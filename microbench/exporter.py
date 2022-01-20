@@ -8,9 +8,9 @@ from expert import export_batched_expert, export_serial_expert, torch_check_resu
 from argparse import ArgumentParser
 
 arg_parser = ArgumentParser()
-arg_parser.add_argument("--bs", type=int, default=1)
-arg_parser.add_argument("--T", type=int, default=128)
-arg_parser.add_argument("--E", type=int, default=2)
+arg_parser.add_argument("--bs", type=int, default=128)
+arg_parser.add_argument("--T", type=int, default=1)
+arg_parser.add_argument("--E", type=int, default=16)
 arg_parser.add_argument("--N", type=int, default=512)
 arg_parser.add_argument("--K", type=int, default=1024)
 args = arg_parser.parse_args()
