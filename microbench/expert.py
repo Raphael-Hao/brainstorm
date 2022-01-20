@@ -58,17 +58,17 @@ def to_numpy(tensor):
 def export_batched_expert(bs, T, E, N, K):
     model = BatchedExpert(E, N, K).cuda()
     model.eval()
-    dummy_input = torch.ones(T, 1, bs, N, dtype=torch.float32).cuda()
+    dummy_input = torch.ones(bs, 1, T, N, dtype=torch.float32).cuda()
     output = model(dummy_input)
     print(output.shape)
     torch.onnx.export(
         model,
         dummy_input,
         "batched_expert.onnx",
-        opset_version=14,
+        opset_version=10,
         input_names=["input"],
         output_names=["output"],
-        # dynamic_axes={"input": {2: "batch_size"}, "output": {2: "batch_size"}},
+        # dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
     )
     onnx_model = onnx.load("batched_expert.onnx")
     onnx.checker.check_model(onnx_model)
@@ -78,7 +78,7 @@ def export_batched_expert(bs, T, E, N, K):
 
 def run_batched_expert(bs, T, N, providers):
     ort_session = ort.InferenceSession("batched_expert.onnx", providers=providers)
-    dummy_input = torch.ones(T, 1, bs, N, dtype=torch.float32)
+    dummy_input = torch.ones(bs, 1, T, N, dtype=torch.float32)
     ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(dummy_input)}
     for i in range(10):
         ort_outputs = ort_session.run(None, ort_inputs)
@@ -93,17 +93,17 @@ def run_batched_expert(bs, T, N, providers):
 def export_serial_expert(bs, T, E, N, K):
     model = SerialExpert(E, N, K).cuda()
     model.eval()
-    dummy_input = torch.ones(T, bs, N, dtype=torch.float32).cuda()
+    dummy_input = torch.ones(bs, T, N, dtype=torch.float32).cuda()
     output = model(dummy_input)
     print(output.shape)
     torch.onnx.export(
         model,
         dummy_input,
         "serial_expert.onnx",
-        opset_version=14,
+        opset_version=10,
         input_names=["input"],
         output_names=["output"],
-        # dynamic_axes={"input": {1: "batch_size"}, "output": {2: "batch_size"}},
+        # dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
     )
     onnx_model = onnx.load("serial_expert.onnx")
     onnx.checker.check_model(onnx_model)
@@ -113,7 +113,7 @@ def export_serial_expert(bs, T, E, N, K):
 
 def run_serial_expert(bs, T, N, providers):
     ort_session = ort.InferenceSession("serial_expert.onnx", providers=providers)
-    dummy_input = torch.ones(T, bs, N, dtype=torch.float32)
+    dummy_input = torch.ones(bs, T, N, dtype=torch.float32)
     ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(dummy_input)}
     for i in range(10):
         ort_outputs = ort_session.run(None, ort_inputs)

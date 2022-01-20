@@ -9,9 +9,9 @@ from argparse import ArgumentParser
 
 arg_parser = ArgumentParser()
 arg_parser.add_argument("--batched", action="store_true")
-arg_parser.add_argument("--bs", type=int, default=128)
-arg_parser.add_argument("--T", type=int, default=1)
-arg_parser.add_argument("--N", type=int, default=512)
+arg_parser.add_argument("--bs", type=int, default=1)
+arg_parser.add_argument("--T", type=int, default=128)
+arg_parser.add_argument("--N", type=int, default=3072)
 args = arg_parser.parse_args()
 args.providers = ["TensorrtExecutionProvider" ,"CUDAExecutionProvider"]
 # if args.batched:
@@ -21,4 +21,6 @@ args.providers = ["TensorrtExecutionProvider" ,"CUDAExecutionProvider"]
 
 batched_output = run_batched_expert(args.bs, args.T, args.N, args.providers)
 serial_output = run_serial_expert(args.bs, args.T, args.N, args.providers)
-onnx_check_results(batched_output, serial_output)
+# print(batched_output)
+# print(serial_output)
+# onnx_check_results(batched_output, serial_output)
