@@ -9,11 +9,11 @@ from argparse import ArgumentParser
 
 arg_parser = ArgumentParser()
 arg_parser.add_argument("--batched", action="store_true")
-arg_parser.add_argument("--bs", type=int, default=1)
-arg_parser.add_argument("--T", type=int, default=128)
+arg_parser.add_argument("--bs", type=int, default=128)
+arg_parser.add_argument("--T", type=int, default=1)
 arg_parser.add_argument("--N", type=int, default=512)
 args = arg_parser.parse_args()
-args.providers = ["CUDAExecutionProvider"]
+args.providers = ["TensorrtExecutionProvider" ,"CUDAExecutionProvider"]
 # if args.batched:
 #     run_batched_expert(args.bs, args.T, args.N, args.providers)
 # else:

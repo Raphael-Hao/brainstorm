@@ -12,13 +12,14 @@ import onnxruntime as ort
 import time
 import numpy as np
 
+
 class BatchedExpert(nn.Module):
     def __init__(self, E, N, K):
         super().__init__()
-        self.M = E
+        self.E = E
         self.N = N
         self.K = K
-        self.weight = torch.nn.Parameter(torch.ones(E, N, K))
+        self.weight = torch.nn.Parameter(torch.ones(self.E, self.N, self.K, dtype=torch.float32))
 
     def forward(self, A):
         return torch.matmul(A, self.weight)
@@ -31,7 +32,7 @@ class SerialExpert(nn.Module):
         self.N = N
         self.K = K
         self.weights = torch.nn.ParameterList(
-            [torch.nn.Parameter(torch.ones(self.N, self.K)) for _ in range(self.E)]
+            [torch.nn.Parameter(torch.ones(self.N, self.K, dtype=torch.float32)) for _ in range(self.E)]
         )
 
     def forward(self, A):
@@ -44,30 +45,30 @@ def torch_check_results(lft_output, rht_output):
     assert torch.allclose(lft_output, rht_output)
     print("Results are the same!")
 
+
 def onnx_check_results(lft_output, rht_output):
     assert np.allclose(lft_output, rht_output)
     print("Results are the same!")
 
+
 def to_numpy(tensor):
-    return (
-        tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
-    )
+    return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
 
 
 def export_batched_expert(bs, T, E, N, K):
     model = BatchedExpert(E, N, K).cuda()
     model.eval()
-    dummy_input = torch.ones(T, 1, bs, N, requires_grad=False).cuda()
+    dummy_input = torch.ones(T, 1, bs, N, dtype=torch.float32).cuda()
     output = model(dummy_input)
     print(output.shape)
     torch.onnx.export(
         model,
         dummy_input,
         "batched_expert.onnx",
-        opset_version=10,
+        opset_version=14,
         input_names=["input"],
-        output_names=['output'],
-        dynamic_axes={"input": {2: "batch_size"}, "output": {2: "batch_size"}},
+        output_names=["output"],
+        # dynamic_axes={"input": {2: "batch_size"}, "output": {2: "batch_size"}},
     )
     onnx_model = onnx.load("batched_expert.onnx")
     onnx.checker.check_model(onnx_model)
@@ -77,7 +78,7 @@ def export_batched_expert(bs, T, E, N, K):
 
 def run_batched_expert(bs, T, N, providers):
     ort_session = ort.InferenceSession("batched_expert.onnx", providers=providers)
-    dummy_input = torch.ones(T, 1, bs, N, requires_grad=False)
+    dummy_input = torch.ones(T, 1, bs, N, dtype=torch.float32)
     ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(dummy_input)}
     for i in range(10):
         ort_outputs = ort_session.run(None, ort_inputs)
@@ -92,17 +93,17 @@ def run_batched_expert(bs, T, N, providers):
 def export_serial_expert(bs, T, E, N, K):
     model = SerialExpert(E, N, K).cuda()
     model.eval()
-    dummy_input = torch.ones(T, bs, N, requires_grad=False).cuda()
+    dummy_input = torch.ones(T, bs, N, dtype=torch.float32).cuda()
     output = model(dummy_input)
     print(output.shape)
     torch.onnx.export(
         model,
         dummy_input,
         "serial_expert.onnx",
-        opset_version=10,
+        opset_version=14,
         input_names=["input"],
-        output_names=['output'],
-        dynamic_axes={"input": {1: "batch_size"}, "output": {2: "batch_size"}},
+        output_names=["output"],
+        # dynamic_axes={"input": {1: "batch_size"}, "output": {2: "batch_size"}},
     )
     onnx_model = onnx.load("serial_expert.onnx")
     onnx.checker.check_model(onnx_model)
@@ -112,7 +113,7 @@ def export_serial_expert(bs, T, E, N, K):
 
 def run_serial_expert(bs, T, N, providers):
     ort_session = ort.InferenceSession("serial_expert.onnx", providers=providers)
-    dummy_input = torch.ones(T, bs, N, requires_grad=False)
+    dummy_input = torch.ones(T, bs, N, dtype=torch.float32)
     ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(dummy_input)}
     for i in range(10):
         ort_outputs = ort_session.run(None, ort_inputs)
