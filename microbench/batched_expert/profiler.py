@@ -4,7 +4,7 @@
 # \file: /batched_matmul.py
 # \brief:
 # Author: raphael hao
-from expert import run_batched_expert, run_serial_expert, onnx_check_results
+from microbench.horizontal_expert.expert import run_batched_expert, run_serial_expert, onnx_check_results
 from argparse import ArgumentParser
 
 arg_parser = ArgumentParser()

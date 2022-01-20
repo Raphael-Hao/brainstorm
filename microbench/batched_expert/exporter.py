@@ -4,7 +4,7 @@
 # \file: /batched_matmul.py
 # \brief:
 # Author: raphael hao
-from expert import export_batched_expert, export_serial_expert, torch_check_results
+from microbench.horizontal_expert.expert import export_batched_expert, export_serial_expert, torch_check_results
 from argparse import ArgumentParser
 
 arg_parser = ArgumentParser()
