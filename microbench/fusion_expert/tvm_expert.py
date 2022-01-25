@@ -19,6 +19,8 @@ def serial_expert(batch, E, M, K, N, out_dtype="float32"):
     out = topi.nn.matmul(
         data,
         weight,
+        transpose_a=False,
+        transpose_b=True,
         out_dtype=out_dtype,
     )
     return [data, weight, out]
@@ -99,7 +101,7 @@ def main():
     argparser.add_argument("--batch", type=int, default=1)
     argparser.add_argument("--E", type=int, default=2)
     argparser.add_argument("--M", type=int, default=128)
-    argparser.add_argument("--K", type=int, default=1024)
+    argparser.add_argument("--K", type=int, default=512)
     argparser.add_argument("--N", type=int, default=1024)
     args = argparser.parse_args()
     if args.task == "search":
