@@ -2,3 +2,7 @@
 __pycache__
 *.pyc
 *.nvprof
+bin
+*.o
+*.so
+*.a
