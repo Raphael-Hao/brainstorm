@@ -27,3 +27,13 @@ void __global__ dynamic_add(float *a, float *b, float *c, int n,
     c[idx] = a[idx] + b[idx];
   }
 }
+
+template <int kFlag>
+void __global__ dynamic_add_asm(float *a, float *b, float *c, int n,
+                            int *launch_flag) {
+  LAUNCH_CHECK_ASM(launch_flag, kFlag);
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx < n) {
+    c[idx] = a[idx] + b[idx];
+  }
+}

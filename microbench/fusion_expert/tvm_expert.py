@@ -10,6 +10,7 @@ import tvm.topi as topi
 import tvm.te as te
 import tvm.auto_scheduler as auto_scheduler
 from tvm.auto_scheduler.measure_record import load_best_record
+import numpy as np
 import argparse
 
 
@@ -49,9 +50,7 @@ def search_expert_kernel(
     print(task.compute_dag)
     log_file = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
     print(log_file)
-    measure_ctx = auto_scheduler.LocalRPCMeasureContext(
-        repeat=5, min_repeat_ms=300
-    )
+    measure_ctx = auto_scheduler.LocalRPCMeasureContext(repeat=5, min_repeat_ms=300)
     tune_option = auto_scheduler.TuningOptions(
         num_measure_trials=1000,
         runner=measure_ctx.runner,
@@ -64,12 +63,16 @@ def search_expert_kernel(
 
 
 def benchmark_expert_kernel(
-    batch, E, M, K, N, out_dtype="float32", expert_kernel=fusion_expert
+    batch, E, M, K, N, expert_kernel=fusion_expert
 ):
     log_file = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
     _, best_result = load_best_record(log_file)
-    best_time = best_result.costs[0] * 1000
-    print(f"batch, E, M, K, N, best_results \n {batch},{E},{M},{K},{N},{best_time}")
+    costs = [v.value for v in best_result.costs]
+    best_time_cost_in_sec = np.mean(costs)
+    best_time_cost_in_ms = best_time_cost_in_sec * 1000
+    print(
+        f"batch, E, M, K, N, best_results \n {batch},{E},{M},{K},{N},{best_time_cost_in_ms}"
+    )
 
 
 def main():
@@ -118,7 +121,7 @@ def main():
                 args.batch, args.E, args.M, args.K, args.N, expert_kernel=fusion_expert
             )
             benchmark_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=serial_expert
+                1, 1, args.M, args.K, args.N, expert_kernel=serial_expert
             )
         elif args.type == "fusion":
             benchmark_expert_kernel(
@@ -126,7 +129,7 @@ def main():
             )
         elif args.type == "serial":
             benchmark_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=serial_expert
+                1, 1, args.M, args.K, args.N, expert_kernel=serial_expert
             )
         else:
             raise ValueError("unknown type for benchmark task")
