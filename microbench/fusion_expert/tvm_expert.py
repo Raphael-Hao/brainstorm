@@ -9,6 +9,7 @@ import tvm
 import tvm.topi as topi
 import tvm.te as te
 import tvm.auto_scheduler as auto_scheduler
+from tvm.auto_scheduler.measure_record import load_best_record
 import argparse
 
 
@@ -48,7 +49,9 @@ def search_expert_kernel(
     print(task.compute_dag)
     log_file = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
     print(log_file)
-    measure_ctx = auto_scheduler.LocalRPCMeasureContext(min_repeat_ms=300)
+    measure_ctx = auto_scheduler.LocalRPCMeasureContext(
+        repeat=5, min_repeat_ms=300
+    )
     tune_option = auto_scheduler.TuningOptions(
         num_measure_trials=1000,
         runner=measure_ctx.runner,
@@ -63,23 +66,10 @@ def search_expert_kernel(
 def benchmark_expert_kernel(
     batch, E, M, K, N, out_dtype="float32", expert_kernel=fusion_expert
 ):
-    # target = tvm.target.Target("cuda")
-    # task = auto_scheduler.BenchmarkTask(
-    #     func=fusion_expert, args=(batch, E, M, K, N, out_dtype), target=target
-    # )
-    # print(task.compute_dag)
-    # log_file = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
-    # measure_ctx = auto_scheduler.LocalRPCMeasureContext(min_repeat_ms=300)
-    # tune_option = auto_scheduler.TuningOptions(
-    #     num_measure_trials=1000,
-    #     runner=measure_ctx.runner,
-    #     measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
-    #     verbose=2,
-    # )
-    # task.tune(tune_option)
-
-    # sch, args = task.apply_best(log_file=log_file)
-    raise NotImplementedError
+    log_file = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
+    _, best_result = load_best_record(log_file)
+    best_time = best_result.costs[0] * 1000
+    print(f"batch, E, M, K, N, best_results \n {batch},{E},{M},{K},{N},{best_time}")
 
 
 def main():
@@ -87,7 +77,7 @@ def main():
     argparser.add_argument(
         "--task",
         type=str,
-        default="tune",
+        default="search",
         required=True,
         choices=["search", "benchmark"],
     )
