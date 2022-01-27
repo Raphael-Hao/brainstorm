@@ -38,6 +38,14 @@ int main(int argc, char **argv) {
       .help("kernel id")
       .scan<'i', int>()
       .default_value(0);
+  program.add_argument("--vector_size", "-v")
+      .help("vector size")
+      .scan<'i', int>()
+      .default_value(1024);
+  program.add_argument("--block_size", "-b")
+      .help("vector size")
+      .scan<'i', int>()
+      .default_value(1024);
   try {
     program.parse_args(argc, argv);
   } catch (const std::runtime_error &err) {
@@ -51,6 +59,8 @@ int main(int argc, char **argv) {
   const int test_iterations = program.get<int>("--iterations");
   const bool persistent = program.get<bool>("--persist");
   const int kernel_id = program.get<int>("--kernel_id");
+  const int vector_size = program.get<int>("--vector_size");
+  const int block_size = program.get<int>("--block_size");
 
   // set device
   printf("setting to device %d\n", device_id);
@@ -61,7 +71,7 @@ int main(int argc, char **argv) {
 
   int *d_schedule_flag;
   int *h_schedule_flag;
-  auto size_schedule_flag = 16 * sizeof(int);
+  auto size_schedule_flag = 1024 * sizeof(int);
   CUDA_CHECK(cudaMalloc(&d_schedule_flag, size_schedule_flag));
   CUDA_CHECK(cudaMallocHost(&h_schedule_flag, size_schedule_flag));
 
@@ -72,7 +82,7 @@ int main(int argc, char **argv) {
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
     size_t persist_size =
-        min(int(prop.l2CacheSize * .1), prop.persistingL2CacheMaxSize);
+        std::min(int(prop.l2CacheSize * .1), prop.persistingL2CacheMaxSize);
     if (persist_size > 0) {
       printf("setting persistent L2 cache size to %zu bytes\n",
              size_schedule_flag * 2);
@@ -98,7 +108,7 @@ int main(int argc, char **argv) {
 
   // initialize data
   float *d_A, *d_B, *d_C;
-  int size_A = 1024 * 1024, size_B = size_A, size_C = size_A;
+  int size_A = vector_size * vector_size, size_B = size_A, size_C = size_A;
   CUDA_CHECK(cudaMalloc(&d_A, size_A * sizeof(float)));
   CUDA_CHECK(cudaMalloc(&d_B, size_B * sizeof(float)));
   CUDA_CHECK(cudaMalloc(&d_C, size_C * sizeof(float)));
@@ -117,11 +127,21 @@ int main(int argc, char **argv) {
   CheckResults(h_B, size_B, 1.0, "B");
 
   // create grid and block
-  int threads_per_block = 1024;
+  int threads_per_block = block_size;
   int blocks_per_grid = size_A / threads_per_block;
   dim3 dim_block(threads_per_block);
   dim3 dim_grid(blocks_per_grid);
 
+  // warm up
+  for (int i = 0; i < test_iterations; i++) {
+    // set scheduler flag
+    set_flag<<<dim_grid, dim_block, 0, stream>>>(d_schedule_flag, kernel_id);
+    // compute
+    simple_add<<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
+                                                   d_schedule_flag);
+  }
+
+  CUDA_CHECK(cudaStreamSynchronize(stream));
   // reset result data
   printf("testing the lowwer bound");
   SetConstantValue(h_C, size_C, 0.0);
@@ -129,8 +149,6 @@ int main(int argc, char **argv) {
   CUDA_CHECK(cudaEventRecord(start, stream));
   for (int i = 0; i < test_iterations; i++) {
     // set scheduler flag
-    // CUDA_CHECK(cudaMemsetAsync(d_schedule_flag, 0, 16 * sizeof(int),
-    // stream));
     set_flag<<<dim_grid, dim_block, 0, stream>>>(d_schedule_flag, kernel_id);
     // compute
     simple_add<<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
@@ -153,8 +171,9 @@ int main(int argc, char **argv) {
   for (int i = 0; i < test_iterations; i++) {
     // set scheduler flag
     set_flag<<<dim_grid, dim_block, 0, stream>>>(d_schedule_flag, kernel_id);
-    CUDA_CHECK(cudaMemcpyAsync(h_schedule_flag, d_schedule_flag, sizeof(int),
-                               cudaMemcpyDeviceToHost, stream));
+    CUDA_CHECK(cudaMemcpyAsync(h_schedule_flag, d_schedule_flag,
+                               size_schedule_flag, cudaMemcpyDeviceToHost,
+                               stream));
     CUDA_CHECK(cudaStreamSynchronize(stream));
     switch (*h_schedule_flag) {
       case 0: {
@@ -209,7 +228,7 @@ int main(int argc, char **argv) {
     dynamic_add<2><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
                                                        d_schedule_flag);
     dynamic_add<3><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
-     d_schedule_flag);
+                                                       d_schedule_flag);
   }
   CUDA_CHECK(cudaEventRecord(stop, stream));
   CUDA_CHECK(cudaEventSynchronize(stop));
