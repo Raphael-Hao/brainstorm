@@ -221,14 +221,15 @@ int main(int argc, char **argv) {
   for (int i = 0; i < test_iterations; i++) {
     // set scheduler flag
     set_flag<<<dim_grid, dim_block, 0, stream>>>(d_schedule_flag, kernel_id);
-    dynamic_add<0><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
+    dynamic_add_asm<0><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
                                                        d_schedule_flag);
-    dynamic_add<1><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
+    dynamic_add_asm<1><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
                                                        d_schedule_flag);
-    dynamic_add<2><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
+    dynamic_add_asm<2><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
                                                        d_schedule_flag);
-    dynamic_add<3><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
+    dynamic_add_asm<3><<<dim_grid, dim_block, 0, stream>>>(d_A, d_B, d_C, size_A,
                                                        d_schedule_flag);
+    cudaGetLastError();
   }
   CUDA_CHECK(cudaEventRecord(stop, stream));
   CUDA_CHECK(cudaEventSynchronize(stop));

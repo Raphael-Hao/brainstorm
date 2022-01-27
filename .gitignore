@@ -8,4 +8,4 @@ bin
 *.a
 core
 !core/
-*.pkl_memoize_py3
+.pkl_memoize_py3

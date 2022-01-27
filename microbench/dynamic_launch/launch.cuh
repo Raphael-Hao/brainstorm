@@ -8,12 +8,10 @@
     return;                              \
   }
 
-// else {                                                   \
-//     int idx = blockIdx.x * blockDim.x + threadIdx.x;         \
-//     if (idx == 0) {                                          \
-//       printf("Launch the %d-th candidate kernel!\n", kFlag); \
-//     }                                                        \
-//   }
+#define LAUNCH_CHECK_ASM(launch_flag, kFlag) \
+  if (*launch_flag != kFlag) {               \
+    asm("trap;");                            \
+  }
 
 #define CUDA_CHECK(x) __CUDA_CHECK(x, __FILE__, __LINE__)
 
