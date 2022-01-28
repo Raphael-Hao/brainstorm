@@ -12,6 +12,7 @@ import tvm.auto_scheduler as auto_scheduler
 from tvm.auto_scheduler.measure_record import load_best_record
 import numpy as np
 import argparse
+import sys
 
 
 @auto_scheduler.register_workload
@@ -62,17 +63,24 @@ def search_expert_kernel(
     sch, args = task.apply_best(log_file=log_file)
 
 
-def benchmark_expert_kernel(
-    batch, E, M, K, N, expert_kernel=fusion_expert
+def report_best_expert_kernel(
+    batch, E, M, K, N, expert_kernel=fusion_expert, header=False
 ):
     log_file = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
     _, best_result = load_best_record(log_file)
     costs = [v.value for v in best_result.costs]
     best_time_cost_in_sec = np.mean(costs)
     best_time_cost_in_ms = best_time_cost_in_sec * 1000
-    print(
-        f"batch, E, M, K, N, best_results \n {batch},{E},{M},{K},{N},{best_time_cost_in_ms}"
-    )
+    if header is True:
+        print(
+            f"batch, E, M, K, N, best_results \n{batch},{E},{M},{K},{N},{best_time_cost_in_ms}"
+        )
+    else:
+        print(f"{batch},{E},{M},{K},{N},{best_time_cost_in_ms}")
+
+
+def generate_standalone():
+    raise NotImplementedError
 
 
 def main():
@@ -82,7 +90,7 @@ def main():
         type=str,
         default="search",
         required=True,
-        choices=["search", "benchmark"],
+        choices=["search", "benchmark", "report_best"],
     )
     argparser.add_argument(
         "--type",
@@ -96,14 +104,17 @@ def main():
     argparser.add_argument("--M", type=int, default=128)
     argparser.add_argument("--K", type=int, default=512)
     argparser.add_argument("--N", type=int, default=1024)
+    argparser.add_argument(
+        "--header", action="store_true", help="print header for csv file"
+    )
     args = argparser.parse_args()
     if args.task == "search":
         if args.type == "all":
             search_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=fusion_expert
+                args.batch, args.E, args.M, args.K, args.N, expert_kernel=serial_expert
             )
             search_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=serial_expert
+                args.batch, args.E, args.M, args.K, args.N, expert_kernel=fusion_expert
             )
         elif args.type == "fusion":
             search_expert_kernel(
@@ -115,24 +126,48 @@ def main():
             )
         else:
             raise ValueError("unknown type for search task")
-    elif args.task == "benchmark":
+    elif args.task == "report_best":
         if args.type == "all":
-            benchmark_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=fusion_expert
+            report_best_expert_kernel(
+                1,
+                1,
+                args.M,
+                args.K,
+                args.N,
+                expert_kernel=serial_expert,
+                header=args.header,
             )
-            benchmark_expert_kernel(
-                1, 1, args.M, args.K, args.N, expert_kernel=serial_expert
+            report_best_expert_kernel(
+                args.batch,
+                args.E,
+                args.M,
+                args.K,
+                args.N,
+                expert_kernel=fusion_expert,
+                header=False,
             )
         elif args.type == "fusion":
-            benchmark_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=fusion_expert
+            report_best_expert_kernel(
+                args.batch,
+                args.E,
+                args.M,
+                args.K,
+                args.N,
+                expert_kernel=fusion_expert,
+                header=args.header,
             )
         elif args.type == "serial":
-            benchmark_expert_kernel(
-                1, 1, args.M, args.K, args.N, expert_kernel=serial_expert
+            report_best_expert_kernel(
+                1,
+                1,
+                args.M,
+                args.K,
+                args.N,
+                expert_kernel=serial_expert,
+                header=args.header,
             )
         else:
-            raise ValueError("unknown type for benchmark task")
+            raise ValueError("unknown type for report best task")
     else:
         raise ValueError("unknown task")
 
