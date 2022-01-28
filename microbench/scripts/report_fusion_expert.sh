@@ -9,26 +9,26 @@ cd ../fusion_expert || exit
 # pyenv shell miniconda3-4.7.12
 
 #
-python tvm_expert.py --task benchmark --type all --M 40 --K 512 --N 1024 --E 2 --batch 2
-python tvm_expert.py --task benchmark --type fusion --M 40 --K 512 --N 1024 --E 4 --batch 4
-python tvm_expert.py --task benchmark --type fusion --M 40 --K 512 --N 1024 --E 8 --batch 8
-python tvm_expert.py --task benchmark --type fusion --M 40 --K 512 --N 1024 --E 16 --batch 16
-python tvm_expert.py --task benchmark --type fusion --M 40 --K 512 --N 1024 --E 32 --batch 32
+python tvm_expert.py --task report_best --type all --M 40 --K 512 --N 1024 --E 2 --batch 2 --header
+python tvm_expert.py --task report_best --type fusion --M 40 --K 512 --N 1024 --E 4 --batch 4
+python tvm_expert.py --task report_best --type fusion --M 40 --K 512 --N 1024 --E 8 --batch 8
+python tvm_expert.py --task report_best --type fusion --M 40 --K 512 --N 1024 --E 16 --batch 16
+python tvm_expert.py --task report_best --type fusion --M 40 --K 512 --N 1024 --E 32 --batch 32
 
-python tvm_expert.py --task benchmark --type all --M 128 --K 512 --N 1024 --E 2 --batch 2
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 512 --N 1024 --E 4 --batch 4
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 512 --N 1024 --E 8 --batch 8
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 512 --N 1024 --E 16 --batch 16
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 512 --N 1024 --E 32 --batch 32
+python tvm_expert.py --task report_best --type all --M 128 --K 512 --N 1024 --E 2 --batch 2
+python tvm_expert.py --task report_best --type fusion --M 128 --K 512 --N 1024 --E 4 --batch 4
+python tvm_expert.py --task report_best --type fusion --M 128 --K 512 --N 1024 --E 8 --batch 8
+python tvm_expert.py --task report_best --type fusion --M 128 --K 512 --N 1024 --E 16 --batch 16
+python tvm_expert.py --task report_best --type fusion --M 128 --K 512 --N 1024 --E 32 --batch 32
 
-python tvm_expert.py --task benchmark --type all --M 128 --K 1024 --N 1024 --E 2 --batch 2
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 1024 --N 1024 --E 4 --batch 4
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 1024 --N 1024 --E 8 --batch 8
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 1024 --N 1024 --E 16 --batch 16
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 1024 --N 1024 --E 32 --batch 32
+python tvm_expert.py --task report_best --type all --M 128 --K 1024 --N 1024 --E 2 --batch 2
+python tvm_expert.py --task report_best --type fusion --M 128 --K 1024 --N 1024 --E 4 --batch 4
+python tvm_expert.py --task report_best --type fusion --M 128 --K 1024 --N 1024 --E 8 --batch 8
+python tvm_expert.py --task report_best --type fusion --M 128 --K 1024 --N 1024 --E 16 --batch 16
+python tvm_expert.py --task report_best --type fusion --M 128 --K 1024 --N 1024 --E 32 --batch 32
 
-python tvm_expert.py --task benchmark --type all --M 128 --K 3072 --N 768 --E 2 --batch 2
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 3072 --N 768 --E 4 --batch 4
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 3072 --N 768 --E 8 --batch 8
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 3072 --N 768 --E 16 --batch 16
-python tvm_expert.py --task benchmark --type fusion --M 128 --K 3072 --N 768 --E 32 --batch 32
+python tvm_expert.py --task report_best --type all --M 128 --K 3072 --N 768 --E 2 --batch 2
+python tvm_expert.py --task report_best --type fusion --M 128 --K 3072 --N 768 --E 4 --batch 4
+python tvm_expert.py --task report_best --type fusion --M 128 --K 3072 --N 768 --E 8 --batch 8
+python tvm_expert.py --task report_best --type fusion --M 128 --K 3072 --N 768 --E 16 --batch 16
+python tvm_expert.py --task report_best --type fusion --M 128 --K 3072 --N 768 --E 32 --batch 32
