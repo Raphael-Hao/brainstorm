@@ -12,7 +12,8 @@ import tvm.auto_scheduler as auto_scheduler
 from tvm.auto_scheduler.measure_record import load_best_record
 import numpy as np
 import argparse
-import sys
+import itertools
+import os
 
 
 @auto_scheduler.register_workload
@@ -42,15 +43,34 @@ def fusion_expert(batch, E, M, K, N, out_dtype="float32"):
 
 
 def search_expert_kernel(
-    batch, E, M, K, N, out_dtype="float32", expert_kernel=fusion_expert
+    batch, E, M, K, N, out_dtype="float32", resume=False, log_dir="."
 ):
+    expert_kernel = fusion_expert
+    if batch == 1 and E == 1:
+        expert_kernel = serial_expert
+    log_filename = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
+    log_file = os.path.join(log_dir, log_filename)
+    print(f"Writing to log to file: {log_file}")
     target = tvm.target.Target("cuda")
     task = auto_scheduler.SearchTask(
         func=expert_kernel, args=(batch, E, M, K, N, out_dtype), target=target
     )
     print(task.compute_dag)
-    log_file = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
-    print(log_file)
+    search_policy = None
+    if resume:
+        # check if the log file exists
+        if os.path.exists(log_file):
+            cost_model = auto_scheduler.XGBModel()
+            cost_model.update_from_file(log_file)
+            search_policy = auto_scheduler.SketchPolicy(
+                task,
+                cost_model,
+                init_search_callbacks=[auto_scheduler.PreloadMeasuredStates(log_file)],
+            )
+    else:
+        # if log_file exists, delete it
+        if os.path.exists(log_file):
+            os.remove(log_file)
     measure_ctx = auto_scheduler.LocalRPCMeasureContext(repeat=5, min_repeat_ms=300)
     tune_option = auto_scheduler.TuningOptions(
         num_measure_trials=1000,
@@ -58,15 +78,15 @@ def search_expert_kernel(
         measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
         verbose=2,
     )
-    task.tune(tune_option)
-
-    sch, args = task.apply_best(log_file=log_file)
+    task.tune(tune_option, search_policy=search_policy)
 
 
-def report_best_expert_kernel(
-    batch, E, M, K, N, expert_kernel=fusion_expert, header=False
-):
-    log_file = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
+def report_best_expert_kernel(batch, E, M, K, N, header=False, log_dir="."):
+    expert_kernel = fusion_expert
+    if batch == 1 and E == 1:
+        expert_kernel = serial_expert
+    log_filename = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
+    log_file = os.path.join(log_dir, log_filename)
     _, best_result = load_best_record(log_file)
     costs = [v.value for v in best_result.costs]
     best_time_cost_in_sec = np.mean(costs)
@@ -80,6 +100,7 @@ def report_best_expert_kernel(
 
 
 def generate_standalone():
+    # sch, args = task.apply_best(log_file=log_file)
     raise NotImplementedError
 
 
@@ -90,84 +111,52 @@ def main():
         type=str,
         default="search",
         required=True,
-        choices=["search", "benchmark", "report_best"],
+        choices=["search", "export_best", "report_best"],
+    )
+    argparser.add_argument("--B", type=int, nargs="+", default=1)
+    argparser.add_argument("--E", type=int, nargs="+", default=2)
+    argparser.add_argument("--M", type=int, nargs="+", default=128)
+    argparser.add_argument("--K", type=int, nargs="+", default=512)
+    argparser.add_argument("--N", type=int, nargs="+", default=1024)
+
+    argparser.add_argument(
+        "--resume", action="store_true", help="resume from previous search"
     )
     argparser.add_argument(
-        "--type",
-        type=str,
-        default="all",
-        required=True,
-        choices=["all", "fusion", "serial"],
+        "--log_dir", type=str, default=".", help="directory to save log files"
     )
-    argparser.add_argument("--batch", type=int, default=1)
-    argparser.add_argument("--E", type=int, default=2)
-    argparser.add_argument("--M", type=int, default=128)
-    argparser.add_argument("--K", type=int, default=512)
-    argparser.add_argument("--N", type=int, default=1024)
-    argparser.add_argument(
-        "--header", action="store_true", help="print header for csv file"
-    )
+    argparser.add_argument("--header", action="store_false", help="print header")
+
     args = argparser.parse_args()
+    args.log_dir = os.path.abspath(args.log_dir)
+
+    if len(args.B) == len(args.E):
+        args.BE = zip(args.B, args.E)
+    elif (len(args.B) == 1 and args.B[0] == 1) or (len(args.E) == 1 and args.E[0] == 1):
+        args.BE = itertools.product(args.B, args.E)
+    else:
+        raise NotImplementedError
+
     if args.task == "search":
-        if args.type == "all":
+        for (B, E), M, K, N in itertools.product(args.BE, args.M, args.K, args.N):
             search_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=serial_expert
+                B, E, M, K, N, resume=args.resume, log_dir=args.log_dir
             )
-            search_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=fusion_expert
-            )
-        elif args.type == "fusion":
-            search_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=fusion_expert
-            )
-        elif args.type == "serial":
-            search_expert_kernel(
-                args.batch, args.E, args.M, args.K, args.N, expert_kernel=serial_expert
-            )
-        else:
-            raise ValueError("unknown type for search task")
     elif args.task == "report_best":
-        if args.type == "all":
+        print_header = True if args.header is True else False
+        for (B, E), M, K, N in itertools.product(args.BE, args.M, args.K, args.N):
             report_best_expert_kernel(
-                1,
-                1,
-                args.M,
-                args.K,
-                args.N,
-                expert_kernel=serial_expert,
-                header=args.header,
+                B,
+                E,
+                M,
+                K,
+                N,
+                header=print_header,
+                log_dir=args.log_dir,
             )
-            report_best_expert_kernel(
-                args.batch,
-                args.E,
-                args.M,
-                args.K,
-                args.N,
-                expert_kernel=fusion_expert,
-                header=False,
-            )
-        elif args.type == "fusion":
-            report_best_expert_kernel(
-                args.batch,
-                args.E,
-                args.M,
-                args.K,
-                args.N,
-                expert_kernel=fusion_expert,
-                header=args.header,
-            )
-        elif args.type == "serial":
-            report_best_expert_kernel(
-                1,
-                1,
-                args.M,
-                args.K,
-                args.N,
-                expert_kernel=serial_expert,
-                header=args.header,
-            )
-        else:
-            raise ValueError("unknown type for report best task")
+            print_header = False
+    elif args.task == "export_best":
+        generate_standalone()
     else:
         raise ValueError("unknown task")
 
