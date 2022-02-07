@@ -91,7 +91,8 @@ class TranslationThorTask(TranslationTask):
             self.sequence_generator = self.build_generator(
                 [model], Namespace(**gen_args)
             )
-
+        model_path = "entire_fusion.pt"
+        torch.save(model, model_path)
         return model
 
     def _get_loss(self, sample, model, criterion, expert_num=None):
