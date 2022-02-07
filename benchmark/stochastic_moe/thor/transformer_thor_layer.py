@@ -200,7 +200,7 @@ class ThorTransformerDecoderLayer(TransformerDecoderLayer):
 
     def build_fc2(self, input_dim, output_dim, q_noise, qn_block_size):
         if self.use_expert:
-            quant_noise(nn.Linear(input_dim, output_dim * self.num_experts), q_noise, qn_block_size)
+            return quant_noise(nn.Linear(input_dim, output_dim * self.num_experts), q_noise, qn_block_size)
         else:
             return quant_noise(nn.Linear(input_dim, output_dim), q_noise, qn_block_size)
 
