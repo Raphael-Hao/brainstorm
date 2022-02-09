@@ -123,7 +123,7 @@ def main():
         "--resume", action="store_true", help="resume from previous search"
     )
     argparser.add_argument(
-        "--log_dir", type=str, default=".", help="directory to save log files"
+        "--log_dir", type=str, default="log", help="directory to save log files"
     )
     argparser.add_argument("--header", action="store_false", help="print header")
 

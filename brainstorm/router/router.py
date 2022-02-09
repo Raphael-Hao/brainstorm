@@ -5,12 +5,11 @@
 # Author: v-weihaocui
 # Email: v-weihaocui@microsoft.com
 
-import torch
+import torch.nn as nn
 
-class Router:
-    def __init__(self, model, device):
-        self.model = model
-        self.device = device
+class Router(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 
     def forward(self, *input):
         raise NotImplementedError
