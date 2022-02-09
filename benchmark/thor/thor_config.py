@@ -143,6 +143,8 @@ class ThorConfig(PretrainedConfig):
         position_embedding_type="absolute",
         use_cache=True,
         classifier_dropout=None,
+        token_num = 64,
+        runtime = False,
         expert_num = 2,
         expert_type = "serial",
         **kwargs
@@ -164,6 +166,8 @@ class ThorConfig(PretrainedConfig):
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
+        self.token_num = token_num
+        self.runtime = runtime
         self.expert_num = expert_num
         self.expert_type = expert_type
 

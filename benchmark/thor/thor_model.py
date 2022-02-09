@@ -44,7 +44,7 @@ from transformers.modeling_utils import (
 )
 from transformers.utils import logging
 from thor_config import ThorConfig
-
+from thor_moe import ThorInterOutput, MaskSerialThorMoE, MaskFusionThorMoE, SparseSerialThorMoE, SparseFusionThorMoE
 
 logger = logging.get_logger(__name__)
 
@@ -421,144 +421,6 @@ class ThorOutput(nn.Module):
         return hidden_states
 
 
-class ThorInterOutput(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.dense1 = nn.Linear(config.hidden_size, config.intermediate_size)
-        if isinstance(config.hidden_act, str):
-            self.intermediate_act_fn = ACT2FN[config.hidden_act]
-        else:
-            self.intermediate_act_fn = config.hidden_act
-        self.dense2 = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-    def forward(self, hidden_states):
-        inter_states = self.dense1(hidden_states)
-        inter_states = self.intermediate_act_fn(inter_states)
-        inter_states = self.dense2(inter_states)
-        inter_states = self.dropout(inter_states)
-        inter_states = self.LayerNorm(inter_states + hidden_states)
-        return inter_states
-
-
-class SerialThorInterOutput(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.expert_num = config.expert_num
-        self.dense1 = nn.ModuleList(
-            nn.Linear(config.hidden_size, config.intermediate_size)
-            for _ in range(self.expert_num)
-        )
-        if isinstance(config.hidden_act, str):
-            self.intermediate_act_fn = ACT2FN[config.hidden_act]
-        else:
-            self.intermediate_act_fn = config.hidden_act
-        self.dense2 = nn.ModuleList(
-            nn.Linear(config.intermediate_size, config.hidden_size)
-            for _ in range(self.expert_num)
-        )
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-    def forward(self, hidden_states):
-        inter_states = []
-        for expert in range(self.expert_num):
-            temp = self.dense1[expert](hidden_states)
-            temp = self.intermediate_act_fn(temp)
-            temp = self.dense2[expert](temp)
-            inter_states.append(temp)
-        inter_states = torch.stack(inter_states, dim=0)
-
-        # mask = torch.randint(
-        #     0,
-        #     self.expert_num,
-        #     (inter_states.size(1), inter_states.size(2)),
-        #     device=inter_states.device,
-        # )
-        # for i in range(self.expert_num):
-        #     expert_mask = mask.eq(i)
-        #     inter_states[i] *= expert_mask.unsqueeze(-1)
-
-        inter_states = inter_states.sum(dim=0)
-        inter_states = self.dropout(inter_states)
-        inter_states = self.LayerNorm(inter_states + hidden_states)
-        return inter_states
-
-
-class FusionThorInterOutput(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.expert_num = config.expert_num
-        dense1_weight = torch.empty(
-            1, self.expert_num, config.hidden_size, config.intermediate_size
-        )
-        dense1_bias = torch.empty(1, self.expert_num, 1, config.intermediate_size)
-        dense2_weight = torch.empty(
-            1, self.expert_num, config.intermediate_size, config.hidden_size
-        )
-        dense2_bias = torch.empty(1, self.expert_num, 1, config.hidden_size)
-
-        for i in range(self.expert_num):
-            dense1 = torch.nn.Linear(config.hidden_size, config.intermediate_size)
-            dense2 = torch.nn.Linear(config.intermediate_size, config.hidden_size)
-            dense1_weight[0, i, :, :], dense1_bias[0, i, :, :] = (
-                dense1.weight.t(),
-                dense1.bias,
-            )
-            dense2_weight[0, i, :, :], dense2_bias[0, i, :, :] = (
-                dense2.weight.t(),
-                dense2.bias,
-            )
-
-        dense1_weight = dense1_weight.view(
-            self.expert_num, config.hidden_size, config.intermediate_size
-        )
-        dense1_bias = dense1_bias.view(self.expert_num, 1, config.intermediate_size)
-        dense2_weight = dense2_weight.view(
-            self.expert_num, config.intermediate_size, config.hidden_size
-        )
-        dense2_bias = dense2_bias.view(self.expert_num, 1, config.hidden_size)
-        self.register_parameter(name="dense1_weight", param=nn.Parameter(dense1_weight))
-        self.register_parameter(name="dense1_bias", param=nn.Parameter(dense1_bias))
-        self.register_parameter(name="dense2_weight", param=nn.Parameter(dense2_weight))
-        self.register_parameter(name="dense2_bias", param=nn.Parameter(dense2_bias))
-
-        if isinstance(config.hidden_act, str):
-            self.intermediate_act_fn = ACT2FN[config.hidden_act]
-        else:
-            self.intermediate_act_fn = config.hidden_act
-
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-    def forward(self, hidden_states):
-        # inter_states = hidden_states.unsqueeze(1)
-        inter_states = hidden_states
-        inter_states = torch.matmul(inter_states, self.dense1_weight) + self.dense1_bias
-        inter_states = self.intermediate_act_fn(inter_states)
-        inter_states = torch.matmul(inter_states, self.dense2_weight) + self.dense2_bias
-
-        # inter_states = inter_states.permute(1, 0, 2, 3)
-
-        # mask = torch.randint(
-        #     0,
-        #     self.expert_num,
-        #     (inter_states.size(1),),
-        #     device=inter_states.device
-        # )
-        # for i in range(self.expert_num):
-        #     expert_mask = mask.eq(i)
-        #     inter_states[i] *= expert_mask.unsqueeze(-1)
-        inter_states = inter_states.sum(dim=0, keepdim=True)
-
-        # print(inter_states.size())
-        # inter_states = inter_states.sum(dim=1)
-        inter_states = self.dropout(inter_states)
-        inter_states = self.LayerNorm(inter_states + hidden_states)
-        return inter_states
-
-
 class BertLayer(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -579,12 +441,18 @@ class BertLayer(nn.Module):
             print("using default inter output")
             self.inter_output = ThorInterOutput(config)
         else:
-            if config.expert_type == "serial":
+            if config.expert_type == "mask_serial":
                 print("using serial inter output for moe")
-                self.inter_output = SerialThorInterOutput(config)
-            elif config.expert_type == "fusion":
+                self.inter_output = MaskSerialThorMoE(config)
+            elif config.expert_type == "mask_fusion":
                 print("using fusion inter output for moe")
-                self.inter_output = FusionThorInterOutput(config)
+                self.inter_output = MaskFusionThorMoE(config)
+            elif config.expert_type == "sparse_serial":
+                print("using sparse serial inter output for moe")
+                self.inter_output = SparseSerialThorMoE(config)
+            elif config.expert_type == "sparse_fusion":
+                print("using sparse fusion inter output for moe")
+                self.inter_output = SparseFusionThorMoE(config)
             else:
                 raise ValueError(f"{config.expert_type} is not supported")
 
