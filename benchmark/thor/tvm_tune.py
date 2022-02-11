@@ -12,19 +12,20 @@ from tvm import auto_scheduler
 from tvm.contrib import graph_executor
 import argparse
 
-def run_tuning(tasks, task_weights, log_file):
-        print("Begin tuning...")
-        measure_ctx = auto_scheduler.LocalRPCMeasureContext(
-            repeat=4, min_repeat_ms=300, timeout=10
-        )
 
-        tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
-        tune_option = auto_scheduler.TuningOptions(
-            num_measure_trials=8000,  # change this to 20000 to achieve the best performance
-            runner=measure_ctx.runner,
-            measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
-        )
-        tuner.tune(tune_option)
+def run_tuning(tasks, task_weights, log_file):
+    print("Begin tuning...")
+    measure_ctx = auto_scheduler.LocalRPCMeasureContext(
+        repeat=4, min_repeat_ms=300, timeout=10
+    )
+
+    tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
+    tune_option = auto_scheduler.TuningOptions(
+        num_measure_trials=8000,  # change this to 20000 to achieve the best performance
+        runner=measure_ctx.runner,
+        measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
+    )
+    tuner.tune(tune_option)
 
 
 def tune_thor(model_name):
@@ -43,7 +44,8 @@ def tune_thor(model_name):
 
     for idx, task in enumerate(thor_tasks):
         print(
-            "========== Task %d  (workload key: %s) ==========" % (idx, task.workload_key)
+            "========== Task %d  (workload key: %s) =========="
+            % (idx, task.workload_key)
         )
         print(task.compute_dag)
 
@@ -66,6 +68,7 @@ def tune_thor(model_name):
     # Evaluate
     print("Evaluate inference time cost...")
     print(module.benchmark(dev, repeat=3, min_repeat_ms=500))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
