@@ -1,3 +1,4 @@
 expert_type, expert_num, bs, tokens, cost,
 mask_fusion, 2, 1, 64, 0.2231
-serial_fusion, 2, 1, 64, 0.2231
+mask_serial, 2, 1, 64, 0.2613
+sparse_fusion, 2, 1, 64, 0.2027

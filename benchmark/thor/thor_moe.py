@@ -154,45 +154,18 @@ class SparseSerialThorMoE(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.expert_num = config.expert_num
-        dense1_weight = torch.empty(
-            1, self.expert_num, config.hidden_size, config.intermediate_size
+        self.dense1 = nn.ModuleList(
+            nn.Linear(config.hidden_size, config.intermediate_size)
+            for _ in range(self.expert_num)
         )
-        dense1_bias = torch.empty(1, self.expert_num, 1, config.intermediate_size)
-        dense2_weight = torch.empty(
-            1, self.expert_num, config.intermediate_size, config.hidden_size
-        )
-        dense2_bias = torch.empty(1, self.expert_num, 1, config.hidden_size)
-
-        for i in range(self.expert_num):
-            dense1 = torch.nn.Linear(config.hidden_size, config.intermediate_size)
-            dense2 = torch.nn.Linear(config.intermediate_size, config.hidden_size)
-            dense1_weight[0, i, :, :], dense1_bias[0, i, :, :] = (
-                dense1.weight.t(),
-                dense1.bias,
-            )
-            dense2_weight[0, i, :, :], dense2_bias[0, i, :, :] = (
-                dense2.weight.t(),
-                dense2.bias,
-            )
-
-        dense1_weight = dense1_weight.view(
-            self.expert_num, config.hidden_size, config.intermediate_size
-        )
-        dense1_bias = dense1_bias.view(self.expert_num, 1, config.intermediate_size)
-        dense2_weight = dense2_weight.view(
-            self.expert_num, config.intermediate_size, config.hidden_size
-        )
-        dense2_bias = dense2_bias.view(self.expert_num, 1, config.hidden_size)
-        self.register_parameter(name="dense1_weight", param=nn.Parameter(dense1_weight))
-        self.register_parameter(name="dense1_bias", param=nn.Parameter(dense1_bias))
-        self.register_parameter(name="dense2_weight", param=nn.Parameter(dense2_weight))
-        self.register_parameter(name="dense2_bias", param=nn.Parameter(dense2_bias))
-
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
             self.intermediate_act_fn = config.hidden_act
-
+        self.dense2 = nn.ModuleList(
+            nn.Linear(config.intermediate_size, config.hidden_size)
+            for _ in range(self.expert_num)
+        )
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -221,12 +194,20 @@ class SparseSerialThorMoE(nn.Module):
             self.generate_mask(inter_states)
         # print(inter_states.size())
         inter_states = inter_states[self.random_mask].contiguous()
+        print(self.token_num)
+        print(self.expert_num)
         inter_states = inter_states.view(
-            self.expert_num, self.token_num / self.expert_num, hidden_states.size(-1)
+            self.expert_num,
+            int(self.token_num / self.expert_num),
+            hidden_states.size(-1),
         )
-        inter_states = torch.matmul(inter_states, self.dense1_weight) + self.dense1_bias
-        inter_states = self.intermediate_act_fn(inter_states)
-        inter_states = torch.matmul(inter_states, self.dense2_weight) + self.dense2_bias
+        tmp_inter_states = []
+        for i in range(self.expert_num):
+            tmp_states = self.dense1[i](inter_states[i])
+            tmp_states = self.intermediate_act_fn(tmp_states)
+            tmp_states = self.dense2[i](tmp_states)
+            tmp_inter_states.append(tmp_states)
+        inter_states = torch.stack(tmp_inter_states, dim=0)
         inter_states = inter_states.view(self.token_num, hidden_states.size(-1))
         inter_states = inter_states[self.restore_mask].contiguous()
         inter_states = self.dropout(inter_states)
