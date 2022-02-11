@@ -10,3 +10,4 @@ core
 !core/
 .pkl_memoize_py3
 *.log
+total_latency.tsv
