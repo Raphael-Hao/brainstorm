@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # Motto: Were It to Benefit My Country, I Would Lay Down My Life!
-# \file: /netlet.py
+# \file: /pod.py
 # \brief: 
 # Author: raphael hao
+
 import torch
 import torch.nn as nn
+from .netlet import Netlet
+from .router import router
 
-class Netlet(nn.Module):
+class Pod(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
