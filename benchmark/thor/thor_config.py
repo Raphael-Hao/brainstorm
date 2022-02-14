@@ -146,7 +146,7 @@ class ThorConfig(PretrainedConfig):
         token_num = 64,
         runtime = False,
         expert_num = 2,
-        expert_type = "serial",
+        expert_type = "sparse_serial",
         **kwargs
     ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)

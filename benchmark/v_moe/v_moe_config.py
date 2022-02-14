@@ -18,7 +18,7 @@ VIT_PRETRAINED_CONFIG_ARCHIVE_MAP = {
 }
 
 
-class ViTConfig(PretrainedConfig):
+class VMoEConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`ViTModel`]. It is used to instantiate an ViT
     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
@@ -91,6 +91,8 @@ class ViTConfig(PretrainedConfig):
         patch_size=16,
         num_channels=3,
         qkv_bias=True,
+        expert_num=2,
+        expert_type="serial",
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -109,3 +111,6 @@ class ViTConfig(PretrainedConfig):
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.qkv_bias = qkv_bias
+
+        self.expert_num = expert_num
+        self.expert_type = expert_type
