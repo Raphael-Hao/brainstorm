@@ -21,7 +21,7 @@ from transformers.file_utils import add_code_sample_docstrings, add_start_docstr
 from transformers.modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling, SequenceClassifierOutput
 from transformers.modeling_utils import PreTrainedModel, find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.utils import logging
-from v_moe_config import ViTConfig
+from v_moe_config import VMoEConfig
 
 
 logger = logging.get_logger(__name__)
@@ -58,7 +58,7 @@ def to_2tuple(x):
 # https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 
 
-class ViTEmbeddings(nn.Module):
+class VMoEEmbeddings(nn.Module):
     """
     Construct the CLS token, position and patch embeddings.
 
@@ -159,7 +159,7 @@ class PatchEmbeddings(nn.Module):
         return x
 
 
-class ViTSelfAttention(nn.Module):
+class VMoESelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
         if config.hidden_size % config.num_attention_heads != 0 and not hasattr(config, "embedding_size"):
@@ -217,7 +217,7 @@ class ViTSelfAttention(nn.Module):
         return outputs
 
 
-class ViTSelfOutput(nn.Module):
+class VMoESelfOutput(nn.Module):
     """
     The residual connection is defined in ViTLayer instead of here (as is the case with other models), due to the
     layernorm applied before each block.
@@ -236,11 +236,11 @@ class ViTSelfOutput(nn.Module):
         return hidden_states
 
 
-class ViTAttention(nn.Module):
+class VMoEAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.attention = ViTSelfAttention(config)
-        self.output = ViTSelfOutput(config)
+        self.attention = VMoESelfAttention(config)
+        self.output = VMoESelfOutput(config)
         self.pruned_heads = set()
 
     def prune_heads(self, heads):
@@ -270,7 +270,7 @@ class ViTAttention(nn.Module):
         return outputs
 
 
-class ViTIntermediate(nn.Module):
+class VMoEIntermediate(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
@@ -287,7 +287,7 @@ class ViTIntermediate(nn.Module):
         return hidden_states
 
 
-class ViTOutput(nn.Module):
+class VMoEOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
@@ -302,16 +302,16 @@ class ViTOutput(nn.Module):
         return hidden_states
 
 
-class ViTLayer(nn.Module):
+class VMoELayer(nn.Module):
     """This corresponds to the Block class in the timm implementation."""
 
     def __init__(self, config):
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.seq_len_dim = 1
-        self.attention = ViTAttention(config)
-        self.intermediate = ViTIntermediate(config)
-        self.output = ViTOutput(config)
+        self.attention = VMoEAttention(config)
+        self.intermediate = VMoEIntermediate(config)
+        self.output = VMoEOutput(config)
         self.layernorm_before = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.layernorm_after = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
@@ -339,11 +339,11 @@ class ViTLayer(nn.Module):
         return outputs
 
 
-class ViTEncoder(nn.Module):
+class VMoEEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.layer = nn.ModuleList([ViTLayer(config) for _ in range(config.num_hidden_layers)])
+        self.layer = nn.ModuleList([VMoELayer(config) for _ in range(config.num_hidden_layers)])
         self.gradient_checkpointing = False
 
     def forward(
@@ -396,13 +396,13 @@ class ViTEncoder(nn.Module):
         )
 
 
-class ViTPreTrainedModel(PreTrainedModel):
+class VMoEPreTrainedModel(PreTrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
     """
 
-    config_class = ViTConfig
+    config_class = VMoEConfig
     base_model_prefix = "vit"
     main_input_name = "pixel_values"
     supports_gradient_checkpointing = True
@@ -424,7 +424,7 @@ class ViTPreTrainedModel(PreTrainedModel):
             module.weight.data.fill_(1.0)
 
     def _set_gradient_checkpointing(self, module, value=False):
-        if isinstance(module, ViTEncoder):
+        if isinstance(module, VMoEEncoder):
             module.gradient_checkpointing = value
 
 
@@ -468,16 +468,16 @@ VIT_INPUTS_DOCSTRING = r"""
     "The bare ViT Model transformer outputting raw hidden-states without any specific head on top.",
     VIT_START_DOCSTRING,
 )
-class ViTModel(ViTPreTrainedModel):
+class VMoEModel(VMoEPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True):
         super().__init__(config)
         self.config = config
 
-        self.embeddings = ViTEmbeddings(config)
-        self.encoder = ViTEncoder(config)
+        self.embeddings = VMoEEmbeddings(config)
+        self.encoder = VMoEEncoder(config)
 
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.pooler = ViTPooler(config) if add_pooling_layer else None
+        self.pooler = VMoEPooler(config) if add_pooling_layer else None
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -551,7 +551,7 @@ class ViTModel(ViTPreTrainedModel):
         )
 
 
-class ViTPooler(nn.Module):
+class VMoEPooler(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
@@ -573,12 +573,12 @@ class ViTPooler(nn.Module):
     """,
     VIT_START_DOCSTRING,
 )
-class ViTForImageClassification(ViTPreTrainedModel):
+class VMoEForImageClassification(VMoEPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
         self.num_labels = config.num_labels
-        self.vit = ViTModel(config, add_pooling_layer=False)
+        self.vit = VMoEModel(config, add_pooling_layer=False)
 
         # Classifier head
         self.classifier = nn.Linear(config.hidden_size, config.num_labels) if config.num_labels > 0 else nn.Identity()

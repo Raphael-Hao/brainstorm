@@ -49,6 +49,14 @@ class MaskSerialThorMoE(nn.Module):
         )
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.token_num = config.token_num
+        self.mask = torch.randint(
+            0,
+            self.expert_num,
+            (1, config.token_num, 1),
+        )
+        self.mask = self.mask.repeat(1, 1, config.hidden_size)
+        self.expert_mask = [self.mask.eq(i) for i in range(self.expert_num)]
 
     def forward(self, hidden_states):
         inter_states = []
@@ -57,18 +65,10 @@ class MaskSerialThorMoE(nn.Module):
             temp = self.intermediate_act_fn(temp)
             temp = self.dense2[expert](temp)
             inter_states.append(temp)
-        inter_states = torch.stack(inter_states, dim=0)
-
-        mask = torch.randint(
-            0,
-            self.expert_num,
-            (inter_states.size(1), inter_states.size(2)),
-            device=inter_states.device,
-        )
         for i in range(self.expert_num):
-            expert_mask = mask.eq(i)
-            inter_states[i] *= expert_mask.unsqueeze(-1)
+            inter_states[i] *= self.expert_mask[i]
 
+        inter_states = torch.stack(inter_states, dim=0)
         inter_states = inter_states.sum(dim=0)
         inter_states = self.dropout(inter_states)
         inter_states = self.LayerNorm(inter_states + hidden_states)
@@ -120,6 +120,9 @@ class MaskFusionThorMoE(nn.Module):
 
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.mask = torch.randint(0, self.expert_num, (config.token_num,1))
+        self.mask = self.mask.repeat(1, config.hidden_size)
+        self.expert_mask = [self.mask.eq(i) for i in range(self.expert_num)]
 
     def forward(self, hidden_states):
         # inter_states = hidden_states.unsqueeze(1)
@@ -127,14 +130,8 @@ class MaskFusionThorMoE(nn.Module):
         inter_states = torch.matmul(inter_states, self.dense1_weight) + self.dense1_bias
         inter_states = self.intermediate_act_fn(inter_states)
         inter_states = torch.matmul(inter_states, self.dense2_weight) + self.dense2_bias
-
-        # inter_states = inter_states.view(self.expert_num, 1, -1, inter_states.size(-1))
-        mask = torch.randint(
-            0, self.expert_num, (inter_states.size(1),), device=inter_states.device
-        )
         for i in range(self.expert_num):
-            expert_mask = mask.eq(i)
-            inter_states[i] *= expert_mask.unsqueeze(-1)
+            inter_states[i] *= self.expert_mask[i]
         inter_states = inter_states.sum(dim=0, keepdim=True)
 
         # print(inter_states.size())
@@ -194,8 +191,6 @@ class SparseSerialThorMoE(nn.Module):
             self.generate_mask(inter_states)
         # print(inter_states.size())
         inter_states = inter_states[self.random_mask].contiguous()
-        print(self.token_num)
-        print(self.expert_num)
         inter_states = inter_states.view(
             self.expert_num,
             int(self.token_num / self.expert_num),
