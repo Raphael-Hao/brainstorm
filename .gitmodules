@@ -1,0 +1,20 @@
+[submodule "3rdparty/vision_transformer"]
+	path = 3rdparty/vision_transformer
+	url = https://github.com/google-research/vision_transformer.git
+	branch = main
+[submodule "3rdparty/vmoe"]
+	path = 3rdparty/vmoe
+	url = https://github.com/google-research/vmoe.git
+	branch = main
+[submodule "3rdparty/flax"]
+	path = 3rdparty/flax
+	url = https://github.com/google/flax.git
+	branch = main
+[submodule "3rdparty/jax"]
+	path = 3rdparty/jax
+	url = https://github.com/google/jax.git
+	branch = main
+[submodule "3rdparty/optax"]
+	path = 3rdparty/optax
+	url = https://github.com/deepmind/optax.git
+	branch = master
