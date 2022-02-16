@@ -18,3 +18,27 @@
 	path = 3rdparty/optax
 	url = https://github.com/deepmind/optax.git
 	branch = master
+[submodule "3rdparty/dynamic_routing"]
+	path = 3rdparty/dynamic_routing
+	url = https://github.com/Megvii-BaseDetection/DynamicRouting.git
+	branch = master
+[submodule "3rdparty/multi_scale"]
+	path = 3rdparty/multi_scale
+	url = https://github.com/kalviny/MSDNet-PyTorch.git
+	branch = master
+[submodule "3rdparty/skipnet"]
+	path = 3rdparty/skipnet
+	url = https://github.com/ucbdrive/skipnet.git
+	branch = master
+[submodule "3rdparty/dee_bert"]
+	path = 3rdparty/dee_bert
+	url = https://github.com/castorini/DeeBERT.git
+	branch = master
+[submodule "3rdparty/dynamic_vit"]
+	path = 3rdparty/dynamic_vit
+	url = https://github.com/raoyongming/DynamicViT.git
+	branch = master
+[submodule "3rdparty/tvm"]
+	path = 3rdparty/tvm
+	url = https://github.com/apache/tvm.git
+	branch = main
