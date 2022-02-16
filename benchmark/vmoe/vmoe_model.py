@@ -33,7 +33,7 @@ from transformers.modeling_utils import (
     prune_linear_layer,
 )
 from transformers.utils import logging
-from v_moe_config import VMoEConfig
+from benchmark.vmoe.vmoe_config import VMoEConfig
 
 
 logger = logging.get_logger(__name__)
