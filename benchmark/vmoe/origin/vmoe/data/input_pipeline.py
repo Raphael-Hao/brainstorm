@@ -156,10 +156,10 @@ def get_data_from_tfds(*,
 def get_data_num_examples(config: ml_collections.ConfigDict) -> int:
   """Returns the total number of examples of a dataset specified by a config."""
   data_builder = tfds.builder(
-      name=config.name, data_dir=config.get('tfds_data_dir'))
+      name=config.name, data_dir=config.get('data_dir'))
   data_builder.download_and_prepare(
       download_config=tfds.download.DownloadConfig(
-          manual_dir=config.get('tfds_manual_dir')))
+          manual_dir=config.get('manual_dir')))
   # 1. Canonicalize input to absolute indices.
   abs_ri = tfds.core.ReadInstruction.from_spec(config.split).to_absolute(
       data_builder.info.splits)
