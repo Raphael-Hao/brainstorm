@@ -5,16 +5,15 @@
 # \brief:
 # Author: raphael hao
 
-import torch
-import torch.nn as nn
+import abc
 
 
-class Gate(nn.Module):
+class Gate(abc.ABC):
     def __init__(self, *args, **kwargs):
-        super().__init__()
+        pass
 
-    def forward(self, *input):
+    def dispatch(self, *input):
         raise NotImplementedError
 
-    def __repr__(self):
-        return self.__class__.__name__ + "()"
+    def combine(self, *input):
+        raise NotImplementedError
