@@ -25,8 +25,8 @@ Accuracy (mean over 3 runs with different fine-tuning seeds):
 import ml_collections
 
 # Paths to manually downloaded datasets and to the tensorflow_datasets data dir.
-TFDS_MANUAL_DIR = None
-TFDS_DATA_DIR = None
+TFDS_MANUAL_DIR = "/root/datasets/imagenet/manual"
+TFDS_DATA_DIR = "/root/datasets/imagenet"
 # The following configuration was made to fit on TPUv3-32. The number of images
 # per device has to be at least 32.
 BATCH_SIZE = 1024    # Number of images processed in each step.
@@ -94,7 +94,7 @@ def get_config():
   config.train_steps = 10_000
   config.initialization = ml_collections.ConfigDict({
       'name': 'initialize_from_vmoe_release',
-      'prefix': 'gs://vmoe_checkpoints/vmoe_b16_imagenet21k_randaug_strong',
+      'prefix': '/root/checkpoints/vmoe_b16_imagenet21k_randaug_strong_ft_ilsvrc2012',
       'keep': ['head'],
   })
   config.model = ml_collections.ConfigDict({
