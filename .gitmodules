@@ -42,7 +42,3 @@
 	path = 3rdparty/tvm
 	url = https://github.com/apache/tvm.git
 	branch = main
-[submodule "3rdparty/clu"]
-	path = 3rdparty/clu
-	url = https://github.com/google/CommonLoopUtils.git
-	branch = main
