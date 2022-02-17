@@ -21,7 +21,7 @@ def export_thor_model(model_filename):
     thor_config.num_attention_heads = 8
     thor_config.num_hidden_layers = 1
     thor_config.expert_num = 64
-    thor_config.expert_type = "sparse_serial"
+    thor_config.expert_type = "mask_fusion"
     model_filename = (
         thor_config.expert_type
         + "_"

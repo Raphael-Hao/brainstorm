@@ -46,3 +46,11 @@
 	path = 3rdparty/clu
 	url = https://github.com/google/CommonLoopUtils.git
 	branch = main
+[submodule "3rdparty/fastmoe"]
+	path = 3rdparty/fastmoe
+	url = https://github.com/laekov/fastmoe.git
+	branch = master
+[submodule "3rdparty/tutel"]
+	path = 3rdparty/tutel
+	url = https://github.com/microsoft/tutel.git
+	branch = v0.1.x
