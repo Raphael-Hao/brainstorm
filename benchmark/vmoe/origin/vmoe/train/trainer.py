@@ -442,7 +442,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
         train_state=train_state,
         axis_resources=train_state_axis_resources,
         **config.initialization)
-
+  print("wwwwwwwwwwwwwwwwwww")
   train_loss_fn, eval_loss_fn, label_pred_fn = get_loss_fn(**config.loss)
   train_step_pjit = pjit.pjit(
       fun=functools.partial(train_step, loss_fn=train_loss_fn),
@@ -456,7 +456,6 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str):
           None,                        # metrics
       ),
       donate_argnums=(0, 1, 2))
-
   # Setup metric writer & hooks.
   writer = metric_writers.create_default_writer(
       logdir=workdir, just_logging=jax.process_index() > 0)
