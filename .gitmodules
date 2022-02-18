@@ -38,3 +38,7 @@
 	path = 3rdparty/tvm
 	url = https://github.com/Raphael-Hao/tvm.git
 	branch = cmake_fix_v0.8.0
+[submodule "3rdparty/nnfusion"]
+	path = 3rdparty/nnfusion
+	url = https://github.com/Raphael-Hao/nnfusion.git
+	branch = cmake_fix
