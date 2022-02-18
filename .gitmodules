@@ -28,8 +28,8 @@
 	branch = master
 [submodule "3rdparty/tvm"]
 	path = 3rdparty/tvm
-	url = https://github.com/apache/tvm.git
-	branch = v0.8.0
+	url = https://github.com/Raphael-Hao/tvm.git
+	branch = cmake_fix
 [submodule "3rdparty/fastmoe"]
 	path = 3rdparty/fastmoe
 	url = https://github.com/laekov/fastmoe.git
