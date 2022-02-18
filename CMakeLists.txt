@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.2)
 project(brainstorm C CXX)
-include(cmake/tvm_config.cmake)
+include(cmake/tvm.cmake)
+include(cmake/nnfusion.cmake)
 
 # thirdparty libraries
 add_subdirectory(3rdparty/tvm)
