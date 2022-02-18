@@ -1,13 +1,26 @@
-expert_type, expert_num, bs, tokens, cost
-sparse_serial, 2, 1, 64, 0.2514
-sparse_serial, 4, 1, 64, 0.2980
-sparse_serial, 8, 1, 64, 0.4034
-sparse_serial, 16, 1, 64, 0.6338
-sparse_serial, 32, 1, 64, 1.0120
-sparse_serial, 64, 1, 64, 1.9480
-sparse_fusion, 2, 1, 64, 0.2027
-sparse_fusion, 4, 1, 64, 0.2058
-sparse_fusion, 8, 1, 64, 0.2283
-sparse_fusion, 16, 1, 64, 0.2459
-sparse_fusion, 32, 1, 64, 0.2698
-sparse_fusion, 64, 1, 64, 0.3791
+expert_type,expert_num,bs,tokens,cost,
+sparse_serial,2,1,64,0.2514,
+sparse_serial,4,1,64,0.2980,
+sparse_serial,8,1,64,0.4034,
+sparse_serial,16,1,64,0.6338,
+sparse_serial,32,1,64,1.0120,
+sparse_serial,64,1,64,1.9480,
+sparse_fusion,2,1,64,0.2027,
+sparse_fusion,4,1,64,0.2058,
+sparse_fusion,8,1,64,0.2283,
+sparse_fusion,16,1,64,0.2459,
+sparse_fusion,32,1,64,0.2698,
+sparse_fusion,64,1,64,0.3791,
+expert_type,expert_num,bs,tokens,cost,speedup
+sparse_serial,2,1,64,0.2514,1
+sparse_serial,4,1,64,0.298,1
+sparse_serial,8,1,64,0.4034,1
+sparse_serial,16,1,64,0.6338,1
+sparse_serial,32,1,64,1.012,1
+sparse_serial,64,1,64,1.948,1
+sparse_fusion,2,1,64,0.2027,1.24025654
+sparse_fusion,4,1,64,0.2058,1.44800777
+sparse_fusion,8,1,64,0.2283,1.76697328
+sparse_fusion,16,1,64,0.2459,2.57747052
+sparse_fusion,32,1,64,0.2698,3.75092661
+sparse_fusion,64,1,64,0.3791,5.13848589
