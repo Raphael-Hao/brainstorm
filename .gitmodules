@@ -29,7 +29,7 @@
 [submodule "3rdparty/tvm"]
 	path = 3rdparty/tvm
 	url = https://github.com/apache/tvm.git
-	branch = main
+	branch = v0.8.0
 [submodule "3rdparty/fastmoe"]
 	path = 3rdparty/fastmoe
 	url = https://github.com/laekov/fastmoe.git
