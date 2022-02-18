@@ -67,7 +67,6 @@ class MaskSerialThorMoE(nn.Module):
             inter_states.append(temp)
         for i in range(self.expert_num):
             inter_states[i] *= self.expert_mask[i]
-
         inter_states = torch.stack(inter_states, dim=0)
         inter_states = inter_states.sum(dim=0)
         inter_states = self.dropout(inter_states)
@@ -130,8 +129,11 @@ class MaskFusionThorMoE(nn.Module):
         inter_states = torch.matmul(inter_states, self.dense1_weight) + self.dense1_bias
         inter_states = self.intermediate_act_fn(inter_states)
         inter_states = torch.matmul(inter_states, self.dense2_weight) + self.dense2_bias
+        tmp_inter_states = []
         for i in range(self.expert_num):
-            inter_states[i] *= self.expert_mask[i]
+            tmp_states = inter_states[i] * self.expert_mask[i]
+            tmp_inter_states.append(tmp_states)
+        inter_states = torch.stack(tmp_inter_states, dim=0)
         inter_states = inter_states.sum(dim=0, keepdim=True)
 
         # print(inter_states.size())

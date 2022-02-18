@@ -6,18 +6,6 @@
 	path = 3rdparty/vmoe
 	url = https://github.com/google-research/vmoe.git
 	branch = main
-[submodule "3rdparty/flax"]
-	path = 3rdparty/flax
-	url = https://github.com/google/flax.git
-	branch = main
-[submodule "3rdparty/jax"]
-	path = 3rdparty/jax
-	url = https://github.com/google/jax.git
-	branch = main
-[submodule "3rdparty/optax"]
-	path = 3rdparty/optax
-	url = https://github.com/deepmind/optax.git
-	branch = master
 [submodule "3rdparty/dynamic_routing"]
 	path = 3rdparty/dynamic_routing
 	url = https://github.com/Megvii-BaseDetection/DynamicRouting.git
@@ -42,10 +30,6 @@
 	path = 3rdparty/tvm
 	url = https://github.com/apache/tvm.git
 	branch = main
-[submodule "3rdparty/clu"]
-	path = 3rdparty/clu
-	url = https://github.com/google/CommonLoopUtils.git
-	branch = main
 [submodule "3rdparty/fastmoe"]
 	path = 3rdparty/fastmoe
 	url = https://github.com/laekov/fastmoe.git
@@ -54,3 +38,7 @@
 	path = 3rdparty/tutel
 	url = https://github.com/microsoft/tutel.git
 	branch = v0.1.x
+[submodule "3rdparty/nnfusion"]
+	path = 3rdparty/nnfusion
+	url = https://github.com/microsoft/nnfusion.git
+	branch = master
