@@ -13,4 +13,3 @@ core
 total_latency.tsv
 build
 *.json
-!.vscode
