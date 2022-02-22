@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
 project(brainstorm C CXX)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(cmake/brainstorm.cmake)
 include(cmake/tvm.cmake)
 include(cmake/nnfusion.cmake)
