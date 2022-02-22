@@ -1,3 +1,7 @@
 {
-  "python.envFile": "${workspaceFolder}/.env"
+  "python.envFile": "${workspaceFolder}/.env",
+  "files.associations": {
+    "*.pbtxt": "textproto",
+    "memory_resource": "cpp"
+  }
 }
