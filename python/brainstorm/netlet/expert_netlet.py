@@ -8,12 +8,17 @@
 from __future__ import annotations
 import math
 import torch
+import torch.nn as nn
 from torch.nn import init
 from torch.nn.parameter import Parameter
 
 from .base import Netlet
 from transformers.activations import ACT2FN
 
+import tvm
+import tvm.relay as relay
+from tvm import auto_scheduler
+from tvm.contrib import graph_runtime
 
 def reset_bias(weight, bias):
     fan_in, _ = init._calculate_fan_in_and_fan_out(weight)
@@ -37,32 +42,7 @@ class ExpertNetlet(Netlet):
             self.intermediate_act_fn = ACT2FN
         else:
             self.intermediate_act_fn = config.hidden_act
-        self.dense1_weight = [
-            torch.empty((self.intermediate_size, self.hidden_size))
-            for _ in range(self.expert_num)
-        ]
-        self.dense1_bias = [
-            Parameter(torch.empty(self.intermediate_size))
-            for _ in range(self.expert_num)
-        ]
-        self.dense2_weight = [
-            torch.empty((self.hidden_size, self.intermediate_size))
-            for _ in range(self.expert_num)
-        ]
-        self.dense2_bias = [
-            Parameter(torch.empty(self.hidden_size)) for _ in range(self.expert_num)
-        ]
-        self.reset_parameters()
-
-    def reset_parameters(self) -> None:
-        for i in range(self.expert_num):
-            init.kaiming_uniform_(self.dense1_weight[i], a=math.sqrt(5))
-            reset_bias(self.dense1_weight[i], self.dense1_bias[i])
-            init.kaiming_uniform_(self.dense2_weight[i], a=math.sqrt(5))
-            reset_bias(self.dense2_weight[i], self.dense2_bias[i])
+        self.dense1 = nn.linear(self.hidden_size, self.intermediate_size)
+        self.dense2 = nn.Linear(self.intermediate_size, self.expert_num)
 
     def tvm_export(self):
-        class Expert
-    
-    
-    

@@ -12,4 +12,3 @@ core
 *.log
 total_latency.tsv
 build
-*.json
