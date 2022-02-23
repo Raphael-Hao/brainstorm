@@ -95,6 +95,8 @@ class EfficientTaskScheduler(TaskScheduler):
 
         for inp, res in zip(measure_inputs, measure_results):
             cost = array_mean(res.costs)
+            print(inp)
+            # threads_cnt = inp[]
             if cost < self.best_costs[task_idx]:
                 self.task_best_cts[task_idx] = self.task_cts[task_idx]
                 self.best_costs[task_idx] = cost
