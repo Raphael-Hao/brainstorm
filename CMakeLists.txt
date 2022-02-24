@@ -14,6 +14,9 @@ add_subdirectory(3rdparty/tvm)
 # add_subdirectory(3rdparty/nnfusion)
 
 #include directories
+include_directories(include)
 include_directories(3rdparty/tvm/include)
 include_directories(3rdparty/tvm/3rdparty/dmlc-core/include)
 include_directories(3rdparty/tvm/3rdparty/dlpack/include)
+
+add_subdirectory(microbench)
