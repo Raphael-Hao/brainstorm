@@ -69,6 +69,32 @@ def tune_thor(model_name):
     print("Evaluate inference time cost...")
     print(module.benchmark(dev, repeat=3, min_repeat_ms=500))
 
+def export_thor(model_name):
+    thor_onnx_model = onnx.load(f"{model_name}.onnx")
+    # fusion_onnx_model = onnx.load("fusion_thor_model.onnx")
+
+    thor_mod, thor_params = relay.frontend.from_onnx(thor_onnx_model, opset=11)
+    # fusion_mod, fusion_params = relay.frontend.from_onnx(fusion_onnx_model)
+    target = tvm.target.Target("cuda")
+    dtype = "float32"
+    log_file = f"{model_name}_tune.log"
+
+    thor_tasks, thor_task_weights = auto_scheduler.extract_tasks(
+        thor_mod["main"], thor_params, target
+    )
+    for idx, task in enumerate(thor_tasks):
+        print(
+            "========== Task %d  (workload key: %s) =========="
+            % (idx, task.workload_key)
+        )
+        print(task.compute_dag)
+    print("Begin exporting...")
+    with auto_scheduler.ApplyHistoryBest(log_file):
+        with tvm.transform.PassContext(
+            opt_level=3, config={"relay.backend.use_auto_scheduler": True}
+        ):
+            lib = relay.build(thor_mod, target=target, params=thor_params)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
