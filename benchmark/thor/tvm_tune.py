@@ -69,7 +69,8 @@ def tune_thor(model_name):
     print("Evaluate inference time cost...")
     print(module.benchmark(dev, repeat=3, min_repeat_ms=500))
 
-def export_thor(model_name):
+
+def print_thor(model_name):
     thor_onnx_model = onnx.load(f"{model_name}.onnx")
     # fusion_onnx_model = onnx.load("fusion_thor_model.onnx")
 
@@ -88,16 +89,23 @@ def export_thor(model_name):
             % (idx, task.workload_key)
         )
         print(task.compute_dag)
+        task.print_best(log_file, print_mode="cuda")
     print("Begin exporting...")
-    with auto_scheduler.ApplyHistoryBest(log_file):
-        with tvm.transform.PassContext(
-            opt_level=3, config={"relay.backend.use_auto_scheduler": True}
-        ):
-            lib = relay.build(thor_mod, target=target, params=thor_params)
+    # with auto_scheduler.ApplyHistoryBest(log_file):
+    #     with tvm.transform.PassContext(
+    #         opt_level=3, config={"relay.backend.use_auto_scheduler": True}
+    #     ):
+    #         lib = relay.build(thor_mod, target=target, params=thor_params)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="thor")
+    parser.add_argument("--mode", type=str, default="tune", choices=["tune", "print"])
     args = parser.parse_args()
-    tune_thor(args.model)
+    if args.mode == "tune":
+        tune_thor(args.model)
+    elif args.mode == "print":
+        print_thor(args.model)
+    else:
+        print("Unknown mode")
