@@ -6,9 +6,11 @@
 # Author: raphael hao
 import onnx
 import numpy as np
+import json
 import tvm
 import tvm.relay as relay
 from tvm import auto_scheduler
+from tvm.auto_scheduler.utils import deserialize_args
 from tvm.contrib import graph_executor
 import argparse
 
@@ -88,8 +90,19 @@ def print_thor(model_name):
             "========== Task %d  (workload key: %s) =========="
             % (idx, task.workload_key)
         )
+        workload = json.loads(task.workload_key)
+
         print(task.compute_dag)
-        task.print_best(log_file, print_mode="cuda")
+        if idx == 0 or idx == 3 or idx == 5 or idx == 6:
+            source_code =task.print_best(log_file, print_mode="cuda")
+            kernel_name = workload[0]
+            kernel_args = deserialize_args(workload[1:])
+            kernel_fname = kernel_name
+            for arg in kernel_args:
+                kernel_fname += "_" + str(arg)
+            kernel_fname += ".cu"
+            with open(kernel_fname, "w") as f:
+                f.write(source_code)
     print("Begin exporting...")
     # with auto_scheduler.ApplyHistoryBest(log_file):
     #     with tvm.transform.PassContext(
