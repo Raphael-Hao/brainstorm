@@ -137,12 +137,13 @@ __global__ void __launch_bounds__(16)
                                      ((((int)threadIdx.x) >> 2) * 1024)) +
                                     (k_outer_outer * 16)) +
                                    ((((int)threadIdx.x) & 3) * 4)))))[0];
-    ((float4*)(placeholder_shared + ((((int)threadIdx.x) * 4))))[0] =
-        ((float4*)((placeholder1[(((int)blockIdx.x) >> 7)]) +
-                   ((((((((int)blockIdx.x) & 127) * 4096)) +
-                      ((((int)threadIdx.x) >> 2) * 1024)) +
-                     (k_outer_outer * 16)) +
-                    ((((int)threadIdx.x) & 3) * 4))))[0];
+    
+    // ((float4*)(placeholder_shared + ((((int)threadIdx.x) * 4))))[0] =
+    //     ((float4*)((placeholder1[(((int)blockIdx.x) >> 7)]) +
+    //                ((((((((int)blockIdx.x) & 127) * 4096)) +
+    //                   ((((int)threadIdx.x) >> 2) * 1024)) +
+    //                  (k_outer_outer * 16)) +
+    //                 ((((int)threadIdx.x) & 3) * 4))))[0];
     // ((float4*)(placeholder_shared + (((((int)threadIdx.x) * 4) + 64))))[0] =
     //     ((float4*)(placeholder1[((((int)blockIdx.x) >> 7) + 1)] +
     //                ((((((((int)blockIdx.x) & 127) * 4096) +
