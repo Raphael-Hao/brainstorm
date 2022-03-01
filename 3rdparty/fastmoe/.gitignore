@@ -1,0 +1,15 @@
+*.pyc
+data/
+libtorch-shared-with-deps-*
+pytorch/cuda/build
+exp/
+.vscode/
+a.out
+*.egg-info
+*.egg
+build
+*swp
+logs
+dist
+**/.DS_Store
+.idea
