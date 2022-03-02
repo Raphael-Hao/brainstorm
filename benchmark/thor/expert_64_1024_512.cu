@@ -322,9 +322,7 @@ int main(int argc, char const* argv[]) {
   for (int i = 0; i < 64; ++i) {
     for (int j = 0; j < 512; ++j) {
       A_indices[i * 512 + j] = A_row_indices[i];
-      printf("%d ", A_indices[i * 512 + j]);
     }
-    printf("\n");
   }
 
   int* A_indices_d;
@@ -402,6 +400,18 @@ int main(int argc, char const* argv[]) {
   int test_num = 1000;
   CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
+    CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
+                             1024, &alpha, A_dispatch_d, 1024, B_d_linear, 512,
+                             &beta, C_d, 512));
+  }
+  CUDA_CHECK(cudaEventRecord(stop, stream));
+  CUDA_CHECK(cudaEventSynchronize(stop));
+  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  printf("default cublas matmul without gather %f ms\n",
+         elapsed_time / test_num);
+
+  CUDA_CHECK(cudaEventRecord(start, stream));
+  for (auto i = 0; i < test_num; ++i) {
     gather_kernel_kernel_16_16_32_4<<<gather_grid, gather_block, 0, stream>>>(
         A_indices_d, A_dispatch_d, A_d);
     CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
@@ -411,7 +421,7 @@ int main(int argc, char const* argv[]) {
   CUDA_CHECK(cudaEventRecord(stop, stream));
   CUDA_CHECK(cudaEventSynchronize(stop));
   CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
-  printf("default cublas matmul %f ms\n", elapsed_time / test_num);
+  printf("default cublas matmul with gather %f ms\n", elapsed_time / test_num);
 
   CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
@@ -425,6 +435,17 @@ int main(int argc, char const* argv[]) {
 
   CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
+    expert_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
+        A_d, B_d_array, C_d);
+  }
+  CUDA_CHECK(cudaEventRecord(stop, stream));
+  CUDA_CHECK(cudaEventSynchronize(stop));
+  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  printf("expert batch matmul without pointer gather %f ms\n",
+         elapsed_time / test_num);
+
+  CUDA_CHECK(cudaEventRecord(start, stream));
+  for (auto i = 0; i < test_num; ++i) {
     pointer_array_assign<<<2, 32, 0, stream>>>(B_d_array, B_d, expert_indexes);
     expert_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
         A_d, B_d_array, C_d);
@@ -432,7 +453,8 @@ int main(int argc, char const* argv[]) {
   CUDA_CHECK(cudaEventRecord(stop, stream));
   CUDA_CHECK(cudaEventSynchronize(stop));
   CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
-  printf("expert batch matmul %f ms\n", elapsed_time / test_num);
+  printf("expert batch matmul with pointer gather %f ms\n",
+         elapsed_time / test_num);
 
   CUDA_CHECK(cudaMemcpy(C_h_grand, C_d_grand, size_C * sizeof(float),
                         cudaMemcpyDeviceToHost));
