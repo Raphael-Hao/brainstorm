@@ -1,4 +1,7 @@
 
+#include "gather_64_512.cuh"
+
+#include <algorithm>
 #include <brainstorm/common/cuda_utils.h>
 #include <cmath>
 #include <cublas_v2.h>
@@ -308,15 +311,37 @@ int main(int argc, char const* argv[]) {
   CUDA_CHECK(cudaEventCreate(&stop));
   float elapsed_time;
 
+  int A_row_indices[64];
+  for (int i = 0; i < 64; ++i) {
+    A_row_indices[i] = i;
+  }
+  std::random_shuffle(A_row_indices, A_row_indices + 64);
+
+  int* A_indices;
+  CUDA_CHECK(cudaMallocHost((void**)&A_indices, sizeof(int) * size_A));
+  for (int i = 0; i < 64; ++i) {
+    for (int j = 0; j < 512; ++j) {
+      A_indices[i * 512 + j] = A_row_indices[i];
+      printf("%d ", A_indices[i * 512 + j]);
+    }
+    printf("\n");
+  }
+
+  int* A_indices_d;
+  CUDA_CHECK(cudaMalloc((void**)&A_indices_d, sizeof(int) * size_A));
+  CUDA_CHECK(cudaMemcpy(A_indices_d, A_indices, sizeof(int) * size_A,
+                        cudaMemcpyHostToDevice));
+
   float *A_h, *B_h, *C_h, *C_h_grand;
   CUDA_CHECK(cudaMallocHost((void**)&A_h, size_A * sizeof(float)));
   CUDA_CHECK(cudaMallocHost((void**)&B_h, size_B * sizeof(float)));
   CUDA_CHECK(cudaMallocHost((void**)&C_h, size_C * sizeof(float)));
   CUDA_CHECK(cudaMallocHost((void**)&C_h_grand, size_C * sizeof(float)));
 
-  float *A_d, *B_d, *B_d_linear, *C_d, *C_d_grand;
+  float *A_d, *A_dispatch_d, *B_d, *B_d_linear, *C_d, *C_d_grand;
   float** B_d_array;
   CUDA_CHECK(cudaMalloc((void**)&A_d, size_A * sizeof(float)));
+  CUDA_CHECK(cudaMalloc((void**)&A_dispatch_d, size_A * sizeof(float)));
   CUDA_CHECK(cudaMalloc((void**)&B_d, size_B * sizeof(float)));
   CUDA_CHECK(cudaMalloc((void**)&B_d_linear, size_B * sizeof(float)));
   CUDA_CHECK(cudaMalloc((void**)&B_d_array, sizeof(float*) * 64));
@@ -343,15 +368,20 @@ int main(int argc, char const* argv[]) {
   }
   CUDA_CHECK(cudaDeviceSynchronize());
 
-  pointer_array_assign<<<2, 32>>>(B_d_array, B_d, expert_indexes);
+  pointer_array_assign<<<2, 32, 0, stream>>>(B_d_array, B_d, expert_indexes);
   CUDA_CHECK(cudaDeviceSynchronize());
 
   dim3 grids(512, 64);
   dim3 blocks(1024, 1);
 
-  array_value_comp<<<grids, blocks>>>(B_d_array, B_d_linear);
+  array_value_comp<<<grids, blocks, 0, stream>>>(B_d_array, B_d_linear);
   CUDA_CHECK(cudaDeviceSynchronize());
 
+  dim3 gather_grid(16, 16);
+  dim3 gather_block(32, 4);
+  gather_kernel_kernel_16_16_32_4<<<gather_grid, gather_block, 0, stream>>>(
+      A_indices_d, A_dispatch_d, A_d);
+  CUDA_CHECK(cudaDeviceSynchronize());
   dim3 threads_per_block(4 * 4);
   dim3 blocks_per_grid(512 * 64 / threads_per_block.x);
   float alpha = 1.0f;
@@ -372,9 +402,11 @@ int main(int argc, char const* argv[]) {
   int test_num = 1000;
   CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
+    gather_kernel_kernel_16_16_32_4<<<gather_grid, gather_block, 0, stream>>>(
+        A_indices_d, A_dispatch_d, A_d);
     CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
-                             1024, &alpha, A_d, 1024, B_d_linear, 512, &beta,
-                             C_d, 512));
+                             1024, &alpha, A_dispatch_d, 1024, B_d_linear, 512,
+                             &beta, C_d, 512));
   }
   CUDA_CHECK(cudaEventRecord(stop, stream));
   CUDA_CHECK(cudaEventSynchronize(stop));
@@ -393,6 +425,7 @@ int main(int argc, char const* argv[]) {
 
   CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
+    pointer_array_assign<<<2, 32, 0, stream>>>(B_d_array, B_d, expert_indexes);
     expert_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
         A_d, B_d_array, C_d);
   }

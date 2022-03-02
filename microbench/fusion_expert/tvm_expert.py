@@ -50,7 +50,7 @@ def search_expert_kernel(
         expert_kernel = serial_expert
     log_filename = f"tvm_{expert_kernel.__name__}_{batch}_{E}_{M}_{K}_{N}.json"
     log_file = os.path.join(log_dir, log_filename)
-    print(f"Writing to log to file: {log_file}")
+    print(f"Writing log to file: {log_file}")
     target = tvm.target.Target("cuda")
     task = auto_scheduler.SearchTask(
         func=expert_kernel, args=(batch, E, M, K, N, out_dtype), target=target

@@ -1,17 +1,9 @@
+#define uint unsigned int
+#define uchar unsigned char
+#define ushort unsigned short
+#define int64_t long long
+#define uint64_t unsigned long long
 
-#ifdef _WIN32
-  using uint = unsigned int;
-  using uchar = unsigned char;
-  using ushort = unsigned short;
-  using int64_t = long long;
-  using uint64_t = unsigned long long;
-#else
-  #define uint unsigned int
-  #define uchar unsigned char
-  #define ushort unsigned short
-  #define int64_t long long
-  #define uint64_t unsigned long long
-#endif
 extern "C" __global__ void __launch_bounds__(32) default_function_kernel0(float* __restrict__ placeholder, float* __restrict__ placeholder1, float* __restrict__ T_batch_matmul_NT) {
   float T_batch_matmul_NT_local[4];
   __shared__ float placeholder_d_shared[1024];
