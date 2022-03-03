@@ -1128,3 +1128,7 @@ __global__ void __launch_bounds__(16) default_function_kernel0(float* __restrict
   }
 }
 }
+
+int main(int argc, char const* argv[]) {
+  return 0;
+}

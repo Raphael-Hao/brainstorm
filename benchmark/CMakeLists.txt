@@ -1,7 +1,7 @@
 
 # adding executable for thor experts
 
-file(GLOB HFUSION_SOURCE CONFIGURE_DEPENDS "thor/*64_1024_512.cu")
+file(GLOB HFUSION_SOURCE CONFIGURE_DEPENDS "thor/*1024_512.cu")
 foreach(file_name ${HFUSION_SOURCE})
   get_filename_component(file_name_no_ext ${file_name} NAME_WE)
   message(STATUS "Build " "${file_name_no_ext}")

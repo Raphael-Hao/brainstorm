@@ -31,14 +31,14 @@ def run_tuning(tasks, task_weights, log_file):
 
 
 def tune_thor(model_name):
-    thor_onnx_model = onnx.load(f"{model_name}.onnx")
+    thor_onnx_model = onnx.load(f"log/{model_name}.onnx")
     # fusion_onnx_model = onnx.load("fusion_thor_model.onnx")
 
     thor_mod, thor_params = relay.frontend.from_onnx(thor_onnx_model, opset=11)
     # fusion_mod, fusion_params = relay.frontend.from_onnx(fusion_onnx_model)
     target = tvm.target.Target("cuda")
     dtype = "float32"
-    log_file = f"{model_name}_tune.log"
+    log_file = f"log/{model_name}_tune.log"
 
     thor_tasks, thor_task_weights = auto_scheduler.extract_tasks(
         thor_mod["main"], thor_params, target
@@ -73,14 +73,14 @@ def tune_thor(model_name):
 
 
 def print_thor(model_name):
-    thor_onnx_model = onnx.load(f"{model_name}.onnx")
+    thor_onnx_model = onnx.load(f"log/{model_name}.onnx")
     # fusion_onnx_model = onnx.load("fusion_thor_model.onnx")
 
     thor_mod, thor_params = relay.frontend.from_onnx(thor_onnx_model, opset=11)
     # fusion_mod, fusion_params = relay.frontend.from_onnx(fusion_onnx_model)
     target = tvm.target.Target("cuda")
     dtype = "float32"
-    log_file = f"{model_name}_tune.log"
+    log_file = f"log/{model_name}_tune.log"
 
     thor_tasks, thor_task_weights = auto_scheduler.extract_tasks(
         thor_mod["main"], thor_params, target
