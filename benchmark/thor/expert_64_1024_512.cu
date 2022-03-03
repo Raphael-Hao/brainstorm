@@ -238,6 +238,24 @@ __global__ void __launch_bounds__(16)
        ((((int)blockIdx.x) & 127) * 4)) +
       (((int)threadIdx.x) & 3)))] = T_batch_matmul_NT_local[(0)];
 }
+
+__global__ void __launch_bounds__(32)
+    pointer_array_assign(float** dst, float* src, int index[]) {
+  dst[((blockIdx.x * 32) + threadIdx.x)] =
+      src + index[((blockIdx.x * 32) + threadIdx.x)] * 1024 * 512;
+}
+
+__global__ void __launch_bounds__(1024)
+    array_value_comp(float** dst, float* src) {
+  if (dst[blockIdx.y][blockIdx.x * 1024 + threadIdx.x] !=
+      src[blockIdx.y * 524288 + blockIdx.x * 1024 + threadIdx.x]) {
+    printf("%d-th value not equal:  %f, %f\n",
+           blockIdx.y * 524288 + blockIdx.x * 1024 + threadIdx.x,
+           dst[blockIdx.y][blockIdx.x * 1024 + threadIdx.x],
+           src[blockIdx.y * 524288 + blockIdx.x * 1024 + threadIdx.x]);
+  }
+  __syncthreads();
+}
 }
 
 void init_with_val(float* data, int size, float value) {
@@ -260,24 +278,6 @@ bool check_results(float* lfs, float* rhs, int size) {
     }
   }
   return true;
-}
-
-__global__ void __launch_bounds__(32)
-    pointer_array_assign(float** dst, float* src, int index[]) {
-  dst[((blockIdx.x * 32) + threadIdx.x)] =
-      src + index[((blockIdx.x * 32) + threadIdx.x)] * 1024 * 512;
-}
-
-__global__ void __launch_bounds__(1024)
-    array_value_comp(float** dst, float* src) {
-  if (dst[blockIdx.y][blockIdx.x * 1024 + threadIdx.x] !=
-      src[blockIdx.y * 524288 + blockIdx.x * 1024 + threadIdx.x]) {
-    printf("%d-th value not equal:  %f, %f\n",
-           blockIdx.y * 524288 + blockIdx.x * 1024 + threadIdx.x,
-           dst[blockIdx.y][blockIdx.x * 1024 + threadIdx.x],
-           src[blockIdx.y * 524288 + blockIdx.x * 1024 + threadIdx.x]);
-  }
-  __syncthreads();
 }
 
 void generate_expert_index(int* index, int size, int expert_num) {
@@ -357,7 +357,7 @@ int main(int argc, char const* argv[]) {
 
   int* expert_indexes;
   CUDA_CHECK(cudaMallocHost((void**)&expert_indexes, sizeof(int) * 64));
-  generate_expert_index(expert_indexes, 64, 1);
+  generate_expert_index(expert_indexes, 64, 64);
 
   for (auto i = 0; i < 64; ++i) {
     CUDA_CHECK(cudaMemcpy(
