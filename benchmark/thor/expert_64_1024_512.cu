@@ -258,13 +258,13 @@ __global__ void __launch_bounds__(1024)
 }
 }
 
-void init_with_val(float* data, int size, float value) {
+void init_with_val(float* __restrict__ data, int size, float value) {
   for (int i = 0; i < size; ++i) {
     data[i] = value;
   }
 }
 
-void init_with_rand(float* data, int size) {
+void init_with_rand(float* __restrict__ data, int size) {
   for (int i = 0; i < size; ++i) {
     data[i] = (rand() % 100) / 100.0;
   }
