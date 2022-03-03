@@ -452,3 +452,6 @@ extern "C" __global__ void __launch_bounds__(16)
   T_batch_matmul_NT[(((((int)blockIdx.x) * 16) + ((int)threadIdx.x)))] =
       T_batch_matmul_NT_local[(0)];
 }
+int main(int argc, char const* argv[]) {
+  return 0;
+}

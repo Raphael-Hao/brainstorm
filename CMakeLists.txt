@@ -1,10 +1,19 @@
 cmake_minimum_required(VERSION 3.2)
 project(brainstorm LANGUAGES CXX CUDA)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(cmake/FindCUDA.cmake)
+include(cmake/Utils.cmake)
+
 include(cmake/brainstorm.cmake)
 include(cmake/tvm.cmake)
 include(cmake/nnfusion.cmake)
-include(cmake/FindCUDA.cmake)
+
+brt_option(PTX_INFO "print ptx info for each cuda kernel" OFF)
+
+if(NOT DEFINED ${CMAKE_CUDA_ARCHITECTURES})
+    set(CMAKE_CUDA_ARCHITECTURES 80)
+endif()
 
 # IF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 #   SET(CMAKE_INSTALL_PREFIX  CACHE PATH <comment> FORCE)
@@ -82,9 +91,11 @@ if(USE_THRUST)
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
 endif(USE_THRUST)
 
-if(NOT DEFINED ${CMAKE_CUDA_ARCHITECTURES})
-    set(CMAKE_CUDA_ARCHITECTURES 80)
-endif()
+if(PTX_INFO)
+  message(STATUS "Build with PTX info")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --ptxas-options=-v")
+endif(PTX_INFO)
+
 
 # add_subdirectory(microbench)
 add_subdirectory(benchmark)
