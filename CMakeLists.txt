@@ -99,3 +99,4 @@ endif(PTX_INFO)
 
 # add_subdirectory(microbench)
 add_subdirectory(benchmark)
+add_subdirectory(test)

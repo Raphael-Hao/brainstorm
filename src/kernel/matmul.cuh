@@ -3456,17 +3456,20 @@ __device__ __forceinline__ void matmul_2_1024_512(float* __restrict__ placeholde
        512))] = T_batch_matmul_NT_local[(1)];
 }
 
+// calling 128 threads per block and using 256 blocks
 __device__ __forceinline__ void matmul_1_1024_512(float* __restrict__ placeholder, float* __restrict__ placeholder1, float* __restrict__ T_batch_matmul_NT) {
-  float T_batch_matmul_NT_local[2];
+  float T_batch_matmul_NT_local[1];
   __shared__ float placeholder_d_shared[512];
-  __shared__ float placeholder_shared[131072];
+  __shared__ float placeholder_shared[65536];
   T_batch_matmul_NT_local[(0)] = 0.000000e+00f;
-  T_batch_matmul_NT_local[(1)] = 0.000000e+00f;
-  ((float4*)(placeholder_d_shared + ((((int)threadIdx.x) * 4))))[0] =
-        ((float4*)(placeholder + ((((((int)blockIdx.x) >> 1) * 4096) +
-                                   (((int)threadIdx.x) * 4)))))[0];
-  for (int k_outer_outer = 0; k_outer_outer < 64; ++k_outer_outer) {
+  // T_batch_matmul_NT_local[(1)] = 0.000000e+00f;
+#pragma unroll
+  for (int k_outer_outer = 0; k_outer_outer < 2; ++k_outer_outer) {
     __syncthreads();
+    ((float4*)(placeholder_d_shared + ((((int)threadIdx.x) * 4))))[0] =
+        ((float4*)(placeholder + (k_outer_outer * 512)+ ((((((int)blockIdx.x) >> 1) * 4096) +
+                                   (((int)threadIdx.x) * 4)))))[0];
+    for (int k_)
     ((float4*)(placeholder_shared + ((((int)threadIdx.x) * 4))))[0] =
         ((float4*)(placeholder1 + (((((((((int)blockIdx.x) >> 7) * 2097152) +
                                        ((((int)blockIdx.x) & 127) * 4096)) +
