@@ -124,7 +124,7 @@ __global__ void __launch_bounds__(128)
                       float* __restrict__ T_batch_matmul_NT) {
   float T_batch_matmul_NT_local[1];
   __shared__ float placeholder_d_shared[512];
-  __shared__ float placeholder_shared[16384];
+  __shared__ float placeholder_shared[8192];
   T_batch_matmul_NT_local[(0)] = 0.000000e+00f;
 #pragma unroll
   for (int k_outer_outer = 0; k_outer_outer < 2; ++k_outer_outer) {
@@ -134,21 +134,25 @@ __global__ void __launch_bounds__(128)
                    ((((((int)blockIdx.x) >> 2) * 1024) +
                      (((int)threadIdx.x) * 4)))))[0];
 #pragma unroll
-    for (int k_outer = 0; k_outer < 4; ++k_outer) {
-      ((float4*)(placeholder_shared +
-                 ((((int)threadIdx.x) * 4 + k_outer * 512))))[0] =
-          ((float4*)(placeholder1 +
-                     (((((((((int)blockIdx.x) >> 2) * 524288) +
-                          ((((int)blockIdx.x) & 3) * 131072))) +
-                        (k_outer_outer * 512) + (k_outer * 1024)) +
-                       (((int)threadIdx.x) * 4)))))[0];
-    }
-    __syncthreads();
+    for (int k_outer = 0; k_outer < 8; ++k_outer) {
 #pragma unroll
-    for (int k_outer = 0; k_outer < 512; ++k_outer) {
-      T_batch_matmul_NT_local[(0)] +=
-          placeholder_d_shared[k_outer] *
-          placeholder_shared[((((int)threadIdx.x) * 512) + k_outer)];
+      for (int k = 0; k < 16; ++k) {
+        ((float4*)(placeholder_shared +
+                   ((((int)threadIdx.x) * 4 + k * 512))))[0] =
+            ((float4*)(placeholder1 +
+                       (((((((((int)blockIdx.x) >> 2) * 524288) +
+                            ((((int)blockIdx.x) & 3) * 131072))) +
+                          (k_outer_outer * 512) + (k_outer * 64) + (k * 8192)) +
+                         ((((int)threadIdx.x) >> 4) * 1024) +
+                         ((((int)threadIdx.x) & 15) * 4)))))[0];
+      }
+      __syncthreads();
+#pragma unroll
+      for (int k = 0; k < 64; ++k) {
+        T_batch_matmul_NT_local[(0)] +=
+            placeholder_d_shared[k + k_outer * 64] *
+            placeholder_shared[((((int)threadIdx.x) * 64) + k)];
+      }
     }
   }
   T_batch_matmul_NT[(

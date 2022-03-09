@@ -3469,7 +3469,6 @@ __device__ __forceinline__ void matmul_1_1024_512(float* __restrict__ placeholde
     ((float4*)(placeholder_d_shared + ((((int)threadIdx.x) * 4))))[0] =
         ((float4*)(placeholder + (k_outer_outer * 512)+ ((((((int)blockIdx.x) >> 1) * 4096) +
                                    (((int)threadIdx.x) * 4)))))[0];
-    for (int k_)
     ((float4*)(placeholder_shared + ((((int)threadIdx.x) * 4))))[0] =
         ((float4*)(placeholder1 + (((((((((int)blockIdx.x) >> 7) * 2097152) +
                                        ((((int)blockIdx.x) & 127) * 4096)) +
