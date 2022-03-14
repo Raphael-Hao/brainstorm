@@ -45,6 +45,7 @@ DistScatterRouter: nn.Module
 DistGatherRouter: nn.Module
 RecursiveRouter: nn.Module
 FusionNetlet: nn.Module
+NetletGroup: nn.ModuleDict
 
 x = Linear(x)
 x = Shutter(x)
@@ -55,7 +56,7 @@ x = Linear(x)
 x = Linear(x)
 x = Shutter(x)
 x, y = ScatterRouter(x) # x the scatter result, y the reverse indices
-x = Netlet(x)
+x = NetletGroup(x)
 x = GatherRouter(x, y)
 x = Linear(x)
 
@@ -73,5 +74,9 @@ x, y = DistScatterRouter(x)
 x = FusionNetlet(x)
 x = DistGatherRouter(x, y)
 
-with RecursiveRouter(x):
-    x = FusionNetlet(x)
+
+# recursive router
+x = Linear(x)
+x = Shutter(x)
+with RecursiveRouter(x) as r:
+    x = r.run(x)
