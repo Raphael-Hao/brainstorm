@@ -1,0 +1,4 @@
+xgboost==1.5.2
+tqdm=4.62.3
+torch=1.10.1+cu113
+transformers=0.4.2
