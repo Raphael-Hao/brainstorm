@@ -20,6 +20,7 @@ class DatasetEvaluator:
     This class will accumulate information of the inputs/outputs (by :meth:`process`),
     and produce evaluation results in the end (by :meth:`evaluate`).
     """
+
     def reset(self):
         """
         Preparation for a new round of evaluation.
@@ -76,12 +77,13 @@ class DatasetEvaluators(DatasetEvaluator):
                     assert (
                         k not in results
                     ), "Different evaluators produce results with the same key {}".format(
-                        k)
+                        k
+                    )
                     results[k] = v
         return results
 
 
-def inference_on_dataset(model, data_loader, evaluator):
+def inference_on_dataset(model, data_loader, evaluator, predict_mode=True):
     """
     Run model on the data_loader and evaluate the metrics with evaluator.
     The model will be used in eval mode.
@@ -101,8 +103,9 @@ def inference_on_dataset(model, data_loader, evaluator):
     Returns:
         The return value of `evaluator.evaluate()`
     """
-    num_devices = torch.distributed.get_world_size(
-    ) if torch.distributed.is_initialized() else 1
+    num_devices = (
+        torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+    )
     logger = logging.getLogger(__name__)
     logger.info("Start inference on {} images".format(len(data_loader)))
 
@@ -118,9 +121,10 @@ def inference_on_dataset(model, data_loader, evaluator):
             if idx == num_warmup:
                 start_time = time.time()
                 total_compute_time = 0
-
+            if not predict_mode:
+                model.cpu()
             start_compute_time = time.time()
-            outputs = model(inputs)
+            outputs = model(inputs, predict_mode=predict_mode)
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
             total_compute_time += time.time() - start_compute_time
@@ -129,26 +133,32 @@ def inference_on_dataset(model, data_loader, evaluator):
             if (idx + 1) % logging_interval == 0:
                 duration = time.time() - start_time
                 seconds_per_img = duration / (idx + 1 - num_warmup)
-                eta = datetime.timedelta(seconds=int(seconds_per_img *
-                                                     (total - num_warmup) -
-                                                     duration))
+                eta = datetime.timedelta(
+                    seconds=int(seconds_per_img * (total - num_warmup) - duration)
+                )
                 logger.info(
                     "Inference done {}/{}. {:.4f} s / img. ETA={}".format(
-                        idx + 1, total, seconds_per_img, str(eta)))
+                        idx + 1, total, seconds_per_img, str(eta)
+                    )
+                )
 
     # Measure the time only for this worker (before the synchronization barrier)
     total_time = int(time.time() - start_time)
     total_time_str = str(datetime.timedelta(seconds=total_time))
     # NOTE this format is parsed by grep
     logger.info(
-        "Total inference time: {} ({:.6f} s / img per device, on {} devices)".
-        format(total_time_str, total_time / (total - num_warmup), num_devices))
-    total_compute_time_str = str(
-        datetime.timedelta(seconds=int(total_compute_time)))
+        "Total inference time: {} ({:.6f} s / img per device, on {} devices)".format(
+            total_time_str, total_time / (total - num_warmup), num_devices
+        )
+    )
+    total_compute_time_str = str(datetime.timedelta(seconds=int(total_compute_time)))
     logger.info(
-        "Total inference pure compute time: {} ({:.6f} s / img per device, on {} devices)"
-        .format(total_compute_time_str,
-                total_compute_time / (total - num_warmup), num_devices))
+        "Total inference pure compute time: {} ({:.6f} s / img per device, on {} devices)".format(
+            total_compute_time_str,
+            total_compute_time / (total - num_warmup),
+            num_devices,
+        )
+    )
 
     results = evaluator.evaluate()
     # An evaluator may return None when not in main process.

@@ -17,8 +17,14 @@ __all__ = ["DynamicStem", "DynamicNetwork", "build_dynamic_backbone"]
 
 class DynamicStem(nn.Module):
     def __init__(
-        self, in_channels=3, mid_channels=64, out_channels=64,
-        input_res=None, sept_stem=True, norm="BN", affine=True
+        self,
+        in_channels=3,
+        mid_channels=64,
+        out_channels=64,
+        input_res=None,
+        sept_stem=True,
+        norm="BN",
+        affine=True,
     ):
         """
         Build basic STEM for Dynamic Network.
@@ -32,87 +38,144 @@ class DynamicStem(nn.Module):
         self.real_flops = 0.0
         # start with 3 stem layers down-sampling by 4.
         self.stem_1 = Conv2d(
-            in_channels, mid_channels, kernel_size=3, stride=2,
-            bias=False, norm=get_norm(norm, mid_channels),
-            activation=nn.ReLU()
+            in_channels,
+            mid_channels,
+            kernel_size=3,
+            stride=2,
+            bias=False,
+            norm=get_norm(norm, mid_channels),
+            activation=nn.ReLU(),
         )
         self.real_flops += cal_op_flops.count_ConvBNReLU_flop(
-            input_res[0], input_res[1], 3, mid_channels,
-            [3, 3], stride=2, is_affine=affine
+            input_res[0],
+            input_res[1],
+            3,
+            mid_channels,
+            [3, 3],
+            stride=2,
+            is_affine=affine,
         )
         # stem 2
         input_res = input_res // 2
         if not sept_stem:
             self.stem_2 = Conv2d(
-                mid_channels, mid_channels, kernel_size=3,
-                stride=1, padding=1, bias=False,
+                mid_channels,
+                mid_channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False,
                 norm=get_norm(norm, mid_channels),
-                activation=nn.ReLU()
+                activation=nn.ReLU(),
             )
             self.real_flops += cal_op_flops.count_ConvBNReLU_flop(
-                input_res[0], input_res[1], mid_channels,
-                mid_channels, [3, 3], is_affine=affine
+                input_res[0],
+                input_res[1],
+                mid_channels,
+                mid_channels,
+                [3, 3],
+                is_affine=affine,
             )
         else:
             self.stem_2 = nn.Sequential(
                 Conv2d(
-                    mid_channels, mid_channels, kernel_size=3, stride=1,
-                    padding=1, groups=mid_channels, bias=False
+                    mid_channels,
+                    mid_channels,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    groups=mid_channels,
+                    bias=False,
                 ),
                 Conv2d(
-                    mid_channels, mid_channels, kernel_size=1,
-                    stride=1, padding=0, bias=False,
+                    mid_channels,
+                    mid_channels,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    bias=False,
                     norm=get_norm(norm, mid_channels),
-                    activation=nn.ReLU()
-                )
+                    activation=nn.ReLU(),
+                ),
             )
-            self.real_flops += (
-                cal_op_flops.count_Conv_flop(
-                    input_res[0], input_res[1], mid_channels,
-                    mid_channels, [3, 3], groups=mid_channels
-                ) + cal_op_flops.count_ConvBNReLU_flop(
-                    input_res[0], input_res[1], mid_channels,
-                    mid_channels, [1, 1], is_affine=affine
-                )
+            self.real_flops += cal_op_flops.count_Conv_flop(
+                input_res[0],
+                input_res[1],
+                mid_channels,
+                mid_channels,
+                [3, 3],
+                groups=mid_channels,
+            ) + cal_op_flops.count_ConvBNReLU_flop(
+                input_res[0],
+                input_res[1],
+                mid_channels,
+                mid_channels,
+                [1, 1],
+                is_affine=affine,
             )
         # stem 3
         if not sept_stem:
             self.stem_3 = Conv2d(
-                mid_channels, out_channels, kernel_size=3,
-                stride=2, padding=1, bias=False,
+                mid_channels,
+                out_channels,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                bias=False,
                 norm=get_norm(norm, out_channels),
-                activation=nn.ReLU()
+                activation=nn.ReLU(),
             )
             self.real_flops += cal_op_flops.count_ConvBNReLU_flop(
-                input_res[0], input_res[1], mid_channels, out_channels,
-                [3, 3], stride=2, is_affine=affine
+                input_res[0],
+                input_res[1],
+                mid_channels,
+                out_channels,
+                [3, 3],
+                stride=2,
+                is_affine=affine,
             )
         else:
             self.stem_3 = nn.Sequential(
                 Conv2d(
-                    mid_channels, mid_channels, kernel_size=3, stride=2,
-                    padding=1, groups=mid_channels, bias=False
+                    mid_channels,
+                    mid_channels,
+                    kernel_size=3,
+                    stride=2,
+                    padding=1,
+                    groups=mid_channels,
+                    bias=False,
                 ),
                 Conv2d(
-                    mid_channels, out_channels, kernel_size=1, padding=0,
-                    bias=False, norm=get_norm(norm, out_channels),
-                    activation=nn.ReLU()
-                )
+                    mid_channels,
+                    out_channels,
+                    kernel_size=1,
+                    padding=0,
+                    bias=False,
+                    norm=get_norm(norm, out_channels),
+                    activation=nn.ReLU(),
+                ),
             )
-            self.real_flops += (
-                cal_op_flops.count_Conv_flop(
-                    input_res[0], input_res[1], mid_channels,
-                    mid_channels, [3, 3], stride=2, groups=mid_channels
-                ) + cal_op_flops.count_ConvBNReLU_flop(
-                    input_res[0] // 2, input_res[1] // 2, mid_channels,
-                    out_channels, [1, 1], is_affine=affine
-                )
+            self.real_flops += cal_op_flops.count_Conv_flop(
+                input_res[0],
+                input_res[1],
+                mid_channels,
+                mid_channels,
+                [3, 3],
+                stride=2,
+                groups=mid_channels,
+            ) + cal_op_flops.count_ConvBNReLU_flop(
+                input_res[0] // 2,
+                input_res[1] // 2,
+                mid_channels,
+                out_channels,
+                [1, 1],
+                is_affine=affine,
             )
         self.out_res = input_res // 2
         self.out_cha = out_channels
         # using Kaiming init
         for layer in [self.stem_1, self.stem_2, self.stem_3]:
-            weight_init.kaiming_init_module(layer, mode='fan_in')
+            weight_init.kaiming_init_module(layer, mode="fan_in")
 
     def forward(self, x):
         x = self.stem_1(x)
@@ -142,15 +205,29 @@ class DynamicNetwork(Backbone):
     This module implements Dynamic Routing Network.
     It creates dense connected network on top of some input feature maps.
     """
+
     def __init__(
-        self, init_channel, input_shape, cell_num_list, layer_num,
-        ext_layer=None, norm="", cal_flops=True, cell_type='',
-        max_stride=32, sep_stem=True, using_gate=False,
-        small_gate=False, gate_bias=1.5, drop_prob=0.0,
+        self,
+        init_channel,
+        input_shape,
+        cell_num_list,
+        layer_num,
+        ext_layer=None,
+        norm="",
+        cal_flops=True,
+        cell_type="",
+        max_stride=32,
+        sep_stem=True,
+        using_gate=False,
+        small_gate=False,
+        gate_bias=1.5,
+        drop_prob=0.0,
+        device=None,
     ):
         super(DynamicNetwork, self).__init__()
+        self.device = device
         # set affine in BatchNorm
-        if 'Sync' in norm:
+        if "Sync" in norm:
             self.affine = True
         else:
             self.affine = False
@@ -165,8 +242,12 @@ class DynamicNetwork(Backbone):
         input_res = np.array(input_shape[1:3])
 
         self.stem = DynamicStem(
-            3, out_channels=init_channel, input_res=input_res,
-            sept_stem=sep_stem, norm=norm, affine=self.affine
+            3,
+            out_channels=init_channel,
+            input_res=input_res,
+            sept_stem=sep_stem,
+            norm=norm,
+            affine=self.affine,
         )
         self.stem_flops = self.stem.flops
         self._out_feature_strides = {"stem": self.stem.stride}
@@ -181,10 +262,18 @@ class DynamicNetwork(Backbone):
         input_res = input_res // self.stem.stride
         in_channel = out_channel = init_channel
         self.init_layer = Cell(
-            C_in=in_channel, C_out=out_channel, norm=norm, allow_up=False,
-            allow_down=True, input_size=input_res, cell_type=cell_type,
-            cal_flops=False, using_gate=using_gate, small_gate=small_gate,
-            gate_bias=gate_bias, affine=self.affine
+            C_in=in_channel,
+            C_out=out_channel,
+            norm=norm,
+            allow_up=False,
+            allow_down=True,
+            input_size=input_res,
+            cell_type=cell_type,
+            cal_flops=False,
+            using_gate=using_gate,
+            small_gate=small_gate,
+            gate_bias=gate_bias,
+            affine=self.affine,
         )
 
         # add cells in each layer
@@ -207,12 +296,18 @@ class DynamicNetwork(Backbone):
                 res_size = input_res // channel_multi
                 layer_cell_list.append(
                     Cell(
-                        C_in=in_channel_cell, C_out=in_channel_cell, norm=norm,
-                        allow_up=allow_up, allow_down=allow_down,
-                        input_size=res_size, cell_type=cell_type,
-                        cal_flops=cal_flops, using_gate=using_gate,
-                        small_gate=small_gate, gate_bias=gate_bias,
-                        affine=self.affine
+                        C_in=in_channel_cell,
+                        C_out=in_channel_cell,
+                        norm=norm,
+                        allow_up=allow_up,
+                        allow_down=allow_down,
+                        input_size=res_size,
+                        cell_type=cell_type,
+                        cal_flops=cal_flops,
+                        using_gate=using_gate,
+                        small_gate=small_gate,
+                        gate_bias=gate_bias,
+                        affine=self.affine,
                     )
                 )
                 # allow dim change in each aggregation
@@ -221,17 +316,24 @@ class DynamicNetwork(Backbone):
                 if cell_index > 0:
                     dim_up = True
                 # dim down and resolution up by 2
-                if (cell_index < self.cell_num_list[layer_index] - 1) and layer_index > 2:
+                if (
+                    cell_index < self.cell_num_list[layer_index] - 1
+                ) and layer_index > 2:
                     dim_down = True
-                elif (cell_index < self.cell_num_list[layer_index] - 2) and layer_index <= 2:
+                elif (
+                    cell_index < self.cell_num_list[layer_index] - 2
+                ) and layer_index <= 2:
                     dim_down = True
                 # dim keep unchanged
-                if layer_index <= 2 and cell_index == self.cell_num_list[layer_index] - 1:
+                if (
+                    layer_index <= 2
+                    and cell_index == self.cell_num_list[layer_index] - 1
+                ):
                     dim_keep = False
                 # allowed cell operations
                 layer_cell_type.append([dim_up, dim_keep, dim_down])
                 if layer_index == len(self.cell_num_list) - 1:
-                    name = 'layer_' + str(cell_index)
+                    name = "layer_" + str(cell_index)
                     self._out_feature_strides[name] = channel_multi * self.stem.stride
                     self._out_feature_channels[name] = in_channel_cell
                     self._out_feature_resolution[name] = res_size
@@ -243,10 +345,17 @@ class DynamicNetwork(Backbone):
     def size_divisibility(self):
         return self._size_divisibility
 
-    def forward(self, x, step_rate=0.0):
+    def forward(self, x, step_rate=0.0, predict_mode=True):
+        if not predict_mode:
+            # print("Stem To Device: ", self.device)
+            self.stem.to(self.device)
         h_l1 = self.stem(x)
         # the initial layer
-        h_l1_list, h_beta_list, trans_flops, trans_flops_real = self.init_layer(h_l1=h_l1)
+        if not predict_mode:
+            self.init_layer.to(self.device)
+        h_l1_list, h_beta_list, trans_flops, trans_flops_real = self.init_layer(
+            h_l1=h_l1
+        )
         prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
         prev_trans_flops, prev_trans_flops_real = [trans_flops], [trans_flops_real]
         # build forward outputs
@@ -262,17 +371,27 @@ class DynamicNetwork(Backbone):
                 if self.all_cell_type_list[layer_index][cell_index][0]:
                     cell_input.append(prev_out_list[cell_index - 1][2][0])
                     trans_flops_input.append(prev_trans_flops[cell_index - 1][2][0])
-                    trans_flops_real_input.append(prev_trans_flops_real[cell_index - 1][2][0])
+                    trans_flops_real_input.append(
+                        prev_trans_flops_real[cell_index - 1][2][0]
+                    )
                 if self.all_cell_type_list[layer_index][cell_index][1]:
                     cell_input.append(prev_out_list[cell_index][1][0])
                     trans_flops_input.append(prev_trans_flops[cell_index][1][0])
-                    trans_flops_real_input.append(prev_trans_flops_real[cell_index][1][0])
+                    trans_flops_real_input.append(
+                        prev_trans_flops_real[cell_index][1][0]
+                    )
                 if self.all_cell_type_list[layer_index][cell_index][2]:
                     cell_input.append(prev_out_list[cell_index + 1][0][0])
                     trans_flops_input.append(prev_trans_flops[cell_index + 1][0][0])
-                    trans_flops_real_input.append(prev_trans_flops_real[cell_index + 1][0][0])
-
+                    trans_flops_real_input.append(
+                        prev_trans_flops_real[cell_index + 1][0][0]
+                    )
                 h_l1 = sum(cell_input)
+                h_l1_input = h_l1 if isinstance(h_l1, float) else h_l1.shape
+                # if isinstance(h_l1_input, float):
+                # print(
+                #     f"layer index: {layer_index}, cell index: {cell_index}, collected input: {len(cell_input)}, cell input: {h_l1_input}"
+                # )
                 # calculate input for gate
                 layer_input.append(h_l1)
                 # calculate FLOPs input
@@ -283,28 +402,44 @@ class DynamicNetwork(Backbone):
 
             # calculate each cell
             for _cell_index in range(len(self.all_cell_type_list[layer_index])):
+                if not predict_mode:
+                    # print(f"layer index: {layer_index}, cell index: {_cell_index} to device: {self.device}")
+                    self.all_cell_list[layer_index][_cell_index].to(self.device)
                 if self.cal_flops:
-                    cell_output, gate_weights_beta, cell_flops, \
-                        cell_flops_real, trans_flops, trans_flops_real = \
-                        self.all_cell_list[layer_index][_cell_index](
-                            h_l1=layer_input[_cell_index],
-                            flops_in_expt=flops_in_expt_list[_cell_index],
-                            flops_in_real=flops_in_real_list[_cell_index],
-                            is_drop_path=self.drop_path, drop_prob=self.drop_prob,
-                            layer_rate=layer_rate, step_rate=step_rate
-                        )
+                    (
+                        cell_output,
+                        gate_weights_beta,
+                        cell_flops,
+                        cell_flops_real,
+                        trans_flops,
+                        trans_flops_real,
+                    ) = self.all_cell_list[layer_index][_cell_index](
+                        h_l1=layer_input[_cell_index],
+                        flops_in_expt=flops_in_expt_list[_cell_index],
+                        flops_in_real=flops_in_real_list[_cell_index],
+                        is_drop_path=self.drop_path,
+                        drop_prob=self.drop_prob,
+                        layer_rate=layer_rate,
+                        step_rate=step_rate,
+                    )
                     # calculate real flops
                     cell_flops_list.append(cell_flops)
                     cell_flops_real_list.append(cell_flops_real)
                 else:
-                    cell_output, gate_weights_beta, trans_flops, trans_flops_real = \
-                        self.all_cell_list[layer_index][_cell_index](
-                            h_l1=layer_input[_cell_index],
-                            flops_in_expt=flops_in_expt_list[_cell_index],
-                            flops_in_real=flops_in_real_list[_cell_index],
-                            is_drop_path=self.drop_path, drop_prob=self.drop_prob,
-                            layer_rate=layer_rate, step_rate=step_rate
-                        )
+                    (
+                        cell_output,
+                        gate_weights_beta,
+                        trans_flops,
+                        trans_flops_real,
+                    ) = self.all_cell_list[layer_index][_cell_index](
+                        h_l1=layer_input[_cell_index],
+                        flops_in_expt=flops_in_expt_list[_cell_index],
+                        flops_in_real=flops_in_real_list[_cell_index],
+                        is_drop_path=self.drop_path,
+                        drop_prob=self.drop_prob,
+                        layer_rate=layer_rate,
+                        step_rate=step_rate,
+                    )
 
                 layer_output.append(cell_output)
                 # update trans flops output
@@ -330,7 +465,7 @@ class DynamicNetwork(Backbone):
                 channels=self._out_feature_channels[name],
                 height=self._out_feature_resolution[name][0],
                 width=self._out_feature_resolution[name][0],
-                stride=self._out_feature_strides[name]
+                stride=self._out_feature_strides[name],
             )
             for name in self._out_features
         }
@@ -359,7 +494,8 @@ def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
         using_gate=cfg.MODEL.GATE.GATE_ON,
         small_gate=cfg.MODEL.GATE.SMALL_GATE,
         gate_bias=cfg.MODEL.GATE.GATE_INIT_BIAS,
-        drop_prob=cfg.MODEL.BACKBONE.DROP_PROB
+        drop_prob=cfg.MODEL.BACKBONE.DROP_PROB,
+        device=cfg.MODEL.DEVICE,
     )
 
     return backbone
