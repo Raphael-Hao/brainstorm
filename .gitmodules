@@ -10,3 +10,7 @@
 	path = 3rdparty/nnfusion
 	url = https://github.com/Raphael-Hao/nnfusion.git
 	branch = cmake_fix
+[submodule "3rdparty/transformers"]
+	path = 3rdparty/transformers
+	url = https://github.com/huggingface/transformers.git
+	branch = master
