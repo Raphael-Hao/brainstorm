@@ -15,15 +15,17 @@ from collections import OrderedDict
 from torch.nn.parallel import DistributedDataParallel
 
 from dl_lib.checkpoint import DetectionCheckpointer
-from dl_lib.data import (build_detection_test_loader,
-                         build_detection_train_loader)
-from dl_lib.evaluation import (DatasetEvaluator, inference_on_dataset,
-                               print_csv_format, verify_results)
+from dl_lib.data import build_detection_test_loader, build_detection_train_loader
+from dl_lib.evaluation import (
+    DatasetEvaluator,
+    inference_on_dataset,
+    print_csv_format,
+    verify_results,
+)
 from dl_lib.modeling.nn_utils.precise_bn import get_bn_modules
 from dl_lib.solver import build_lr_scheduler, build_optimizer
 from dl_lib.utils import comm
-from dl_lib.utils.events import (CommonMetricPrinter, JSONWriter,
-                                 TensorboardXWriter)
+from dl_lib.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
 
 from . import hooks
 from .train_loop import DIYTrainer
@@ -71,6 +73,7 @@ class CustomizedTrainer(DIYTrainer):
         trainer.resume_or_load()  # load last checkpoint or MODEL.WEIGHTS
         trainer.train()
     """
+
     def __init__(self, cfg, model):
         """
         Args:
@@ -82,13 +85,12 @@ class CustomizedTrainer(DIYTrainer):
 
         # For training, wrap with DDP. But don't need this for inference.
         if comm.get_world_size() > 1:
-            model = DistributedDataParallel(model,
-                                            device_ids=[comm.get_local_rank()],
-                                            broadcast_buffers=False)
+            model = DistributedDataParallel(
+                model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
+            )
         super().__init__(model, data_loader, optimizer)
 
-        self.scheduler = self.build_lr_scheduler(cfg.SOLVER.LR_SCHEDULER,
-                                                 optimizer)
+        self.scheduler = self.build_lr_scheduler(cfg.SOLVER.LR_SCHEDULER, optimizer)
         # Assume no other objects need to be checkpointed.
         # We can later make it checkpoint the stateful hooks
         self.checkpointer = DetectionCheckpointer(
@@ -117,8 +119,12 @@ class CustomizedTrainer(DIYTrainer):
         """
         # The checkpoint stores the training iteration that just finished, thus we start
         # at the next iteration (or iter zero if there's no checkpoint).
-        self.start_iter = (self.checkpointer.resume_or_load(
-            self.cfg.MODEL.WEIGHTS, resume=resume).get("iteration", -1) + 1)
+        self.start_iter = (
+            self.checkpointer.resume_or_load(self.cfg.MODEL.WEIGHTS, resume=resume).get(
+                "iteration", -1
+            )
+            + 1
+        )
 
     def build_hooks(self):
         """
@@ -141,7 +147,8 @@ class CustomizedTrainer(DIYTrainer):
                 # Build a new data loader to not affect training
                 self.build_train_loader(cfg),
                 cfg.TEST.PRECISE_BN.NUM_ITER,
-            ) if cfg.TEST.PRECISE_BN.ENABLED and get_bn_modules(self.model)
+            )
+            if cfg.TEST.PRECISE_BN.ENABLED and get_bn_modules(self.model)
             else None,
         ]
 
@@ -151,8 +158,10 @@ class CustomizedTrainer(DIYTrainer):
         # some checkpoints may have more precise statistics than others.
         if comm.is_main_process():
             ret.append(
-                hooks.PeriodicCheckpointer(self.checkpointer,
-                                           cfg.SOLVER.CHECKPOINT_PERIOD))
+                hooks.PeriodicCheckpointer(
+                    self.checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD
+                )
+            )
 
         def test_and_save_results():
             self._last_eval_results = self.test(self.cfg, self.model)
@@ -257,7 +266,8 @@ class CustomizedTrainer(DIYTrainer):
         """
         raise NotImplementedError(
             "Please either implement `build_evaluator()` in subclasses, or pass "
-            "your evaluator as arguments to `DefaultTrainer.test()`.")
+            "your evaluator as arguments to `DefaultTrainer.test()`."
+        )
 
     @classmethod
     def test(cls, cfg, model, evaluators=None):
@@ -276,9 +286,9 @@ class CustomizedTrainer(DIYTrainer):
         if isinstance(evaluators, DatasetEvaluator):
             evaluators = [evaluators]
         if evaluators is not None:
-            assert len(
-                cfg.DATASETS.TEST) == len(evaluators), "{} != {}".format(
-                    len(cfg.DATASETS.TEST), len(evaluators))
+            assert len(cfg.DATASETS.TEST) == len(evaluators), "{} != {}".format(
+                len(cfg.DATASETS.TEST), len(evaluators)
+            )
 
         results = OrderedDict()
         for idx, dataset_name in enumerate(cfg.DATASETS.TEST):
@@ -293,18 +303,23 @@ class CustomizedTrainer(DIYTrainer):
                 except NotImplementedError:
                     logger.warn(
                         "No evaluator found. Use `DefaultTrainer.test(evaluators=)`, "
-                        "or implement its `build_evaluator` method.")
+                        "or implement its `build_evaluator` method."
+                    )
                     results[dataset_name] = {}
                     continue
-            results_i = inference_on_dataset(model, data_loader, evaluator)
+            results_i = inference_on_dataset(
+                model, data_loader, evaluator, cfg.BRT.PREDICT_MODE
+            )
             results[dataset_name] = results_i
             if comm.is_main_process():
                 assert isinstance(
                     results_i, dict
                 ), "Evaluator must return a dict on the main process. Got {} instead.".format(
-                    results_i)
-                logger.info("Evaluation results for {} in csv format:".format(
-                    dataset_name))
+                    results_i
+                )
+                logger.info(
+                    "Evaluation results for {} in csv format:".format(dataset_name)
+                )
                 print_csv_format(results_i)
 
         if len(results) == 1:

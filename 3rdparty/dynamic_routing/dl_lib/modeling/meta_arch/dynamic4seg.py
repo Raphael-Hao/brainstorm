@@ -24,6 +24,7 @@ class DynamicNet4Seg(nn.Module):
         self.constrain_on = cfg.MODEL.BUDGET.CONSTRAIN
         self.unupdate_rate = cfg.MODEL.BUDGET.UNUPDATE_RATE
         self.device = torch.device(cfg.MODEL.DEVICE)
+        self.cal_flops = cfg.MODEL.CAL_FLOPS
         self.backbone = cfg.build_backbone(cfg)
         self.sem_seg_head = cfg.build_sem_seg_head(
             cfg, self.backbone.output_shape())
@@ -35,7 +36,7 @@ class DynamicNet4Seg(nn.Module):
         self.budget_constrint = BudgetConstraint(cfg)
         self.to(self.device)
 
-    def forward(self, batched_inputs, step_rate=0.0):
+    def forward(self, batched_inputs, step_rate=0.0, predict_mode=True):
         """
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
@@ -58,9 +59,8 @@ class DynamicNet4Seg(nn.Module):
         images = [self.normalizer(x) for x in images]
         images = ImageList.from_tensors(images,
                                         self.backbone.size_divisibility)
-
         features, expt_flops, real_flops = self.backbone(
-            images.tensor, step_rate)
+            images.tensor, step_rate, predict_mode)
 
         if "sem_seg" in batched_inputs[0]:
             targets = [x["sem_seg"].to(self.device) for x in batched_inputs]
@@ -69,11 +69,15 @@ class DynamicNet4Seg(nn.Module):
                 self.sem_seg_head.ignore_value).tensor
         else:
             targets = None
-
+        if not predict_mode:
+            self.sem_seg_head.to(self.device)
         results, losses = self.sem_seg_head(features, targets)
         # calculate flops
-        real_flops += self.sem_seg_head.flops
-        flops = {'real_flops': real_flops, 'expt_flops': expt_flops}
+        if self.cal_flops:
+            real_flops += self.sem_seg_head.flops
+            flops = {'real_flops': real_flops, 'expt_flops': expt_flops}
+        else:
+            flops = None
         # use budget constraint for training
         if self.training:
             if self.constrain_on and step_rate >= self.unupdate_rate:
@@ -92,7 +96,10 @@ class DynamicNet4Seg(nn.Module):
             height = input_per_image.get("height")
             width = input_per_image.get("width")
             r = sem_seg_postprocess(result, image_size, height, width)
-            processed_results.append({"sem_seg": r, "flops": flops})
+            if self.cal_flops:
+                processed_results.append({"sem_seg": r, "flops": flops})
+            else:
+                processed_results.append({"sem_seg": r})
         return processed_results
 
 
