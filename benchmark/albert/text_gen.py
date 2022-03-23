@@ -36,7 +36,7 @@ input_ids = tokenizer(prompt, return_tensors="pt").input_ids
 input_ids = input_ids.to(device)
 start_time = time.time()
 for i in range(20):
-    outputs = model.generate(input_ids, num_beams=16, do_sample=False, max_length=64)
+    outputs = model.generate(input_ids, num_beams=24, do_sample=False, max_length=64)
 torch.cuda.synchronize()
 compute_time = time.time() - start_time
 print("eos based inference time: {:.4f} s".format(compute_time / 20))
@@ -45,7 +45,7 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 start_time = time.time()
 for i in range(20):
     outputs = model.generate(
-        input_ids, num_beams=16, do_sample=False, max_length=64, no_wait=True
+        input_ids, num_beams=24, do_sample=False, max_length=64, no_wait=True
     )
 torch.cuda.synchronize()
 compute_time = time.time() - start_time
