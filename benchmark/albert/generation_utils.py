@@ -1602,7 +1602,7 @@ class GenerationMixin:
                 **model_kwargs,
             )
             # 12. run beam search
-            return self.beam_search(
+            return self.no_wait_beam_search(
                 input_ids,
                 beam_scorer,
                 logits_processor=logits_processor,
@@ -3231,16 +3231,12 @@ class GenerationMixin:
                 output_hidden_states=output_hidden_states,
             )
 
-            if synced_gpus and this_peer_finished:
-                cur_len = cur_len + 1
-                continue  # don't waste resources running the code we don't need
-
             next_token_logits = outputs.logits[:, -1, :]
             # hack: adjust tokens for Marian. For Marian we have to make sure that the `pad_token_id`
             # cannot be generated both before and after the `nn.functional.log_softmax` operation.
-            next_token_logits = self.adjust_logits_during_generation(
-                next_token_logits, cur_len=cur_len
-            )
+            # next_token_logits = self.adjust_logits_during_generation(
+            #     next_token_logits, cur_len=cur_len
+            # )
             next_token_scores = nn.functional.log_softmax(
                 next_token_logits, dim=-1
             )  # (batch_size * num_beams, vocab_size)
@@ -3320,12 +3316,8 @@ class GenerationMixin:
             # increase cur_len
             cur_len = cur_len + 1
 
-            if beam_scorer.is_done or stopping_criteria(input_ids, scores):
-                if not synced_gpus:
-                    break
-                else:
-                    this_peer_finished = True
-
+            if stopping_criteria(input_ids, scores):
+                break
         sequence_outputs = beam_scorer.finalize(
             input_ids,
             beam_scores,
