@@ -12,13 +12,11 @@ import time
 device = torch.device("cuda:0")
 
 # %%
-from transformers import AlbertTokenizer
+from transformers import BertTokenizer
 from modeling_albert import AlbertForMaskedLM
 
-tokenizer = AlbertTokenizer.from_pretrained("albert-base-v2")
-model = AlbertForMaskedLM.from_pretrained(
-    "albert-base-v2", pad_token_id=tokenizer.eos_token_id
-)
+tokenizer = BertTokenizer.from_pretrained("/home/whcui/checkpoints/albert_chinese_tiny")
+model = AlbertForMaskedLM.from_pretrained("/home/whcui/checkpoints/albert_chinese_tiny")
 model.to(device)
 
 # %%
@@ -36,8 +34,8 @@ input_ids = tokenizer(prompt, return_tensors="pt").input_ids
 input_ids = input_ids.to(device)
 start_time = time.time()
 for i in range(20):
-    outputs = model.generate(input_ids, num_beams=24, do_sample=False, max_length=64)
-torch.cuda.synchronize()
+    outputs = model.generate(input_ids, num_beams=32, do_sample=False, max_length=64)
+torch.cuda.synchronize(device=device)
 compute_time = time.time() - start_time
 print("eos based inference time: {:.4f} s".format(compute_time / 20))
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
@@ -45,9 +43,9 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 start_time = time.time()
 for i in range(20):
     outputs = model.generate(
-        input_ids, num_beams=24, do_sample=False, max_length=64, no_wait=True
+        input_ids, num_beams=32, do_sample=False, max_length=64, no_wait=True
     )
-torch.cuda.synchronize()
+torch.cuda.synchronize(device=device)
 compute_time = time.time() - start_time
 print("no wait inference time: {:.4f} s".format(compute_time / 20))
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))

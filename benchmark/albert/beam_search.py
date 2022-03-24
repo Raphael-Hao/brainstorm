@@ -135,64 +135,71 @@ class NoWaitBeamSearchScorer(BeamScorer):
             (batch_size, self.group_size), dtype=next_indices.dtype, device=device
         )
 
-        for batch_idx, beam_hyp in enumerate(self._beam_hyps):
-            # if self._done[batch_idx]:
-            #     if self.num_beams < len(beam_hyp):
-            #         raise ValueError(
-            #             f"Batch can only be done if at least {self.num_beams} beams have been generated"
-            #         )
-            #     if eos_token_id is None or pad_token_id is None:
-            #         raise ValueError(
-            #             "Generated beams >= num_beams -> eos_token_id and pad_token have to be defined"
-            #         )
-            #     # pad the batch
-            #     next_beam_scores[batch_idx, :] = 0
-            #     next_beam_tokens[batch_idx, :] = pad_token_id
-            #     next_beam_indices[batch_idx, :] = 0
-            #     continue
+        next_beam_scores[:, :] = next_scores[:, : self.group_size]
+        next_beam_tokens[:, :] = next_tokens[:, : self.group_size]
+        next_beam_indices[:, :] = (
+            next_indices[:, : self.group_size]
+            + torch.arange(0, batch_size, dtype=next_indices.dtype, device=device)
+            * self.group_size
+        )
 
-            # next tokens for this sentence
-            beam_idx = 0
-            for beam_token_rank, (next_token, next_score, next_index) in enumerate(
-                zip(
-                    next_tokens[batch_idx],
-                    next_scores[batch_idx],
-                    next_indices[batch_idx],
-                )
-            ):
-                batch_beam_idx = batch_idx * self.group_size + next_index
-                # add to generated hypotheses if end of sentence
-                # if (eos_token_id is not None) and (next_token.item() == eos_token_id):
-                #     # if beam_token does not belong to top num_beams tokens, it should not be added
-                #     is_beam_token_worse_than_top_num_beams = (
-                #         beam_token_rank >= self.group_size
-                #     )
-                #     if is_beam_token_worse_than_top_num_beams:
-                #         continue
-                #     beam_hyp.add(
-                #         input_ids[batch_beam_idx].clone(),
-                #         next_score.item(),
-                #     )
-                # else:
-                # add next predicted token since it is not eos_token
-                next_beam_scores[batch_idx, beam_idx] = next_score
-                next_beam_tokens[batch_idx, beam_idx] = next_token
-                next_beam_indices[batch_idx, beam_idx] = batch_beam_idx
-                beam_idx += 1
+        # for batch_idx, beam_hyp in enumerate(self._beam_hyps):
+        #     # if self._done[batch_idx]:
+        #     #     if self.num_beams < len(beam_hyp):
+        #     #         raise ValueError(
+        #     #             f"Batch can only be done if at least {self.num_beams} beams have been generated"
+        #     #         )
+        #     #     if eos_token_id is None or pad_token_id is None:
+        #     #         raise ValueError(
+        #     #             "Generated beams >= num_beams -> eos_token_id and pad_token have to be defined"
+        #     #         )
+        #     #     # pad the batch
+        #     #     next_beam_scores[batch_idx, :] = 0
+        #     #     next_beam_tokens[batch_idx, :] = pad_token_id
+        #     #     next_beam_indices[batch_idx, :] = 0
+        #     #     continue
+        #     # next tokens for this sentence
+        #     beam_idx = 0
+        #     for beam_token_rank, (next_token, next_score, next_index) in enumerate(
+        #         zip(
+        #             next_tokens[batch_idx],
+        #             next_scores[batch_idx],
+        #             next_indices[batch_idx],
+        #         )
+        #     ):
+        #         batch_beam_idx = batch_idx * self.group_size + next_index
+        #         # add to generated hypotheses if end of sentence
+        #         # if (eos_token_id is not None) and (next_token.item() == eos_token_id):
+        #         #     # if beam_token does not belong to top num_beams tokens, it should not be added
+        #         #     is_beam_token_worse_than_top_num_beams = (
+        #         #         beam_token_rank >= self.group_size
+        #         #     )
+        #         #     if is_beam_token_worse_than_top_num_beams:
+        #         #         continue
+        #         #     beam_hyp.add(
+        #         #         input_ids[batch_beam_idx].clone(),
+        #         #         next_score.item(),
+        #         #     )
+        #         # else:
+        #         # add next predicted token since it is not eos_token
+        #         next_beam_scores[batch_idx, beam_idx] = next_score
+        #         next_beam_tokens[batch_idx, beam_idx] = next_token
+        #         next_beam_indices[batch_idx, beam_idx] = batch_beam_idx
+        #         beam_idx += 1
 
-                # once the beam for next step is full, don't add more tokens to it.
-                if beam_idx == self.group_size:
-                    break
+        #         # once the beam for next step is full, don't add more tokens to it.
+        #         if beam_idx == self.group_size:
+        #             break
 
-            if beam_idx < self.group_size:
-                raise ValueError(
-                    f"At most {self.group_size} tokens in {next_tokens[batch_idx]} can be equal to `eos_token_id: {eos_token_id}`. Make sure {next_tokens[batch_idx]} are corrected."
-                )
+        #     if beam_idx < self.group_size:
+        #         raise ValueError(
+        #             f"At most {self.group_size} tokens in {next_tokens[batch_idx]} can be equal to `eos_token_id: {eos_token_id}`. Make sure {next_tokens[batch_idx]} are corrected."
+        #         )
 
-            # Check if we are done so that we can save a pad step if all(done)
-            # self._done[batch_idx] = self._done[batch_idx] or beam_hyp.is_done(
-            #     next_scores[batch_idx].max().item(), cur_len
-            # )
+        #     # Check if we are done so that we can save a pad step if all(done)
+        #     # self._done[batch_idx] = self._done[batch_idx] or beam_hyp.is_done(
+        #     #     next_scores[batch_idx].max().item(), cur_len
+        #     # )
 
         return UserDict(
             {
