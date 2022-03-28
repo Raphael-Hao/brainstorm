@@ -8,7 +8,6 @@ import torch
 
 from transformers.generation_beam_search import BeamScorer, BeamHypotheses
 
-
 class NoWaitBeamSearchScorer(BeamScorer):
     r"""
     [`BeamScorer`] implementing standard beam search decoding.
