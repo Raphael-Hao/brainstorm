@@ -4,7 +4,7 @@ from dl_lib.configs.segm_config import SemanticSegmentationConfig
 
 _config_dict = dict(
     MODEL=dict(
-        WEIGHTS="/home/whcui/checkpoints/",
+        WEIGHTS="/home/whcui/checkpoints/dynamic_A_miou73_9.pth",
         CAL_FLOPS=True,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],
@@ -74,8 +74,11 @@ _config_dict = dict(
         ),
     ),
     OUTPUT_DIR=osp.join(
-        "/data/Outputs/model_logs/dl_lib_playground",
+        "/home/whcui/model_logs/dl_lib_playground",
         osp.split(osp.realpath(__file__))[0].split("playground/")[-1],
+    ),
+    BRT=dict(
+        PREDICT_MODE=True,
     ),
 )
 
