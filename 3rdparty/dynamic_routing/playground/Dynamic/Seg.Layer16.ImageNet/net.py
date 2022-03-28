@@ -3,8 +3,7 @@ import logging
 from dl_lib.layers import ShapeSpec
 from dl_lib.modeling.backbone import Backbone
 from dl_lib.modeling.dynamic_arch.dynamic_backbone import build_dynamic_backbone
-from dl_lib.modeling.meta_arch.dynamic4seg import (DynamicNet4Seg,
-                                                   SemSegDecoderHead)
+from dl_lib.modeling.meta_arch.dynamic4seg import DynamicNet4Seg, SemSegDecoderHead
 
 
 def build_backbone(cfg, input_shape=None):
@@ -15,9 +14,11 @@ def build_backbone(cfg, input_shape=None):
         an instance of :class:`Backbone`
     """
     if input_shape is None:
-        input_shape = ShapeSpec(channels=len(cfg.MODEL.PIXEL_MEAN),
-                                height=cfg.INPUT.FIX_SIZE_FOR_FLOPS[0],
-                                width=cfg.INPUT.FIX_SIZE_FOR_FLOPS[1])
+        input_shape = ShapeSpec(
+            channels=len(cfg.MODEL.PIXEL_MEAN),
+            height=cfg.INPUT.FIX_SIZE_FOR_FLOPS[0],
+            width=cfg.INPUT.FIX_SIZE_FOR_FLOPS[1],
+        )
 
     backbone = build_dynamic_backbone(cfg, input_shape)
     assert isinstance(backbone, Backbone)
