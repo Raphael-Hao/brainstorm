@@ -5,7 +5,7 @@ from dl_lib.configs.segm_config import SemanticSegmentationConfig
 _config_dict = dict(
     MODEL=dict(
         WEIGHTS="/home/whcui/checkpoints/dynamic_A_miou73_9.pth",
-        CAL_FLOPS=True,
+        CAL_FLOPS=False,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],
             LAYER_NUM=16,
@@ -77,8 +77,10 @@ _config_dict = dict(
         "/home/whcui/model_logs/dl_lib_playground",
         osp.split(osp.realpath(__file__))[0].split("playground/")[-1],
     ),
+    SEED=0,
     BRT=dict(
         PREDICT_MODE=True,
+        GATE_HISTORY_PATH="/home/whcui/model_logs/dl_lib_playground/Dynamic/Seg.Layer16.SmallGate.Dynamic_A/gate_history.csv",
     ),
 )
 
