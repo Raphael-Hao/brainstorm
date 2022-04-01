@@ -12,8 +12,4 @@ class Router(nn.Module):
         super().__init__()
 
     def forward(self, *input):
-        super().forward(*input)
         raise NotImplementedError
-
-    def __repr__(self):
-        return self.__class__.__name__ + "()"
