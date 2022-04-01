@@ -131,7 +131,7 @@ def main(args):
             logger.warning(
                 "SOLVER.IMS_PER_BATCH is changed to {}".format(batches))
 
-    if "MODEL.WEIGHTS" in args.opts:
+    if cfg.MODEL.WEIGHTS:
         valid_files = [cfg.MODEL.WEIGHTS]
     else:
         list_of_files = glob.glob(os.path.join(cfg.OUTPUT_DIR, '*.pth'))

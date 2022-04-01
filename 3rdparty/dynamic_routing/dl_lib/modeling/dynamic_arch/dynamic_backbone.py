@@ -345,11 +345,33 @@ class DynamicNetwork(Backbone):
         # prepare for gate history
         self.gate_history_path = gate_history_path
         if self.gate_history_path is not None:
-            header_row = ["init_layer_0", "init_layer_1", "init_layer_2"]
+            header_row = [
+                "layer_0_cell_0_up",
+                "layer_0_cell_0_keep",
+                "layer_0_cell_0_down",
+            ]
             for layer_index in range(len(self.cell_num_list)):
                 for cell_index in range(self.cell_num_list[layer_index]):
                     header_row.append(
-                        "layer_" + str(layer_index) + "_cell_" + str(cell_index)
+                        "layer_"
+                        + str(layer_index + 1)
+                        + "_cell_"
+                        + str(cell_index)
+                        + "_up"
+                    )
+                    header_row.append(
+                        "layer_"
+                        + str(layer_index + 1)
+                        + "_cell_"
+                        + str(cell_index)
+                        + "_keep"
+                    )
+                    header_row.append(
+                        "layer_"
+                        + str(layer_index + 1)
+                        + "_cell_"
+                        + str(cell_index)
+                        + "_down"
                     )
             self.gate_history_file = open(self.gate_history_path, mode="w")
             self.writer = csv.writer(self.gate_history_file)
