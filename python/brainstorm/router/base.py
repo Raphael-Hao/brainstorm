@@ -4,12 +4,25 @@
 # \brief: base router for brainstorm
 # Author: v-weihaocui
 # Email: v-weihaocui@microsoft.com
+from typing import List, Dict, OrderedDict
+import abc
 
-import torch.nn as nn
 
-class Router(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
+class Router(abc.ABC):
+    def __init__(self) -> None:
+        self.indices = None
 
-    def forward(self, *input):
-        raise NotImplementedError
+    def route(self, input):
+        if input <= 0:
+            self.index = 0
+        else:
+            self.index = 1
+
+    def scatter(self, input):
+        return self.index, input
+    
+    def gather(self, input):
+        return input
+
+    def register_router(self):
+        pass

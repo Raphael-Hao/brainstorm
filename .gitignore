@@ -13,3 +13,4 @@ core
 total_latency.tsv
 build
 .env
+*.egg-info

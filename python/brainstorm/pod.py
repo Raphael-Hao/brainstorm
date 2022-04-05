@@ -4,18 +4,13 @@
 # \file: /pod.py
 # \brief: 
 # Author: raphael hao
-
-import torch
+from typing import Any
 import torch.nn as nn
-from .netlet import Netlet
-from .router import router
 
-class Pod(nn.Module):
-    def __init__(self) -> None:
+class BranchPod(nn.Module):
+    def __init__(self, branches: list) -> None:
         super().__init__()
+        self.branches = branches
 
-    def forward(self, *input):
-        raise NotImplementedError
-
-    def export(self):
-        raise NotImplementedError
+    def forward(self, x):
+        return self.branches[x[0]](x[1])
