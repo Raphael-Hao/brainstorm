@@ -5,6 +5,6 @@
 # \brief:
 # Author: raphael hao
 
-from .pod import BranchPod
 from .gate import Gate
 from .router import Router
+from .netlet import Netlet, BranchNetlet

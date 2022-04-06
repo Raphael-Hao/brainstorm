@@ -7,10 +7,3 @@
 from typing import Any
 import torch.nn as nn
 
-class BranchPod(nn.Module):
-    def __init__(self, branches: list) -> None:
-        super().__init__()
-        self.branches = branches
-
-    def forward(self, x):
-        return self.branches[x[0]](x[1])
