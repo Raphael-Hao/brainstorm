@@ -79,6 +79,7 @@
     {
       "language": "*",
       "template": [
+        "",
         "Copyright (c) <<year>> by <<company>>",
         "<<licensetext>>",
         // "--------",
