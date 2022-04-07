@@ -8,11 +8,20 @@
 import torch.nn as nn
 import torch
 
-
 class Router(nn.Module):
     def __init__(self) -> None:
         super().__init__()
+        self.active_counter = 0
 
     @torch.jit.ignore
     def forward(self, input):
-        return input, None
+        return self.route(input)
+
+    def route(self, input):
+        raise NotImplementedError
+
+    def record(self):
+        raise NotImplementedError
+
+    def register_router(self):
+        pass
