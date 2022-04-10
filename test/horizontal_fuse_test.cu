@@ -1,6 +1,11 @@
+/*!
+ * Copyright (c) 2022 by Microsoft Corporation.
+ * Licensed under the MIT license.
+ */
+
 #include <algorithm>
-#include <brainstorm/common/cuda_utils.h>
-#include <brainstorm/kernel/matmul.cuh>
+#include <brt/common/cuda_utils.h>
+#include <brt/kernel/matmul.cuh>
 #include <cuda_runtime.h>
 #include <random>
 

@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding:utf-8 -*-
-# \file: /router.py
-# \brief: base router for brainstorm
-# Author: v-weihaocui
-# Email: v-weihaocui@microsoft.com
-# from typing import List, Dict, OrderedDict
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+
 import torch.nn as nn
 import torch
+import torch.fx
+
 
 class Router(nn.Module):
     def __init__(self) -> None:
@@ -14,10 +12,13 @@ class Router(nn.Module):
         self.active_counter = 0
 
     @torch.jit.ignore
-    def forward(self, input):
-        return self.route(input)
+    def forward(self, *inputs):
+        return self.route(*inputs)
 
-    def route(self, input):
+    def onscript_route(self, *inputs):
+        raise NotImplementedError
+
+    def route(self, *inputs):
         raise NotImplementedError
 
     def record(self):

@@ -1,9 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding:utf-8 -*-
-# Motto: Were It to Benefit My Country, I Would Lay Down My Life!
-# \file: /brainstorm.py
-# \brief:
-# Author: raphael hao
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+
 from typing import List, Optional, Union
 
 from abc import ABC
@@ -44,8 +41,7 @@ class NetletGroup(nn.Module):
 
 
 class SwitchRouter(ABC):
-    def __init__(self, scatter_method: nn.Module,
-                 gather_method: nn.Module):
+    def __init__(self, scatter_method: nn.Module, gather_method: nn.Module):
         self.scatter_method = scatter_method
         self.gather_method = gather_method
 

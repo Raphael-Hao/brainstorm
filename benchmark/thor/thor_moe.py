@@ -8,9 +8,18 @@
 import torch
 import torch.nn as nn
 from transformers.activations import ACT2FN
+from brt.router import (
+    RandomScatterRouter,
+    RandomGatherRouter,
+)
 
 
 class ThorInterOutput(nn.Module):
+    """_summary_
+
+    Args:
+        nn (_type_): _description_
+    """
     def __init__(self, config):
         super().__init__()
         self.dense1 = nn.Linear(config.hidden_size, config.intermediate_size)
@@ -29,6 +38,49 @@ class ThorInterOutput(nn.Module):
         inter_states = self.dropout(inter_states)
         inter_states = self.LayerNorm(inter_states + hidden_states)
         return inter_states
+
+
+class ThorExpert(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.dense1 = nn.Linear(config.hidden_size, config.intermediate_size)
+        if isinstance(config.hidden_act, str):
+            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+        else:
+            self.intermediate_act_fn = config.hidden_act
+        self.dense2 = nn.Linear(config.intermediate_size, config.hidden_size)
+
+    def forward(self, inter_state):
+        x = self.dense1(inter_state)
+        x = self.intermediate_act_fn(x)
+        x = self.dense2(x)
+        return x
+
+
+class ThorMoE(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.expert1 = ThorExpert(config)
+        self.expert2 = ThorExpert(config)
+        self.scatter_router = RandomScatterRouter()
+        self.gather_router = RandomGatherRouter()
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+
+    def forward(self, hidden_states):
+        # B x T x H -> T x H
+        inter_states = hidden_states.view(-1, hidden_states.size(-1))
+        inputs = torch.chunk(inter_states, inter_states.size(0), dim=0)
+        x, y, reverse_indices = self.scatter_router(inputs)
+        x = self.expert1(x)
+        y = self.expert2(y)
+        inter_states = self.gather_router(x, y, reverse_indices)
+        # T x H -> B x T x H
+        inter_states = inter_states.view(
+            hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
+        )
+        x = self.layer_norm(inter_states + hidden_states)
+        return x
 
 
 class MaskSerialThorMoE(nn.Module):
@@ -119,7 +171,7 @@ class MaskFusionThorMoE(nn.Module):
 
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.mask = torch.randint(0, self.expert_num, (config.token_num,1))
+        self.mask = torch.randint(0, self.expert_num, (config.token_num, 1))
         self.mask = self.mask.repeat(1, config.hidden_size)
         self.expert_mask = [self.mask.eq(i) for i in range(self.expert_num)]
 
@@ -294,5 +346,7 @@ class SparseFusionThorMoE(nn.Module):
         inter_states = inter_states.view(-1, hidden_states.size(-1))
         inter_states = inter_states[self.restore_mask].contiguous()
         inter_states = self.dropout(inter_states)
+        print(inter_states.size())
+        print(hidden_states.size())
         inter_states = self.LayerNorm(inter_states + hidden_states)
         return inter_states
