@@ -8,7 +8,7 @@
 # %%
 import torch.nn as nn
 import torch
-from brainstorm import Router
+from brt import Router
 from torch.jit import ScriptModule, script_method
 
 #%%

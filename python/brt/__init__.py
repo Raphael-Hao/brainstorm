@@ -5,4 +5,4 @@
 
 from .gate import Gate
 from .router import Router
-from .netlet import Netlet, BranchNetlet
+from .netlet import netlet

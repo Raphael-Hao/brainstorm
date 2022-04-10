@@ -55,10 +55,10 @@
       "prefix": "# ",
       "end": "",
       "blankLinesAfter": 1,
-      "beforeHeader": [
-        "#!/usr/bin/env python3",
-        "# -*- coding:utf-8 -*-"
-      ],
+      // "beforeHeader": [
+      //   "#!/usr/bin/env python3",
+      //   "# -*- coding:utf-8 -*-"
+      // ],
     },
     {
       "language": "shellscript",
@@ -79,7 +79,6 @@
     {
       "language": "*",
       "template": [
-        "",
         "Copyright (c) <<year>> by <<company>>",
         "<<licensetext>>",
         // "--------",

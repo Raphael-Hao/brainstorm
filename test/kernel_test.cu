@@ -1,5 +1,10 @@
+/*!
+ * Copyright (c) 2022 by Microsoft Corporation.
+ * Licensed under the MIT license.
+ */
+
 #include <algorithm>
-#include <brainstorm/common/cuda_utils.h>
+#include <brt/common/cuda_utils.h>
 #include <cuda_runtime.h>
 #include <random>
 

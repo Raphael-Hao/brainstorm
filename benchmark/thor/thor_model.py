@@ -44,7 +44,14 @@ from transformers.modeling_utils import (
 )
 from transformers.utils import logging
 from thor_config import ThorConfig
-from thor_moe import ThorInterOutput, MaskSerialThorMoE, MaskFusionThorMoE, SparseSerialThorMoE, SparseFusionThorMoE
+from thor_moe import (
+    ThorInterOutput,
+    MaskSerialThorMoE,
+    MaskFusionThorMoE,
+    SparseSerialThorMoE,
+    SparseFusionThorMoE,
+    ThorMoE,
+)
 
 logger = logging.get_logger(__name__)
 
@@ -453,6 +460,9 @@ class BertLayer(nn.Module):
             elif config.expert_type == "sparse_fusion":
                 print("using sparse fusion inter output for moe")
                 self.inter_output = SparseFusionThorMoE(config)
+            elif config.expert_type == "router_moe":
+                print("using router moe inter output")
+                self.inter_output = ThorMoE(config)
             else:
                 raise ValueError(f"{config.expert_type} is not supported")
 
