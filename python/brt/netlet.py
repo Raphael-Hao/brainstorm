@@ -73,12 +73,12 @@ def netlet(cls: T, netlet_tag: bool = True) -> T:
                 return None
             return self.pt_forward(*args, **kwargs)
 
-        def brt_script(self, mode: bool = True):
+        def brt(self, mode: bool = True):
             for module in self.children():
                 if getattr(module, "_netlet", False):
-                    module.brt_script(mode)
-            self._brt_script = mode
-            if self._brt_script:
+                    module.brt(mode)
+            self._brt = mode
+            if self._brt:
                 self.forward = self.pt_forward
             else:
                 self.forward = self.brt_forward
