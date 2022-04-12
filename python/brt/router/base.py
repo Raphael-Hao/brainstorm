@@ -3,8 +3,6 @@
 
 import torch.nn as nn
 import torch
-import torch.fx
-
 
 class Router(nn.Module):
     def __init__(self) -> None:
@@ -14,9 +12,6 @@ class Router(nn.Module):
     @torch.jit.ignore
     def forward(self, *inputs):
         return self.route(*inputs)
-
-    def onscript_route(self, *inputs):
-        raise NotImplementedError
 
     def route(self, *inputs):
         raise NotImplementedError
