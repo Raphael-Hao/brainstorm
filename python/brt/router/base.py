@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch
 
 class Router(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
         self.active_counter = 0
 

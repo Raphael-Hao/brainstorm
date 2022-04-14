@@ -8,15 +8,18 @@ import torch
 
 from .base import Router
 
+__all__ = ['GatherRouter', 'RandomGatherRouter', 'TopKGatherRouter']
 
 class GatherRouter(Router):
-    def __init__(self, select_fn=None, support_batch=False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.select_fn = select_fn
-        self.support_batch = support_batch
+    def __init__(
+        self,
+        route_num: int,
+    ):
+        super().__init__()
+        self._route_num = route_num
 
-    def route(self, *inputs):
-        return inputs[0]
+    def route(self, reverse_indices, *inputs):
+        raise NotImplementedError
 
     def record(self):
         self.active_counter += 1
@@ -26,16 +29,32 @@ class GatherRouter(Router):
 
 
 class RandomGatherRouter(GatherRouter):
-    def __init__(self, support_batch=False, *args, **kwargs):
-        super().__init__(self.random_select, support_batch, *args, **kwargs)
+    def __init__(self, route_num: int):
+        super().__init__(route_num=route_num)
 
-    def random_select(self, input):
-        return torch.randint(0, input.size(0), (input.size(0),))
+    def route(self, reverse_indices, origin_shape, *inputs):
+        assert (
+            len(inputs) == self._route_num and len(reverse_indices) == self._route_num
+        )
+        if isinstance(origin_shape, int):
+            route_size = origin_shape
+        elif isinstance(origin_shape, torch.Size):
+            route_size = origin_shape[0]
+        else:
+            raise ValueError("origin_shape must be a int or torch.Size")
+        route_results = [[] for _ in range(route_size)]
+        for i in range(self._route_num):
+            if reverse_indices[i] is not None:
+                for j in range(len(reverse_indices[i])):
+                    route_results[reverse_indices[i][j]] = inputs[i][j]
+        if isinstance(origin_shape, int):
+            return route_results
+        else:
+            route_results = torch.stack(route_results).view(origin_shape)
+            return route_results
 
 
 class TopKGatherRouter(GatherRouter):
-    def __init__(self, support_batch=False, *args, **kwargs):
-        super().__init__(self.topk_select, support_batch, *args, **kwargs)
-
-    def topk_select(self, input):
-        return torch.topk(input, self.top, dim=0)[1]
+    def __init__(self, route_num: int, k: int):
+        super().__init__(route_num=route_num)
+        self._k = k
