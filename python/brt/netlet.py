@@ -61,8 +61,8 @@ def netlet(cls: T, netlet_tag: bool = True) -> T:
         return cls
     class wrapper(cls):
         def __init__(self, *args, **kwargs):
-            self._brt_script = False
             super().__init__(*args, **kwargs)
+            self._brt_script = False
             self.pt_forward = super().forward
             self.forward = self.brt_forward
 
