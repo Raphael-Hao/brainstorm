@@ -12,7 +12,7 @@ T = TypeVar("T")
 
 def is_netlet(cls_or_instance) -> bool:
     """
-    Check if the class is a subclass of nn.Module.
+    Check if the class is a netlet for brainstorm.
     """
     if not inspect.isclass(cls_or_instance):
         cls_or_instance = cls_or_instance.__class__
@@ -20,7 +20,7 @@ def is_netlet(cls_or_instance) -> bool:
     import torch.nn as nn
 
     assert issubclass(cls_or_instance, nn.Module), "Only nn.Module is supported."
-    return getattr(cls_or_instance, "brt_netlet", False)
+    return getattr(cls_or_instance, "_netlet", False)
 
 
 def branch(func: T) -> T:
