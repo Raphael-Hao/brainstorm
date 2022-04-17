@@ -58,3 +58,6 @@ class TopKGatherRouter(GatherRouter):
     def __init__(self, route_num: int, k: int):
         super().__init__(route_num=route_num)
         self._k = k
+        
+    def route(self, reverse_indices, *inputs):
+        return super().route(reverse_indices, *inputs)
