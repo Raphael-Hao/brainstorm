@@ -333,8 +333,8 @@ dynamic_launch.o:dynamic_launch.cu
 
 dynamic_launch: dynamic_launch.o
 	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
-	$(EXEC) mkdir -p bin
-	$(EXEC) mv $@ bin
+	$(EXEC) mkdir -p build
+	$(EXEC) mv $@ build
 
 run: build
 	$(EXEC) ./dynamic_launch
@@ -343,6 +343,6 @@ testrun: build
 
 clean:
 	rm -f dynamic_launch dynamic_launch.o
-	rm -rf bin/dynamic_launch
+	rm -rf build/dynamic_launch
 
 clobber: clean
