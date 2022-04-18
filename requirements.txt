@@ -3,3 +3,4 @@ tqdm==4.62.3
 torch==1.10.1+cu113
 transformers==0.4.2
 networkx==2.6.3
+tutel==0.1
