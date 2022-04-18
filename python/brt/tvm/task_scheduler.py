@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding:utf-8 -*-
-# Motto: Were It to Benefit My Country, I Would Lay Down My Life!
-# \file: /task_scheduler.py
-# \brief:
-# Author: raphael hao
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+
 
 from tvm.auto_scheduler import TaskScheduler
 from tvm.auto_scheduler.utils import array_mean
+
 
 class EfficientTaskScheduler(TaskScheduler):
     """
