@@ -6,10 +6,8 @@ import abc
 
 
 class Dispatcher(abc.ABC):
-    def __init__(
-        self,
-    ):
-        pass
+    def __init__(self, route_num):
+        self.route_num = route_num
 
     def dispatch(self, *inputs):
         raise NotImplementedError
