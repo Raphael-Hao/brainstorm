@@ -2,7 +2,9 @@
 # -*- coding:utf-8 -*-
 # Motto: Were It to Benefit My Country, I Would Lay Down My Life!
 # \file: /__init__.py
-# \brief: 
+# \brief:
 # Author: raphael hao
 
-from .base import Gate
+from .base import Dispatcher
+from .default_dispatcher import DefaultDispatcher
+from .moe_dispatcher import MoEDispatcher, TutelMoEDispatcher

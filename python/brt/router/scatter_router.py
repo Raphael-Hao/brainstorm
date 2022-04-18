@@ -5,7 +5,6 @@ from typing import Union, Tuple, List
 import torch
 import torch.nn.functional as F
 from tutel.impls.fast_dispatch import TutelMoeFastDispatcher, extract_critical
-import numpy as np
 
 
 from .base import Router
@@ -66,16 +65,16 @@ class RandomScatterRouter(ScatterRouter):
             Union[int, torch.Size]]: indicate the reverse shape info
         """
         inputs_size, inputs_shape, _ = self.inspect_inputs(inputs)
-        route_targets = np.random.randint(0, self.route_num, (inputs_size,))
+        route_indices = torch.randint(0, self.route_num, (inputs_size,))
         route_results = [None] * self.route_num
         reverse_indices = [None] * self.route_num
         for i in range(self.route_num):
-            route_indices = np.nonzero(route_targets == i)[0]
-            if len(route_indices) > 0:
-                tmp_results = [inputs[j] for j in route_indices]
+            indices = torch.nonzero(route_indices == i)[0]
+            if len(indices) > 0:
+                tmp_results = [inputs[j] for j in indices]
                 # TODO: current only support tensors with same shape
                 route_results[i] = torch.stack(tmp_results)
-                reverse_indices[i] = route_indices
+                reverse_indices[i] = indices
         return route_results, reverse_indices, inputs_shape
 
 
