@@ -7,6 +7,7 @@ import torch
 
 
 class Router(nn.Module):
+    _router_tag = True
     def __init__(self, route_num: int, grain_dim: int = None, dtype=None):
         """_summary_
 
@@ -16,7 +17,6 @@ class Router(nn.Module):
                                           if None, routers only accept list of tensors
         """
         super().__init__()
-        self._router_tag = True
         self.route_num = route_num
         self.grain_dim = grain_dim
         self.dtype = torch.float32 if dtype is None else dtype
