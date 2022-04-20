@@ -1,4 +1,5 @@
 *.onnx
+*.pt
 core
 !core/
 .pkl_memoize_py3
