@@ -21,7 +21,7 @@ class DefaultDispatcher(Dispatcher):
         route_results = [None] * self.route_num
         reverse_indices = [None] * self.route_num
         for i in range(self.route_num):
-            indices = torch.nonzero(route_indices == i)[0]
+            indices = torch.nonzero(route_indices == i, as_tuple=True)[0]
             if len(indices) > 0:
                 tmp_results = [inputs[j] for j in indices]
                 # TODO: current only support tensors with same shape
@@ -38,9 +38,7 @@ class DefaultDispatcher(Dispatcher):
         """
         Combine the outputs of the routers into the final outputs
         """
-        assert (
-            len(inputs) == self._route_num and len(reverse_indices) == self._route_num
-        )
+        assert len(inputs) == self.route_num and len(reverse_indices) == self.route_num
         if isinstance(reverse_shape, int):
             route_size = reverse_shape
         elif isinstance(reverse_shape, torch.Size):
@@ -48,7 +46,7 @@ class DefaultDispatcher(Dispatcher):
         else:
             raise ValueError("origin_shape must be a int or torch.Size")
         route_results = [[] for _ in range(route_size)]
-        for i in range(self._route_num):
+        for i in range(self.route_num):
             if reverse_indices[i] is not None:
                 for j in range(len(reverse_indices[i])):
                     route_results[reverse_indices[i][j]] = inputs[i][j]

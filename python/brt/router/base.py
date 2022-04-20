@@ -16,22 +16,22 @@ class Router(nn.Module):
                                           if None, routers only accept list of tensors
         """
         super().__init__()
+        self._router_tag = True
         self.route_num = route_num
         self.grain_dim = grain_dim
         self.dtype = torch.float32 if dtype is None else dtype
         self.active_counter = 0
 
     @torch.jit.ignore
-    def forward(self, *inputs):
-        return self.route(*inputs)
+    def forward(self, *args, **kwargs):
+        return self.route(*args, **kwargs)
 
-    def route(self, *inputs):
+    def route(self, *inputs, **kwargs):
         raise NotImplementedError
 
     def inspect_inputs(self, inputs: Union[torch.Tensor, List[torch.Tensor]]):
         if isinstance(inputs, torch.Tensor):
             inputs_shape = inputs.shape
-            assert inputs.shape[-1] == self.grain_dim
             inputs_size = inputs.shape[0]
             tensor_input = True
         elif isinstance(inputs, list):

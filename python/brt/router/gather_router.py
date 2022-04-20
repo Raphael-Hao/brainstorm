@@ -34,18 +34,21 @@ class RandomGatherRouter(GatherRouter):
         self, route_num: int, grain_dim: int = None, dispatcher=None, dtype=None
     ):
         super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
-        self.dispatcher = DefaultDispatcher(self.route_num) if dispatcher is None else dispatcher
-        
+        self.dispatcher = (
+            DefaultDispatcher(self.route_num) if dispatcher is None else dispatcher
+        )
+
     def route(
         self,
         reverse_indices: List[torch.Tensor],
         reverse_shape: Union[int, torch.Size],
         *inputs,
     ):
-        assert (
-            len(inputs) == self._route_num and len(reverse_indices) == self._route_num
+        route_results = self.dispatcher.combine(
+            reverse_indices,
+            reverse_shape,
+            *inputs,
         )
-        route_results =self.dispatcher.combine(reverse_indices=reverse_indices, reverse_shape=reverse_shape, *inputs)
         return route_results
 
 
@@ -56,9 +59,9 @@ class TopKGatherRouter(GatherRouter):
 
     def route(
         self,
+        *inputs,
         reverse_indices: List[torch.Tensor],
         reverse_shape: Union[int, torch.Size],
-        *inputs: List[torch.Tensor],
     ):
         if isinstance(reverse_shape, int):
             route_size = reverse_shape

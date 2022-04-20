@@ -4,4 +4,4 @@
 
 from . import nn
 from .router import Router
-from .netlet import netlet
+from .graph import netlet, top_graph

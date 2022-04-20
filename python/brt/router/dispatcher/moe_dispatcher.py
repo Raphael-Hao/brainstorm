@@ -9,7 +9,7 @@ class MoEDispatcher(Dispatcher):
     def __init__(self, route_num):
         super().__init__(route_num)
 
-    def dispatch(self, *inputs):
+    def dispatch(self, inputs, route_indices):
         raise NotImplementedError
 
     def combine(self, *inputs):

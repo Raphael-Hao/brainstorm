@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from tutel.impls.fast_dispatch import TutelMoeFastDispatcher, extract_critical
 
+from .dispatcher import DefaultDispatcher
 
 from .base import Router
 
@@ -42,13 +43,18 @@ class ScatterRouter(Router):
 
 
 class RandomScatterRouter(ScatterRouter):
-    def __init__(self, route_num: int, grain_dim: int = None, dtype=None):
+    def __init__(
+        self, route_num: int, grain_dim: int = None, dispatcher=None, dtype=None
+    ):
         """random scatter router
 
         Args:
             route_num (int): routing number
         """
         super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
+        self.dispatcher = (
+            DefaultDispatcher(self.route_num) if dispatcher is None else dispatcher
+        )
 
     def route(
         self, inputs
@@ -64,17 +70,15 @@ class RandomScatterRouter(ScatterRouter):
             List[torch.Tensor]: reverse indices for each routing dst
             Union[int, torch.Size]]: indicate the reverse shape info
         """
+
+        # calculate the scatter indices
         inputs_size, inputs_shape, _ = self.inspect_inputs(inputs)
         route_indices = torch.randint(0, self.route_num, (inputs_size,))
-        route_results = [None] * self.route_num
-        reverse_indices = [None] * self.route_num
-        for i in range(self.route_num):
-            indices = torch.nonzero(route_indices == i)[0]
-            if len(indices) > 0:
-                tmp_results = [inputs[j] for j in indices]
-                # TODO: current only support tensors with same shape
-                route_results[i] = torch.stack(tmp_results)
-                reverse_indices[i] = indices
+
+        # dispatch according to the indices
+        route_results, reverse_indices = self.dispatcher.dispatch(
+            inputs=inputs, route_indices=route_indices
+        )
         return route_results, reverse_indices, inputs_shape
 
 
@@ -130,6 +134,7 @@ class TopKScatterRouter(ScatterRouter):
             Union[int, torch.Size]]: indicate the reverse shape info
             torch.Tensor: loss of top-k for load balance
         """
+
         _inputs_size, inputs_shape, tensor_input = self.inspect_inputs(inputs)
         if tensor_input is not True:
             inputs = torch.stack(inputs)
