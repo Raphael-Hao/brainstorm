@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+from ..graph import Edge, Graph, Model, Node
 from ..operation import Cell
-from ..graph import Model, Graph, Node, Edge
 
 
 def build_full_name(prefix, name, seq=None):

@@ -1,18 +1,16 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import (Any, Dict, List)
+from typing import Any, Dict, List
 
-from . import debug_configs
-
-__all__ = ['Operation', 'Cell']
+__all__ = ["Operation", "Cell"]
 
 
 def _convert_name(name: str) -> str:
     """
     Convert the names using separator '.' to valid variable name in code
     """
-    return name.replace('.', '__')
+    return name.replace(".", "__")
 
 
 class Operation:
@@ -34,8 +32,14 @@ class Operation:
         Arbitrary key-value parameters (e.g. kernel_size).
     """
 
-    def __init__(self, type_name: str, parameters: Dict[str, Any] = {}, _internal: bool = False, attributes: Dict[str, Any] = {}):
-        assert _internal, '`Operation()` is private, use `Operation.new()` instead'
+    def __init__(
+        self,
+        type_name: str,
+        parameters: Dict[str, Any] = {},
+        _internal: bool = False,
+        attributes: Dict[str, Any] = {},
+    ):
+        assert _internal, "`Operation()` is private, use `Operation.new()` instead"
         self.type: str = type_name
         self.parameters: Dict[str, Any] = parameters
         self.attributes: Dict[str, Any] = attributes
@@ -53,22 +57,21 @@ class Operation:
         return True
 
     @staticmethod
-    def new(type_name: str, parameters: Dict[str, Any] = None, cell_name: str = None,
-            attributes: Dict[str, Any] = None) -> 'Operation':
+    def new(
+        type_name: str,
+        parameters: Dict[str, Any] = None,
+        cell_name: str = None,
+        attributes: Dict[str, Any] = None,
+    ) -> "Operation":
         parameters = parameters or {}
         attributes = attributes or {}
-        if type_name == '_cell':
+        if type_name == "_cell":
             # NOTE: cell_name is the same as its Node's name, when the cell is wrapped within the node
             return Cell(cell_name, parameters)
         else:
-            if debug_configs.framework.lower() in ('torch', 'pytorch'):
-                from .operation_def import torch_op_def  # pylint: disable=unused-import
-                cls = PyTorchOperation._find_subclass(type_name)
-            elif debug_configs.framework.lower() in ('tf', 'tensorflow'):
-                from .operation_def import tf_op_def  # pylint: disable=unused-import
-                cls = TensorFlowOperation._find_subclass(type_name)
-            else:
-                raise ValueError(f'Unsupported framework: {debug_configs.framework}')
+            from . import torch_op  # pylint: disable=unused-import
+
+            cls = PyTorchOperation._find_subclass(type_name)
             return cls(type_name, parameters, _internal=True, attributes=attributes)
 
     @classmethod
@@ -80,69 +83,81 @@ class Operation:
 
     def __repr__(self):
         type_name = type(self).__name__
-        args = [f'{key}={repr(value)}' for key, value in self.parameters.items()]
+        args = [f"{key}={repr(value)}" for key, value in self.parameters.items()]
         if type_name != self.type:
             args = [f'type="{self.type}"'] + args
         return f'{type_name}({", ".join(args)})'
 
     def __eq__(self, other):
-        return type(other) is type(self) and other.type == self.type and other.parameters == self.parameters
+        return (
+            type(other) is type(self)
+            and other.type == self.type
+            and other.parameters == self.parameters
+        )
 
 
 class PyTorchOperation(Operation):
     @classmethod
     def _find_subclass(cls, subclass_name):
         if cls.to_class_name(subclass_name) is not None:
-            subclass_name = 'ModuleOperator'
+            subclass_name = "ModuleOperator"
         if cls.is_functional(subclass_name):
-            subclass_name = 'FunctionalOperator'
+            subclass_name = "FunctionalOperator"
         for subclass in cls.__subclasses__():
-            if hasattr(subclass, '_ori_type_name') and \
-                subclass_name in subclass._ori_type_name:
+            if (
+                hasattr(subclass, "_ori_type_name")
+                and subclass_name in subclass._ori_type_name
+            ):
                 return subclass
         for subclass in cls.__subclasses__():
-            if hasattr(subclass, '_artificial_op_name') and \
-                subclass_name in subclass._artificial_op_name:
+            if (
+                hasattr(subclass, "_artificial_op_name")
+                and subclass_name in subclass._artificial_op_name
+            ):
                 return subclass
         return cls
 
     @classmethod
     def to_class_name(cls, type_name) -> str:
-        if type_name.startswith('__torch__.'):
-            return type_name[len('__torch__.'):]
-        elif type_name.startswith('__mutated__.'):
-            return type_name[len('__mutated__.'):]
+        if type_name.startswith("__torch__."):
+            return type_name[len("__torch__.") :]
+        elif type_name.startswith("__mutated__."):
+            return type_name[len("__mutated__.") :]
         else:
             return None
 
     @classmethod
     def is_functional(cls, type_name) -> bool:
-        return type_name.startswith('Function.')
+        return type_name.startswith("Function.")
 
     def _to_class_name(self) -> str:
-        if self.type.startswith('__torch__.'):
-            return self.type[len('__torch__.'):]
-        elif self.type.startswith('__mutated__.'):
-            return self.type[len('__mutated__.'):]
+        if self.type.startswith("__torch__."):
+            return self.type[len("__torch__.") :]
+        elif self.type.startswith("__mutated__."):
+            return self.type[len("__mutated__.") :]
         else:
             return None
 
     def get_import_pkg(self) -> str:
-        if self.type.startswith('__torch__.'):
-            return self.type[len('__torch__.'):].split('.')[0]
-        elif self.type.startswith('__mutated__.'):
-            return self.type[len('__mutated__.'):].split('.')[0]
+        if self.type.startswith("__torch__."):
+            return self.type[len("__torch__.") :].split(".")[0]
+        elif self.type.startswith("__mutated__."):
+            return self.type[len("__mutated__.") :].split(".")[0]
         else:
             return None
 
     def to_init_code(self, field: str) -> str:
         if self._to_class_name() is not None:
-            assert 'positional_args' not in self.parameters
-            kw_params = ', '.join(f'{key}={repr(value)}' for key, value in self.parameters.items())
-            return f'self.{field} = {self._to_class_name()}({kw_params})'
+            assert "positional_args" not in self.parameters
+            kw_params = ", ".join(
+                f"{key}={repr(value)}" for key, value in self.parameters.items()
+            )
+            return f"self.{field} = {self._to_class_name()}({kw_params})"
         return None
 
-    def to_forward_code(self, field: str, output: str, inputs: List[str], inputs_value: List[Any] = None) -> str:
+    def to_forward_code(
+        self, field: str, output: str, inputs: List[str], inputs_value: List[Any] = None
+    ) -> str:
         """
         Parameters
         ----------
@@ -161,15 +176,12 @@ class PyTorchOperation(Operation):
         str
             generated code line
         """
-        if self.type == 'aten::slice':
-            raise RuntimeError('not supposed to have aten::slice operation')
+        if self.type == "aten::slice":
+            raise RuntimeError("not supposed to have aten::slice operation")
         else:
-            raise RuntimeError(f'unsupported operation type: {self.type} ? {self._to_class_name()}')
-
-
-class TensorFlowOperation(Operation):
-    def _to_class_name(self) -> str:
-        return 'K.layers.' + self.type
+            raise RuntimeError(
+                f"unsupported operation type: {self.type} ? {self._to_class_name()}"
+            )
 
 
 class Cell(PyTorchOperation):
@@ -207,8 +219,13 @@ class Cell(PyTorchOperation):
         No real usage. Exists for compatibility with base class.
     """
 
-    def __init__(self, cell_name: str, parameters: Dict[str, Any] = None, attributes: Dict[str, Any] = None):
-        self.type = '_cell'
+    def __init__(
+        self,
+        cell_name: str,
+        parameters: Dict[str, Any] = None,
+        attributes: Dict[str, Any] = None,
+    ):
+        self.type = "_cell"
         self.cell_name = cell_name
         self.parameters = parameters or {}
         self.attributes = attributes or {}
@@ -217,8 +234,11 @@ class Cell(PyTorchOperation):
         # TODO: ugly, think about how to refactor this part
         return _convert_name(self.cell_name)
 
-    def to_forward_code(self, field: str, output: str, inputs: List[str], inputs_value: List[Any] = None) -> str:
+    def to_forward_code(
+        self, field: str, output: str, inputs: List[str], inputs_value: List[Any] = None
+    ) -> str:
         return f'{output} = self.{field}({", ".join(inputs)})'
+
 
 class _IOPseudoOperation(Operation):
     """
@@ -228,7 +248,7 @@ class _IOPseudoOperation(Operation):
     """
 
     def __init__(self, type_name: str, io_names: List = None):
-        assert type_name.startswith('_')
+        assert type_name.startswith("_")
         super(_IOPseudoOperation, self).__init__(type_name, {}, True)
         self.io_names = io_names
 
