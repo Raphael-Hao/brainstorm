@@ -1,12 +1,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import (Any, Dict, List)
+from typing import Any, Dict, List
 
 import torch
 
-from ..operation import PyTorchOperation
-
+from .base import PyTorchOperation
 
 mem_format = [
     'torch.contiguous_format',      # 0

@@ -3,16 +3,26 @@
 
 import inspect
 import logging
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from .netlet import netlet
-from .registry import is_netlet, is_router
+from .registry import is_netlet, is_router, is_traceable
 from .router import router
 
 LOG = logging.getLogger("brainstorm")
 
 T = TypeVar("T")
 
+def get_init_parameters_or_fail(obj: Any):
+    if is_traceable(obj):
+        return obj.trace_kwargs
+    raise ValueError(
+        f"Object {obj} needs to be serializable but `trace_kwargs` is not available. "
+        "If it is a built-in module (like Conv2d), please import it from retiarii.nn. "
+        "If it is a customized module, please to decorate it with @basic_unit. "
+        "For other complex objects (e.g., trainer, optimizer, dataset, dataloader), "
+        "try to use @nni.trace."
+    )
 
 def unwrap_netlet(m):
     if is_netlet(m):
@@ -43,7 +53,7 @@ def unwrap_redundant_netlet(m):
 def is_top_graph(cls_or_instance) -> bool:
     if not inspect.isclass(cls_or_instance):
         cls_or_instance = cls_or_instance.__class__
-
+    import torch
     assert issubclass(cls_or_instance, torch.nn.Module), "Only nn.Module is supported."
     return getattr(cls_or_instance, "_top_graph", False)
 

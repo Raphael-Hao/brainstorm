@@ -3,13 +3,13 @@
 
 import logging
 import re
-from typing import Dict, List, Tuple, Any
+from typing import Any, Dict, List, Tuple
 
-from nni.retiarii.operation_def.torch_op_def import ToDevice
-from nni.retiarii.utils import STATE_DICT_PY_MAPPING
 from nni.common.device import Device, GPUDevice
 
-from ..graph import IllegalGraphError, Edge, Graph, Node, Model
+from ..graph import Edge, Graph, IllegalGraphError, Model, Node
+from ..operation.torch_op import ToDevice
+from ..utils import STATE_DICT_PY_MAPPING
 
 _logger = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-import nni.retiarii.nn.pytorch
+import brt.nn
 
 {}
 

@@ -9,8 +9,8 @@ import json
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union, overload
 
-from nni.retiarii.operation import Cell, Operation, _IOPseudoOperation
-from nni.retiarii.utils import uid
+from .operation import Cell, Operation, _IOPseudoOperation
+from .utils import uid
 
 __all__ = [
     "Model",
@@ -76,7 +76,7 @@ class Model:
         self.python_class: Optional[Type] = None
         self.python_init_params: Optional[Dict[str, Any]] = None
 
-        self.status: ModelStatus = ModelStatus.Mutating
+        self.status: ModelStatus = ModelStatus.Jumbling
 
         self._root_graph_name: str = "_model"
         self.graphs: Dict[str, Graph] = {}
@@ -210,7 +210,7 @@ class ModelStatus(Enum):
     If training is successfully ended, model's `metric` attribute get set and its status becomes `Trained`.
     If training failed, the status becomes `Failed`.
     """
-
+    Jumbling = "jumbling"
     Frozen = "frozen"
     Training = "training"
     Trained = "trained"
