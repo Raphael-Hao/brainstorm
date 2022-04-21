@@ -1,19 +1,21 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Union, Tuple, List
+from typing import List, Tuple
+
 import torch
 import torch.nn.functional as F
 from tutel.impls.fast_dispatch import TutelMoeFastDispatcher, extract_critical
 
+from ..prim import router
+from .base import BaseRouter
 from .dispatcher import DefaultDispatcher
-
-from .base import Router
 
 __all__ = ["ScatterRouter", "RandomScatterRouter", "TopKScatterRouter"]
 
 
-class ScatterRouter(Router):
+@router
+class ScatterRouter(BaseRouter):
     def __init__(self, route_num: int, grain_dim: int = None, dtype=None):
         """base scatter router
 
@@ -23,9 +25,9 @@ class ScatterRouter(Router):
         """
         super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
 
-    def route(
-        self, *inputs
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], Union[int, torch.Size]]:
+    def forward(
+        self, inputs
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], torch.Tensor]:
         """should be implemented by all scatter routers
 
         Returns:
@@ -42,6 +44,7 @@ class ScatterRouter(Router):
         pass
 
 
+@router
 class RandomScatterRouter(ScatterRouter):
     def __init__(
         self, route_num: int, grain_dim: int = None, dispatcher=None, dtype=None
@@ -56,9 +59,9 @@ class RandomScatterRouter(ScatterRouter):
             DefaultDispatcher(self.route_num) if dispatcher is None else dispatcher
         )
 
-    def route(
+    def forward(
         self, inputs
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], Union[int, torch.Size]]:
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], torch.Tensor]:
         """routing logic of random router
 
         Args:
@@ -82,6 +85,7 @@ class RandomScatterRouter(ScatterRouter):
         return route_results, reverse_indices, inputs_shape
 
 
+@router
 class TopKScatterRouter(ScatterRouter):
     def __init__(
         self,
@@ -125,7 +129,7 @@ class TopKScatterRouter(ScatterRouter):
         else:
             self.top_fn = top_fn
 
-    def route(self, inputs):
+    def forward(self, inputs):
         """routing logic of top-K router
 
         Returns:
@@ -157,3 +161,53 @@ class TopKScatterRouter(ScatterRouter):
         self.dispatcher.update(*critical_data[1:])
         route_results = self.dispatcher.encode(inputs)
         return route_results, l_loss
+
+
+@router
+class MultiplexScatterRouter(ScatterRouter):
+    def __init__(
+        self,
+        route_num: int,
+        grain_dim: int,
+        multiplex_fn=None,
+        dispatcher=None,
+        dtype=None,
+    ):
+        """multiplex scatter router
+
+        Args:
+            route_num (int): routing number
+            grain_dim (int): routing grainularity
+            multiplex_fn (_type_, optional): function for multiplex mapping. None defaults to nn.linear.
+        """
+        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
+        self.grain_dim = grain_dim
+        assert self.grain_dim > 0, f"grain dim {self.grain_dim} is not valid"
+        if dispatcher is not None:
+            self.dispatcher = dispatcher
+        else:
+            self.dispatcher = TutelMoeFastDispatcher(
+                num_global_experts=self.route_num,
+                capacity=self.route_num,
+                model_dim=self.grain_dim,
+                dispatch_dtype=self.dtype,
+            )
+        if isinstance(self.dispatcher, TutelMoeFastDispatcher):
+            print(
+                "The Multiplex scatter router is using tutel dispatcher, the dispatcher should be shared with the corresponding gather router"
+            )
+        if multiplex_fn == None:
+            self.multiplex_fn = torch.nn.Linear(self.grain_dim, self.route_num, bias=False)
+        else:
+            self.multiplex_fn = multiplex_fn
+
+    def forward(self, inputs):
+        """routing logic of multiplex router
+
+        Returns:
+            List[torch.Tensor]: routing results for each routing dst
+            List[torch.Tensor]: reverse indices for each routing dst
+            Union[int, torch.Size]]: indicate the reverse shape info
+            torch.Tensor: loss of top-k for load balance
+        """
+        pass

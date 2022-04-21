@@ -3,5 +3,4 @@
 
 
 from . import nn
-from .router import Router
-from .primitive import netlet, top_graph
+from .prim import netlet, top_graph

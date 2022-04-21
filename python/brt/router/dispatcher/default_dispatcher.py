@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 
 import torch
+
 from .base import Dispatcher
 
 
@@ -33,11 +34,12 @@ class DefaultDispatcher(Dispatcher):
         self,
         reverse_indices,
         reverse_shape,
-        *inputs,
+        inputs,
     ):
         """
         Combine the outputs of the routers into the final outputs
         """
+        print(inputs)
         assert len(inputs) == self.route_num and len(reverse_indices) == self.route_num
         if isinstance(reverse_shape, int):
             route_size = reverse_shape
