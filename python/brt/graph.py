@@ -5,15 +5,22 @@
 Model representation.
 """
 
-import abc
 import json
 from enum import Enum
-from typing import (Any, Dict, Iterable, List, Optional, Tuple, Type, Union, overload)
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union, overload
 
 from nni.retiarii.operation import Cell, Operation, _IOPseudoOperation
 from nni.retiarii.utils import uid
 
-__all__ = ['Model', 'ModelStatus', 'Graph', 'Node', 'Edge', 'Mutation', 'IllegalGraphError', 'MetricData']
+__all__ = [
+    "Model",
+    "ModelStatus",
+    "Graph",
+    "Node",
+    "Edge",
+    "IllegalGraphError",
+    "MetricData",
+]
 
 
 MetricData = Any
@@ -21,54 +28,10 @@ MetricData = Any
 Type hint for graph metrics (loss, accuracy, etc).
 """
 
-EdgeEndpoint = Tuple['Node', Optional[int]]
+EdgeEndpoint = Tuple["Node", Optional[int]]
 """
 Type hint for edge's endpoint. The int indicates nodes' order.
 """
-
-
-class Evaluator(abc.ABC):
-    """
-    Evaluator of a model. An evaluator should define where the training code is, and the configuration of
-    training code. The configuration includes basic runtime information trainer needs to know (such as number of GPUs)
-    or tune-able parameters (such as learning rate), depending on the implementation of training code.
-
-    Each config should define how it is interpreted in ``_execute()``, taking only one argument which is the mutated model class.
-    For example, functional evaluator might directly import the function and call the function.
-    """
-
-    def __repr__(self):
-        items = ', '.join(['%s=%r' % (k, v) for k, v in self.__dict__.items()])
-        return f'{self.__class__.__name__}({items})'
-
-    @staticmethod
-    def _load(ir: Any) -> 'Evaluator':
-        evaluator_type = ir.get('type')
-        if isinstance(evaluator_type, str):
-            # for debug purposes only
-            for subclass in Evaluator.__subclasses__():
-                if subclass.__name__ == evaluator_type:
-                    evaluator_type = subclass
-                    break
-        assert issubclass(evaluator_type, Evaluator)
-        return evaluator_type._load(ir)
-
-    @abc.abstractmethod
-    def _dump(self) -> Any:
-        """
-        Subclass implements ``_dump`` for their own serialization.
-        They should return a dict, with a key ``type`` which equals ``self.__class__``,
-        and optionally other keys.
-        """
-        pass
-
-    @abc.abstractmethod
-    def _execute(self, model_cls: type) -> Any:
-        pass
-
-    @abc.abstractmethod
-    def __eq__(self, other) -> bool:
-        pass
 
 
 class Model:
@@ -108,32 +71,31 @@ class Model:
     """
 
     def __init__(self, _internal=False):
-        assert _internal, '`Model()` is private, use `model.fork()` instead'
-        self.model_id: int = uid('model')
+        assert _internal, "`Model()` is private, use `model.fork()` instead"
+        self.model_id: int = uid("model")
         self.python_class: Optional[Type] = None
         self.python_init_params: Optional[Dict[str, Any]] = None
 
         self.status: ModelStatus = ModelStatus.Mutating
 
-        self._root_graph_name: str = '_model'
+        self._root_graph_name: str = "_model"
         self.graphs: Dict[str, Graph] = {}
-        self.evaluator: Optional[Evaluator] = None
-
-        self.history: List['Mutation'] = []
 
         self.metric: Optional[MetricData] = None
         self.intermediate_metrics: List[MetricData] = []
 
     def __repr__(self):
-        return f'Model(model_id={self.model_id}, status={self.status}, graphs={list(self.graphs.keys())}, ' + \
-            f'evaluator={self.evaluator}, metric={self.metric}, intermediate_metrics={self.intermediate_metrics}, ' + \
-            f'python_class={self.python_class})'
+        return (
+            f"Model(model_id={self.model_id}, status={self.status}, graphs={list(self.graphs.keys())}, "
+            + f"evaluator={self.evaluator}, metric={self.metric}, intermediate_metrics={self.intermediate_metrics}, "
+            + f"python_class={self.python_class})"
+        )
 
     @property
-    def root_graph(self) -> 'Graph':
+    def root_graph(self) -> "Graph":
         return self.graphs[self._root_graph_name]
 
-    def fork(self) -> 'Model':
+    def fork(self) -> "Model":
         """
         Create a new model which has same topology, names, and IDs to current one.
 
@@ -146,29 +108,31 @@ class Model:
         new_model._root_graph_name = self._root_graph_name
         new_model.python_class = self.python_class
         new_model.python_init_params = self.python_init_params
-        new_model.graphs = {name: graph._fork_to(new_model) for name, graph in self.graphs.items()}
-        new_model.evaluator = self.evaluator  # TODO this needs a clever copy (not deepcopy) if we need mutation
+        new_model.graphs = {
+            name: graph._fork_to(new_model) for name, graph in self.graphs.items()
+        }
+        new_model.evaluator = (
+            self.evaluator
+        )  # TODO this needs a clever copy (not deepcopy) if we need mutation
         new_model.history = [*self.history]
         # Note: the history is not updated. It will be updated when the model is changed, that is in mutator.
         return new_model
 
     @staticmethod
-    def _load(ir: Any) -> 'Model':
+    def _load(ir: Any) -> "Model":
         model = Model(_internal=True)
         for graph_name, graph_data in ir.items():
-            if graph_name != '_evaluator':
+            if graph_name != "_evaluator":
                 Graph._load(model, graph_name, graph_data)._register()
-        if '_evaluator' in ir:
-            model.evaluator = Evaluator._load(ir['_evaluator'])
         return model
 
     def _dump(self) -> Any:
         ret = {name: graph._dump() for name, graph in self.graphs.items()}
         if self.evaluator is not None:
-            ret['_evaluator'] = self.evaluator._dump()
+            ret["_evaluator"] = self.evaluator._dump()
         return ret
 
-    def get_nodes(self) -> Iterable['Node']:
+    def get_nodes(self) -> Iterable["Node"]:
         """
         Traverse through all the nodes.
         """
@@ -176,7 +140,7 @@ class Model:
             for node in graph.nodes:
                 yield node
 
-    def get_nodes_by_label(self, label: str) -> List['Node']:
+    def get_nodes_by_label(self, label: str) -> List["Node"]:
         """
         Traverse all the nodes to find the matched node(s) with the given label.
         There could be multiple nodes with the same label. Name space name can uniquely
@@ -190,7 +154,7 @@ class Model:
             matched_nodes.extend(nodes)
         return matched_nodes
 
-    def get_nodes_by_type(self, type_name: str) -> List['Node']:
+    def get_nodes_by_type(self, type_name: str) -> List["Node"]:
         """
         Traverse all the nodes to find the matched node(s) with the given type.
         """
@@ -200,7 +164,7 @@ class Model:
             matched_nodes.extend(nodes)
         return matched_nodes
 
-    def get_node_by_name(self, node_name: str) -> 'Node':
+    def get_node_by_name(self, node_name: str) -> "Node":
         """
         Traverse all the nodes to find the matched node with the given name.
         """
@@ -214,7 +178,7 @@ class Model:
         else:
             return None
 
-    def get_node_by_python_name(self, python_name: str) -> 'Node':
+    def get_node_by_python_name(self, python_name: str) -> "Node":
         """
         Traverse all the nodes to find the matched node with the given python_name.
         """
@@ -228,7 +192,7 @@ class Model:
         else:
             return None
 
-    def get_cell_nodes(self) -> List['Node']:
+    def get_cell_nodes(self) -> List["Node"]:
         matched_nodes = []
         for graph in self.graphs.values():
             nodes = [node for node in graph.nodes if isinstance(node.operation, Cell)]
@@ -246,7 +210,7 @@ class ModelStatus(Enum):
     If training is successfully ended, model's `metric` attribute get set and its status becomes `Trained`.
     If training failed, the status becomes `Failed`.
     """
-    Mutating = "mutating"
+
     Frozen = "frozen"
     Training = "training"
     Trained = "trained"
@@ -294,30 +258,46 @@ class Graph:
         The name of torch.nn.Module, should have one-to-one mapping with items in python model.
     """
 
-    def __init__(self, model: Model, graph_id: int, name: str = None, _internal: bool = False):
-        assert _internal, '`Graph()` is private'
+    def __init__(
+        self, model: Model, graph_id: int, name: str = None, _internal: bool = False
+    ):
+        assert _internal, "`Graph()` is private"
 
         self.model: Model = model
         self.id: int = graph_id
-        self.name: str = name or f'_generated_{graph_id}'
+        self.name: str = name or f"_generated_{graph_id}"
 
         # `python_name` is `None` by default. It should be set after initialization if it is needed.
         self.python_name: Optional[str] = None
 
-        self.input_node: Node = Node(self, _InputPseudoUid, '_inputs', _IOPseudoOperation('_inputs'), _internal=True)
-        self.output_node: Node = Node(self, _OutputPseudoUid, '_outputs', _IOPseudoOperation('_outputs'), _internal=True)
+        self.input_node: Node = Node(
+            self,
+            _InputPseudoUid,
+            "_inputs",
+            _IOPseudoOperation("_inputs"),
+            _internal=True,
+        )
+        self.output_node: Node = Node(
+            self,
+            _OutputPseudoUid,
+            "_outputs",
+            _IOPseudoOperation("_outputs"),
+            _internal=True,
+        )
         self.hidden_nodes: List[Node] = []
 
         self.edges: List[Edge] = []
 
     def __repr__(self):
-        return f'Graph(id={self.id}, name={self.name}, ' + \
-            f'input_names={self.input_node.operation.io_names}, ' + \
-            f'output_names={self.output_node.operation.io_names}, ' + \
-            f'num_hidden_nodes={len(self.hidden_nodes)}, num_edges={len(self.edges)})'
+        return (
+            f"Graph(id={self.id}, name={self.name}, "
+            + f"input_names={self.input_node.operation.io_names}, "
+            + f"output_names={self.output_node.operation.io_names}, "
+            + f"num_hidden_nodes={len(self.hidden_nodes)}, num_edges={len(self.edges)})"
+        )
 
     @property
-    def nodes(self) -> List['Node']:
+    def nodes(self) -> List["Node"]:
         return [self.input_node, self.output_node] + self.hidden_nodes
 
     def _add_input(self, input_name) -> None:
@@ -333,9 +313,14 @@ class Graph:
             self.output_node.operation.io_names.append(output_name)
 
     @overload
-    def add_node(self, name: str, operation: Operation) -> 'Node': ...
+    def add_node(self, name: str, operation: Operation) -> "Node":
+        ...
+
     @overload
-    def add_node(self, name: str, type_name: str, parameters: Dict[str, Any] = None) -> 'Node': ...
+    def add_node(
+        self, name: str, type_name: str, parameters: Dict[str, Any] = None
+    ) -> "Node":
+        ...
 
     def add_node(self, name, operation_or_type, parameters=None):
         if isinstance(operation_or_type, Operation):
@@ -345,11 +330,20 @@ class Graph:
         return Node(self, uid(), name, op, _internal=True)._register()
 
     @overload
-    def insert_node_on_edge(self, edge: 'Edge', name: str, operation: Operation) -> 'Node': ...
-    @overload
-    def insert_node_on_edge(self, edge: 'Edge', name: str, type_name: str, parameters: Dict[str, Any] = None) -> 'Node': ...
+    def insert_node_on_edge(
+        self, edge: "Edge", name: str, operation: Operation
+    ) -> "Node":
+        ...
 
-    def insert_node_on_edge(self, edge, name, operation_or_type, parameters=None) -> 'Node':
+    @overload
+    def insert_node_on_edge(
+        self, edge: "Edge", name: str, type_name: str, parameters: Dict[str, Any] = None
+    ) -> "Node":
+        ...
+
+    def insert_node_on_edge(
+        self, edge, name, operation_or_type, parameters=None
+    ) -> "Node":
         if isinstance(operation_or_type, Operation):
             op = operation_or_type
         else:
@@ -362,50 +356,52 @@ class Graph:
         return new_node
 
     # mutation
-    def add_edge(self, head: EdgeEndpoint, tail: EdgeEndpoint) -> 'Edge':
+    def add_edge(self, head: EdgeEndpoint, tail: EdgeEndpoint) -> "Edge":
         assert head[0].graph is self and tail[0].graph is self
         return Edge(head, tail, _internal=True)._register()
 
-    def del_edge(self, edge: 'Edge') -> None:
+    def del_edge(self, edge: "Edge") -> None:
         self.edges.remove(edge)
 
-    def get_node_by_name(self, name: str) -> Optional['Node']:
+    def get_node_by_name(self, name: str) -> Optional["Node"]:
         """
         Returns the node which has specified name; or returns `None` if no node has this name.
         """
         found = [node for node in self.nodes if node.name == name]
         return found[0] if found else None
 
-    def get_node_by_python_name(self, python_name: str) -> Optional['Node']:
+    def get_node_by_python_name(self, python_name: str) -> Optional["Node"]:
         """
         Returns the node which has specified python_name; or returns `None` if no node has this python_name.
         """
         found = [node for node in self.nodes if node.python_name == python_name]
         return found[0] if found else None
 
-    def get_nodes_by_type(self, operation_type: str) -> List['Node']:
+    def get_nodes_by_type(self, operation_type: str) -> List["Node"]:
         """
         Returns nodes whose operation is specified typed.
         """
-        return [node for node in self.hidden_nodes if node.operation.type == operation_type]
+        return [
+            node for node in self.hidden_nodes if node.operation.type == operation_type
+        ]
 
-    def get_node_by_id(self, node_id: int) -> Optional['Node']:
+    def get_node_by_id(self, node_id: int) -> Optional["Node"]:
         """
         Returns the node which has specified name; or returns `None` if no node has this name.
         """
         found = [node for node in self.nodes if node.id == node_id]
         return found[0] if found else None
 
-    def get_nodes_by_label(self, label: str) -> List['Node']:
+    def get_nodes_by_label(self, label: str) -> List["Node"]:
         return [node for node in self.hidden_nodes if node.label == label]
 
-    def get_nodes_by_name(self, name: str) -> List['Node']:
+    def get_nodes_by_name(self, name: str) -> List["Node"]:
         return [node for node in self.hidden_nodes if node.name == name]
 
-    def get_nodes_by_python_name(self, python_name: str) -> Optional['Node']:
+    def get_nodes_by_python_name(self, python_name: str) -> Optional["Node"]:
         return [node for node in self.nodes if node.python_name == python_name]
 
-    def topo_sort(self) -> List['Node']:
+    def topo_sort(self) -> List["Node"]:
         node_to_fanin = {}
         curr_nodes = []
         for node in self.nodes:
@@ -427,17 +423,20 @@ class Graph:
                     curr_nodes.append(successor)
 
         for key in node_to_fanin:
-            assert node_to_fanin[key] == 0, '{}, fanin: {}, predecessor: {}, edges: {}, fanin: {}, keys: {}'.format(
+            assert (
+                node_to_fanin[key] == 0
+            ), "{}, fanin: {}, predecessor: {}, edges: {}, fanin: {}, keys: {}".format(
                 key,
                 node_to_fanin[key],
                 key.predecessors[0],
                 self.edges,
                 node_to_fanin.values(),
-                node_to_fanin.keys())
+                node_to_fanin.keys(),
+            )
 
         return sorted_nodes
 
-    def fork(self) -> 'Graph':
+    def fork(self) -> "Graph":
         """
         Fork the model and returns corresponding graph in new model.
         This shortcut might be helpful because many algorithms only cares about "stem" subgraph instead of whole model.
@@ -447,8 +446,10 @@ class Graph:
     def __eq__(self, other: object) -> bool:
         return self is other
 
-    def _fork_to(self, model: Model, name_prefix='') -> 'Graph':
-        new_graph = Graph(model, self.id, name_prefix + self.name, _internal=True)._register()
+    def _fork_to(self, model: Model, name_prefix="") -> "Graph":
+        new_graph = Graph(
+            model, self.id, name_prefix + self.name, _internal=True
+        )._register()
         # TODO: use node copy instead
         new_graph.input_node.operation.io_names = self.input_node.operation.io_names
         new_graph.output_node.operation.io_names = self.output_node.operation.io_names
@@ -457,7 +458,9 @@ class Graph:
         new_graph.python_name = self.python_name
 
         for node in self.hidden_nodes:
-            new_node = Node(new_graph, node.id, node.name, node.operation, _internal=True)
+            new_node = Node(
+                new_graph, node.id, node.name, node.operation, _internal=True
+            )
             new_node.python_name = node.python_name
             new_node.update_label(node.label)
             new_node._register()
@@ -467,11 +470,13 @@ class Graph:
         for edge in self.edges:
             new_head = id_to_new_node[edge.head.id]
             new_tail = id_to_new_node[edge.tail.id]
-            Edge((new_head, edge.head_slot), (new_tail, edge.tail_slot), _internal=True)._register()
+            Edge(
+                (new_head, edge.head_slot), (new_tail, edge.tail_slot), _internal=True
+            )._register()
 
         return new_graph
 
-    def _copy(self) -> 'Graph':
+    def _copy(self) -> "Graph":
         # Copy this graph inside the model.
         # The new graph will have identical topology, but its nodes' name and ID will be different.
         new_graph = Graph(self.model, uid(), _internal=True)._register()
@@ -484,7 +489,9 @@ class Graph:
         id_to_new_node = {}  # old node ID -> new node object
 
         for old_node in self.hidden_nodes:
-            new_node = Node(new_graph, uid(), None, old_node.operation, _internal=True)._register()
+            new_node = Node(
+                new_graph, uid(), None, old_node.operation, _internal=True
+            )._register()
             new_node.python_name = old_node.python_name
             new_node.update_label(old_node.label)
             id_to_new_node[old_node.id] = new_node
@@ -492,11 +499,13 @@ class Graph:
         for edge in self.edges:
             new_head = id_to_new_node[edge.head.id]
             new_tail = id_to_new_node[edge.tail.id]
-            Edge((new_head, edge.head_slot), (new_tail, edge.tail_slot), _internal=True)._register()
+            Edge(
+                (new_head, edge.head_slot), (new_tail, edge.tail_slot), _internal=True
+            )._register()
 
         return new_graph
 
-    def _register(self) -> 'Graph':
+    def _register(self) -> "Graph":
         self.model.graphs[self.name] = self
         return self
 
@@ -506,22 +515,22 @@ class Graph:
         del self.model.graphs[old_name]
 
     @staticmethod
-    def _load(model: Model, name: str, ir: Any) -> 'Graph':
+    def _load(model: Model, name: str, ir: Any) -> "Graph":
         graph = Graph(model, uid(), name, _internal=True)
-        graph.input_node.operation.io_names = ir.get('inputs')
-        graph.output_node.operation.io_names = ir.get('outputs')
-        for node_name, node_data in ir['nodes'].items():
+        graph.input_node.operation.io_names = ir.get("inputs")
+        graph.output_node.operation.io_names = ir.get("outputs")
+        for node_name, node_data in ir["nodes"].items():
             Node._load(graph, node_name, node_data)._register()
-        for edge_data in ir['edges']:
+        for edge_data in ir["edges"]:
             Edge._load(graph, edge_data)._register()
         return graph
 
     def _dump(self) -> Any:
         return {
-            'inputs': self.input_node.operation.io_names,
-            'outputs': self.output_node.operation.io_names,
-            'nodes': {node.name: node._dump() for node in self.hidden_nodes},
-            'edges': [edge._dump() for edge in self.edges]
+            "inputs": self.input_node.operation.io_names,
+            "outputs": self.output_node.operation.io_names,
+            "nodes": {node.name: node._dump() for node in self.hidden_nodes},
+            "edges": [edge._dump() for edge in self.edges],
         }
 
 
@@ -571,7 +580,7 @@ class Node:
     def __init__(self, graph, node_id, name, operation, _internal=False):
         self.graph: Graph = graph
         self.id: int = node_id
-        self.name: str = name or f'_generated_{node_id}'
+        self.name: str = name or f"_generated_{node_id}"
         # `python_name` is `None` by default. It should be set after initialization if it is needed.
         self.python_name: Optional[str] = None
         # TODO: the operation is likely to be considered editable by end-user and it will be hard to debug
@@ -580,40 +589,49 @@ class Node:
         self.label: Optional[str] = None
 
     def __repr__(self):
-        return f'Node(id={self.id}, name={self.name}, python_name={self.python_name}, label={self.label}, operation={self.operation})'
+        return f"Node(id={self.id}, name={self.name}, python_name={self.python_name}, label={self.label}, operation={self.operation})"
 
     @property
-    def predecessors(self) -> List['Node']:
-        return sorted(set(edge.head for edge in self.incoming_edges), key=(lambda node: node.id))
+    def predecessors(self) -> List["Node"]:
+        return sorted(
+            set(edge.head for edge in self.incoming_edges), key=(lambda node: node.id)
+        )
 
     @property
-    def successors(self) -> List['Node']:
-        return sorted(set(edge.tail for edge in self.outgoing_edges), key=(lambda node: node.id))
+    def successors(self) -> List["Node"]:
+        return sorted(
+            set(edge.tail for edge in self.outgoing_edges), key=(lambda node: node.id)
+        )
 
     @property
-    def successor_slots(self) -> List[Tuple['Node', Union[int, None]]]:
+    def successor_slots(self) -> List[Tuple["Node", Union[int, None]]]:
         return set((edge.tail, edge.tail_slot) for edge in self.outgoing_edges)
 
     @property
-    def incoming_edges(self) -> List['Edge']:
+    def incoming_edges(self) -> List["Edge"]:
         return [edge for edge in self.graph.edges if edge.tail is self]
 
     @property
-    def outgoing_edges(self) -> List['Edge']:
+    def outgoing_edges(self) -> List["Edge"]:
         return [edge for edge in self.graph.edges if edge.head is self]
 
     @property
     def cell(self) -> Graph:
         assert isinstance(self.operation, Cell)
-        return self.graph.model.graphs[self.operation.parameters['cell']]
+        return self.graph.model.graphs[self.operation.parameters["cell"]]
 
     def update_label(self, label: str) -> None:
         self.label = label
 
     @overload
-    def update_operation(self, operation: Operation) -> None: ...
+    def update_operation(self, operation: Operation) -> None:
+        ...
+
     @overload
-    def update_operation(self, type_name: str, parameters: Dict[str, Any] = None) -> None: ...
+    def update_operation(
+        self, type_name: str, parameters: Dict[str, Any] = None
+    ) -> None:
+        ...
 
     def update_operation(self, operation_or_type, parameters=None):
         if isinstance(operation_or_type, Operation):
@@ -642,31 +660,43 @@ class Node:
     def __hash__(self) -> int:
         return hash(id(self))
 
-    def _register(self) -> 'Node':
+    def _register(self) -> "Node":
         self.graph.hidden_nodes.append(self)
         return self
 
     @staticmethod
-    def _load(graph: Graph, name: str, ir: Any) -> 'Node':
-        if ir['operation']['type'] == '_cell':
-            op = Cell(ir['operation']['cell_name'], ir['operation'].get('parameters', {}), attributes=ir['operation'].get('attributes', {}))
+    def _load(graph: Graph, name: str, ir: Any) -> "Node":
+        if ir["operation"]["type"] == "_cell":
+            op = Cell(
+                ir["operation"]["cell_name"],
+                ir["operation"].get("parameters", {}),
+                attributes=ir["operation"].get("attributes", {}),
+            )
         else:
-            op = Operation.new(ir['operation']['type'],
-                               ir['operation'].get('parameters', {}),
-                               attributes=ir['operation'].get('attributes', {}))
+            op = Operation.new(
+                ir["operation"]["type"],
+                ir["operation"].get("parameters", {}),
+                attributes=ir["operation"].get("attributes", {}),
+            )
         node = Node(graph, uid(), name, op)
-        if 'label' in ir:
-            node.update_label(ir['label'])
+        if "label" in ir:
+            node.update_label(ir["label"])
         return node
 
     def _dump(self) -> Any:
-        ret = {'operation': {'type': self.operation.type, 'parameters': self.operation.parameters, 'attributes': self.operation.attributes}}
+        ret = {
+            "operation": {
+                "type": self.operation.type,
+                "parameters": self.operation.parameters,
+                "attributes": self.operation.attributes,
+            }
+        }
         if isinstance(self.operation, Cell):
-            ret['operation']['cell_name'] = self.operation.cell_name
+            ret["operation"]["cell_name"] = self.operation.cell_name
         if self.label is not None:
-            ret['label'] = self.label
+            ret["label"] = self.label
         if self.python_name is not None:
-            ret['python_name'] = self.python_name
+            ret["python_name"] = self.python_name
         return ret
 
 
@@ -707,7 +737,7 @@ class Edge:
     """
 
     def __init__(self, head: EdgeEndpoint, tail: EdgeEndpoint, _internal: bool = False):
-        assert _internal, '`Edge()` is private'
+        assert _internal, "`Edge()` is private"
         self.graph: Graph = head[0].graph
         self.head: Node = head[0]
         self.tail: Node = tail[0]
@@ -715,28 +745,29 @@ class Edge:
         self.tail_slot: Optional[int] = tail[1]
 
     def __repr__(self):
-        return f'Edge(head=({self.head}, {self.head_slot}), tail=({self.tail}, {self.tail_slot}))'
+        return f"Edge(head=({self.head}, {self.head_slot}), tail=({self.tail}, {self.tail_slot}))"
 
     # mutation
     def remove(self) -> None:
         self.graph.edges.remove(self)
 
-    def _register(self) -> 'Edge':
+    def _register(self) -> "Edge":
         self.graph.edges.append(self)
         return self
 
     @staticmethod
-    def _load(graph: Graph, ir: Any) -> 'Edge':
-        head = graph.get_node_by_name(ir['head'][0])
-        tail = graph.get_node_by_name(ir['tail'][0])
+    def _load(graph: Graph, ir: Any) -> "Edge":
+        head = graph.get_node_by_name(ir["head"][0])
+        tail = graph.get_node_by_name(ir["tail"][0])
         assert head is not None and tail is not None
-        return Edge((head, ir['head'][1]), (tail, ir['tail'][1]), _internal=True)
+        return Edge((head, ir["head"][1]), (tail, ir["tail"][1]), _internal=True)
 
     def _dump(self) -> Any:
         return {
-            'head': [self.head.name, self.head_slot],
-            'tail': [self.tail.name, self.tail_slot]
+            "head": [self.head.name, self.head_slot],
+            "tail": [self.tail.name, self.tail_slot],
         }
+
 
 class IllegalGraphError(ValueError):
     def __init__(self, graph, *args):
@@ -747,20 +778,5 @@ class IllegalGraphError(ValueError):
     def _debug_dump_graph(graph):
         if isinstance(graph, Graph):
             graph = graph._dump()
-        with open('generated/debug.json', 'w') as dump_file:
+        with open("generated/debug.json", "w") as dump_file:
             json.dump(graph, dump_file, indent=4)
-
-
-class DebugEvaluator(Evaluator):
-    @staticmethod
-    def _load(ir: Any) -> 'DebugEvaluator':
-        return DebugEvaluator()
-
-    def _dump(self) -> Any:
-        return {'type': DebugEvaluator}
-
-    def _execute(self, model_cls: type) -> Any:
-        pass
-
-    def __eq__(self, other) -> bool:
-        return True

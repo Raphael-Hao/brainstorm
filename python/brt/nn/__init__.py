@@ -2,11 +2,11 @@
 # Licensed under the MIT license.
 
 
+import copy
 import inspect
+import os
 import warnings
 from pathlib import Path
-import os
-import copy
 
 import torch
 import torch.nn as nn
@@ -59,7 +59,7 @@ if not CACHE_VALID:
         "# pylint: skip-file",
         f'_torch_version = "{torch.__version__}"',
         "import torch.nn as nn",
-        "from ..primitive import netlet",
+        "from ..prim import netlet",
     ]
 
     obj_common_header = [

@@ -4,11 +4,11 @@
 import re
 
 import torch
+from nni.retiarii.nn.pytorch import InputChoice, Placeholder, LayerChoice
 
 from ..graph import Graph, Model, Node
-from ..nn.pytorch import InputChoice, Placeholder, LayerChoice
 from ..operation import Cell, Operation
-from ..serializer import get_init_parameters_or_fail
+from ..prim.serializer import get_init_parameters_or_fail
 from ..utils import get_importable_name
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName
 from .utils import (
