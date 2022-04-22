@@ -4,11 +4,11 @@
 import re
 
 import torch
+from brt.graph import Graph, Model, Node
+from brt.operation import Cell, Operation
+from brt.prim import get_init_parameters_or_fail
+from brt.utils import get_importable_name
 
-from ..graph import Graph, Model, Node
-from ..operation import Cell, Operation
-from ..prim import get_init_parameters_or_fail
-from ..utils import get_importable_name
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName
 from .utils import (
     _convert_name,
@@ -22,7 +22,7 @@ from .utils import (
 )
 
 
-class GraphConverter:
+class GraphBuilder:
     def __init__(self):
         self.global_seq = 0
         self.global_graph_id = 0
@@ -382,7 +382,7 @@ class GraphConverter:
                         module_python_name, submodule_name
                     )
                     submodule_obj = getattr(module, submodule_name)
-                    subgraph, sub_m_attrs = self._convert_module(
+                    subgraph, sub_m_attrs = self._build_module(
                         script_module._modules[submodule_name],
                         submodule_obj,
                         submodule_full_name,
@@ -425,7 +425,7 @@ class GraphConverter:
                         for each_name in list(reversed(module_name_space)):
                             submodule_obj = getattr(submodule_obj, each_name)
                             script_submodule = script_submodule._modules[each_name]
-                        subgraph, sub_m_attrs = self._convert_module(
+                        subgraph, sub_m_attrs = self._build_module(
                             script_submodule,
                             submodule_obj,
                             submodule_full_name,
@@ -754,7 +754,7 @@ class GraphConverter:
             "label": module.label,
         }
 
-    def _convert_module(
+    def _build_module(
         self, script_module, module, module_name, module_python_name, ir_model
     ):
         # NOTE: have not supported nested LayerChoice, i.e., a candidate module
@@ -773,7 +773,7 @@ class GraphConverter:
                 cand_full_name = build_cand_name(cand_name, module.label)
                 cand_python_name = build_python_name(module_python_name, cand_name)
                 candidate_name_list.append(cand_full_name)
-                subgraph, attrs = self._convert_module(
+                subgraph, attrs = self._build_module(
                     script_cand, cand, cand_full_name, cand_python_name, ir_model
                 )
                 if subgraph is not None:
@@ -848,9 +848,9 @@ class GraphConverter:
 
         return ir_graph, {}
 
-    def convert_module(self, script_module, module, module_name, ir_model):
+    def build_module(self, script_module, module, module_name, ir_model):
         """
-        Convert a module to its graph ir (i.e., Graph) along with its input arguments
+        Build a module to its graph ir (i.e., Graph) along with its input arguments
 
         Parameters
         ----------
@@ -870,10 +870,10 @@ class GraphConverter:
         dict
             the input arguments of this module
         """
-        return self._convert_module(script_module, module, module_name, None, ir_model)
+        return self._build_module(script_module, module, module_name, None, ir_model)
 
 
-def convert_to_graph(script_module, module, converter=None, **kwargs):
+def build_graph(script_module, module, builder=None, **kwargs):
     """
     Convert module to our graph ir, i.e., build a :class:`Model` type
 
@@ -883,10 +883,10 @@ def convert_to_graph(script_module, module, converter=None, **kwargs):
         the script module obtained with torch.jit.script
     module : nn.Module
         the targeted module instance
-    converter : `TorchConverter`
-        default `GraphConverter` is used
+    builder : `TorchBuilder`
+        default `GraphBuilder` is used
     kwargs:
-        will be passed to `converter.convert_module()`
+        will be passed to `builder.build_module()`
 
     Returns
     -------
@@ -896,8 +896,8 @@ def convert_to_graph(script_module, module, converter=None, **kwargs):
 
     model = Model(_internal=True)
     module_name = "_model"
-    if converter is None:
-        converter = GraphConverter()
-    converter.convert_module(script_module, module, module_name, model, **kwargs)
+    if builder is None:
+        builder = GraphBuilder()
+    builder.build_module(script_module, module, module_name, model, **kwargs)
 
     return model

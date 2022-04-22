@@ -5,8 +5,8 @@ import inspect
 import logging
 from typing import Any, TypeVar
 
+from .helper import is_netlet, is_router, is_traceable
 from .netlet import netlet
-from .registry import is_netlet, is_router, is_traceable
 from .router import router
 
 LOG = logging.getLogger("brainstorm")

@@ -26,7 +26,7 @@ from .base import (
     inject_trace_info,
     torchscript_patch,
 )
-from .registry import check_wrapped
+from .helper import check_wrapped
 
 LOG = logging.getLogger("brainstorm")
 

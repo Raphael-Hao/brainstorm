@@ -6,7 +6,7 @@ from typing import TypeVar
 import torch
 
 from .base import torchscript_patch, trace
-from .registry import check_wrapped
+from .helper import check_wrapped
 
 T = TypeVar("T")
 
