@@ -4,8 +4,8 @@
 from typing import List
 
 import torch
+from brt.primitive import router
 
-from ..prim import router
 from .base import BaseRouter
 from .dispatcher import DefaultDispatcher
 

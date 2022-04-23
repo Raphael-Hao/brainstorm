@@ -14,11 +14,11 @@ from nni.common.device import Device, GPUDevice
 _logger = logging.getLogger(__name__)
 
 
-def model_to_torch_script(model: Model, placement=None) -> str:
+def model_to_script(model: Model, placement=None) -> str:
     graphs = []
     total_pkgs = set()
     for name, cell in model.graphs.items():
-        import_pkgs, graph_code = graph_to_torch_model(
+        import_pkgs, graph_code = graph_to_model(
             name, cell, placement=placement
         )
         graphs.append(graph_code)
@@ -147,7 +147,7 @@ def generate_cuda_mapping(placement: Dict[Node, Device]) -> Dict[Device, int]:
     return cuda_remapped_id
 
 
-def graph_to_torch_model(graph_name: str, graph: Graph, placement=None) -> str:
+def graph_to_model(graph_name: str, graph: Graph, placement=None) -> str:
     nodes = graph.topo_sort()
 
     # handle module node and function node differently

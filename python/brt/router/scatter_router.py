@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from tutel.impls.fast_dispatch import TutelMoeFastDispatcher, extract_critical
 
-from ..prim import router
+from ..primitive import router
 from .base import BaseRouter
 from .dispatcher import DefaultDispatcher
 

@@ -4,6 +4,8 @@
 import inspect
 from typing import Any, TypeVar
 
+from brt.logger import DEBUG
+
 T = TypeVar("T")
 
 
@@ -34,6 +36,15 @@ def is_wrapped_with_trace(cls_or_func: Any) -> bool:
         in cls_or_func.__dict__  # must be in this class, super-class traced doesn't count
     )
 
+
+def is_domain(cls_or_instance) -> bool:
+    """check if the class is a domain for brainstorm."""
+
+    if not inspect.isclass(cls_or_instance):
+        cls_or_instance = cls_or_instance.__class__
+    import torch
+    assert issubclass(cls_or_instance, torch.nn.Module), "Only nn.Module is supported."
+    return getattr(cls_or_instance, "_brt_domain", False)
 
 def is_router(cls_or_instance) -> bool:
     """check if the class is a router for brainstorm."""
@@ -77,3 +88,5 @@ def check_wrapped(cls: T, rewrap: str) -> bool:
             )
         return True
     return False
+
+
