@@ -6,7 +6,7 @@ import re
 import torch
 from brt.graph import Graph, Model, Node
 from brt.operation import Cell, Operation
-from brt.prim import get_init_parameters_or_fail
+from brt.primitive import get_init_parameters_or_fail
 from brt.utils import get_importable_name
 
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName

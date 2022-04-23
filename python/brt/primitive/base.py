@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, TypeVar, Union
 import cloudpickle  # use cloudpickle as backend for unserializable types and instances
 import json_tricks  # use json_tricks as serializer backend
 
-from .helper import is_wrapped_with_trace
+from .helper import is_traceable, is_wrapped_with_trace
 
 __all__ = [
     "trace",

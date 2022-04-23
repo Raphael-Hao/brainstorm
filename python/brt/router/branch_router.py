@@ -1,7 +1,8 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from ..prim import router
+from brt.primitive import router
+
 from .base import BaseRouter
 
 
