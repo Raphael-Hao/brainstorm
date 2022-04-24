@@ -53,5 +53,5 @@ class NetletTest(unittest.TestCase):
         except Exception as e:
             self.fail(f"Failed to inline the jitted graph: {e}")
 
-    def test_graph_build(self):
+    def test_traced(self):
         pass
