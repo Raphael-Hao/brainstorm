@@ -38,3 +38,5 @@ class RouterTest(unittest.TestCase):
             script_simple_net.inlined_graph
         except Exception as e:
             self.fail(f"Failed to inline the jitted graph: {e}")
+    def test_traced(self):
+        pass
