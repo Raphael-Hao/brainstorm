@@ -2,16 +2,16 @@
 # Licensed under the MIT license.
 
 
-import logging
+
 import re
 from typing import Any, Dict, List, Tuple
 
-from brt.graph import Edge, Graph, IllegalGraphError, Model, Node
+from brt import Edge, Graph, IllegalGraphError, Model, Node, log
+from brt.common.utils import STATE_DICT_PY_MAPPING
 from brt.operation.torch_op import ToDevice
-from brt.utils import STATE_DICT_PY_MAPPING
 from nni.common.device import Device, GPUDevice
 
-_logger = logging.getLogger(__name__)
+logger = log.get_module_logger(__file__)
 
 
 def model_to_script(model: Model, placement=None) -> str:
@@ -29,10 +29,10 @@ def model_to_script(model: Model, placement=None) -> str:
 
 def _sorted_incoming_edges(node: Node) -> List[Edge]:
     edges = [edge for edge in node.graph.edges if edge.tail is node]
-    _logger.debug("sorted_incoming_edges: %s", str(edges))
+    logger.debug("sorted_incoming_edges: %s", str(edges))
     if not edges:
         return []
-    _logger.debug(
+    logger.debug(
         "all tail_slots are None: %s", str([edge.tail_slot for edge in edges])
     )
     if all(edge.tail_slot is None for edge in edges):

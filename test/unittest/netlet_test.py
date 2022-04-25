@@ -17,12 +17,13 @@ class NetletTest(unittest.TestCase):
 
             def forward(self, x):
                 return x
+
         simple_net = SimpleNetlet()
         try:
             simple_net(None)
         except Exception as e:
             self.fail(f"Netlet failed to accept None as input: {e}")
-        
+
     def test_jit(self):
         @brt.netlet
         class SimpleNet(nn.Module):

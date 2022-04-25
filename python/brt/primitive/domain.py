@@ -4,8 +4,8 @@
 import inspect
 from typing import TypeVar, Union
 
+# import brt.logger as logger
 import cloudpickle
-from brt.logger import DEBUG
 
 from .base import (
     SerializableObject,
@@ -37,7 +37,7 @@ def unwrap_netlet(m):
 
 def unwrap_redundant_netlet(m):
     if is_domain(m):
-        DEBUG("unwrap redundant netlet because it is a domain")
+        # logger.Debug("unwrap redundant netlet because it is a domain")
         unwrap_netlet(m)
     # check if router in children
     if_redundant = True
@@ -46,7 +46,7 @@ def unwrap_redundant_netlet(m):
             if_redundant = False
             break
     if if_redundant:
-        DEBUG("unwrap redundant netlet due to no router")
+        # logger.Debug("unwrap redundant netlet due to no router")
         for child in m.children():
             unwrap_netlet(child)
     for child in m.children():

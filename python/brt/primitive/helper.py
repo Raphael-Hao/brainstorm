@@ -4,7 +4,9 @@
 import inspect
 from typing import Any, TypeVar
 
-from brt.logger import DEBUG
+from brt.common import logging
+
+logger = logging.get_module_logger(__file__)
 
 T = TypeVar("T")
 
