@@ -2,7 +2,6 @@
 # Licensed under the MIT license.
 
 
-
 import re
 from typing import Any, Dict, List, Tuple
 
@@ -19,9 +18,7 @@ def model_to_script(model: Model, placement=None) -> str:
     graphs = []
     total_pkgs = set()
     for name, cell in model.graphs.items():
-        import_pkgs, graph_code = graph_to_model(
-            name, cell, placement=placement
-        )
+        import_pkgs, graph_code = graph_to_model(name, cell, placement=placement)
         graphs.append(graph_code)
         total_pkgs.update(import_pkgs)
     pkgs_code = "\n".join(["import {}".format(pkg) for pkg in total_pkgs])
@@ -33,9 +30,7 @@ def _sorted_incoming_edges(node: Node) -> List[Edge]:
     logger.debug("sorted_incoming_edges: %s", str(edges))
     if not edges:
         return []
-    logger.debug(
-        "all tail_slots are None: %s", str([edge.tail_slot for edge in edges])
-    )
+    logger.debug("all tail_slots are None: %s", str([edge.tail_slot for edge in edges]))
     if all(edge.tail_slot is None for edge in edges):
         return edges
     if all(isinstance(edge.tail_slot, int) for edge in edges):
@@ -173,6 +168,7 @@ def graph_to_model(graph_name: str, graph: Graph, placement=None) -> str:
                 import_pkgs.add(pkg_name)
 
             py_variable_name = _format_variable_name(node.name, graph_name)
+            # TODO filter out the routers for to_init_code generation
             node_code = node.operation.to_init_code(py_variable_name)
             if node_code is not None:
                 if placement and node in placement and len(node_code) > 0:
@@ -207,6 +203,10 @@ def graph_to_model(graph_name: str, graph: Graph, placement=None) -> str:
                 submodule_name = _format_variable_name(
                     node.operation.parameters["reference"], graph_name
                 )
+            # TODO filter out the routers for to_forward_code generation
+            logger.debug(
+                f"submodule_name: {submodule_name}, node_name: {node_name}, inputs: {inputs}, inputs_value: {inputs_value}"
+            )
             edge_codes.append(
                 node.operation.to_forward_code(
                     submodule_name, node_name, inputs, inputs_value
