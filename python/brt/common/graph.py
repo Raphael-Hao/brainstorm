@@ -9,7 +9,8 @@ import json
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union, overload
 
-from .operation import Cell, Operation, _IOPseudoOperation
+from brt.operation import Cell, Operation, _IOPseudoOperation
+
 from .utils import uid
 
 __all__ = [
@@ -57,8 +58,6 @@ class Model:
         The outermost graph which usually takes dataset as input and feeds output to loss function.
     graphs
         All graphs (subgraphs) in this model.
-    evaluator
-        Model evaluator
     history
         Mutation history.
         ``self`` is directly mutated from ``self.history[-1]``;
@@ -87,7 +86,7 @@ class Model:
     def __repr__(self):
         return (
             f"Model(model_id={self.model_id}, status={self.status}, graphs={list(self.graphs.keys())}, "
-            + f"evaluator={self.evaluator}, metric={self.metric}, intermediate_metrics={self.intermediate_metrics}, "
+            + f"metric={self.metric}, intermediate_metrics={self.intermediate_metrics}, "
             + f"python_class={self.python_class})"
         )
 
@@ -111,9 +110,6 @@ class Model:
         new_model.graphs = {
             name: graph._fork_to(new_model) for name, graph in self.graphs.items()
         }
-        new_model.evaluator = (
-            self.evaluator
-        )  # TODO this needs a clever copy (not deepcopy) if we need mutation
         new_model.history = [*self.history]
         # Note: the history is not updated. It will be updated when the model is changed, that is in mutator.
         return new_model
@@ -122,14 +118,11 @@ class Model:
     def _load(ir: Any) -> "Model":
         model = Model(_internal=True)
         for graph_name, graph_data in ir.items():
-            if graph_name != "_evaluator":
-                Graph._load(model, graph_name, graph_data)._register()
+            Graph._load(model, graph_name, graph_data)._register()
         return model
 
     def _dump(self) -> Any:
         ret = {name: graph._dump() for name, graph in self.graphs.items()}
-        if self.evaluator is not None:
-            ret["_evaluator"] = self.evaluator._dump()
         return ret
 
     def get_nodes(self) -> Iterable["Node"]:

@@ -2,15 +2,16 @@
 # Licensed under the MIT license.
 
 import inspect
-import logging
 from typing import Any, TypeVar
+
+from brt.common import logging
 
 from .domain import domain
 from .helper import is_netlet, is_router, is_traceable
 from .netlet import netlet
 from .router import router
 
-LOG = logging.getLogger("brainstorm")
+logger = logging.get_module_logger(__file__)
 
 T = TypeVar("T")
 

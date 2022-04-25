@@ -4,24 +4,15 @@
 import re
 
 import torch
-from brt.graph import Graph, Model, Node
+from brt import Graph, Model, Node, log
+from brt.common.utils import get_importable_name
 from brt.operation import Cell, Operation
 from brt.primitive import get_init_parameters_or_fail
-from brt.utils import get_importable_name
 
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName
-from .utils import (
-    _convert_name,
-    _extract_info_from_trace_node,
-    _without_shape_info,
-    build_cand_name,
-    build_full_name,
-    build_python_name,
-    get_full_name_by_scope_name,
-    match_node,
-)
+from .utils import _convert_name, build_cand_name, build_full_name, build_python_name
 
-
+logger = log.get_module_logger(__file__)
 class GraphBuilder:
     def __init__(self):
         self.global_seq = 0
@@ -761,6 +752,7 @@ class GraphBuilder:
         # also has LayerChoice or InputChoice or ValueChoice
         original_type_name = script_module.original_name
         m_attrs = None
+        logger.Debug("building module {}".format(original_type_name))
         if original_type_name == OpTypeName.LayerChoice:
             graph = Graph(
                 ir_model, -100, module_name, _internal=True
