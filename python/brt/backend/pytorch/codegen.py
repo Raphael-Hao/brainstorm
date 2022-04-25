@@ -6,12 +6,13 @@
 import re
 from typing import Any, Dict, List, Tuple
 
-from brt import Edge, Graph, IllegalGraphError, Model, Node, log
+from brt import Edge, Graph, IllegalGraphError, Model, Node
+from brt.common import log
 from brt.common.utils import STATE_DICT_PY_MAPPING
 from brt.operation.torch_op import ToDevice
 from nni.common.device import Device, GPUDevice
 
-logger = log.get_module_logger(__file__)
+logger = log.get_logger(__file__)
 
 
 def model_to_script(model: Model, placement=None) -> str:

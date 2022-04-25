@@ -4,7 +4,6 @@
 import collections
 import functools
 import inspect
-import logging
 import numbers
 import types
 from io import IOBase
@@ -12,6 +11,7 @@ from typing import TypeVar, Union
 
 import cloudpickle
 import torch
+from brt.common import log
 
 from .base import (
     SerializableObject,
@@ -28,7 +28,7 @@ from .base import (
 )
 from .helper import check_wrapped, is_wrapped_with_trace
 
-LOG = logging.getLogger("brainstorm")
+logger = log.get_logger(__file__)
 
 __all__ = ["netlet"]
 T = TypeVar("T")
@@ -119,7 +119,7 @@ def _trace_netlet_cls(
 
         @torch.jit.ignore
         def brt_forward(self, *args, **kwargs):
-            logging.debug("using brt_forward")
+            logger.debug("using brt_forward")
             for arg in args:
                 if arg is not None:
                     return self.pt_forward(*args, **kwargs)

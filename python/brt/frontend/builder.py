@@ -4,7 +4,8 @@
 import re
 
 import torch
-from brt import Graph, Model, Node, log
+from brt import Graph, Model, Node
+from brt.common import log
 from brt.common.utils import get_importable_name
 from brt.operation import Cell, Operation
 from brt.primitive import get_init_parameters_or_fail
@@ -12,7 +13,9 @@ from brt.primitive import get_init_parameters_or_fail
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName
 from .utils import _convert_name, build_cand_name, build_full_name, build_python_name
 
-logger = log.get_module_logger(__file__)
+logger = log.get_logger(__file__)
+
+
 class GraphBuilder:
     def __init__(self):
         self.global_seq = 0
@@ -752,7 +755,7 @@ class GraphBuilder:
         # also has LayerChoice or InputChoice or ValueChoice
         original_type_name = script_module.original_name
         m_attrs = None
-        logger.Debug("building module {}".format(original_type_name))
+        logger.debug(f"building module {original_type_name}")
         if original_type_name == OpTypeName.LayerChoice:
             graph = Graph(
                 ir_model, -100, module_name, _internal=True
@@ -865,7 +868,7 @@ class GraphBuilder:
         return self._build_module(script_module, module, module_name, None, ir_model)
 
 
-def build_graph(script_module, module, builder=None, **kwargs):
+def build_graph(module: torch.nn.Module, builder=None, **kwargs):
     """
     Convert module to our graph ir, i.e., build a :class:`Model` type
 
@@ -890,6 +893,7 @@ def build_graph(script_module, module, builder=None, **kwargs):
     module_name = "_model"
     if builder is None:
         builder = GraphBuilder()
+    script_module = torch.jit.script(module)
     builder.build_module(script_module, module, module_name, model, **kwargs)
 
     return model
