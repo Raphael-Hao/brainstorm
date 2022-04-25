@@ -213,6 +213,7 @@ class GraphBuilder:
                 continue
             graph_inputs.append(_input)
             # TODO: add scope name
+            logger.debug(f"converted input name: {_convert_name(_input.debugName())}")
             ir_graph._add_input(_convert_name(_input.debugName()))
 
         node_index = {}  # graph node to graph ir node
@@ -236,7 +237,7 @@ class GraphBuilder:
 
             NOTE: do not support dynamic graph
             """
-
+            logger.debug("handleing if condition")
             def _generate_expr(tensor):
                 if tensor.node().kind() == "prim::GetAttr":
                     return f'({getattr(module, tensor.node().s("name"))})'
@@ -318,6 +319,7 @@ class GraphBuilder:
             Node
                 the created node ir
             """
+            logger.debug("handling if node")
             # only deal with input of prim::If is constant or attribute for now
             # will support constant expression in future
             inputs = [i for i in node.inputs()]
@@ -347,6 +349,7 @@ class GraphBuilder:
 
         # ===================handle function call===================
         def handle_function_callmethod(node):
+            logger.debug("handling function callmethod")
             # get and handle the first input, which should be an nn.Module
             assert node.hasAttribute("name")
             # NOTE: "forward__0" is hacky, LSTM instance is parsed to call forward__0 in torchscript
@@ -477,6 +480,7 @@ class GraphBuilder:
                     ignore_first=True,
                 )
             else:
+                logger.debug("handling normal member function")
                 # handle normal member function
                 assert hasattr(script_module, node.s("name"))
                 # TODO: support non member functions
@@ -598,6 +602,7 @@ class GraphBuilder:
                 # refer to https://gist.github.com/liuzhe-lz/90c35d9dd6fd7f3f32544940151ab186
                 raise RuntimeError("Loop has not been supported yet!")
             elif node.kind().startswith("prim::"):
+                # TODO: filter out the routers
                 self.global_seq += 1
                 prim_op_name = node.kind().replace("::", "__")
                 prim_node = ir_graph.add_node(
@@ -755,7 +760,7 @@ class GraphBuilder:
         # also has LayerChoice or InputChoice or ValueChoice
         original_type_name = script_module.original_name
         m_attrs = None
-        logger.debug(f"building module {original_type_name}")
+        logger.debug(f"building module {original_type_name}, __class__.__module__:{module.__class__.__module__}")
         if original_type_name == OpTypeName.LayerChoice:
             graph = Graph(
                 ir_model, -100, module_name, _internal=True
@@ -799,9 +804,11 @@ class GraphBuilder:
         ):
             # this is a basic module from pytorch, no need to parse its graph
             m_attrs = get_init_parameters_or_fail(module)
-        elif getattr(module, "_nni_basic_unit", False):
+            logger.debug(f"building torch.nn module {original_type_name}, m_attrs: {m_attrs}")
+        elif getattr(module, "_brt_router", False):
             # this module is marked as serialize, won't continue to parse
             m_attrs = get_init_parameters_or_fail(module)
+            logger.debug(f"building brt router module {original_type_name}, m_attrs: {m_attrs}")
         if m_attrs is not None:
             return None, m_attrs
 
