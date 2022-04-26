@@ -5,10 +5,10 @@
 import re
 from typing import Any, Dict, List, Tuple
 
-from brt import Edge, Graph, IllegalGraphError, Model, Node
 from brt.common import log
-from brt.common.utils import STATE_DICT_PY_MAPPING
-from brt.operation.torch_op import ToDevice
+from brt.ir import Edge, Graph, IllegalGraphError, Model, Node
+from brt.ir.operation.torch_op import ToDevice
+from brt.ir.utils import STATE_DICT_PY_MAPPING
 from nni.common.device import Device, GPUDevice
 
 logger = log.get_logger(__file__)
