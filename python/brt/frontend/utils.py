@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from brt import Edge, Graph, Model, Node
-from brt.operation import Cell
+from brt.ir import Edge, Graph, Model, Node
+from brt.ir.operation import Cell
 
 
 def build_full_name(prefix, name, seq=None):

@@ -6,10 +6,12 @@ import pathlib
 
 _BRT_MODULES = [
     "user",
-    "common",
-    "primitive",
-    "frontend",
     "backend",
+    "common",
+    "frontend",
+    "ir",
+    "nn",
+    "primitive",
     "router",
     "runtime",
     "transform",

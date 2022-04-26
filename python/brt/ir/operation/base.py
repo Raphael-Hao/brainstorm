@@ -3,6 +3,9 @@
 
 from typing import Any, Dict, List
 
+from brt.common import log
+
+logger = log.get_logger(__file__)
 __all__ = ["Operation", "Cell"]
 
 
@@ -99,6 +102,7 @@ class Operation:
 class PyTorchOperation(Operation):
     @classmethod
     def _find_subclass(cls, subclass_name):
+        logger.debug(f"find subclass of pytorch operation: {subclass_name}")
         if cls.to_class_name(subclass_name) is not None:
             subclass_name = "ModuleOperator"
         if cls.is_functional(subclass_name):

@@ -4,10 +4,10 @@
 import re
 
 import torch
-from brt import Graph, Model, Node
 from brt.common import log
-from brt.common.utils import get_importable_name
-from brt.operation import Cell, Operation
+from brt.ir import Graph, Model, Node
+from brt.ir.operation import Cell, Operation
+from brt.ir.utils import get_importable_name
 from brt.primitive import get_init_parameters_or_fail
 
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName

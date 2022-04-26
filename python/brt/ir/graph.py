@@ -9,8 +9,7 @@ import json
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union, overload
 
-from brt.operation import Cell, Operation, _IOPseudoOperation
-
+from .operation import Cell, Operation, _IOPseudoOperation
 from .utils import uid
 
 __all__ = [
