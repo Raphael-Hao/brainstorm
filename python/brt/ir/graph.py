@@ -57,11 +57,6 @@ class Model:
         The outermost graph which usually takes dataset as input and feeds output to loss function.
     graphs
         All graphs (subgraphs) in this model.
-    history
-        Mutation history.
-        ``self`` is directly mutated from ``self.history[-1]``;
-        ``self.history[-1]`` is mutated from ``self.history[-2]``, and so on.
-        ``self.history[0]`` is the base graph.
     metric
         Training result of the model, or ``None`` if it's not yet trained or has failed to train.
     intermediate_metrics
@@ -109,8 +104,6 @@ class Model:
         new_model.graphs = {
             name: graph._fork_to(new_model) for name, graph in self.graphs.items()
         }
-        new_model.history = [*self.history]
-        # Note: the history is not updated. It will be updated when the model is changed, that is in mutator.
         return new_model
 
     @staticmethod
@@ -218,7 +211,7 @@ class Graph:
     Graph topology.
 
     This class simply represents the topology, with no semantic meaning.
-    All other information like metric, non-graph functions, mutation history, etc should go to :class:`Model`.
+    All other information like metric, non-graph functions, etc should go to :class:`Model`.
 
     Each graph belongs to and only belongs to one :class:`Model`.
 
