@@ -14,10 +14,5 @@ class OpTypeName(str, Enum):
 
     Attr = "Attr"
     Constant = "Constant"
-    LayerChoice = "LayerChoice"
-    InputChoice = "InputChoice"
-    ValueChoice = "ValueChoice"
-    Placeholder = "Placeholder"
     MergedSlice = "MergedSlice"
-    Repeat = "Repeat"
     Cell = "Cell"

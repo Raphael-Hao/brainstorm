@@ -32,6 +32,12 @@ scalar_type_to_pytorch_type = [
 ]
 
 
+class Router(PyTorchOperation):
+    _ori_type_name = ['Router']
+
+    def to_forward_code(self, field: str, output: str, inputs: List[str], inputs_value: List[Any] = None) -> str:
+        return f'{output} = self.{field}({", ".join(inputs)})'
+
 class NoOpIdentity(PyTorchOperation):
     """
     this operator type is added by us
@@ -47,7 +53,6 @@ class ModuleOperator(PyTorchOperation):
 
     def to_forward_code(self, field: str, output: str, inputs: List[str], inputs_value: List[Any] = None) -> str:
         return f'{output} = self.{field}({", ".join(inputs)})'
-
 
 class FunctionalOperator(PyTorchOperation):
     _ori_type_name = ['FunctionalOperator']
