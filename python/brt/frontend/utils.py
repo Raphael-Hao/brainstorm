@@ -23,10 +23,6 @@ def build_python_name(prefix, name):
         return name
 
 
-def build_cand_name(name, label):
-    return f"layerchoice_{label}_{name}"
-
-
 def _convert_name(name: str) -> str:
     """
     Convert the names using separator '.' to valid variable name in code

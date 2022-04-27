@@ -7,11 +7,10 @@ import torch
 from brt.common import log
 from brt.ir import Graph, Model, Node
 from brt.ir.operation import Cell, Operation
-from brt.ir.utils import get_importable_name
 from brt.primitive import get_init_parameters_or_fail
 
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName
-from .utils import _convert_name, build_cand_name, build_full_name, build_python_name
+from .utils import _convert_name, build_full_name, build_python_name
 
 logger = log.get_logger(__file__)
 
@@ -56,7 +55,7 @@ class GraphBuilder:
 
     def _add_edge(
         self,
-        ir_graph,
+        ir_graph: Graph,
         node,
         graph_inputs,
         node_index,
@@ -103,7 +102,7 @@ class GraphBuilder:
 
             new_node_input_idx += 1
 
-    def create_prim_constant_node(self, ir_graph, node, module_name):
+    def create_prim_constant_node(self, ir_graph: Graph, node, module_name):
         # NOTE: compare with string not type, because the type is defined in pytorch C code.
         # `.kind()` can also be used here
         if node.outputsAt(0).type().str() == "None":
@@ -174,8 +173,8 @@ class GraphBuilder:
         module,
         module_name,
         module_python_name,
-        ir_model,
-        ir_graph,
+        ir_model: Model,
+        ir_graph: Graph,
         shared_module_index=None,
     ):
         """
@@ -213,7 +212,6 @@ class GraphBuilder:
                 continue
             graph_inputs.append(_input)
             # TODO: add scope name
-            logger.debug(f"converted input name: {_convert_name(_input.debugName())}")
             ir_graph._add_input(_convert_name(_input.debugName()))
 
         node_index = {}  # graph node to graph ir node
@@ -238,6 +236,7 @@ class GraphBuilder:
             NOTE: do not support dynamic graph
             """
             logger.debug("handleing if condition")
+
             def _generate_expr(tensor):
                 if tensor.node().kind() == "prim::GetAttr":
                     return f'({getattr(module, tensor.node().s("name"))})'
@@ -349,7 +348,6 @@ class GraphBuilder:
 
         # ===================handle function call===================
         def handle_function_callmethod(node):
-            logger.debug("handling function callmethod")
             # get and handle the first input, which should be an nn.Module
             assert node.hasAttribute("name")
             # NOTE: "forward__0" is hacky, LSTM instance is parsed to call forward__0 in torchscript
@@ -527,6 +525,61 @@ class GraphBuilder:
                         continue
                     ir_graph.edges.append(edge)
 
+        # ===================handle Router call===================
+        def handle_Router_callmethod(node):
+            # get and handle the first input, which should be an Router (subclass of nn.Module)
+            # node.inputsAt(0).type() is <class 'torch._C.ClassType'>
+            submodule_type_str = self._remove_mangle(node.inputsAt(0).type().str())
+            submodule = node.inputsAt(0).node()
+            assert submodule.kind() == "prim::GetAttr"
+            assert submodule.hasAttribute("name")
+            submodule_name = submodule.s("name")
+            assert submodule.inputsAt(0).debugName() == "self"
+            # module is usually instantiated in __init__.
+            # when calling a module in forward,
+            # prim::GetAttr is used to obtain the module in torch script.
+            # therefore, we do this check for a module. example below:
+            # %25 : __torch__.xxx = prim::GetAttr[name="input_switch"](%self)
+            # %27 : Tensor = prim::CallMethod[name="forward"](%25, %out.1)
+            assert (
+                submodule_name in script_module._modules
+            ), "submodule_name: {} not in script_module {}".format(
+                submodule_name, script_module._modules.keys()
+            )
+            submodule_full_name = build_full_name(module_name, submodule_name)
+            submodule_python_name = build_python_name(
+                module_python_name, submodule_name
+            )
+            submodule_obj = getattr(module, submodule_name)
+            subgraph, sub_m_attrs = self._build_module(
+                script_module._modules[submodule_name],
+                submodule_obj,
+                submodule_full_name,
+                submodule_python_name,
+                ir_model,
+            )
+            assert subgraph is None
+            # this module is processed for the first time, build cell for it
+
+            # if we do not parse this module's graph, we create Node for this module
+            subcell = ir_graph.add_node(
+                submodule_full_name, submodule_type_str, sub_m_attrs
+            )
+            subcell.python_name = submodule_python_name
+
+            # shared_module_index[submodule_full_name] = subcell
+            node_index[node] = subcell
+            # connect the cell into graph
+            self._add_edge(
+                ir_graph,
+                node,
+                graph_inputs,
+                node_index,
+                subcell,
+                output_remap,
+                ignore_first=True,
+            )
+
         # ===================handle each single node===================
         def handle_single_node(node):
             """
@@ -601,18 +654,27 @@ class GraphBuilder:
             elif node.kind() == "prim::Loop":
                 # refer to https://gist.github.com/liuzhe-lz/90c35d9dd6fd7f3f32544940151ab186
                 raise RuntimeError("Loop has not been supported yet!")
+
             elif node.kind().startswith("prim::"):
-                # TODO: filter out the routers
                 self.global_seq += 1
-                prim_op_name = node.kind().replace("::", "__")
-                prim_node = ir_graph.add_node(
-                    build_full_name(module_name, prim_op_name, self.global_seq),
-                    node.kind(),
-                )
-                node_index[node] = prim_node
-                self._add_edge(
-                    ir_graph, node, graph_inputs, node_index, prim_node, output_remap
-                )
+                if node.kind() == "prim::PythonOp":
+                    # TODO: filter out the routers
+                    handle_Router_callmethod(node)
+                else:
+                    prim_op_name = node.kind().replace("::", "__")
+                    prim_node = ir_graph.add_node(
+                        build_full_name(module_name, prim_op_name, self.global_seq),
+                        node.kind(),
+                    )
+                    node_index[node] = prim_node
+                    self._add_edge(
+                        ir_graph,
+                        node,
+                        graph_inputs,
+                        node_index,
+                        prim_node,
+                        output_remap,
+                    )
             elif node.kind() == "aten::append":
                 self.global_seq += 1
                 aten_op_name = node.kind().replace("::", "__")
@@ -760,55 +822,20 @@ class GraphBuilder:
         # also has LayerChoice or InputChoice or ValueChoice
         original_type_name = script_module.original_name
         m_attrs = None
-        logger.debug(f"building module {original_type_name}, __class__.__module__:{module.__class__.__module__}")
-        if original_type_name == OpTypeName.LayerChoice:
-            graph = Graph(
-                ir_model, -100, module_name, _internal=True
-            )  # graph_id is not used now
-            graph.python_name = module_python_name
-            candidate_name_list = []
-            for cand_name in module.names:
-                cand = module[cand_name]
-                script_cand = script_module._modules[cand_name]
-                cand_full_name = build_cand_name(cand_name, module.label)
-                cand_python_name = build_python_name(module_python_name, cand_name)
-                candidate_name_list.append(cand_full_name)
-                subgraph, attrs = self._build_module(
-                    script_cand, cand, cand_full_name, cand_python_name, ir_model
-                )
-                if subgraph is not None:
-                    cand_node = graph.add_node(
-                        subgraph.name, Cell(cell_name=subgraph.name, parameters=attrs)
-                    )
-                    cand_node.python_name = cand_python_name
-                else:
-                    cand_type = "__torch__." + get_importable_name(cand.__class__)
-                    cand_node = graph.add_node(cand_full_name, cand_type, attrs)
-                    cand_node.python_name = cand_python_name
-            graph._register()
-            return graph, {
-                "mutation": "layerchoice",
-                "label": module.label,
-                "candidates": candidate_name_list,
-            }
-        elif original_type_name == OpTypeName.InputChoice:
-            m_attrs = self._handle_inputchoice(module)
-        elif original_type_name == OpTypeName.ValueChoice:
-            m_attrs = self._handle_valuechoice(module)
-        elif original_type_name == OpTypeName.Placeholder:
-            m_attrs = get_init_parameters_or_fail(module)
-        elif (
+        if (
             module.__class__.__module__.startswith("torch.nn")
             and original_type_name in torch.nn.__dict__
             and original_type_name not in MODULE_EXCEPT_LIST
         ):
             # this is a basic module from pytorch, no need to parse its graph
             m_attrs = get_init_parameters_or_fail(module)
-            logger.debug(f"building torch.nn module {original_type_name}, m_attrs: {m_attrs}")
+
         elif getattr(module, "_brt_router", False):
             # this module is marked as serialize, won't continue to parse
             m_attrs = get_init_parameters_or_fail(module)
-            logger.debug(f"building brt router module {original_type_name}, m_attrs: {m_attrs}")
+            logger.debug(
+                f"building brt.router {original_type_name}, m_attrs: {m_attrs}"
+            )
         if m_attrs is not None:
             return None, m_attrs
 
@@ -836,17 +863,6 @@ class GraphBuilder:
         self.refine_graph(ir_graph)
 
         ir_graph._register()
-
-        # add mutation signal for special modules
-        if original_type_name == OpTypeName.Repeat:
-            attrs = {
-                "mutation": "repeat",
-                "label": module.label,
-                "depth": module.depth_choice,
-                "max_depth": module.max_depth,
-                "min_depth": module.min_depth,
-            }
-            return ir_graph, attrs
 
         return ir_graph, {}
 
