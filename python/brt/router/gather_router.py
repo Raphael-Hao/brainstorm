@@ -14,8 +14,8 @@ __all__ = ["GatherRouter", "RandomGatherRouter", "TopKGatherRouter"]
 
 @router
 class GatherRouter(BaseRouter):
-    def __init__(self, route_num: int, grain_dim: int = None, dtype=None):
-        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
+    def __init__(self, route_num: int, gran_dim: int = None, dtype=None):
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
 
     def forward(
         self,
@@ -35,9 +35,9 @@ class GatherRouter(BaseRouter):
 @router
 class RandomGatherRouter(GatherRouter):
     def __init__(
-        self, route_num: int, grain_dim: int = None, dispatcher=None, dtype=None
+        self, route_num: int, gran_dim: int = None, dispatcher=None, dtype=None
     ):
-        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
         self.dispatcher = (
             DefaultDispatcher(self.route_num) if dispatcher is None else dispatcher
         )
@@ -58,8 +58,8 @@ class RandomGatherRouter(GatherRouter):
 
 @router
 class TopKGatherRouter(GatherRouter):
-    def __init__(self, route_num: int, grain_dim: int, k=2, dtype=None):
-        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
+    def __init__(self, route_num: int, gran_dim: int, k=2, dtype=None):
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
         self.k = k
 
     def forward(
@@ -80,7 +80,7 @@ class TopKGatherRouter(GatherRouter):
             self.dtype == valid_input.dtype
         ), "Dtype of router and input must be consistent"
         route_results = torch.zeros(
-            size=(route_size, self.grain_dim),
+            size=(route_size, self.gran_dim),
             dtype=valid_input.dtype,
             device=valid_input.device,
         )
@@ -93,8 +93,8 @@ class TopKGatherRouter(GatherRouter):
 
 @router
 class AggregateGatherRouter(GatherRouter):
-    def __init__(self, route_num: int, grain_dim: int, dtype=None):
-        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
+    def __init__(self, route_num: int, gran_dim: int, dtype=None):
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
 
     def forward(
         self,
@@ -114,7 +114,7 @@ class AggregateGatherRouter(GatherRouter):
             self.dtype == valid_input.dtype
         ), "Dtype of router and input must be consistent"
         route_results = torch.zeros(
-            size=(route_size, self.grain_dim),
+            size=(route_size, self.gran_dim),
             dtype=valid_input.dtype,
             device=valid_input.device,
         )

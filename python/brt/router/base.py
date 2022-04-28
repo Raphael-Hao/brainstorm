@@ -10,17 +10,17 @@ from brt.primitive import router
 
 @router
 class BaseRouter(nn.Module):
-    def __init__(self, route_num: int, grain_dim: int = None, dtype=None):
+    def __init__(self, route_num: int, gran_dim: int = None, dtype=None):
         """_summary_
 
         Args:
             route_num (int): number of src or dst for routing
-            grain_dim (_type_, optional): routing granularity. Defaults to None.
+            gran_dim (_type_, optional): routing granularity. Defaults to None.
                                           if None, routers only accept list of tensors
         """
         super().__init__()
         self.route_num = route_num
-        self.grain_dim = grain_dim
+        self.gran_dim = gran_dim
         self.dtype = torch.float32 if dtype is None else dtype
         self.active_counter = 0
 
