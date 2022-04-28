@@ -5,6 +5,7 @@ import collections
 import functools
 import inspect
 import numbers
+import re
 import types
 from io import IOBase
 from typing import TypeVar, Union
@@ -118,15 +119,19 @@ def _trace_netlet_cls(
             self.using_brt_forward = True
 
         @torch.jit.ignore
-        def brt_forward(self, *args, **kwargs):
+        def brt_forward(self, *inputs):
             logger.debug("using brt_forward")
-            for arg in args:
-                if arg is not None:
-                    return self.pt_forward(*args, **kwargs)
-            for _k, v in kwargs.items():
-                if v is not None:
-                    return self.pt_forward(*args, **kwargs)
-            return None
+            assert isinstance(
+                inputs[0], torch.Tensor
+            ), "BRT requires the first argument to be a tensor"
+            if inputs[0].numel() == 0:
+                return torch.zeros_like(inputs[0])
+            return self.pt_forward(*inputs)
+
+        @property
+        def _brt_retn(self) -> int:
+            # pt_fwd_sig = inspect.signature(self.pt_forward)
+            return 1
 
         def __reduce__(self):
             # The issue that decorator and pickler doesn't play well together is well known.

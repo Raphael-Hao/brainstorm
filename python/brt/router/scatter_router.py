@@ -1,29 +1,33 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+import time
 from typing import List, Tuple
 
 import torch
 import torch.nn.functional as F
+from brt.common import log
+from brt.primitive import router
 from tutel.impls.fast_dispatch import TutelMoeFastDispatcher, extract_critical
 
-from ..primitive import router
 from .base import BaseRouter
 from .dispatcher import DefaultDispatcher
 
 __all__ = ["ScatterRouter", "RandomScatterRouter", "TopKScatterRouter"]
 
+logger = log.get_logger(__file__)
+
 
 @router
 class ScatterRouter(BaseRouter):
-    def __init__(self, route_num: int, grain_dim: int = None, dtype=None):
+    def __init__(self, route_num: int, gran_dim: int = None, dtype=None):
         """base scatter router
 
         Args:
             route_num (int): routing number
-            grain_dim (int, optional): routing grainularity. Defaults to None.
+            gran_dim (int, optional): routing grainularity. Defaults to None.
         """
-        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
 
     def forward(
         self, inputs
@@ -47,14 +51,14 @@ class ScatterRouter(BaseRouter):
 @router
 class RandomScatterRouter(ScatterRouter):
     def __init__(
-        self, route_num: int, grain_dim: int = None, dispatcher=None, dtype=None
+        self, route_num: int, gran_dim: int = None, dispatcher=None, dtype=None
     ):
         """random scatter router
 
         Args:
             route_num (int): routing number
         """
-        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
         self.dispatcher = (
             DefaultDispatcher(self.route_num) if dispatcher is None else dispatcher
         )
@@ -90,7 +94,7 @@ class TopKScatterRouter(ScatterRouter):
     def __init__(
         self,
         route_num: int,
-        grain_dim: int,
+        gran_dim: int,
         k=2,
         top_fn=None,
         dispatcher=None,
@@ -100,14 +104,12 @@ class TopKScatterRouter(ScatterRouter):
 
         Args:
             route_num (int): routing number
-            grain_dim (int): routing grainularity
+            gran_dim (int): routing grainularity
             k (int, optional): K. Defaults to 2.
             top_fn (_type_, optional): function for top-k mapping. None defaults to nn.linear.
         """
-        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
-        self.grain_dim = grain_dim
-        assert self.grain_dim > 0, f"grain dim {self.grain_dim} is not valid"
-        self.k = min(k, route_num)
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
+        self.k = min(k, self.route_num)
         assert self.k > 0, f"Top-K value {self.k} is not valid"
         self.using_tutel = False
         if dispatcher is not None:
@@ -116,16 +118,16 @@ class TopKScatterRouter(ScatterRouter):
             self.dispatcher = TutelMoeFastDispatcher(
                 num_global_experts=self.route_num,
                 capacity=self.k,
-                model_dim=self.grain_dim,
+                model_dim=self.gran_dim,
                 dispatch_dtype=self.dtype,
             )
         if isinstance(self.dispatcher, TutelMoeFastDispatcher):
-            print(
+            logger.debug(
                 "The Top-K scatter router is using tutel dispatcher, the dispatcher should be shared with the corresponding gather router"
             )
             self.using_tutel = True
         if top_fn == None:
-            self.top_fn = torch.nn.Linear(self.grain_dim, self.route_num, bias=False)
+            self.top_fn = torch.nn.Linear(self.gran_dim, self.route_num, bias=False)
         else:
             self.top_fn = top_fn
 
@@ -153,12 +155,14 @@ class TopKScatterRouter(ScatterRouter):
         critical_data, l_loss = extract_critical(
             gates, self.k, capacity_factor=1.0, fp32_gate=True
         )
-        print(f"indices: {critical_data[1]}")
-        print(f"locations: {critical_data[2]}")
-        print(f"gates: {critical_data[3]}")
-        print(f"capacity: {critical_data[4]}")
+        # print(f"indices: {critical_data[1]}")
+        # print(f"locations: {critical_data[2]}")
+        # print(f"gates: {critical_data[3]}")
+        # print(f"capacity: {critical_data[4]}")
         # * using default update method => is_postscore = True
+        before_update_timestamp = time.time()
         self.dispatcher.update(*critical_data[1:])
+        logger.debug(f"dispatcher update time: {time.time() - before_update_timestamp}")
         route_results = self.dispatcher.encode(inputs)
         return route_results, l_loss
 
@@ -168,7 +172,7 @@ class MultiplexScatterRouter(ScatterRouter):
     def __init__(
         self,
         route_num: int,
-        grain_dim: int,
+        gran_dim: int,
         multiplex_fn=None,
         dispatcher=None,
         dtype=None,
@@ -177,19 +181,17 @@ class MultiplexScatterRouter(ScatterRouter):
 
         Args:
             route_num (int): routing number
-            grain_dim (int): routing grainularity
+            gran_dim (int): routing grainularity
             multiplex_fn (_type_, optional): function for multiplex mapping. None defaults to nn.linear.
         """
-        super().__init__(route_num=route_num, grain_dim=grain_dim, dtype=dtype)
-        self.grain_dim = grain_dim
-        assert self.grain_dim > 0, f"grain dim {self.grain_dim} is not valid"
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
         if dispatcher is not None:
             self.dispatcher = dispatcher
         else:
             self.dispatcher = TutelMoeFastDispatcher(
                 num_global_experts=self.route_num,
                 capacity=self.route_num,
-                model_dim=self.grain_dim,
+                model_dim=self.gran_dim,
                 dispatch_dtype=self.dtype,
             )
         if isinstance(self.dispatcher, TutelMoeFastDispatcher):
@@ -197,7 +199,9 @@ class MultiplexScatterRouter(ScatterRouter):
                 "The Multiplex scatter router is using tutel dispatcher, the dispatcher should be shared with the corresponding gather router"
             )
         if multiplex_fn == None:
-            self.multiplex_fn = torch.nn.Linear(self.grain_dim, self.route_num, bias=False)
+            self.multiplex_fn = torch.nn.Linear(
+                self.gran_dim, self.route_num, bias=False
+            )
         else:
             self.multiplex_fn = multiplex_fn
 

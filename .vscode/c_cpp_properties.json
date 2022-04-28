@@ -4,9 +4,12 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/include"
+                "${workspaceFolder}/include",
+                "/state/partition/whcui/tools/pyenv/versions/miniconda3-4.7.12/include/python3.7m",
+                "/state/partition/whcui/tools/pyenv/versions/miniconda3-4.7.12/lib/python3.7/site-packages/torch/include",
+                "/state/partition/whcui/tools/pyenv/versions/miniconda3-4.7.12/lib/python3.7/site-packages/torch/include/torch/csrc/api/include/"
             ],
-            "defines": [],
+            "defines": ["USE_GPU", "USE_NCCL"],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "gnu11",
             "intelliSenseMode": "linux-gcc-x64",

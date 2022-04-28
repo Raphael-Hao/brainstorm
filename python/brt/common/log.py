@@ -28,7 +28,6 @@ __all__ = [
     "get_logger",
 ]
 
-
 def _to_list(modules):
     if isinstance(modules, tuple):
         return list(modules)
@@ -86,6 +85,7 @@ def get_logger(file_path: str = None) -> logging.Logger:
         file_path = pathlib.Path(file_path)
         module = file_path.relative_to(_BRT_PKG_PATH).parts[0]
     if module in _BRT_MODULES:
+        print(f"using logger for brainstorm.{module}")
         m_logger = logging.getLogger(f"brainstorm.{module}")
         return m_logger
     else:
