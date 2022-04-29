@@ -1,2 +1,0 @@
-
-set(PTX_INFO ON)

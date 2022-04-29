@@ -5,16 +5,33 @@
 
 #pragma once
 #include <string>
-
-namespace brt {
-namespace common {
-
+// cuda
 #if defined(USE_CUDA)
 
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <nvrtc.h>
+#endif
+
+// cublas
+#if defined(USE_CUBLAS)
+#include <cublas_v2.h>
+#endif
+
+// cudnn
+#if defined(USE_CUDNN)
+#include <cudnn.h>
+#endif
+
+// nccl
+#if defined(USE_NCCL)
+#include <nccl.h>
+#endif
+
+namespace brt {
+
+#if defined(USE_CUDA)
 
 #define CUDA_CHECK(x) __CUDA_CHECK(x, __FILE__, __LINE__)
 
@@ -29,7 +46,6 @@ inline void __CUDA_CHECK(cudaError_t x, const char* file, int line) {
 #endif
 
 #if defined(USE_CUBLAS)
-#include <cublas_v2.h>
 
 #define CUBLAS_CHECK(x) __CUBLAS_CHECK(x, __FILE__, __LINE__)
 
@@ -88,15 +104,4 @@ inline void __CUBLAS_CHECK(cublasStatus_t x, const char* file, int line) {
 }
 #endif
 
-// cudnn
-#if defined(USE_CUDNN)
-#include <cudnn.h>
-#endif
-
-// nccl
-#if defined(USE_NCCL)
-#include <nccl.h>
-#endif
-
-}  // namespace common
 }  // namespace brt
