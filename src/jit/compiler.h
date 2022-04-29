@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <brt/common/cuda_utils.h>
 #include <dlfcn.h>
 #include <dmlc/common.h>
 #include <pwd.h>
@@ -16,8 +17,6 @@
 #include <regex>
 #include <string>
 #include <vector>
-
-#include "../common/cuda_utils.h"
 
 namespace brt {
 namespace jit {
@@ -141,16 +140,11 @@ inline static CUfunction jit_activate(int fd, int dev) {
   if (gm.hFunc.size() <= dev) gm.hFunc.resize(dev + 1);
 
   if (gm.hFunc[dev] == nullptr) {
-#if !defined(__HIP_PLATFORM_HCC__)
     int major, minor;
     CHECK_EQ(0, cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev));
     CHECK_EQ(0, cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, dev));
     std::string arch = std::to_string(major) + std::to_string(minor);
-#else
-    hipDeviceProp_t prop;
-    CHECK_EQ(0, hipGetDeviceProperties(&prop, dev));
-    std::string arch = prop.gcnArchName;
-#endif
+
     const char *source = gm.code.data(), *pos, *tail;
 
     int use_nvrtc = getenv("USE_NVRTC") ? std::atoi(getenv("USE_NVRTC")) : 0;
@@ -199,11 +193,7 @@ static int inject_source(const std::string& headless_code) {
   _gms.resize(fd + 1);
 
   auto& gm = _gms[fd];
-#if !defined(__HIP_PLATFORM_HCC__)
   gm.code = "#include <cuda_runtime.h>\n#include <cuda_fp16.h>\n" + headless_code;
-#else
-  gm.code = "#include <hip/hip_runtime.h>\n" + headless_code;
-#endif
 
   const char* source = headless_code.c_str();
   {
@@ -238,22 +228,6 @@ static int inject_source(const std::string& headless_code) {
   }
 
   return fd;
-}
-
-static void invoke(const std::vector<torch::Tensor>& ts, const std::vector<long>& args, int fd) {
-  std::vector<const void*> pargs(ts.size() + args.size()), ppargs(ts.size() + args.size());
-  for (int i = 0; i < (int)ts.size(); ++i) {
-    CHECK_CUDA(ts[i]);
-    pargs[i] = ts[i].data_ptr(), ppargs[i] = &pargs[i];
-  }
-  for (int i = (int)ts.size(); i < (int)pargs.size(); ++i) {
-    pargs[i] = (void*)args[i - ts.size()], ppargs[i] = &pargs[i];
-  }
-
-  int dev = ts[0].device().index();
-  CHECK_EQ(0, cudaSetDevice(dev));
-  jit_execute(ppargs, fd, dev, _gms[fd].blocks, _gms[fd].threads,
-              at::cuda::getDefaultCUDAStream().stream());
 }
 
 }  // namespace jit

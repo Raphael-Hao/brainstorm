@@ -1,0 +1,3 @@
+
+set(PTX_INFO ON)
+set(USE_CUDA ON)
