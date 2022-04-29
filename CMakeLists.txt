@@ -21,13 +21,13 @@ endif()
 
 # thirdparty libraries
 add_subdirectory(3rdparty/tvm)
-# add_subdirectory(3rdparty/nnfusion)
 
 #include directories
+include_directories(${CMAKE_INCLUDE_PATH})
 include_directories(include)
 include_directories(3rdparty/tvm/include)
-include_directories(3rdparty/tvm/3rdparty/dmlc-core/include)
-include_directories(3rdparty/tvm/3rdparty/dlpack/include)
+include_directories(3rdparty/dmlc-core/include)
+include_directories(3rdparty/dlpack/include)
 
 set(IS_FALSE_PATTERN "^[Oo][Ff][Ff]$|^0$|^[Ff][Aa][Ll][Ss][Ee]$|^[Nn][Oo]$|^[Nn][Oo][Tt][Ff][Oo][Uu][Nn][Dd]$|.*-[Nn][Oo][Tt][Ff][Oo][Uu][Nn][Dd]$|^$")
 set(IS_TRUE_PATTERN "^[Oo][Nn]$|^[1-9][0-9]*$|^[Tt][Rr][Uu][Ee]$|^[Yy][Ee][Ss]$|^[Yy]$")

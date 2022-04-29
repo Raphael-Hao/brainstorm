@@ -3,8 +3,3 @@
  * Licensed under the MIT license.
  */
 
-namespace brt{
-  namespace jit{
-
-  }
-}
