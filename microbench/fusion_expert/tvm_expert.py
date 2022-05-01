@@ -5,15 +5,16 @@
 # \brief:
 # Author: raphael hao
 #%%
-import tvm
-import tvm.topi as topi
-import tvm.te as te
-import tvm.auto_scheduler as auto_scheduler
-from tvm.auto_scheduler.measure_record import load_best_record
-import numpy as np
 import argparse
 import itertools
 import os
+
+import numpy as np
+import tvm
+import tvm.auto_scheduler as auto_scheduler
+import tvm.te as te
+import tvm.topi as topi
+from tvm.auto_scheduler.measure_record import load_best_record
 
 
 @auto_scheduler.register_workload

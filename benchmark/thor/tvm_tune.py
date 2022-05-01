@@ -4,15 +4,16 @@
 # \file: /tvm_tune.py
 # \brief:
 # Author: raphael hao
-import onnx
-import numpy as np
+import argparse
 import json
+
+import numpy as np
+import onnx
 import tvm
 import tvm.relay as relay
 from tvm import auto_scheduler
 from tvm.auto_scheduler.utils import deserialize_args
 from tvm.contrib import graph_executor
-import argparse
 
 
 def run_tuning(tasks, task_weights, log_file):

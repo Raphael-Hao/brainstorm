@@ -16,7 +16,7 @@ include(cmake/modules/CUDA.cmake)
 # PATH <comment> FORCE) ENDIF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 # thirdparty libraries
-add_subdirectory(3rdparty/tvm)
+# add_subdirectory(3rdparty/tvm)
 
 # include directories
 include_directories(${CMAKE_INCLUDE_PATH})

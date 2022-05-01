@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 import torch
-from brt.runtime import cppjit
+from brt.runtime.jit import cppjit
 
 
 class JitCompiler:
