@@ -6,10 +6,11 @@
 # Author: raphael hao
 #%%
 import torch
-from thor_config import ThorConfig
-from thor_model import ThorModel, ThorEncoder
-from transformers.models.bert.modeling_bert import BertEncoder
 from transformers.models.bert.configuration_bert import BertConfig
+from transformers.models.bert.modeling_bert import BertEncoder
+
+from thor_config import ThorConfig
+from thor_model import ThorEncoder, ThorModel
 
 
 def export_thor_model(model_filename):
