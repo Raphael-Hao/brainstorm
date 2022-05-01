@@ -34,17 +34,17 @@ class TVMTuner:
         self.task_scheduler_cls = task_scheduler_cls
         if log_dir is None:
             self.log_dir = pathlib.Path(
-                "/home/whcui/brainstorm_project/brainstorm"
+                "/home/whcui/brainstorm_project/brainstorm/log"
             ).absolute()
         else:
             self.log_dir = pathlib.Path(log_dir).absolute()
-        self.log_dir = log_dir
 
     def import_pt_netlet(self, script_module: torch.ScriptModule, input_infos):
         self.kernel_name = script_module.original_name
         self.tvm_module, self.tvm_params = relay.frontend.from_pytorch(
             script_module, input_infos
         )
+        self.log_file = self.log_dir / f"{self.kernel_name}.log"
         self._update_scheduler(self.tvm_module, self.tvm_params)
 
     def import_onnx_netlet(self, onnx_model: onnx.ModelProto, model_name):
@@ -52,6 +52,8 @@ class TVMTuner:
         self.tvm_module, self.tvm_params = relay.frontend.from_onnx(
             onnx_model, opset=11
         )
+        log_file_path = self.log_dir / f"{self.kernel_name}_tune.log"
+        self.log_file = str(log_file_path)
         self._update_scheduler(self.tvm_module, self.tvm_params)
 
     def _update_scheduler(self, tvm_module, tvm_params):
