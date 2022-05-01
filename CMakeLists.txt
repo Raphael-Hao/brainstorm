@@ -15,7 +15,8 @@ include(cmake/modules/CUDA.cmake)
 # IF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT) SET(CMAKE_INSTALL_PREFIX CACHE
 # PATH <comment> FORCE) ENDIF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
-# thirdparty libraries add_subdirectory(3rdparty/tvm)
+# thirdparty libraries
+add_subdirectory(3rdparty/tvm)
 
 # include directories
 include_directories(${CMAKE_INCLUDE_PATH})
@@ -55,14 +56,25 @@ set(CMAKE_CXX_FLAGS "/std:c++14 ${CMAKE_CXX_FLAGS}")
 set(CMAKE_CUDA_STANDARD 14)
 
 file(GLOB_RECURSE BRT_SOURCE CMAKE_CONFIGURE_DEPENDS "src/*.cc" "src/*.cu")
+# remove srcs of extension for other frameworks, they will be compiled by python
+set(EXCLUDE_DIR "jit/extension/")
+foreach(TMP_SRC ${BRT_SOURCE})
+    string(FIND ${TMP_SRC} ${EXCLUDE_DIR} EXCLUDE_DIR_FOUND)
+    if(NOT ${EXCLUDE_DIR_FOUND} EQUAL -1)
+        message(STATUS "removing ${TMP_SRC}")
+        list(REMOVE_ITEM BRT_SOURCE ${TMP_SRC})
+    endif()
+endforeach(TMP_SRC)
+
 file(GLOB_RECURSE BRT_INCLUDE CMAKE_CONFIGURE_DEPENDS "src/*.h" "include/*.h")
 
-list(APPEND BRT_SOURCE ${BRT_INCLUDE})
+list(APPEND BRT_SRCS ${BRT_SOURCE} ${BRT_INCLUDE})
 
-add_library(brt SHARED ${BRT_SOURCE})
+add_library(brt SHARED ${BRT_SRCS})
 target_include_directories(
     brt PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_link_libraries(brt PUBLIC ${BRT_LINKER_LIBS})
+# set_target_properties(brt PROPERTIES LINKER_LANGUAGE CXX)
 
 add_subdirectory(benchmark)
 add_subdirectory(test)

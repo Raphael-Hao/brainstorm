@@ -6,87 +6,10 @@
 #pragma once
 
 #include <brt/common/cuda_utils.h>
-#include <dlfcn.h>
 #include <dmlc/common.h>
-#include <pwd.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include <cstring>
-#include <regex>
-#include <string>
-#include <vector>
 
 namespace brt {
 namespace jit {
-
-inline static std::string file_read(const char* path) {
-  FILE* fp = fopen(path, "rb");
-  CHECK_EQ(true, fp != nullptr);
-  fseek(fp, 0, SEEK_END);
-  size_t code_size = ftell(fp);
-  fseek(fp, 0, SEEK_SET);
-  std::string code;
-  code.resize(code_size);
-  CHECK_EQ(code_size, fread((void*)code.data(), 1, code_size, fp));
-  fclose(fp);
-  return code;
-}
-
-inline static void file_write(const char* path, const std::string& code) {
-  FILE* fp = fopen(path, "wb");
-  CHECK_EQ(true, fp != nullptr);
-  CHECK_EQ(code.size(), fwrite((void*)code.data(), 1, code.size(), fp));
-  fclose(fp);
-}
-
-inline static std::string get_cache_path() {
-  char* home_path;
-  struct stat st = {0};
-  if ((home_path = getenv("HOME")) == NULL) {
-    home_path = getpwuid(getuid())->pw_dir;
-  }
-  std::string cache_path(home_path);
-  cache_path += "/.cache/";
-  if (stat(cache_path.c_str(), &st) == -1) {
-    mkdir(cache_path.c_str(), 0755);
-  }
-  cache_path += "brt/";
-  if (stat(cache_path.c_str(), &st) == -1) {
-    mkdir(cache_path.c_str(), 0755);
-  }
-  cache_path += "kernels/";
-  if (stat(cache_path.c_str(), &st) == -1) {
-    mkdir(cache_path.c_str(), 0755);
-  }
-
-  return cache_path;
-}
-
-static std::string nvcc_compile(const char* code, const std::string& arch) {
-  char code_path[] = "/tmp/torch-tutel-XXXXXX.cu";
-  CHECK_NE(-1, mkstemps(code_path, 3));
-
-  file_write(code_path, code);
-  std::string fatbin_path = code_path + std::string(".fatbin");
-  const char* entry = "/usr/local/cuda/bin/nvcc";
-
-  if (access(entry, F_OK) != 0) return "";
-  pid_t pid = fork();
-  if (pid == 0) {
-    CHECK_EQ(
-        -1, execl(entry, entry, code_path, "-o", fatbin_path.c_str(), "--fatbin", "-O4", "-gencode",
-                  ("arch=compute_" + arch + ",code=sm_" + arch).c_str(), (char*)NULL));
-    exit(1);
-  } else {
-    wait(NULL);
-  }
-  auto image = file_read(fatbin_path.data());
-  unlink(fatbin_path.data());
-  unlink(code_path);
-  return image;
-}
 
 static std::string nvrtc_compile(const char* code, const std::string& arch) {
   std::string arch_option = "--gpu-architecture=compute_" + arch;
@@ -141,17 +64,14 @@ inline static CUfunction jit_activate(int fd, int dev) {
 
   if (gm.hFunc[dev] == nullptr) {
     int major, minor;
-    CHECK_EQ(0, cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev));
-    CHECK_EQ(0, cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, dev));
+    CUDA_CHECK(cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev));
+    CUDA_CHECK(cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, dev));
     std::string arch = std::to_string(major) + std::to_string(minor);
 
     const char *source = gm.code.data(), *pos, *tail;
 
-    int use_nvrtc = getenv("USE_NVRTC") ? std::atoi(getenv("USE_NVRTC")) : 0;
     std::string image;
-    if (use_nvrtc || (image = nvcc_compile(source, arch)) == "") {
-      image = nvrtc_compile(source, arch);
-    }
+    image = nvrtc_compile(source, arch);
 
     long launch_bound;
     {
