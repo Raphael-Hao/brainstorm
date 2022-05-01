@@ -58,7 +58,7 @@ if not CACHE_VALID:
         "# pylint: skip-file",
         f'_torch_version = "{torch.__version__}"',
         "import torch.nn as nn",
-        "from brt.prim import netlet",
+        "from brt.primitive import netlet",
     ]
 
     obj_common_header = [
