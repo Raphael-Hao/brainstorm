@@ -18,34 +18,22 @@ static std::string nvrtc_compile(const char* code, const std::string& arch) {
                                              "--extra-device-vectorization"};
   nvrtcProgram prog;
 
-  CHECK_EQ(0, nvrtcCreateProgram(&prog, code, nullptr, 0, nullptr, nullptr));
-  nvrtcResult res = nvrtcCompileProgram(prog, param_cstrings.size(), param_cstrings.data());
+  NVRTC_CHECK(nvrtcCreateProgram(&prog, code, nullptr, 0, nullptr, nullptr));
+  NVRTC_CHECK(nvrtcCompileProgram(prog, param_cstrings.size(), param_cstrings.data()));
 
   size_t log_size;
-  CHECK_EQ(0, nvrtcGetProgramLogSize(prog, &log_size));
+  NVRTC_CHECK(nvrtcGetProgramLogSize(prog, &log_size));
   std::string log;
   log.resize(log_size);
-  CHECK_EQ(0, nvrtcGetProgramLog(prog, &log[0]));
-  if (0 != res) {
-    static bool once_flag = false;
-    if (!once_flag) {
-      once_flag = true;
-      LOG(WARNING)
-          << log
-          << " Failed to use NVRTC for JIT compilation in this Pytorch version, try another "
-             "approach using CUDA compiler.. (To always disable NVRTC, please: export USE_NVRTC=0)";
-    }
-    CHECK_EQ(0, nvrtcDestroyProgram(&prog));
-    return "";
-  }
+  NVRTC_CHECK(nvrtcGetProgramLog(prog, &log[0]));
 
   size_t ptx_size;
-  CHECK_EQ(0, nvrtcGetPTXSize(prog, &ptx_size));
+  NVRTC_CHECK(nvrtcGetPTXSize(prog, &ptx_size));
 
   std::string ptx;
   ptx.resize(ptx_size);
-  CHECK_EQ(0, nvrtcGetPTX(prog, &ptx[0]));
-  CHECK_EQ(0, nvrtcDestroyProgram(&prog));
+  NVRTC_CHECK(nvrtcGetPTX(prog, &ptx[0]));
+  NVRTC_CHECK(nvrtcDestroyProgram(&prog));
   return ptx;
 }
 
@@ -84,17 +72,17 @@ inline static CUfunction jit_activate(int fd, int dev) {
     static void* values[] = {(void*)4L, (void*)launch_bound};
 
     CUmodule hMod = nullptr;
-    CHECK_EQ(0, cuModuleLoadDataEx(&hMod, image.c_str(), sizeof(options) / sizeof(*options),
-                                   options, values));
+    CU_CHECK(cuModuleLoadDataEx(&hMod, image.c_str(), sizeof(options) / sizeof(*options), options,
+                                values));
     CHECK_NE(nullptr, hMod);
 
-    CHECK_NE(nullptr, (pos = strstr(source, " void ")));
-    pos += 6;
-    CHECK_NE(nullptr, (tail = strchr(pos, '(')));
+    int func_entry = image.find(" .entry ");
+    func_entry += 8;
+    int func_end = image.find("(", func_entry);
+    std::string func_name = image.substr(func_entry, func_end - func_entry);
+    gm.fname = func_name;
 
-    std::string fname = std::string(pos, tail - pos);
-    gm.fname = fname;
-    CHECK_EQ(0, cuModuleGetFunction(&gm.hFunc[dev], hMod, fname.c_str()));
+    CU_CHECK(cuModuleGetFunction(&gm.hFunc[dev], hMod, func_name.c_str()));
     CHECK_NE(nullptr, gm.hFunc[dev]);
   }
 

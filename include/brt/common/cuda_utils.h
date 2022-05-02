@@ -43,6 +43,31 @@ inline void __CUDA_CHECK(cudaError_t x, const char* file, int line) {
     }
   } while (0);
 }
+
+#define CU_CHECK(x) __CU_CHECK(x, __FILE__, __LINE__)
+
+inline void __CU_CHECK(CUresult x, const char* file, int line) {
+  do {
+    if (x != cudaError_enum::CUDA_SUCCESS) {
+      const char* error_str;
+      cuGetErrorString(x, &error_str);
+      fprintf(stderr, "Error: %s, from file <%s>, line %i.\n", error_str, file, line);
+      exit(1);
+    }
+  } while (0);
+}
+
+#define NVRTC_CHECK(x) __NVRTC_CHECK(x, __FILE__, __LINE__)
+
+inline void __NVRTC_CHECK(nvrtcResult x, const char* file, int line) {
+  do {
+    if (x != nvrtcResult::NVRTC_SUCCESS) {
+      fprintf(stderr, "Error: %s, from file <%s>, line %i.\n", nvrtcGetErrorString(x), file, line);
+      exit(1);
+    }
+  } while (0);
+}
+
 #endif
 
 #if defined(USE_CUBLAS)

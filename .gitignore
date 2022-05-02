@@ -7,6 +7,8 @@ core
 total_latency.tsv
 model_logs
 _nn.py
+.cache
+
 
 .vscode/*
 !.vscode/settings.json
