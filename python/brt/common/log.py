@@ -3,6 +3,9 @@
 
 import logging
 import pathlib
+import sys
+
+from .file_system import BRT_LOG_FILENAME, BRT_PKG_PATH
 
 _BRT_MODULES = [
     "user",
@@ -10,6 +13,7 @@ _BRT_MODULES = [
     "common",
     "frontend",
     "ir",
+    "jit",
     "nn",
     "primitive",
     "router",
@@ -17,7 +21,6 @@ _BRT_MODULES = [
     "transform",
 ]
 
-_BRT_PKG_PATH = pathlib.Path(__file__).parent.parent
 
 __all__ = [
     "set_level_to_debug",
@@ -27,6 +30,11 @@ __all__ = [
     "set_level",
     "get_logger",
 ]
+
+logging.basicConfig(
+    handlers=[logging.FileHandler(BRT_LOG_FILENAME), logging.StreamHandler(sys.stdout)]
+)
+
 
 def _to_list(modules):
     if isinstance(modules, tuple):
@@ -62,13 +70,13 @@ def set_level_to_error():
 
 
 def set_level(modules, level):
-    if modules is "BRT":
+    if modules == "BRT":
         modules = _BRT_MODULES
     else:
         modules = _to_list(modules)
     for module in modules:
         if module in _BRT_MODULES:
-            print(f"setting logger for brainstorm.{module} to {level} level")
+            # print(f"setting logger for brainstorm.{module} to {level} level")
             m_logger = logging.getLogger(f"brainstorm.{module}")
             m_logger.setLevel(level=level)
 
@@ -83,9 +91,9 @@ def get_logger(file_path: str = None) -> logging.Logger:
         module = "user"
     else:
         file_path = pathlib.Path(file_path)
-        module = file_path.relative_to(_BRT_PKG_PATH).parts[0]
+        module = file_path.relative_to(BRT_PKG_PATH).parts[0]
     if module in _BRT_MODULES:
-        print(f"using logger for brainstorm.{module}")
+        # print(f"using logger for brainstorm.{module}")
         m_logger = logging.getLogger(f"brainstorm.{module}")
         return m_logger
     else:

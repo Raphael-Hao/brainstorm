@@ -1,53 +1,21 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 #%%
-# import brt
-# import brt.nn as nn
-# from brt.common import log
-# from brt.frontend import build_graph
-# from brt.router import RandomGatherRouter, RandomScatterRouter
+import torch
+from brt.common import BRT_KERNEL_TEMPLATE_PATH
+from brt.jit import JitCompiler
 
-# log.set_level("frontend", "DEBUG")
+kernel_name = "sparse_fusion_2_thor_model"
 
-# @brt.netlet
-# class MoE(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.scatter_router = RandomScatterRouter(route_num=2)
-#         self.expert1 = nn.Linear(10, 10)
-#         self.expert2 = nn.Linear(10, 10)
-#         self.gather_router = RandomGatherRouter(route_num=2)
+kernel_template_filename = str(BRT_KERNEL_TEMPLATE_PATH / (kernel_name + ".cu"))
 
-#     def forward(self, x):
-#         route_results, reverse_indice, reverse_shape = self.scatter_router(x)
-#         x_0 = self.expert1(route_results[0])
-#         x_1 = self.expert2(route_results[1])
-#         x = self.gather_router([x_0, x_1], reverse_indice, reverse_shape)
-#         return x
-
-
-# @brt.domain
-# class MoEModel(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         self.moe = MoE()
-
-#     def forward(self, x):
-#         return self.moe(x)
-
-
-# moe_model = MoEModel()
-
-# model_ir = build_graph(moe_model)
-
-# %%
-
-import onnx
-from brt.runtime.jit.tvm import TVMTuner
-
-tuner = TVMTuner()
-model_name = "sparse_fusion_2_thor_model"
-onnx_model = onnx.load(f"/home/whcui/brainstorm_project/brainstorm/log/{model_name}.onnx")
-tuner.import_onnx_netlet(onnx_model, model_name)
-
+kernel_template_source = open(kernel_template_filename, "r").read()
+# print(kernel_template_source)
+kernel_func = JitCompiler.generate_kernel(
+    keyword_dict=None, template=kernel_template_source
+)
+data = torch.ones((8, 64, 64), device="cuda")
+weight = torch.ones((8, 64, 64), device="cuda")
+outdata = torch.ones((8, 64, 64), device="cuda")
+kernel_func(data, weight, outdata)
 # %%

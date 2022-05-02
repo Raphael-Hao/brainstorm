@@ -3,6 +3,20 @@
   "files.associations": {
     "*.pbtxt": "textproto",
     "*.cutemplate": "cuda-cpp",
+    "hash_map": "cpp",
+    "hash_set": "cpp",
+    "*.tcc": "cpp",
+    "string": "cpp",
+    "unordered_map": "cpp",
+    "unordered_set": "cpp",
+    "string_view": "cpp",
+    "__bit_reference": "cpp",
+    "__hash_table": "cpp",
+    "__string": "cpp",
+    "__tree": "cpp",
+    "algorithm": "cpp",
+    "map": "cpp",
+    "set": "cpp"
   },
   "psi-header.config": {
     "forceToTop": true,
