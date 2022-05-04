@@ -15,21 +15,23 @@ namespace jit {
 
 static std::string nvrtc_compile(const char* code, const std::string& arch) {
   std::string arch_option = "--gpu-architecture=compute_" + arch;
-  std::vector<const char*> param_cstrings = {"--restrict", "--include-path=/usr/local/cuda/include",
-                                             arch_option.c_str(), "--use_fast_math",
-                                             "--extra-device-vectorization"};
+  std::vector<const char*> param_cstrings = {
+      "--restrict",        "--include-path=/usr/local/cuda/include",
+      arch_option.c_str(), "--use_fast_math",
+      "--std=c++14",       "--extra-device-vectorization"};
   nvrtcProgram prog;
-  std::ofstream code_file("/home/whcui/brainstorm_project/brainstorm/.cache/brt_code.cu");
-  code_file << code;
-  code_file.flush();
   NVRTC_CHECK(nvrtcCreateProgram(&prog, code, nullptr, 0, nullptr, nullptr));
-  NVRTC_CHECK(nvrtcCompileProgram(prog, param_cstrings.size(), param_cstrings.data()));
+  nvrtcResult nvrtc_compile_result =
+      nvrtcCompileProgram(prog, param_cstrings.size(), param_cstrings.data());
 
-  size_t log_size;
-  NVRTC_CHECK(nvrtcGetProgramLogSize(prog, &log_size));
-  std::string log;
-  log.resize(log_size);
-  NVRTC_CHECK(nvrtcGetProgramLog(prog, &log[0]));
+  if (nvrtc_compile_result != NVRTC_SUCCESS) {
+    size_t log_size;
+    NVRTC_CHECK(nvrtcGetProgramLogSize(prog, &log_size));
+    std::string log;
+    log.resize(log_size);
+    NVRTC_CHECK(nvrtcGetProgramLog(prog, &log[0]));
+    LOG(FATAL) << "nvrtcCompileProgram failed: \n" << log;
+  }
 
   size_t ptx_size;
   NVRTC_CHECK(nvrtcGetPTXSize(prog, &ptx_size));
@@ -64,7 +66,6 @@ inline static CUfunction jit_activate(int fd, int dev) {
 
     std::string image;
     image = nvrtc_compile(source, arch);
-
     long launch_bound;
     {
       char tag[] = " __launch_bounds__(";

@@ -3,3 +3,9 @@
  * Licensed under the MIT license.
  */
 
+#include "./compiler.h"
+namespace brt {
+namespace jit {
+  
+}
+}  // namespace brt

@@ -34,8 +34,9 @@ class GenericFunction:
 #define int64_t long long
 #define uint64_t unsigned long long
 """
-    global_decorator = """extern "C" __global__ void """
-    device_decorator = """__device__ __forceinline__ void """
+    c_api_decorator = 'extern "C" '
+    global_decorator = "__global__ void "
+    device_decorator = "__device__ __forceinline__ void "
 
     def __init__(self, raw_source) -> None:
         self.raw_source = raw_source
@@ -144,6 +145,7 @@ class GenericFunction:
         clean_code = ""
         if mode == "global":
             clean_code += self.common_defines
+            clean_code += self.c_api_decorator
             clean_code += self.global_decorator
             clean_code += f"__launch_bounds__({self.launch_bounds})"
             clean_code += f" {self.name}("
@@ -188,9 +190,11 @@ class GenericFunction:
                 f"  uint thread_idx_z = thread_idx / {self.threadidx_xydim};\n"
             )
             clean_code += (
-                f"  dim3 brt_blockIdx = {{block_idx_x, block_idx_y, block_idx_z}};\n"
+                f"  dim3 brt_blockIdx(block_idx_x, block_idx_y, block_idx_z);\n"
             )
-            clean_code += f"  dim3 brt_threadIdx = {{thread_idx_x, thread_idx_y, thread_idx_z}};\n"
+            clean_code += (
+                f"  dim3 brt_threadIdx(thread_idx_x, thread_idx_y, thread_idx_z);\n"
+            )
             allocated_shm_size = 0
             if self.shm_size_in_bytes > 0:
                 for i in range(len(self.shm_sizes)):
