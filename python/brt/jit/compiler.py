@@ -1,12 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+
 import torch
 
 from . import cppjit
 
 
-class JitCompiler:
+class CUDACompiler:
     @staticmethod
     def create_raw(source):
         torch.cuda.init()
@@ -22,4 +23,5 @@ class JitCompiler:
         if keyword_dict is not None:
             for key in keyword_dict:
                 template = template.replace("@%s@" % key, str(keyword_dict[key]))
-        return JitCompiler.create_raw(template)
+        return CUDACompiler.create_raw(template)
+

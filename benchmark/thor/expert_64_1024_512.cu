@@ -1,6 +1,5 @@
 
-#include "gather_64_512.cuh"
-
+#include "./gather_64_512.cuh"
 #include <algorithm>
 #include <brt/common/cuda_utils.h>
 #include <cmath>

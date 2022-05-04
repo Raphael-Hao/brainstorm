@@ -2,4 +2,4 @@
 # Licensed under the MIT license.
 
 from . import tvm
-from .compiler import JitCompiler
+from .compiler import CUDACompiler
