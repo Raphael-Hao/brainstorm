@@ -1,8 +1,9 @@
 
 set(USE_CUDA ON)
-set(USE_CUDNN ON)
-set(USE_CUBLAS ON)
+# set(USE_CUDNN ON)
+# set(USE_CUBLAS ON)
 set(USE_NCCL ON)
+
 find_cuda(ON ON ON)
 if(CUDA_FOUND)
   include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})

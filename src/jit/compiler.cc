@@ -6,6 +6,10 @@
 #include "./compiler.h"
 namespace brt {
 namespace jit {
-  
+
+CUDACompiler& CUDACompiler::get_compiler() {
+  static CUDACompiler instance;
+  return instance;
 }
+}  // namespace jit
 }  // namespace brt
