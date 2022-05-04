@@ -40,19 +40,6 @@ def export_thor_model(model_filename):
     print(dummy_output[0].shape)
 
 
-# def export_bert_model(model_filename):
-#     bert_config = BertConfig()
-#     bert_config.num_hidden_layers = 1
-#     bert_encoder = BertEncoder(bert_config)
-#     print(bert_encoder)
-#     bert_encoder.cuda()
-#     bert_encoder.eval()
-#     dummy_input = torch.rand(1, 64, 768, device="cuda", dtype=torch.float32)
-#     dummy_output = bert_encoder(dummy_input)
-#     torch.onnx.export(bert_encoder, dummy_input, model_filename)
-#     print(dummy_output[0].shape)
-
-
 if __name__ == "__main__":
     export_thor_model("thor_model.onnx")
     # export_bert_model("bert_model.onnx")

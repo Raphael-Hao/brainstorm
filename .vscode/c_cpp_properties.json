@@ -10,7 +10,7 @@
                 "/home/whcui/.pyenv/versions/miniconda3-3.8-4.11.0/lib/python3.8/site-packages/torch/include/torch/csrc/api/include/"
             ],
             "defines": [
-                "USE_CUDA"
+                "USE_CUDA=1"
             ],
             "compilerPath": "/usr/bin/g++-8",
             "cStandard": "c11",

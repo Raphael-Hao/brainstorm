@@ -77,6 +77,8 @@ class BlockFuser:
         self.fuse()
         clean_code = ""
         clean_code += GenericFunction.common_defines
+        clean_code += GenericFunction.c_api_decorator
+        clean_code += "{ \n"
         for func in self.fuse_cadidates:
             clean_code += func.get_code(mode="device")
         clean_code += GenericFunction.global_decorator
@@ -129,6 +131,6 @@ class BlockFuser:
             block_start == self.grid_size
         ), f"block_fused: {block_start} != grid_size: {self.grid_size}"
         clean_code += "}\n"
-
+        clean_code += "}\n"
         return clean_code
 
