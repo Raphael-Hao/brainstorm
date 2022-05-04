@@ -8,6 +8,8 @@
 #include <brt/common/cuda_utils.h>
 #include <dmlc/common.h>
 
+#include <fstream>
+
 namespace brt {
 namespace jit {
 
@@ -17,7 +19,9 @@ static std::string nvrtc_compile(const char* code, const std::string& arch) {
                                              arch_option.c_str(), "--use_fast_math",
                                              "--extra-device-vectorization"};
   nvrtcProgram prog;
-
+  std::ofstream code_file("/home/whcui/brainstorm_project/brainstorm/.cache/brt_code.cu");
+  code_file << code;
+  code_file.flush();
   NVRTC_CHECK(nvrtcCreateProgram(&prog, code, nullptr, 0, nullptr, nullptr));
   NVRTC_CHECK(nvrtcCompileProgram(prog, param_cstrings.size(), param_cstrings.data()));
 
@@ -105,32 +109,32 @@ static int inject_source(const std::string& headless_code) {
 
   const char* source = headless_code.c_str();
   {
-    char tag[] = "// [thread_extent] blockIdx.x = ";
+    char tag[] = "// [thread_extent] blockIdx.xdim = ";
     const char* pos = strstr(source, tag);
     gm.blocks.x = pos ? std::atoi(pos + sizeof(tag) - 1) : 1;
   }
   {
-    char tag[] = "// [thread_extent] blockIdx.y = ";
+    char tag[] = "// [thread_extent] blockIdx.ydim = ";
     const char* pos = strstr(source, tag);
     gm.blocks.y = pos ? std::atoi(pos + sizeof(tag) - 1) : 1;
   }
   {
-    char tag[] = "// [thread_extent] blockIdx.z = ";
+    char tag[] = "// [thread_extent] blockIdx.zdim = ";
     const char* pos = strstr(source, tag);
     gm.blocks.z = pos ? std::atoi(pos + sizeof(tag) - 1) : 1;
   }
   {
-    char tag[] = "// [thread_extent] threadIdx.x = ";
+    char tag[] = "// [thread_extent] threadIdx.xdim = ";
     const char* pos = strstr(source, tag);
     gm.threads.x = pos ? std::atoi(pos + sizeof(tag) - 1) : 1;
   }
   {
-    char tag[] = "// [thread_extent] threadIdx.y = ";
+    char tag[] = "// [thread_extent] threadIdx.ydim = ";
     const char* pos = strstr(source, tag);
     gm.threads.y = pos ? std::atoi(pos + sizeof(tag) - 1) : 1;
   }
   {
-    char tag[] = "// [thread_extent] threadIdx.z = ";
+    char tag[] = "// [thread_extent] threadIdx.zdim = ";
     const char* pos = strstr(source, tag);
     gm.threads.z = pos ? std::atoi(pos + sizeof(tag) - 1) : 1;
   }

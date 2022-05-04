@@ -31,10 +31,10 @@ def parse_culaunch_config(
 
 def get_culaunch_config(tvm_ir: tvm.IRModule) -> str:
     grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-    culaunch_config = f"// [thread_extent] blockIdx.x = {grid_dim[0]}\n"
-    culaunch_config += f"// [thread_extent] blockIdx.y = {grid_dim[1]}\n"
-    culaunch_config += f"// [thread_extent] blockIdx.z = {grid_dim[2]}\n"
-    culaunch_config += f"// [thread_extent] threadIdx.x = {block_dim[0]}\n"
-    culaunch_config += f"// [thread_extent] threadIdx.y = {block_dim[1]}\n"
-    culaunch_config += f"// [thread_extent] threadIdx.z = {block_dim[2]}\n"
+    culaunch_config = f"// [thread_extent] blockIdx.xdim = {grid_dim[0]}\n"
+    culaunch_config += f"// [thread_extent] blockIdx.ydim = {grid_dim[1]}\n"
+    culaunch_config += f"// [thread_extent] blockIdx.zdim = {grid_dim[2]}\n"
+    culaunch_config += f"// [thread_extent] threadIdx.xdim = {block_dim[0]}\n"
+    culaunch_config += f"// [thread_extent] threadIdx.ydim = {block_dim[1]}\n"
+    culaunch_config += f"// [thread_extent] threadIdx.zdim = {block_dim[2]}\n"
     return culaunch_config
