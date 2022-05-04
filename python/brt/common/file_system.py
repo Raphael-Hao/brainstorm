@@ -3,9 +3,22 @@
 import os
 import pathlib
 
+__all__ = [
+    "HOME_PATH",
+    "BRT_PKG_PATH",
+    "BRT_CACHE_PATH",
+    "BRT_LOG_PATH",
+    "BRT_LOG_FILENAME",
+    "BRT_CKPT_PATH",
+    "BRT_ONNX_CKPT_PATH",
+    "BRT_PYTORCH_CKPT_PATH",
+    "BRT_KERNEL_TUNE_LOG_PATH",
+    "BRT_KERNEL_TEMPLATE_PATH",
+]
+
 # BRT root paths
-BRT_PKG_PATH = pathlib.Path(__file__).parent.parent
 HOME_PATH = pathlib.Path.home()
+BRT_PKG_PATH = pathlib.Path(__file__).parent.parent
 BRT_CACHE_PATH = pathlib.Path(
     os.getenv("BRT_CACHE_PATH", str(HOME_PATH / ".cache/brt"))
 ).absolute()
