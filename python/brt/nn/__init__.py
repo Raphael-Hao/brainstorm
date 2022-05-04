@@ -9,11 +9,12 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
+from brt.common import update_gitignore
 
 # To make auto-completion happy, we generate a _nn.py that lists out all the classes.
 
 nn_cache_file_path = Path(__file__).parent / "_nn.py"
-_nn_module_files = []
+git_ignore_file_path = Path(__file__).parent / ".gitignore"
 
 CACHE_VALID = False
 
@@ -24,6 +25,10 @@ if nn_cache_file_path.exists():
     if _nn._torch_version == torch.__version__:
         CACHE_VALID = True
     else:
+        if nn_cache_file_path.exists():
+            nn_cache_file_path.unlink()
+        if git_ignore_file_path.exists():
+            git_ignore_file_path.unlink()
         for module_name in _nn.all_module_names:
             # delete module_fpath if exist
             module_fpath = Path(__file__).parent / (module_name + ".py")
@@ -106,11 +111,12 @@ if not CACHE_VALID:
                 f.write("\n".join(obj_code))
 
     code.append(f"__all__ = {all_cls_fn_names}")
-    code.append(f"all_module_names = {all_module_names}")
+    code.append(f"__all_module_names__ = {all_module_names}")
 
     with nn_cache_file_path.open("w") as fp:
         fp.write("\n".join(code))
-
+    all_module_names.append("_nn")
+    update_gitignore(all_module_names, git_ignore_file_path, file_suffix=".py")
 
 # Import all modules from generated _nn.py
 
