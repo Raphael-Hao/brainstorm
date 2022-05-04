@@ -27,7 +27,7 @@ def install():
         ext_modules=[
             CUDAExtension(
                 name="brt.jit.cppjit",
-                sources=["./src/jit/extension/torch.cc"],
+                sources=["./src/jit/extension/torch.cc",],
                 library_dirs=["/usr/local/cuda/lib64/stubs"],
                 libraries=ext_libs,
                 include_dirs=[

@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "R3090-Linux",
+            "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/include",
@@ -10,35 +10,13 @@
                 "/home/whcui/.pyenv/versions/miniconda3-3.8-4.11.0/lib/python3.8/site-packages/torch/include/torch/csrc/api/include/"
             ],
             "defines": [
-                "USE_CUDA=1"
+                "USE_CUDA"
             ],
             "compilerPath": "/usr/bin/g++-8",
             "cStandard": "c11",
             "cppStandard": "c++14",
             "intelliSenseMode": "linux-gcc-x64",
             "compileCommands": "${workspaceFolder}/build/compile_commands.json"
-            // "configurationProvider": "ms-vscode.cmake-tools"
-        },
-        {
-            "name": "R3090-Torch",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "${workspaceFolder}/include",
-                "/home/whcui/.pyenv/versions/miniconda3-3.8-4.11.0/include/python3.8",
-                "/home/whcui/.pyenv/versions/miniconda3-3.8-4.11.0/lib/python3.8/site-packages/torch/include",
-                "/home/whcui/.pyenv/versions/miniconda3-3.8-4.11.0/lib/python3.8/site-packages/torch/include/torch/csrc/api/include/"
-            ],
-            "defines": [
-                "USE_CUDA",
-                "USE_CUBLAS",
-                "USE_CUDNN",
-                "USE_NCCL"
-            ],
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "gnu11",
-            "intelliSenseMode": "linux-gcc-x64",
-            "compileCommands": "${workspaceFolder}/build/merged_compile_commands.json",
-            "configurationProvider": "ms-vscode.cmake-tools"
         },
         {
             "name": "A100-Linux",

@@ -26,8 +26,8 @@ include_directories(SYSTEM 3rdparty/dlpack/include)
 # include_directories(SYSTEM 3rdparty/tvm/include)
 
 set(BRT_LINKER_LIBS "")
-
 set(WARNING_FLAG -Wall)
+
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     message(STATUS "Build in Debug mode")
     set(CMAKE_C_FLAGS "-O0 -g ${WARNING_FLAG} -fPIC ${CMAKE_C_FLAGS}")
@@ -70,6 +70,8 @@ file(GLOB_RECURSE BRT_INCLUDE CMAKE_CONFIGURE_DEPENDS "src/*.h" "include/*.h")
 
 list(APPEND BRT_SRCS ${BRT_SOURCE} ${BRT_INCLUDE})
 
+
+add_compile_definitions("USE_CUDA")
 add_library(brt SHARED ${BRT_SRCS})
 target_include_directories(
     brt PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
