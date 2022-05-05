@@ -6,36 +6,39 @@ from typing import List
 from brt.common import log
 
 from .compiler import CUDACompiler
+from .fuse import BlockFuser
 from .generic import GenericFunction
 
 logger = log.get_logger(__file__)
 
 
-class BlockFuser:
+class HomoElasticBlockFuser(BlockFuser):
     def __init__(self, fuse_cadidate_templates: List[str]):
-        self.fuse_cadidates = []
-        for i in range(len(fuse_cadidate_templates)):
-            func_template = fuse_cadidate_templates[i]
-            generic_func = GenericFunction(func_template)
-            self.fuse_cadidates.append(generic_func)
-            generic_func.name += f"_block_{i}"
+        super().__init__(fuse_cadidate_templates)
 
-    def alloc_shared_memory(self):
-        self.shm_size_in_bytes = 0
-        for func in self.fuse_cadidates:
-            self.shm_size_in_bytes = max(self.shm_size_in_bytes, func.shm_size_in_bytes)
+    def runtime_culaunch_dims(self, grid_per_block: List[int]):
+        grid_size = 0
+        for block_id, (func, grid) in enumerate(self.fuse_cadidates, grid_per_block):
+            self.grid_size += func.grid_size * grid
+        return self.grid_size
 
-    def calcu_culaunch_dims(self):
-        self.launch_bounds = 0
-        self.grid_size = 0
-        self.block_size = 0
+    @property
+    def launch_bounds(self):
+        launch_bounds = 0
         for func in self.fuse_cadidates:
-            self.launch_bounds = max(self.launch_bounds, func.launch_bounds)
-            self.grid_size += func.grid_size
-            self.block_size = max(self.block_size, func.block_size)
+            launch_bounds = max(launch_bounds, func.launch_bounds)
+        return launch_bounds
+
+    @property
+    def block_size(self):
+        block_size = 0
+        for func in self.fuse_cadidates:
+            block_size = max(block_size, func.block_size)
+        return block_size
 
     def generate_new_args(self):
         self.func_args = ""
+        first_device_arg = ""
         self.device_args = []
         first_arg_in_func = True
         for i in range(len(self.fuse_cadidates)):
@@ -71,7 +74,6 @@ class BlockFuser:
         self.generate_new_name()
         self.generate_new_args()
         self.alloc_shared_memory()
-        self.calcu_culaunch_dims()
 
     def get_code(self):
         self.fuse()
@@ -86,7 +88,7 @@ class BlockFuser:
         clean_code += f" {self.func_name}("
         clean_code += f"{self.func_args})"
         clean_code += "{\n"
-        clean_code += f"  // [thread_extent] blockIdx.xdim = {self.grid_size}\n"
+        clean_code += f"  // [thread_extent] blockIdx.xdim = {0}\n"
         clean_code += f"  // [thread_extent] blockIdx.ydim = {1}\n"
         clean_code += f"  // [thread_extent] blockIdx.zdim = {1}\n"
         clean_code += f"  // [thread_extent] threadIdx.xdim = {self.block_size}\n"

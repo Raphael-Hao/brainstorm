@@ -346,7 +346,5 @@ class SparseFusionThorMoE(nn.Module):
         inter_states = inter_states.view(-1, hidden_states.size(-1))
         inter_states = inter_states[self.restore_mask].contiguous()
         inter_states = self.dropout(inter_states)
-        print(inter_states.size())
-        print(hidden_states.size())
         inter_states = self.LayerNorm(inter_states + hidden_states)
         return inter_states
