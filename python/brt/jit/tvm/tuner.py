@@ -98,12 +98,15 @@ class TVMTuner:
         workload = json.loads(self.tvm_task.workload_key)
         kernel_args = deserialize_args(workload[1:])
         logger.debug(f"kernel args: {kernel_args}")
-        tvm_sch, tvm_args = self.tvm_task.apply_best(self.tune_log_filename)
-        tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-        culaunch_config = get_culaunch_config(tvm_ir)
-        source_code = self.tvm_task.print_best(
-            self.tune_log_filename, print_mode="cuda"
-        )
-        kernel_template = culaunch_config + source_code
-        with open(self.template_filename, "w") as f:
-            f.write(kernel_template)
+        try:
+            tvm_sch, tvm_args = self.tvm_task.apply_best(self.tune_log_filename)
+            tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
+            culaunch_config = get_culaunch_config(tvm_ir)
+            source_code = self.tvm_task.print_best(
+                self.tune_log_filename, print_mode="cuda"
+            )
+            kernel_template = culaunch_config + source_code
+            with open(self.template_filename, "w") as f:
+                f.write(kernel_template)
+        except Exception as e:
+            logger.error(f"Failed to export netlet template: {e}")
