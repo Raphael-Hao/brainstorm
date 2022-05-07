@@ -104,4 +104,5 @@
   ],
   "python.testing.pytestEnabled": false,
   "python.testing.unittestEnabled": true,
+  "git.detectSubmodules": false,
 }
