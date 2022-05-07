@@ -12,7 +12,7 @@ from .generic import GenericFunction
 logger = log.get_logger(__file__)
 
 
-class HomoElasticBlockFuser(BlockFuser):
+class ElasticBlockFuser(BlockFuser):
     def __init__(self, fuse_cadidate_templates: List[str]):
         super().__init__(fuse_cadidate_templates)
 
