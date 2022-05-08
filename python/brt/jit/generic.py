@@ -4,33 +4,13 @@ import re
 
 from brt.common import log
 
+from .base import BaseFunction, CUDATypeSizeInByte
 from .utils import remove_empty_lines
 
 logger = log.get_logger(__file__)
 
-CUDATypeSizeInByte = {
-    # signed type
-    "char": 1,
-    "short": 2,
-    "int": 4,
-    "float": 4,
-    "double": 8,
-    "int8_t": 1,
-    "int16_t": 2,
-    "int32_t": 4,
-    "int64_t": 8,
-    # unsigned type
-    "uchar": 1,
-    "ushort": 2,
-    "uint": 4,
-    "uint8_t": 1,
-    "uint16_t": 2,
-    "uint32_t": 4,
-    "uint64_t": 8,
-}
 
-
-class GenericFunction:
+class GenericFunction(BaseFunction):
     common_defines = """
 #define uint unsigned int
 #define uchar unsigned char
@@ -45,7 +25,7 @@ __device__ __forceinline__ void AsmBlockSync(int name, int numThreads) {
 """
     asm_warp_sync = """
 __device__ __forceinline__ void AsmWarpSync(const unsigned threadsmask) {
-  asm volatile("bar.warp.sync %0;" : : "r"(threadsmask), : "memory");
+  asm volatile("bar.warp.sync %0;" : : "r"(threadsmask) : "memory");
 }
 """
     cpp_warp_sync = """
@@ -84,7 +64,7 @@ __device__ __forceinline__ void CppCgWarpSync() {
         launch_bounds = re.findall(launch_bound_regex, self.raw_source)
         self.min_blocks_per_sm = 1
         if len(launch_bounds) == 0:
-            self.max_threads_per_block = None
+            self.max_threads_per_block = 0
         else:
             launch_bound_params = launch_bounds[0].split(",")
             self.max_threads_per_block = int(launch_bound_params[0])
@@ -97,10 +77,9 @@ __device__ __forceinline__ void CppCgWarpSync() {
             r"extern\s+\"C\"\s+__global__\s+void\s+(\w+)\s*\((.*)\)\s*(\{[\s\S]*)",
             source_without_launch_bound,
         )
-        self.launch_bounds = int(parsed_source.group(1))
-        self.name = parsed_source.group(2)
-        self.args = parsed_source.group(3)
-        self.body = parsed_source.group(4)
+        self.name = parsed_source.group(1)
+        self.args = parsed_source.group(2)
+        self.body = parsed_source.group(3)
         self.body = self.body[self.body.find("{") + 1 : self.body.rfind("}")]
 
     def extract_culaunch_dims(self):
@@ -197,89 +176,54 @@ __device__ __forceinline__ void CppCgWarpSync() {
         else:
             self.sync_mask = "0xffffffff"
 
-    def clean_cache_and_set_mode(self, mode="global"):
-        self.mode = mode
-        self.clean_code = ""
-        self.indent = 0
+    # Construct Generic Functions
 
-    def new_codeblock(self):
-        self.clean_code += "{\n"
-        self.indent += 1
-
-    def close_codeblock(self):
-        self.clean_code += "{\n"
-        self.indent -= 1
-
-    def set_launch_bounds(self):
-        if self.max_threads_per_block is None:
-            return
-        if self.min_blocks_per_sm == 1:
-            self.clean_code += f"__launch_bounds__({self.max_threads_per_block})"
-        else:
-            self.clean_code += f"__launch_bounds__({self.max_threads_per_block}, {self.min_blocks_per_sm})"
-
-    def declare_name_args(self):
-        self.clean_code += f" {self.name}("
-        self.clean_code += f"{self.args}"
-        if self.mode == "device":
-            self.clean_code += (
-                f", char* shared_buffer, const uint& block_idx, const uint& thread_idx"
-            )
-        self.clean_code += ")"
-
-    def set_culaunch_dims(self):
-        if self.mode == "device":
-            self.clean_code += f"  // [thread_extent] gridSize = {self.grid_size}\n"
-            self.clean_code += f"  // [thread_extent] blockSize = {self.block_size}\n"
-        else:
-            self.clean_code += (
-                f"  // [thread_extent] blockIdx.xdim = {self.blockidx_xdim}\n"
-            )
-            self.clean_code += (
-                f"  // [thread_extent] blockIdx.ydim = {self.blockidx_ydim}\n"
-            )
-            self.clean_code += (
-                f"  // [thread_extent] blockIdx.zdim = {self.blockidx_zdim}\n"
-            )
-            self.clean_code += (
-                f"  // [thread_extent] threadIdx.xdim = {self.threadidx_xdim}\n"
-            )
-            self.clean_code += (
-                f"  // [thread_extent] threadIdx.ydim = {self.threadidx_ydim}\n"
-            )
-            self.clean_code += (
-                f"  // [thread_extent] threadIdx.zdim = {self.threadidx_zdim}\n"
-            )
+    def shadow_global_dims(self):
+        self.clean_code += f"  const dim3 gridDim({self.blockidx_xdim}, {self.blockidx_ydim}, {self.blockidx_zdim});\n"
+        self.clean_code += f"  const dim3 blockDim({self.threadidx_xdim}, {self.threadidx_ydim}, {self.threadidx_zdim});\n"
         self.clean_code += "\n"
+        if self.threadidx_ydim != 1 and self.threadidx_zdim == 1:
+            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_xdim}, thread_idx / {self.threadidx_xdim});\n"
+        elif self.threadidx_ydim == 1 and self.threadidx_zdim != 1:
+            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_xdim}, 1, thread_idx / {self.threadidx_xdim});\n"
+        elif self.threadidx_ydim != 1 and self.threadidx_zdim != 1:
+            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_xdim}, thread_idx / {self.threadidx_xdim} % {self.threadidx_ydim}, thread_idx / {self.threadidx_xydim});\n"
+        if self.blockidx_ydim == 1 and self.blockidx_zdim == 1:
+            self.clean_code += f"  const dim3 blockIdx(block_idx);\n"
+        elif self.blockidx_zdim == 1:
+            self.clean_code += f"  const dim3 blockIdx(block_idx % {self.blockidx_xdim}, block_idx % {self.blockidx_xdim});\n"
+        else:
+            self.clean_code += f"  const dim3 blockIdx(block_idx % {self.blockidx_xdim}, block_idx / {self.blockidx_xdim} % {self.blockidx_ydim}, block_idx / {self.blockidx_xydim});\n"
 
-    def alloc_shared_memory(self):
-        if self.shm_size_in_bytes > 0:
-            if self.mode == "device":
-                allocated_shm_size = 0
-                for i in range(len(self.shm_sizes)):
-                    self.clean_code += f"  {self.shm_types[i]}* {self.shm_symbols[i]} = ({self.shm_types[i]}*)(shared_buffer + {allocated_shm_size});\n"
-                    allocated_shm_size += (
-                        self.shm_sizes[i] * CUDATypeSizeInByte[self.shm_types[i]]
-                    )
-                assert allocated_shm_size == self.shm_size_in_bytes
+    def add_body_without_syncthreads(self, device_id: int, sync_method="asm"):
+        if sync_method == "asm":
+            if self.block_size >= 32:
+                body_without_syncthreads = self.body.replace(
+                    "__syncthreads()", f"AsmBlockSync({device_id}, {self.block_size})"
+                )
             else:
-                for i in range(len(self.shm_sizes)):
-                    self.clean_code += f"  __shared__ {self.shm_types[i]} {self.shm_symbols[i]}[{self.shm_sizes[i]}];\n"
+                body_without_syncthreads = self.body.replace(
+                    "__syncthreads()", f"AsmWarpSync({self.sync_mask})"
+                )
+        elif sync_method == "cpp":
+            if self.block_size > 32:
+                logger.error("CPP sync is not supported for block size >= 32")
+            else:
+                body_without_syncthreads = self.body.replace(
+                    "__syncthreads()", f"CppWarpSync({self.sync_mask})"
+                )
+        else:
+            logger.error("Unknown sync method")
+        self.clean_code += body_without_syncthreads
 
-    def verify_code(self):
-        try:
-            assert self.indent == 0
-        except AssertionError:
-            logger.exception("Code verify failed")
-
-    def get_code(self, mode: str = "global") -> str:
-        self.clean_cache_and_set_mode(mode)
+    def get_code(self, mode="global", device_id: int = 0, sync_method="asm") -> str:
+        self.reset_mode(mode)
         if self.mode == "global":
             self.clean_code += GenericFunction.common_defines
             self.clean_code += GenericFunction.c_api_decorator
             self.clean_code += GenericFunction.global_decorator
-            self.declare_name_args()
             self.set_launch_bounds()
+            self.declare_name_args()
             self.new_codeblock()
             self.set_culaunch_dims()
             self.alloc_shared_memory()
@@ -294,33 +238,12 @@ __device__ __forceinline__ void CppCgWarpSync() {
             self.new_codeblock()
             self.clean_code += "    return;\n"
             self.close_codeblock()
-            self.clean_code += (
-                f"  uint block_idx_x = block_idx % {self.blockidx_xdim};\n"
-            )
-            self.clean_code += f"  uint block_idx_y = (block_idx / {self.blockidx_xdim}) % {self.blockidx_ydim};\n"
-            self.clean_code += (
-                f"  uint block_idx_z = block_idx / {self.blockidx_xydim};\n"
-            )
-            self.clean_code += (
-                f"  uint thread_idx_x = thread_idx % {self.threadidx_xdim};\n"
-            )
-            self.clean_code += f"  uint thread_idx_y = (thread_idx / {self.threadidx_xdim}) % {self.threadidx_ydim};\n"
-            self.clean_code += (
-                f"  uint thread_idx_z = thread_idx / {self.threadidx_xydim};\n"
-            )
-            self.clean_code += (
-                f"  dim3 brt_blockIdx(block_idx_x, block_idx_y, block_idx_z);\n"
-            )
-            self.clean_code += (
-                f"  dim3 brt_threadIdx(thread_idx_x, thread_idx_y, thread_idx_z);\n"
-            )
+            self.shadow_global_dims()
             self.alloc_shared_memory()
-
-            device_func_body = self.body.replace("blockIdx", "brt_blockIdx")
-            device_func_body = device_func_body.replace("threadIdx", "brt_threadIdx")
-            self.clean_code += f"{device_func_body}"
+            self.add_body_without_syncthreads(device_id, sync_method)
             self.close_codeblock()
         else:
             raise ValueError("Invalid mode: %s" % mode)
+        self.verify_code()
         return self.clean_code
 
