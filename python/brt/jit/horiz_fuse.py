@@ -12,7 +12,7 @@ from .generic import GenericFunction
 logger = log.get_logger(__file__)
 
 
-class HFuseFunction(BaseFunction):
+class HorizFuseFunction(BaseFunction):
     def __init__(self, fuse_cadidate_templates: List[str]):
         self.fuse_cadidates: List[GenericFunction] = []
         for i in range(len(fuse_cadidate_templates)):

@@ -3,6 +3,6 @@
 
 from .compiler import CUDACompiler
 from .generic import GenericFunction
-from .hfuse import HFuseFunction
+from .horiz_fuse import HorizFuseFunction
 from .template import Templator
 from .tvm import TVMTuner
