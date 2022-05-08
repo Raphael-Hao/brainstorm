@@ -9,13 +9,13 @@ from typing import List
 from brt.common import log
 
 from .compiler import CUDACompiler
-from .fuse import BlockFuser
 from .generic import GenericFunction
+from .horiz_fuse import HorizFuseFunction
 
 logger = log.get_logger(__file__)
 
 
-class HomoElasticBlockFuser(BlockFuser):
+class HomoFuseBlockFuser(HorizFuseFunction):
     def __init__(self, fuse_cadidate_templates: List[str]):
         super().__init__(fuse_cadidate_templates)
 
