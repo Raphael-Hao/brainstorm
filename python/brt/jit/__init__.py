@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 from .compiler import CUDACompiler
-from .fuse import BlockFuser
 from .generic import GenericFunction
+from .hfuse import HFuseFunction
 from .template import Templator
 from .tvm import TVMTuner
