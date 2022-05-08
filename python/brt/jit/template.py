@@ -4,6 +4,8 @@ import pathlib
 
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
 
+from .raw_func import RawFunction
+
 # from .tvm import TVMTuner
 
 
@@ -11,7 +13,7 @@ class Templator:
     template_pool = dict()
 
     @classmethod
-    def get_template(cls, kernel_name: str):
+    def get_global_function(cls, kernel_name: str):
         template = cls.template_pool.get(kernel_name)
         if template is None:
             template_path = BRT_KERNEL_TEMPLATE_PATH / (kernel_name + ".cu")
@@ -23,5 +25,5 @@ class Templator:
                 raise NotImplementedError(
                     "not implemented yet by getting template from TVMTuner"
                 )
-        return template
+        return RawFunction(template)
 
