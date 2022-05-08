@@ -8,44 +8,42 @@ from typing import List
 
 from brt.common import log
 
+from .base import GlobalFunction
 from .compiler import CUDACompiler
-from .generic import GenericFunction
 from .horiz_fuse import HorizFuseFunction
+from .raw_func import RawFunction
+from .template import Templator
 
 logger = log.get_logger(__file__)
 
 
-class HomoFuseBlockFuser(HorizFuseFunction):
-    def __init__(self, fuse_cadidate_templates: List[str]):
-        super().__init__(fuse_cadidate_templates)
+class HomoFuseFunction(HorizFuseFunction):
+    def __init__(self, homo_func_name: str, candidate_dims: List[int]):
+        self.name = homo_func_name
+        self.candidate_dims = candidate_dims
+        candidates = self.generate_candidates()
+        super().__init__(candidates=candidates)
+
+    def generate_candidates(self):
+        candidates: List[GlobalFunction] = []
+        for dim in self.candidate_dims:
+            candidate = Templator.get_global_function(self.name + f"_{dim}")
+            candidates.append(candidate)
+        return candidates
 
     def runtime_culaunch_dims(self, grid_per_block: List[int]):
         grid_size = 0
-        for block_id, (func, grid) in enumerate(self.fuse_cadidates, grid_per_block):
+        for block_id, (func, grid) in enumerate(self.candidates, grid_per_block):
             self.grid_size += func.grid_size * grid
         return self.grid_size
-
-    @property
-    def launch_bounds(self):
-        launch_bounds = 0
-        for func in self.fuse_cadidates:
-            launch_bounds = max(launch_bounds, func.launch_bounds)
-        return launch_bounds
-
-    @property
-    def block_size(self):
-        block_size = 0
-        for func in self.fuse_cadidates:
-            block_size = max(block_size, func.block_size)
-        return block_size
 
     def generate_new_args(self):
         self.func_args = ""
         first_device_arg = ""
         self.device_args = []
         first_arg_in_func = True
-        for i in range(len(self.fuse_cadidates)):
-            func = self.fuse_cadidates[i]
+        for i in range(len(self.candidates)):
+            func = self.candidates[i]
             device_arg = ""
             first_arg_in_device = True
             for _, (arg_type, arg_decorator, arg_name) in enumerate(
@@ -66,7 +64,7 @@ class HomoFuseBlockFuser(HorizFuseFunction):
     def generate_new_name(self):
         self.func_name = ""
         first_block = True
-        for func in self.fuse_cadidates:
+        for func in self.candidates:
             if first_block:
                 first_block = False
             else:
@@ -81,12 +79,12 @@ class HomoFuseBlockFuser(HorizFuseFunction):
     def get_code(self):
         self.fuse()
         clean_code = ""
-        clean_code += GenericFunction.common_defines
-        clean_code += GenericFunction.c_api_decorator
+        clean_code += GlobalFunction.common_defines
+        clean_code += GlobalFunction.c_api_decorator
         clean_code += "{ \n"
-        for func in self.fuse_cadidates:
+        for func in self.candidates:
             clean_code += func.get_code(mode="device")
-        clean_code += GenericFunction.global_decorator
+        clean_code += GlobalFunction.global_decorator
         clean_code += f"__launch_bounds__({self.launch_bounds})"
         clean_code += f" {self.func_name}("
         clean_code += f"{self.func_args})"
@@ -105,8 +103,8 @@ class HomoFuseBlockFuser(HorizFuseFunction):
             clean_code += "\n"
         block_start = 0
         block_end = 0
-        for i in range(len(self.fuse_cadidates)):
-            func = self.fuse_cadidates[i]
+        for i in range(len(self.candidates)):
+            func = self.candidates[i]
             block_end = block_start + func.grid_size - 1
 
             logger.debug(
@@ -139,3 +137,7 @@ class HomoFuseBlockFuser(HorizFuseFunction):
         clean_code += "}\n"
         return clean_code
 
+
+class ElaticHomoFuseFunction(HorizFuseFunction):
+    def __init__(self, fuse_cadidate_templates: List[str]):
+        pass
