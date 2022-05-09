@@ -14,7 +14,7 @@ class CUDACompiler:
         __ctx__ = cppjit.inject_source(source)
 
         def func(*inputs, extra=[]):
-            cppjit.invoke(inputs, extra, __ctx__)
+            cppjit.static_invoke(inputs, extra, __ctx__)
 
         return func
 
