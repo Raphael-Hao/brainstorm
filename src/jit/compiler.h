@@ -18,6 +18,7 @@ struct KernelConfig {
   std::vector<CUfunction> hFunc;
   std::string code, fname;
   dim3 blocks, threads;
+  std::vector<uint> block_sizes;
 };
 
 class CUDACompiler {
@@ -68,7 +69,7 @@ class CUDACompiler {
       CUDA_CHECK(cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, dev));
       std::string arch = std::to_string(major) + std::to_string(minor);
 
-      const char *source = kernel.code.data();
+      const char* source = kernel.code.data();
 
       std::string image;
       image = nvrtc_compile(source, arch);
@@ -104,6 +105,30 @@ class CUDACompiler {
                    cudaStream_t stream = 0) {
     CUfunction hfunc = jit_activate(fd, dev);
     auto& blocks = kernels_[fd].blocks;
+    auto& threads = kernels_[fd].threads;
+    CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
+                               0, stream, (void**)ppargs.data(), nullptr));
+  }
+
+  void jit_static_execute(const std::vector<const void*>& ppargs, int fd, int dev,
+                          cudaStream_t stream = 0) {
+    CUfunction hfunc = jit_activate(fd, dev);
+    auto& blocks = kernels_[fd].blocks;
+    auto& threads = kernels_[fd].threads;
+    CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
+                               0, stream, (void**)ppargs.data(), nullptr));
+  }
+
+  void jit_elastic_execute(const std::vector<const void*>& ppargs,
+                           const std::vector<uint>& active_blocks, int fd, int dev,
+                           cudaStream_t stream = 0) {
+    CUfunction hfunc = jit_activate(fd, dev);
+    auto& blocks = kernels_[fd].blocks;
+    CHECK_EQ(kernels_[fd].block_sizes.size(), active_blocks.size());
+    blocks.x = 0;
+    for (auto i = 0; i < active_blocks.size(); ++i) {
+      blocks.x += active_blocks[i] * kernels_[fd].block_sizes[i];
+    }
     auto& threads = kernels_[fd].threads;
     CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
                                0, stream, (void**)ppargs.data(), nullptr));
