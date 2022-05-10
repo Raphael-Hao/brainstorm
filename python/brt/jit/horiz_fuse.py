@@ -16,6 +16,7 @@ class HorizFuseFunction(GlobalFunction):
         if isinstance(candidates[0], GlobalFunction):
             for i, func in enumerate(candidates):
                 func.name = func.name + f"_block_{i}"
+                self.candidates.append(func)
         else:
             for i, func_template in enumerate(candidates):
                 raw_func = RawFunction(func_template)
@@ -26,6 +27,7 @@ class HorizFuseFunction(GlobalFunction):
         self.generate_new_name()
         self.generate_new_args()
         self.infer_shared_memory()
+        self.calcu_launch_bounds()
         self.calcu_culaunch_dims()
 
     def generate_new_name(self):
@@ -41,15 +43,15 @@ class HorizFuseFunction(GlobalFunction):
     def generate_new_args(self):
         self.args = ""
         self.device_args = []
-        first_arg_in_func = True
+        first_arg_in_global = True
         for i, func in enumerate(self.candidates):
             device_arg = ""
             first_arg_in_device = True
             for _, (arg_type, arg_decorator, arg_name) in enumerate(
                 zip(func.arg_types, func.arg_decorators, func.arg_names)
             ):
-                if first_arg_in_func:
-                    first_arg_in_func = False
+                if first_arg_in_global:
+                    first_arg_in_global = False
                 else:
                     self.args += ", "
                 self.args += f"{arg_type} {arg_decorator} {arg_name}_{i}"
@@ -68,16 +70,19 @@ class HorizFuseFunction(GlobalFunction):
         self.shm_symbols = ["shared_buffer"]
         self.shm_sizes = [self.shm_size_in_bytes]
 
-    def calcu_culaunch_dims(self):
+    def calcu_launch_bounds(self):
         self.max_threads_per_block = 0
         self.min_blocks_per_sm = 1
-        self.grid_size = 0
-        self.block_size = 0
         for func in self.candidates:
             self.max_threads_per_block = max(
                 self.max_threads_per_block, func.max_threads_per_block
             )
             self.min_blocks_per_sm = max(self.min_blocks_per_sm, func.min_blocks_per_sm)
+
+    def calcu_culaunch_dims(self):
+        self.grid_size = 0
+        self.block_size = 0
+        for func in self.candidates:
             self.grid_size += func.grid_size
             self.block_size = max(self.block_size, func.block_size)
         self.blockidx_xdim = self.grid_size
@@ -104,6 +109,7 @@ class HorizFuseFunction(GlobalFunction):
         self.set_launch_bounds()
         self.declare_name_args()
         self.new_codeblock()
+        self.set_kernel_type("horiz_fuse")
         self.set_culaunch_dims()
         self.alloc_shared_memory()
         block_start = 0

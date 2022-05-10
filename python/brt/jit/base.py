@@ -27,8 +27,33 @@ CUDATypeSizeInByte = {
 
 
 class Function:
+    c_api_decorator = 'extern "C" {\n'
     def __init__(self) -> None:
         pass
+    
+    def add_c_api(self):
+        self.clean_code += Function.c_api_decorator
+    
+    def end_c_api(self):
+        self.clean_code += "} // extern \"C\"\n"
+    
+    def add_codeblock(self, codeblock: str):
+        self.clean_code += codeblock
+        self.new_emtpy_line()
+        
+    def add_line_with_indent(self, code: str, end=False):
+        self.clean_code += "  " * self.indent
+        self.clean_code += code
+        if end == True:
+            self.end_line()
+
+    def add_code(self, code: str, end=False):
+        self.clean_code += code
+        if end == True:
+            self.end_line()
+
+    def end_line(self):
+        self.clean_code += ";\n"
 
     def new_emtpy_line(self):
         self.clean_code += "\n"
@@ -38,8 +63,9 @@ class Function:
         self.indent += 1
 
     def close_codeblock(self):
-        self.clean_code += "}\n"
         self.indent -= 1
+        self.clean_code += "  " * self.indent
+        self.clean_code += "}\n"
 
     def verify_code(self):
         try:
@@ -90,24 +116,28 @@ __device__ __forceinline__ void CppCgWarpSync() {
         if self.max_threads_per_block == 0:
             return
         if self.min_blocks_per_sm == 1:
-            self.clean_code += f"__launch_bounds__({self.max_threads_per_block})"
+            self.clean_code += f"__launch_bounds__({self.max_threads_per_block}) "
         else:
-            self.clean_code += f"__launch_bounds__({self.max_threads_per_block}, {self.min_blocks_per_sm})"
+            self.clean_code += f"__launch_bounds__({self.max_threads_per_block}, {self.min_blocks_per_sm}) "
 
     def declare_name_args(self):
-        self.clean_code += f" {self.name}("
+        self.clean_code += f"{self.name}("
         self.clean_code += f"{self.args}"
         if self.mode == "device":
             self.clean_code += (
                 f", char* shared_buffer, const uint& block_idx, const uint& thread_idx"
             )
-        self.clean_code += ")"
+        self.clean_code += ") "
+
+    def set_kernel_type(self, kernel_type: str = "global"):
+        if self.mode == "device":
+            logger.error("Kernel type not supported in device mode")
+        self.clean_code += f"  // [kernel_type] {kernel_type}\n"
 
     def set_culaunch_dims(self):
-        if self.mode == "device":
-            self.clean_code += f"  // [thread_extent] gridSize = {self.grid_size}\n"
-            self.clean_code += f"  // [thread_extent] blockSize = {self.block_size}\n"
-        else:
+        if self.mode == "global":
+            # self.clean_code += f"  // [thread_extent] gridSize = {self.grid_size}\n"
+            # self.clean_code += f"  // [thread_extent] blockSize = {self.block_size}\n"
             self.clean_code += (
                 f"  // [thread_extent] blockIdx.xdim = {self.blockidx_xdim}\n"
             )
@@ -126,6 +156,8 @@ __device__ __forceinline__ void CppCgWarpSync() {
             self.clean_code += (
                 f"  // [thread_extent] threadIdx.zdim = {self.threadidx_zdim}\n"
             )
+        else:
+            logger.error("Culaunch dims not supported in device mode")
         self.clean_code += "\n"
 
     def alloc_shared_memory(self):
@@ -203,6 +235,7 @@ __device__ __forceinline__ void CppCgWarpSync() {
             self.set_launch_bounds()
             self.declare_name_args()
             self.new_codeblock()
+            self.set_kernel_type("global")
             self.set_culaunch_dims()
             self.alloc_shared_memory()
             self.clean_code += f"{self.body}"
@@ -211,7 +244,6 @@ __device__ __forceinline__ void CppCgWarpSync() {
             self.clean_code += GlobalFunction.device_decorator
             self.declare_name_args()
             self.new_codeblock()
-            self.set_culaunch_dims()
             self.clean_code += f"  if (thread_idx >= {self.block_size})"
             self.new_codeblock()
             self.clean_code += "    return;\n"
