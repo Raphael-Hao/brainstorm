@@ -16,6 +16,7 @@ _nn.py
 !.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
+!.vscode/c_cpp_properties.json
 
 # Local History for Visual Studio Code
 .history/
@@ -68,7 +69,6 @@ CMakeCache.txt
 CMakeFiles
 CMakeScripts
 Testing
-Makefile
 cmake_install.cmake
 install_manifest.txt
 compile_commands.json
