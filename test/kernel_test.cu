@@ -310,15 +310,15 @@ int main(int argc, char const* argv[]) {
   int device_id = 0;
   // set device
   printf("setting to device %d\n", device_id);
-  CUDA_CHECK(cudaSetDevice(device_id));
+  brt::CUDA_CHECK(cudaSetDevice(device_id));
   // create stream
   cudaStream_t stream;
-  CUDA_CHECK(cudaStreamCreate(&stream));
+  brt::CUDA_CHECK(cudaStreamCreate(&stream));
 
   // create CUDA events
   cudaEvent_t start, stop;
-  CUDA_CHECK(cudaEventCreate(&start));
-  CUDA_CHECK(cudaEventCreate(&stop));
+  brt::CUDA_CHECK(cudaEventCreate(&start));
+  brt::CUDA_CHECK(cudaEventCreate(&stop));
   float elapsed_time;
 
   int A_row_indices[64];
@@ -328,23 +328,23 @@ int main(int argc, char const* argv[]) {
   std::random_shuffle(A_row_indices, A_row_indices + 64);
 
   float *A_h, *B_h, *C_h, *C_h_grand;
-  CUDA_CHECK(cudaMallocHost((void**)&A_h, size_A * sizeof(float)));
-  CUDA_CHECK(cudaMallocHost((void**)&B_h, size_B * sizeof(float)));
-  CUDA_CHECK(cudaMallocHost((void**)&C_h, size_C * sizeof(float)));
-  CUDA_CHECK(cudaMallocHost((void**)&C_h_grand, size_C * sizeof(float)));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&A_h, size_A * sizeof(float)));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&B_h, size_B * sizeof(float)));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&C_h, size_C * sizeof(float)));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&C_h_grand, size_C * sizeof(float)));
 
   float *A_d, *B_d, *C_d, *C_d_grand;
-  CUDA_CHECK(cudaMalloc((void**)&A_d, size_A * sizeof(float)));
-  CUDA_CHECK(cudaMalloc((void**)&B_d, size_B * sizeof(float)));
-  CUDA_CHECK(cudaMalloc((void**)&C_d, size_C * sizeof(float)));
-  CUDA_CHECK(cudaMalloc((void**)&C_d_grand, size_C * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&A_d, size_A * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&B_d, size_B * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&C_d, size_C * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&C_d_grand, size_C * sizeof(float)));
 
   init_with_val(A_h, size_A, 1.0f);
   init_with_rand(B_h, size_B);
 
-  CUDA_CHECK(
+  brt::CUDA_CHECK(
       cudaMemcpy(A_d, A_h, size_A * sizeof(float), cudaMemcpyHostToDevice));
-  CUDA_CHECK(
+  brt::CUDA_CHECK(
       cudaMemcpy(B_d, B_h, size_B * sizeof(float), cudaMemcpyHostToDevice));
 
   dim3 threads_per_block(4 * 4);
@@ -359,35 +359,35 @@ int main(int argc, char const* argv[]) {
     matmul_1_1024_512<<<matmul_grid_size, matmul_block_size, 0, stream>>>(
         A_d, B_d, C_d);
   }
-  CUDA_CHECK(cudaDeviceSynchronize());
+  brt::CUDA_CHECK(cudaDeviceSynchronize());
 
   // start timing
   int test_num = 1000;
 
-  CUDA_CHECK(cudaEventRecord(start, stream));
+  brt::CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
     default_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
         A_d, B_d, C_d_grand);
   }
-  CUDA_CHECK(cudaEventRecord(stop, stream));
-  CUDA_CHECK(cudaEventSynchronize(stop));
-  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  brt::CUDA_CHECK(cudaEventRecord(stop, stream));
+  brt::CUDA_CHECK(cudaEventSynchronize(stop));
+  brt::CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
   printf("default batch matmul %f ms\n", elapsed_time / test_num);
 
-  CUDA_CHECK(cudaEventRecord(start, stream));
+  brt::CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
     matmul_1_1024_512<<<matmul_grid_size, matmul_block_size, 0, stream>>>(
         A_d, B_d, C_d);
   }
-  CUDA_CHECK(cudaEventRecord(stop, stream));
-  CUDA_CHECK(cudaEventSynchronize(stop));
-  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  brt::CUDA_CHECK(cudaEventRecord(stop, stream));
+  brt::CUDA_CHECK(cudaEventSynchronize(stop));
+  brt::CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
   printf("expert batch matmul without pointer gather %f ms\n",
          elapsed_time / test_num);
 
-  CUDA_CHECK(cudaMemcpy(C_h_grand, C_d_grand, size_C * sizeof(float),
+  brt::CUDA_CHECK(cudaMemcpy(C_h_grand, C_d_grand, size_C * sizeof(float),
                         cudaMemcpyDeviceToHost));
-  CUDA_CHECK(
+  brt::CUDA_CHECK(
       cudaMemcpy(C_h, C_d, size_C * sizeof(float), cudaMemcpyDeviceToHost));
   bool if_equal = check_results(C_h_grand, C_h, size_C);
   if (if_equal) {

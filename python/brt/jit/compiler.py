@@ -23,10 +23,12 @@ class CUDACompiler:
             def func(*inputs, active_blocks=[]):
                 cppjit.hetero_invoke(inputs, active_blocks, __ctx__)
 
-        elif kernel_type == "homo_fuse":
+        elif kernel_type == "homo_fuse_v2":
 
-            def func(shared_inputs, weights, active_blocks=[]):
-                cppjit.homo_invoke(shared_inputs, weights, active_blocks, __ctx__)
+            def func(shared_inputs, standalone_inputs, capacities=[]):
+                cppjit.homo_invoke(
+                    shared_inputs, standalone_inputs, capacities, __ctx__
+                )
 
         elif kernel_type == "elastic_homo_fuse":
             raise NotImplementedError

@@ -296,18 +296,18 @@ int main(int argc, char const* argv[]) {
   int device_id = 0;
   // set device
   printf("setting to device %d\n", device_id);
-  CUDA_CHECK(cudaSetDevice(device_id));
+  brt::CUDA_CHECK(cudaSetDevice(device_id));
   // create stream
   cudaStream_t stream;
-  CUDA_CHECK(cudaStreamCreate(&stream));
+  brt::CUDA_CHECK(cudaStreamCreate(&stream));
   cublasHandle_t cublas_handle;
-  CUBLAS_CHECK(cublasCreate(&cublas_handle));
-  CUBLAS_CHECK(cublasSetStream(cublas_handle, stream));
+  brt::CUBLAS_CHECK(cublasCreate(&cublas_handle));
+  brt::CUBLAS_CHECK(cublasSetStream(cublas_handle, stream));
 
   // create CUDA events
   cudaEvent_t start, stop;
-  CUDA_CHECK(cudaEventCreate(&start));
-  CUDA_CHECK(cudaEventCreate(&stop));
+  brt::CUDA_CHECK(cudaEventCreate(&start));
+  brt::CUDA_CHECK(cudaEventCreate(&stop));
   float elapsed_time;
 
   int A_row_indices[64];
@@ -317,7 +317,7 @@ int main(int argc, char const* argv[]) {
   std::random_shuffle(A_row_indices, A_row_indices + 64);
 
   int* A_indices;
-  CUDA_CHECK(cudaMallocHost((void**)&A_indices, sizeof(int) * size_A));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&A_indices, sizeof(int) * size_A));
   for (int i = 0; i < 64; ++i) {
     for (int j = 0; j < 512; ++j) {
       A_indices[i * 512 + j] = A_row_indices[i];
@@ -325,67 +325,67 @@ int main(int argc, char const* argv[]) {
   }
 
   int* A_indices_d;
-  CUDA_CHECK(cudaMalloc((void**)&A_indices_d, sizeof(int) * size_A));
-  CUDA_CHECK(cudaMemcpy(A_indices_d, A_indices, sizeof(int) * size_A,
+  brt::CUDA_CHECK(cudaMalloc((void**)&A_indices_d, sizeof(int) * size_A));
+  brt::CUDA_CHECK(cudaMemcpy(A_indices_d, A_indices, sizeof(int) * size_A,
                         cudaMemcpyHostToDevice));
 
   float *A_h, *B_h, *C_h, *C_h_grand;
-  CUDA_CHECK(cudaMallocHost((void**)&A_h, size_A * sizeof(float)));
-  CUDA_CHECK(cudaMallocHost((void**)&B_h, size_B * sizeof(float)));
-  CUDA_CHECK(cudaMallocHost((void**)&C_h, size_C * sizeof(float)));
-  CUDA_CHECK(cudaMallocHost((void**)&C_h_grand, size_C * sizeof(float)));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&A_h, size_A * sizeof(float)));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&B_h, size_B * sizeof(float)));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&C_h, size_C * sizeof(float)));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&C_h_grand, size_C * sizeof(float)));
 
   float *A_d, *A_dispatch_d, *B_d, *B_d_linear, *C_d, *C_d_grand;
   float** B_d_array;
-  CUDA_CHECK(cudaMalloc((void**)&A_d, size_A * sizeof(float)));
-  CUDA_CHECK(cudaMalloc((void**)&A_dispatch_d, size_A * sizeof(float)));
-  CUDA_CHECK(cudaMalloc((void**)&B_d, size_B * sizeof(float)));
-  CUDA_CHECK(cudaMalloc((void**)&B_d_linear, size_B * sizeof(float)));
-  CUDA_CHECK(cudaMalloc((void**)&B_d_array, sizeof(float*) * 64));
-  CUDA_CHECK(cudaMalloc((void**)&C_d, size_C * sizeof(float)));
-  CUDA_CHECK(cudaMalloc((void**)&C_d_grand, size_C * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&A_d, size_A * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&A_dispatch_d, size_A * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&B_d, size_B * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&B_d_linear, size_B * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&B_d_array, sizeof(float*) * 64));
+  brt::CUDA_CHECK(cudaMalloc((void**)&C_d, size_C * sizeof(float)));
+  brt::CUDA_CHECK(cudaMalloc((void**)&C_d_grand, size_C * sizeof(float)));
 
   init_with_val(A_h, size_A, 1.0f);
   init_with_rand(B_h, size_B);
   init_with_val(C_h, size_C, 0.0f);
 
-  CUDA_CHECK(
+  brt::CUDA_CHECK(
       cudaMemcpy(A_d, A_h, size_A * sizeof(float), cudaMemcpyHostToDevice));
-  CUDA_CHECK(
+  brt::CUDA_CHECK(
       cudaMemcpy(B_d, B_h, size_B * sizeof(float), cudaMemcpyHostToDevice));
 
   int* expert_indexes;
-  CUDA_CHECK(cudaMallocHost((void**)&expert_indexes, sizeof(int) * 64));
+  brt::CUDA_CHECK(cudaMallocHost((void**)&expert_indexes, sizeof(int) * 64));
   generate_expert_index(expert_indexes, 64, 64);
 
   for (auto i = 0; i < 64; ++i) {
-    CUDA_CHECK(cudaMemcpy(
+    brt::CUDA_CHECK(cudaMemcpy(
         B_d_linear + i * 1024 * 512, B_d + expert_indexes[i] * 1024 * 512,
         1024 * 512 * sizeof(float), cudaMemcpyDeviceToDevice));
   }
-  CUDA_CHECK(cudaDeviceSynchronize());
+  brt::CUDA_CHECK(cudaDeviceSynchronize());
 
   pointer_array_assign<<<2, 32, 0, stream>>>(B_d_array, B_d, expert_indexes);
-  CUDA_CHECK(cudaDeviceSynchronize());
+  brt::CUDA_CHECK(cudaDeviceSynchronize());
 
   dim3 grids(512, 64);
   dim3 blocks(1024, 1);
 
   array_value_comp<<<grids, blocks, 0, stream>>>(B_d_array, B_d_linear);
-  CUDA_CHECK(cudaDeviceSynchronize());
+  brt::CUDA_CHECK(cudaDeviceSynchronize());
 
   dim3 gather_grid(16, 16);
   dim3 gather_block(32, 4);
   gather_kernel_kernel_16_16_32_4<<<gather_grid, gather_block, 0, stream>>>(
       A_indices_d, A_dispatch_d, A_d);
-  CUDA_CHECK(cudaDeviceSynchronize());
+  brt::CUDA_CHECK(cudaDeviceSynchronize());
   dim3 threads_per_block(4 * 4);
   dim3 blocks_per_grid(512 * 64 / threads_per_block.x);
   float alpha = 1.0f;
   float beta = 0.0f;
   // warm up
   for (auto i = 0; i < 1024; ++i) {
-    CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
+    brt::CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
                              1024, &alpha, A_d, 1024, B_d_linear, 512, &beta,
                              C_d, 512));
     default_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
@@ -393,71 +393,71 @@ int main(int argc, char const* argv[]) {
     expert_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
         A_d, B_d_array, C_d);
   }
-  CUDA_CHECK(cudaDeviceSynchronize());
+  brt::CUDA_CHECK(cudaDeviceSynchronize());
 
   // start timing
   int test_num = 1000;
-  CUDA_CHECK(cudaEventRecord(start, stream));
+  brt::CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
-    CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
+    brt::CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
                              1024, &alpha, A_dispatch_d, 1024, B_d_linear, 512,
                              &beta, C_d, 512));
   }
-  CUDA_CHECK(cudaEventRecord(stop, stream));
-  CUDA_CHECK(cudaEventSynchronize(stop));
-  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  brt::CUDA_CHECK(cudaEventRecord(stop, stream));
+  brt::CUDA_CHECK(cudaEventSynchronize(stop));
+  brt::CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
   printf("default cublas matmul without gather %f ms\n",
          elapsed_time / test_num);
 
-  CUDA_CHECK(cudaEventRecord(start, stream));
+  brt::CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
     gather_kernel_kernel_16_16_32_4<<<gather_grid, gather_block, 0, stream>>>(
         A_indices_d, A_dispatch_d, A_d);
-    CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
+    brt::CUBLAS_CHECK(cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 64, 512,
                              1024, &alpha, A_dispatch_d, 1024, B_d_linear, 512,
                              &beta, C_d, 512));
   }
-  CUDA_CHECK(cudaEventRecord(stop, stream));
-  CUDA_CHECK(cudaEventSynchronize(stop));
-  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  brt::CUDA_CHECK(cudaEventRecord(stop, stream));
+  brt::CUDA_CHECK(cudaEventSynchronize(stop));
+  brt::CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
   printf("default cublas matmul with gather %f ms\n", elapsed_time / test_num);
 
-  CUDA_CHECK(cudaEventRecord(start, stream));
+  brt::CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
     default_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
         A_d, B_d_linear, C_d_grand);
   }
-  CUDA_CHECK(cudaEventRecord(stop, stream));
-  CUDA_CHECK(cudaEventSynchronize(stop));
-  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  brt::CUDA_CHECK(cudaEventRecord(stop, stream));
+  brt::CUDA_CHECK(cudaEventSynchronize(stop));
+  brt::CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
   printf("default batch matmul %f ms\n", elapsed_time / test_num);
 
-  CUDA_CHECK(cudaEventRecord(start, stream));
+  brt::CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
     expert_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
         A_d, B_d_array, C_d);
   }
-  CUDA_CHECK(cudaEventRecord(stop, stream));
-  CUDA_CHECK(cudaEventSynchronize(stop));
-  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  brt::CUDA_CHECK(cudaEventRecord(stop, stream));
+  brt::CUDA_CHECK(cudaEventSynchronize(stop));
+  brt::CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
   printf("expert batch matmul without pointer gather %f ms\n",
          elapsed_time / test_num);
 
-  CUDA_CHECK(cudaEventRecord(start, stream));
+  brt::CUDA_CHECK(cudaEventRecord(start, stream));
   for (auto i = 0; i < test_num; ++i) {
     pointer_array_assign<<<2, 32, 0, stream>>>(B_d_array, B_d, expert_indexes);
     expert_batch_matmul<<<blocks_per_grid, threads_per_block, 0, stream>>>(
         A_d, B_d_array, C_d);
   }
-  CUDA_CHECK(cudaEventRecord(stop, stream));
-  CUDA_CHECK(cudaEventSynchronize(stop));
-  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  brt::CUDA_CHECK(cudaEventRecord(stop, stream));
+  brt::CUDA_CHECK(cudaEventSynchronize(stop));
+  brt::CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
   printf("expert batch matmul with pointer gather %f ms\n",
          elapsed_time / test_num);
 
-  CUDA_CHECK(cudaMemcpy(C_h_grand, C_d_grand, size_C * sizeof(float),
+  brt::CUDA_CHECK(cudaMemcpy(C_h_grand, C_d_grand, size_C * sizeof(float),
                         cudaMemcpyDeviceToHost));
-  CUDA_CHECK(
+  brt::CUDA_CHECK(
       cudaMemcpy(C_h, C_d, size_C * sizeof(float), cudaMemcpyDeviceToHost));
   bool if_equal = check_results(C_h_grand, C_h, size_C);
   if (if_equal) {
