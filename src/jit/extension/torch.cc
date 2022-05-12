@@ -24,11 +24,6 @@
 namespace brt {
 namespace jit {
 
-CUDACompiler& CUDACompiler::get_compiler() {
-  static CUDACompiler instance;
-  return instance;
-}
-
 static void static_invoke(const std::vector<torch::Tensor>& ts, const std::vector<long>& args,
                           int fd) {
   std::vector<const void*> pargs(ts.size() + args.size()), ppargs(ts.size() + args.size());
@@ -65,30 +60,28 @@ static void hetero_invoke(const std::vector<torch::Tensor>& ts,
 
   int dev = ts[0].device().index();
   CHECK_EQ(0, cudaSetDevice(dev));
-  CUDACompiler::get_compiler().hetero_execute(
-      ppargs, std::vector<uint>(active_blocks.begin(), active_blocks.end()), fd, dev,
-      at::cuda::getDefaultCUDAStream().stream());
+  CUDACompiler::get_compiler().hetero_execute(ppargs, active_blocks, fd, dev,
+                                              at::cuda::getDefaultCUDAStream().stream());
 }
 
-static void homo_invoke(const std::vector<torch::Tensor>& inout_ts,
-                        const std::vector<torch::Tensor>& w_ts, const std::vector<long>& args,
-                        int fd) {
-  std::vector<const void*> pargs(inout_ts.size() + args.size()),
-      ppargs(inout_ts.size() + args.size());
-  for (int i = 0; i < (int)inout_ts.size(); ++i) {
-    CHECK_ON_CUDA(inout_ts[i]);
-    pargs[i] = inout_ts[i].data_ptr();
-    ppargs[i] = &pargs[i];
+static void homo_invoke(const std::vector<torch::Tensor>& shared_inputs,
+                        const std::vector<torch::Tensor>& standalone_inputs,
+                        const std::vector<long>& branch_capacities, int fd) {
+  auto& compiler = CUDACompiler::get_compiler();
+  std::vector<const void*> shared_inputs_ptr(shared_inputs.size()),
+      standalone_inputs_ptr(standalone_inputs.size());
+  for (int i = 0; i < (int)shared_inputs.size(); ++i) {
+    CHECK_ON_CUDA(shared_inputs[i]);
+    shared_inputs_ptr[i] = shared_inputs[i].data_ptr();
   }
-  for (int i = (int)inout_ts.size(); i < (int)pargs.size(); ++i) {
-    pargs[i] = (void*)args[i - inout_ts.size()];
-    ppargs[i] = &pargs[i];
+  for (int i = 0; i < (int)standalone_inputs.size(); ++i) {
+    CHECK_ON_CUDA(standalone_inputs[i]);
+    standalone_inputs_ptr[i] = standalone_inputs[i].data_ptr();
   }
-
-  int dev = inout_ts[0].device().index();
+  int dev = shared_inputs[0].device().index();
   CHECK_EQ(0, cudaSetDevice(dev));
-  CUDACompiler::get_compiler().homo_execute(ppargs, std::vector<uint>(args.begin(), args.end()), fd,
-                                            dev, at::cuda::getDefaultCUDAStream().stream());
+  compiler.homo_execute(shared_inputs_ptr, standalone_inputs_ptr, branch_capacities, fd, dev,
+                        at::cuda::getDefaultCUDAStream().stream());
 }
 
 static void elastic_homo_invoke(const std::vector<torch::Tensor>& ts, const std::vector<long>& args,
@@ -118,7 +111,8 @@ static std::pair<std::string, int> inject_source(const std::string& headless_cod
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("static_invoke", &brt::jit::static_invoke, "Generic Invoke for GPU function (CUDA)");
-  m.def("hetero_invoke", &brt::jit::hetero_invoke, "Invoke for horizontal fused GPU function (CUDA) of heterogenous kernels");
+  m.def("hetero_invoke", &brt::jit::hetero_invoke,
+        "Invoke for horizontal fused GPU function (CUDA) of heterogenous kernels");
   m.def("homo_invoke", &brt::jit::homo_invoke, "Generic Invoke for GPU (CUDA)");
   m.def("elastic_homo_invoke", &brt::jit::elastic_homo_invoke, "Generic Invoke for GPU (CUDA)");
   m.def("inject_source", &brt::jit::inject_source, "Inject Source for GPU (CUDA)");

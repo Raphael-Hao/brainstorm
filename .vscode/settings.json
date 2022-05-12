@@ -84,7 +84,10 @@
     "charconv": "cpp",
     "__nullptr": "cpp",
     "__atomic_generated": "cpp",
-    "locale": "cpp"
+    "locale": "cpp",
+    "*.inc": "cpp",
+    "*.def": "cpp",
+    "__split_buffer": "cpp"
   },
   "psi-header.config": {
     "forceToTop": true,

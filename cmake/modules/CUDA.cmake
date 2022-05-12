@@ -1,7 +1,7 @@
 
 set(USE_CUDA ON)
 # set(USE_CUDNN ON)
-# set(USE_CUBLAS ON)
+set(USE_CUBLAS ON)
 set(USE_NCCL ON)
 
 find_cuda(ON ON ON)

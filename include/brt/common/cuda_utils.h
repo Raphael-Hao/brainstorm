@@ -33,8 +33,6 @@ namespace brt {
 
 #if defined(USE_CUDA)
 
-#define CUDA_CHECK(x) __CUDA_CHECK(x, __FILE__, __LINE__)
-
 inline void __CUDA_CHECK(cudaError_t x, const char* file, int line) {
   do {
     if (x != cudaSuccess) {
@@ -44,7 +42,7 @@ inline void __CUDA_CHECK(cudaError_t x, const char* file, int line) {
   } while (0);
 }
 
-#define CU_CHECK(x) __CU_CHECK(x, __FILE__, __LINE__)
+#define CUDA_CHECK(x) __CUDA_CHECK(x, __FILE__, __LINE__)
 
 inline void __CU_CHECK(CUresult x, const char* file, int line) {
   do {
@@ -57,7 +55,7 @@ inline void __CU_CHECK(CUresult x, const char* file, int line) {
   } while (0);
 }
 
-#define NVRTC_CHECK(x) __NVRTC_CHECK(x, __FILE__, __LINE__)
+#define CU_CHECK(x) __CU_CHECK(x, __FILE__, __LINE__)
 
 inline void __NVRTC_CHECK(nvrtcResult x, const char* file, int line) {
   do {
@@ -67,6 +65,8 @@ inline void __NVRTC_CHECK(nvrtcResult x, const char* file, int line) {
     }
   } while (0);
 }
+
+#define NVRTC_CHECK(x) __NVRTC_CHECK(x, __FILE__, __LINE__)
 
 #endif
 

@@ -71,7 +71,7 @@ file(GLOB_RECURSE BRT_INCLUDE CMAKE_CONFIGURE_DEPENDS "src/*.h" "include/*.h")
 list(APPEND BRT_SRCS ${BRT_SOURCE} ${BRT_INCLUDE})
 
 
-add_compile_definitions("USE_CUDA")
+add_compile_definitions("USE_CUDA", "USE_CUBLAS")
 add_library(brt SHARED ${BRT_SRCS})
 target_include_directories(
     brt PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")

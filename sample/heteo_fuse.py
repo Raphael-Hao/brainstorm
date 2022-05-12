@@ -1,3 +1,6 @@
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+
 import time
 
 import torch
@@ -51,7 +54,7 @@ stream.synchronize()
 print("first time: {:.3f}".format(start_event.elapsed_time(end_event)))
 
 start_event.record(stream)
-for i in range(10):
+for i in range(100):
     fused_matmul(
         data_0,
         weight_0,

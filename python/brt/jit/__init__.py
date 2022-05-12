@@ -7,4 +7,5 @@ from .homo_fuse import ElaticHomoFuseFunction, HomoFuseFunctionV1, HomoFuseFunct
 from .horiz_fuse import HorizFuseFunction
 from .raw_func import RawFunction
 from .template import Templator
-from .tvm import TVMTuner
+
+# from .tvm import TVMTuner
