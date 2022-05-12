@@ -8,7 +8,7 @@ total_latency.tsv
 model_logs
 _nn.py
 .cache
-
+*.qdrep
 
 .vscode/*
 !.vscode/settings.json
