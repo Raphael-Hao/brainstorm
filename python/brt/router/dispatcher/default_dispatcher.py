@@ -19,7 +19,8 @@ class DefaultDispatcher(Dispatcher):
         """
         Dispatch the inputs into the the list of torch.Tensor with indices
         """
-        route_results = [torch.zeros((0, inputs[0]))] * self.route_num
+        print(inputs[0])
+        route_results = [torch.zeros((0, 0))] * self.route_num
         reverse_indices = [None] * self.route_num
         for i in range(self.route_num):
             indices = torch.nonzero(route_indices == i, as_tuple=True)[0]
