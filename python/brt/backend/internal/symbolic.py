@@ -6,4 +6,5 @@ from torch.onnx import register_custom_op_symbolic, symbolic_helper
 
 
 def router_op(g: torch._C.Graph,n: torch._C.Node, *args, **kwargs ):
-    
+    print(kwargs["name"])
+    return g.op("brt::Router", args[0])
