@@ -87,7 +87,8 @@
     "locale": "cpp",
     "*.inc": "cpp",
     "*.def": "cpp",
-    "__split_buffer": "cpp"
+    "__split_buffer": "cpp",
+    "*.ipp": "cpp"
   },
   "psi-header.config": {
     "forceToTop": true,

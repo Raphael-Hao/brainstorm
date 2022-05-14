@@ -11,6 +11,7 @@ include(cmake/config/brainstorm.cmake)
 brt_option(PTX_INFO "print ptx info for each cuda kernel" OFF)
 
 include(cmake/modules/CUDA.cmake)
+include(cmake/modules/Torch.cmake)
 
 # IF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT) SET(CMAKE_INSTALL_PREFIX CACHE
 # PATH <comment> FORCE) ENDIF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -57,26 +58,35 @@ set(CMAKE_CUDA_STANDARD 14)
 
 file(GLOB_RECURSE BRT_SOURCE CMAKE_CONFIGURE_DEPENDS "src/*.cc" "src/*.cu")
 # remove srcs of extension for other frameworks, they will be compiled by python
-set(EXCLUDE_DIR "jit/extension/")
-foreach(TMP_SRC ${BRT_SOURCE})
-    string(FIND ${TMP_SRC} ${EXCLUDE_DIR} EXCLUDE_DIR_FOUND)
-    if(NOT ${EXCLUDE_DIR_FOUND} EQUAL -1)
-        message(STATUS "removing ${TMP_SRC}")
-        list(REMOVE_ITEM BRT_SOURCE ${TMP_SRC})
-    endif()
-endforeach(TMP_SRC)
+brt_src_exclude(BRT_SOURCE "jit/extension/")
+brt_src_exclude(BRT_SOURCE "torchscript/")
+
+# set(EXCLUDE_DIR "jit/extension/")
+# foreach(TMP_SRC ${BRT_SOURCE})
+#     string(FIND ${TMP_SRC} ${EXCLUDE_DIR} EXCLUDE_DIR_FOUND)
+#     if(NOT ${EXCLUDE_DIR_FOUND} EQUAL -1)
+#         message(STATUS "removing ${TMP_SRC}")
+#         list(REMOVE_ITEM BRT_SOURCE ${TMP_SRC})
+#     endif()
+# endforeach(TMP_SRC)
 
 file(GLOB_RECURSE BRT_INCLUDE CMAKE_CONFIGURE_DEPENDS "src/*.h" "include/*.h")
 
 list(APPEND BRT_SRCS ${BRT_SOURCE} ${BRT_INCLUDE})
 
 
-add_compile_definitions("USE_CUDA", "USE_CUBLAS")
+add_compile_definitions("USE_CUDA" "USE_CUBLAS")
 add_library(brt SHARED ${BRT_SRCS})
 target_include_directories(
     brt PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_link_libraries(brt PUBLIC ${BRT_LINKER_LIBS})
 # set_target_properties(brt PROPERTIES LINKER_LANGUAGE CXX)
+
+file(GLOB_RECURSE BRT_TORCHSCRIPT_SOURCE CMAKE_CONFIGURE_DEPENDS "src/torchscript/*.cc" "src/torchscript/*.cu")
+add_library(brt_torchscript SHARED ${BRT_TORCHSCRIPT_SOURCE})
+target_compile_features(brt_torchscript PRIVATE cxx_std_14)
+target_link_libraries(brt_torchscript "${TORCH_LIBRARIES}")
+target_include_directories(brt_torchscript PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>" "${TORCH_INCLUDE_DIR}")
 
 add_subdirectory(benchmark)
 add_subdirectory(test)
