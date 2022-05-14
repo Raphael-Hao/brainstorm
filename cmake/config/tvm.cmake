@@ -81,6 +81,17 @@ set(USE_METAL OFF)
 # - /path/to/vulkan-sdk: use specific path to vulkan-sdk
 set(USE_VULKAN OFF)
 
+# Whether to use spirv-tools.and SPIRV-Headers from Khronos github or gitlab.
+#
+# Possible values:
+# - OFF: not to use
+# - /path/to/install: path to your khronis spirv-tools and SPIRV-Headers installation directory
+#
+set(USE_KHRONOS_SPIRV OFF)
+
+# whether enable SPIRV_KHR_DOT_PRODUCT
+set(USE_SPIRV_KHR_INTEGER_DOT_PRODUCT OFF)
+
 # Whether enable OpenGL runtime
 set(USE_OPENGL OFF)
 
@@ -97,7 +108,7 @@ set(USE_CPP_RPC ON)
 set(USE_IOS_RPC OFF)
 
 # Whether embed stackvm into the runtime
-set(USE_STACKVM_RUNTIME ON)
+set(USE_STACKVM_RUNTIME OFF)
 
 # Whether enable tiny embedded graph executor.
 set(USE_GRAPH_EXECUTOR ON)
@@ -106,7 +117,7 @@ set(USE_GRAPH_EXECUTOR ON)
 set(USE_GRAPH_EXECUTOR_CUDA_GRAPH OFF)
 
 # Whether enable pipeline executor.
-set(USE_PIPELINE_EXECUTOR ON)
+set(USE_PIPELINE_EXECUTOR OFF)
 
 # Whether to enable the profiler for the graph executor and vm
 set(USE_PROFILER ON)
@@ -282,21 +293,18 @@ set(USE_PT_TVMDSOOP OFF)
 # Whether to use STL's std::unordered_map or TVM's POD compatible Map
 set(USE_FALLBACK_STL_MAP OFF)
 
-# Whether to use hexagon device
+# Whether to enable Hexagon support
 set(USE_HEXAGON OFF)
 set(USE_HEXAGON_SDK /path/to/sdk)
 
-# Whether to build the hexagon launcher
-set(USE_HEXAGON_LAUNCHER OFF)
-
-# Whether to build the minimal support android rpc server for hexagon
-set(USE_HEXAGON_PROXY_RPC OFF)
+# Whether to build the minimal support android rpc server for Hexagon
+set(USE_HEXAGON_RPC OFF)
 
 # Hexagon architecture to target when compiling TVM itself (not the target for
 # compiling _by_ TVM). This applies to components like the TVM runtime, but is
 # also used to select correct include/library paths from the Hexagon SDK when
-# building offloading runtime for Android.
-# Valid values are v60, v62, v65, v66, v68.
+# building runtime for Android.
+# Valid values are v65, v66, v68, v69.
 set(USE_HEXAGON_ARCH "v66")
 
 # Whether to use ONNX codegen
@@ -364,3 +372,8 @@ set(USE_CUTLASS OFF)
 
 # Enable to show a summary of TVM options
 set(SUMMARIZE OFF)
+
+# Whether to use LibTorch as backend
+# To enable pass the path to the root libtorch (or PyTorch) directory
+# OFF or /path/to/torch/
+set(USE_LIBTORCH OFF)

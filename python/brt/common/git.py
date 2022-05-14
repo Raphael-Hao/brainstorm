@@ -17,12 +17,11 @@ def update_gitignore(
         return
     if gitignore_path.exists() is False:
         gitignore_path.touch(exist_ok=True)
-    print(items)
     ignored_items = gitignore_path.read_text().splitlines()
     items_with_suffix = [item + file_suffix for item in items]
-    print(items_with_suffix)
     ignoring_items = list(filter(lambda x: x not in ignored_items, items_with_suffix))
-    print(ignoring_items)
+    if len(ignoring_items) == 0:
+        return
     with gitignore_path.open("a") as f:
         f.write("\n".join(ignoring_items) + "\n")
 
