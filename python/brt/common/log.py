@@ -5,7 +5,7 @@ import logging
 import pathlib
 import sys
 
-from .file_system import BRT_LOG_FILENAME, BRT_PKG_PATH
+from .pkg_info import BRT_LOG_FILENAME, BRT_PKG_PATH
 
 _BRT_MODULES = [
     "user",

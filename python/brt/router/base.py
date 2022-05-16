@@ -5,8 +5,10 @@ from typing import List, Union
 
 import torch
 import torch.nn as nn
+from brt.common import find_lib_path
 from brt.primitive import router
 
+torch.ops.load_library(find_lib_path("libbrt_torchscript.so")[0])
 
 @router
 class BaseRouter(nn.Module):
@@ -24,9 +26,12 @@ class BaseRouter(nn.Module):
         self.dtype = torch.float32 if dtype is None else dtype
         self.active_counter = 0
 
-    def forward(self, *args, **kwargs):
+    def route(self, *args, **kwargs):
         raise NotImplementedError
 
+    def symbolic_route(self, *args, **kwargs):
+        raise NotImplementedError
+    
     def inspect_inputs(self, inputs: Union[torch.Tensor, List[torch.Tensor]]):
         if isinstance(inputs, torch.Tensor):
             inputs_shape = inputs.shape

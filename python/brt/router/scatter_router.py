@@ -29,7 +29,7 @@ class ScatterRouter(BaseRouter):
         """
         super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
 
-    def forward(
+    def route(
         self, inputs
     ) -> Tuple[List[torch.Tensor], List[torch.Tensor], torch.Tensor]:
         """should be implemented by all scatter routers
@@ -63,7 +63,7 @@ class RandomScatterRouter(ScatterRouter):
             DefaultDispatcher(self.route_num) if dispatcher is None else dispatcher
         )
 
-    def forward(
+    def route(
         self, inputs
     ) -> Tuple[List[torch.Tensor], List[torch.Tensor], torch.Tensor]:
         """routing logic of random router
@@ -87,6 +87,9 @@ class RandomScatterRouter(ScatterRouter):
             inputs=inputs, route_indices=route_indices
         )
         return route_results, reverse_indices, inputs_shape
+
+    def symbolic_route(self, inputs):
+        return torch.ops.brt.symbolic_scatter_route(inputs, 0, self.route_num)
 
 
 @router
@@ -131,7 +134,7 @@ class TopKScatterRouter(ScatterRouter):
         else:
             self.top_fn = top_fn
 
-    def forward(self, inputs):
+    def route(self, inputs):
         """routing logic of top-K router
 
         Returns:
@@ -205,7 +208,7 @@ class MultiplexScatterRouter(ScatterRouter):
         else:
             self.multiplex_fn = multiplex_fn
 
-    def forward(self, inputs):
+    def route(self, inputs):
         """routing logic of multiplex router
 
         Returns:
