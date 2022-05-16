@@ -5,7 +5,6 @@ import collections
 import functools
 import inspect
 import numbers
-import re
 import types
 from io import IOBase
 from typing import TypeVar, Union
@@ -64,7 +63,7 @@ def trace_netlet(
         elif _is_function(cls_or_func):
             # cls_or_func = _trace_netlet_func(cls_or_func, kw_only)
             raise NotImplementedError(
-                "Tracing function is not implemented yet for netlet."
+                "Tracing function is not implemented for netlet yet."
             )
         else:
             raise TypeError(
@@ -82,9 +81,7 @@ def trace_netlet(
     return wrap(cls_or_func)
 
 
-def _trace_netlet_cls(
-    base: T = None, kw_only: bool = True, call_super=True, inheritable=False
-):
+def _trace_netlet_cls(base: T, kw_only, call_super=True, inheritable=False):
     # the implementation to trace a class is to store a copy of init arguments
     # this won't support class that defines a customized new but should work for most cases
 

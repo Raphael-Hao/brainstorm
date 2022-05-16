@@ -17,7 +17,7 @@ class GatherRouter(BaseRouter):
     def __init__(self, route_num: int, gran_dim: int = None, dtype=None):
         super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
 
-    def forward(
+    def route(
         self,
         inputs: List[torch.Tensor],
         reverse_indices: List[torch.Tensor],
@@ -42,18 +42,24 @@ class RandomGatherRouter(GatherRouter):
             DefaultDispatcher(self.route_num) if dispatcher is None else dispatcher
         )
 
-    def forward(
+    def route(
         self,
         inputs: List[torch.Tensor],
         reverse_indices: List[torch.Tensor],
         reverse_shape: torch.Tensor,
     ) -> torch.Tensor:
-        route_results = self.dispatcher.combine(
-            reverse_indices,
-            reverse_shape,
-            inputs,
-        )
+        route_results = self.dispatcher.combine(reverse_indices, reverse_shape, inputs,)
         return route_results
+
+    def symbolic_route(
+        self,
+        inputs: List[torch.Tensor],
+        reverse_indices: List[torch.Tensor],
+        reverse_shape: torch.Tensor,
+    ):
+        return torch.ops.brt.symbolic_gather_route(
+            inputs, reverse_indices, reverse_shape, 0, self.route_num
+        )
 
 
 @router
@@ -62,7 +68,7 @@ class TopKGatherRouter(GatherRouter):
         super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
         self.k = k
 
-    def forward(
+    def route(
         self,
         inputs: List[torch.Tensor],
         reverse_indices: List[torch.Tensor],
@@ -90,13 +96,24 @@ class TopKGatherRouter(GatherRouter):
         else:
             route_results = torch.chunk(route_results, route_size)
             return route_results
+
+    def symbolic_route(
+        self,
+        inputs: List[torch.Tensor],
+        reverse_indices: List[torch.Tensor],
+        reverse_shape: torch.Tensor,
+    ):
+        return torch.ops.brt.symbolic_gather_route(
+            inputs, reverse_indices, reverse_shape, self.k, self.route_num
+        )
+
 
 @router
 class AggregateGatherRouter(GatherRouter):
     def __init__(self, route_num: int, gran_dim: int, dtype=None):
         super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
 
-    def forward(
+    def route(
         self,
         inputs: List[torch.Tensor],
         reverse_indices: List[torch.Tensor],
@@ -124,3 +141,13 @@ class AggregateGatherRouter(GatherRouter):
         else:
             route_results = torch.chunk(route_results, route_size)
             return route_results
+
+    def symbolic_route(
+        self,
+        inputs: List[torch.Tensor],
+        reverse_indices: List[torch.Tensor],
+        reverse_shape: torch.Tensor,
+    ):
+        return torch.ops.brt.symbolic_gather_route(
+            inputs, reverse_indices, reverse_shape, 3, self.route_num
+        )

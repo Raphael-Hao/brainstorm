@@ -6,6 +6,7 @@ from typing import TypeVar, Union
 
 # import brt.logger as logger
 import cloudpickle
+import torch
 
 from .base import (
     SerializableObject,
@@ -51,6 +52,18 @@ def unwrap_redundant_netlet(m):
             unwrap_netlet(child)
     for child in m.children():
         unwrap_redundant_netlet(child)
+    return m
+
+
+def optimize_switch(m, switch=True):
+    for child in m.children():
+        optimize_switch(child, switch=switch)
+    if is_router(m):
+        m._brt_optimize = switch
+        if m._brt_optimize:
+            m.forward = m.symbolic_route
+        else:
+            m.forward = m.route
     return m
 
 
@@ -138,6 +151,9 @@ def _trace_domain_cls(
                 symbol=base, args=args, kwargs=kwargs, call_super=call_super
             )
             unwrap_redundant_netlet(self)
+
+        def optimize(self, switch=True):
+            return optimize_switch(self, switch=switch)
 
         def __reduce__(self):
             # The issue that decorator and pickler doesn't play well together is well known.

@@ -2,5 +2,5 @@
 # Licensed under the MIT license.
 
 from . import log
-from .file_system import *
 from .git import update_gitignore
+from .pkg_info import *
