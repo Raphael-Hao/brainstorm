@@ -10,6 +10,7 @@ from brt.primitive import router
 
 torch.ops.load_library(find_lib_path("libbrt_torchscript.so")[0])
 
+
 @router
 class BaseRouter(nn.Module):
     def __init__(self, route_num: int, gran_dim: int = None, dtype=None):
@@ -31,15 +32,15 @@ class BaseRouter(nn.Module):
 
     def symbolic_route(self, *args, **kwargs):
         raise NotImplementedError
-    
+
     def inspect_inputs(self, inputs: Union[torch.Tensor, List[torch.Tensor]]):
         if isinstance(inputs, torch.Tensor):
-            inputs_shape = inputs.shape
+            inputs_shape = torch._shape_as_tensor(inputs)
             inputs_size = inputs.shape[0]
             tensor_input = True
         elif isinstance(inputs, list):
+            inputs_shape = torch.Tensor([inputs_size])
             inputs_size = len(inputs)
-            inputs_shape = inputs_size
             tensor_input = False
         else:
             raise ValueError(f"Inputs: {inputs}  must be a list of tensor or a tensor")

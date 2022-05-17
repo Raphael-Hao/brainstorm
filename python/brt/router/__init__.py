@@ -3,5 +3,5 @@
 
 
 from .base import BaseRouter
-from .gather_router import *
-from .scatter_router import *
+from .gather import *
+from .scatter import *

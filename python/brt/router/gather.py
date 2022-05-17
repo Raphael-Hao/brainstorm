@@ -7,9 +7,14 @@ import torch
 from brt.primitive import router
 
 from .base import BaseRouter
-from .dispatcher import DefaultDispatcher
+from .dispatcher import DefaultDispatcher, FusedDispatcher
 
-__all__ = ["GatherRouter", "RandomGatherRouter", "TopKGatherRouter"]
+__all__ = [
+    "GatherRouter",
+    "RandomGatherRouter",
+    "FusedRandomGatherRouter",
+    "TopKGatherRouter",
+]
 
 
 @router
@@ -60,6 +65,19 @@ class RandomGatherRouter(GatherRouter):
         return torch.ops.brt.symbolic_gather_route(
             inputs, reverse_indices, reverse_shape, 0, self.route_num
         )
+
+
+@router
+class FusedRandomGatherRouter(GatherRouter):
+    def __init__(self, route_num: int, gran_dim: int = None, dtype=None):
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
+        self.dispatcher = FusedDispatcher(self.route_num, None)
+
+    def route(
+        self, inputs: torch.Tensor, reverse_indices: torch.Tensor,
+    ) -> torch.Tensor:
+        route_results = self.dispatcher.combine(reverse_indices, inputs)
+        return route_results
 
 
 @router
