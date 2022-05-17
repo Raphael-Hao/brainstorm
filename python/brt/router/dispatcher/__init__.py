@@ -7,4 +7,5 @@
 
 from .base import Dispatcher
 from .default_dispatcher import DefaultDispatcher
+from .fused_dispatcher import FusedDispatcher
 from .moe_dispatcher import MoEDispatcher, TutelMoEDispatcher

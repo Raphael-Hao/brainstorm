@@ -11,9 +11,14 @@ from brt.primitive import router
 from tutel.impls.fast_dispatch import TutelMoeFastDispatcher, extract_critical
 
 from .base import BaseRouter
-from .dispatcher import DefaultDispatcher
+from .dispatcher import DefaultDispatcher, FusedDispatcher
 
-__all__ = ["ScatterRouter", "RandomScatterRouter", "TopKScatterRouter"]
+__all__ = [
+    "ScatterRouter",
+    "RandomScatterRouter",
+    "FusedRandomScatterRouter",
+    "TopKScatterRouter",
+]
 
 logger = log.get_logger(__file__)
 
@@ -90,6 +95,50 @@ class RandomScatterRouter(ScatterRouter):
 
     def symbolic_route(self, inputs):
         return torch.ops.brt.symbolic_scatter_route(inputs, 0, self.route_num)
+
+
+@router
+class FusedRandomScatterRouter(ScatterRouter):
+    def __init__(
+        self,
+        route_num: int,
+        supported_capacities: List[int],
+        gran_dim: int = None,
+        dtype=None,
+    ):
+        """random scatter router
+
+        Args:
+            route_num (int): routing number
+        """
+        super().__init__(route_num=route_num, gran_dim=gran_dim, dtype=dtype)
+        self.supported_capacities = supported_capacities
+        self.dispatcher = FusedDispatcher(self.route_num, supported_capacities)
+
+    def route(
+        self, inputs
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """routing logic of random router
+
+        Args:
+            inputs (_type_): inputs for routing
+
+        Returns:
+            Returns:
+            List[torch.Tensor]: routing results for each routing dst
+            List[torch.Tensor]: reverse indices for each routing dst
+            Union[int, torch.Size]]: indicate the reverse shape info
+        """
+
+        # calculate the scatter indices
+        inputs_size, inputs_shape, _ = self.inspect_inputs(inputs)
+        route_dsts = torch.randint(0, self.route_num, (inputs_size,))
+
+        # dispatch according to the indices
+        results, reverse_indices, capacities = self.dispatcher.dispatch(
+            inputs=inputs, route_dsts=route_dsts
+        )
+        return results, reverse_indices, capacities
 
 
 @router

@@ -19,7 +19,6 @@ class DefaultDispatcher(Dispatcher):
         """
         Dispatch the inputs into the the list of torch.Tensor with indices
         """
-        print(inputs[0])
         route_results = [torch.zeros((0, 0))] * self.route_num
         reverse_indices = [None] * self.route_num
         for i in range(self.route_num):
@@ -40,7 +39,6 @@ class DefaultDispatcher(Dispatcher):
         """
         Combine the outputs of the routers into the final outputs
         """
-        print(inputs)
         assert len(inputs) == self.route_num and len(reverse_indices) == self.route_num
         if isinstance(reverse_shape, int):
             route_size = reverse_shape
