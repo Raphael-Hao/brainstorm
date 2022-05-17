@@ -55,7 +55,12 @@ struct KernelConfig {
   int shared_arg_num;
   int standalone_arg_num;
   std::vector<uint> shared_arg_grans;
-  thrust::host_vector<thrust::device_vector<void*>> arg_ptr_array;
+
+  // runtime dispatching
+  dim3 arg_grid_size, arg_block_size;
+  int* shared_arg_offset;
+  thrust::host_vector<void**> standalone_arg_hptr_array;  // allocate 2
+  thrust::host_vector<void**> arg_dptr_array;
   void InitBranchArgStore();
 };
 

@@ -66,4 +66,6 @@ for i in range(100):
     )
 end_event.record(stream)
 stream.synchronize()
+print(outdata_0)
+print(outdata_1)
 print("forward time: {:.3f}".format(start_event.elapsed_time(end_event) / 100))
