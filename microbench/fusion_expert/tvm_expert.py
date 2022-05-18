@@ -17,6 +17,8 @@ import tvm.topi as topi
 from tvm.auto_scheduler.measure_record import load_best_record
 
 
+
+
 @auto_scheduler.register_workload
 def serial_expert(batch, E, M, K, N, out_dtype="float32"):
     data = te.placeholder((M, K), dtype=out_dtype, name="input")

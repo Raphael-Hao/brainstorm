@@ -5,6 +5,7 @@ from typing import Tuple
 
 import tvm
 
+__all__ = ["get_culaunch_config"]
 
 def parse_culaunch_config(
     tvm_ir: tvm.IRModule,

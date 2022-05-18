@@ -22,8 +22,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> FusedPadd
   torch::Tensor reverse_shape = at::_shape_as_tensor(input);
   torch::Tensor route_indices = torch::randint(0, route_num, input.size(0));
   torch::Tensor route_results = torch::gather(input, 0, route_indices);
-  torch::Tensor route_results = torch::empty_like(input, input.options());
-
   torch::Tensor route_capacities = torch::empty(route_num, torch::kInt64);
   return std::make_tuple(route_results, route_indices, route_capacities, reverse_shape);
 }
