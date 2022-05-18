@@ -174,4 +174,5 @@
   "python.testing.pytestEnabled": false,
   "python.testing.unittestEnabled": true,
   "git.detectSubmodules": false,
+  "python.formatting.blackPath": "/state/partition/whcui/tools/pyenv/versions/miniconda3-3.8-4.10.3/bin/black"
 }
