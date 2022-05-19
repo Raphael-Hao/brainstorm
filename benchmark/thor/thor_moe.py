@@ -7,11 +7,14 @@
 
 import torch
 import torch.nn as nn
-from transformers.activations import ACT2FN
+from brt.jit import CUDACompiler, HomoFuseFunctionV2
 from brt.router import (
-    RandomScatterRouter,
+    FusedRandomGatherRouter,
+    FusedRandomScatterRouter,
     RandomGatherRouter,
+    RandomScatterRouter,
 )
+from transformers.activations import ACT2FN
 
 
 class ThorInterOutput(nn.Module):
@@ -20,6 +23,7 @@ class ThorInterOutput(nn.Module):
     Args:
         nn (_type_): _description_
     """
+
     def __init__(self, config):
         super().__init__()
         self.dense1 = nn.Linear(config.hidden_size, config.intermediate_size)
@@ -57,13 +61,85 @@ class ThorExpert(nn.Module):
         return x
 
 
+class FusedThorExpert(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.hidden_size = config.hidden_size
+        self.intermediate_size = config.intermediate_size
+        dense1s = [
+            nn.Linear(config.hidden_size, config.intermediate_size)
+            for _ in range(config.expert_num)
+        ]
+        if isinstance(config.hidden_act, str):
+            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+        else:
+            self.intermediate_act_fn = config.hidden_act
+        dense2s = [
+            nn.Linear(config.intermediate_size, config.hidden_size)
+            for _ in range(config.expert_num)
+        ]
+        self.expert1_func = HomoFuseFunctionV2(
+            "matmul_512_1024",
+            config.expert_num,
+            capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+            shared_arg_indices=[0, 2],
+            shared_arg_grans=[2048, 4096],
+        )
+        self.expert2_func = HomoFuseFunctionV2(
+            "matmul_1024_512",
+            config.expert_num,
+            capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+            shared_arg_indices=[0, 2],
+            shared_arg_grans=[4096, 2048],
+        )
+        self.expert1_func.fuse()
+        self.expert2_func.fuse()
+        self.expert1_kernel = CUDACompiler.generate_kernel(
+            None, self.expert1_func.get_code()
+        )
+        self.expert2_kernel = CUDACompiler.generate_kernel(
+            None, self.expert2_func.get_code()
+        )
+        self.expert1_standalone_inputs = [linear.weight for linear in dense1s]
+        self.expert1_standalone_inputs.extend([linear.bias for linear in dense1s])
+        self.expert1_standalone_inputs = nn.ParameterList(
+            self.expert1_standalone_inputs
+        )
+        self.expert2_standalone_inputs = [linear.weight for linear in dense2s]
+        self.expert2_standalone_inputs.extend([linear.bias for linear in dense2s])
+        self.expert2_standalone_inputs = nn.ParameterList(
+            self.expert2_standalone_inputs
+        )
+
+    def forward(
+        self, inter_state: torch.Tensor, capacities: torch.Tensor
+    ) -> torch.Tensor:
+        expert1_out = torch.empty(
+            inter_state.shape[0], self.intermediate_size, device=inter_state.device
+        )
+        self.expert1_kernel(
+            shared_inputs=[inter_state, expert1_out],
+            standalone_inputs=self.expert1_standalone_inputs,
+            capacities=capacities.tolist(),
+        )
+        x = self.intermediate_act_fn(expert1_out)
+        expert2_out = torch.empty(
+            inter_state.shape[0], self.hidden_size, device=inter_state.device
+        )
+        self.expert2_kernel(
+            shared_inputs=[x, expert2_out],
+            standalone_inputs=self.expert2_standalone_inputs,
+            capacities=capacities.tolist(),
+        )
+        return expert2_out
+
+
 class ThorMoE(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
-        self.expert1 = ThorExpert(config)
-        self.expert2 = ThorExpert(config)
-        self.scatter_router = RandomScatterRouter()
-        self.gather_router = RandomGatherRouter()
+        self.experts = [ThorExpert(config) for _ in range(config.expert_num)]
+        self.scatter_router = RandomScatterRouter(route_num=config.expert_num)
+        self.gather_router = RandomGatherRouter(route_num=config.expert_num)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
@@ -71,16 +147,81 @@ class ThorMoE(nn.Module):
         # B x T x H -> T x H
         inter_states = hidden_states.view(-1, hidden_states.size(-1))
         inputs = torch.chunk(inter_states, inter_states.size(0), dim=0)
-        x, y, reverse_indices = self.scatter_router(inputs)
-        x = self.expert1(x)
-        y = self.expert2(y)
-        inter_states = self.gather_router(x, y, reverse_indices)
+        route_results, reverse_indices, reverse_shape = self.scatter_router(inputs)
+        expert_results = []
+        for i, expert in enumerate(self.experts):
+            expert_results.append(expert(route_results[i]))
+        inter_states = self.gather_router(
+            expert_results, reverse_indices, reverse_shape
+        )
         # T x H -> B x T x H
         inter_states = inter_states.view(
             hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
         )
         x = self.layer_norm(inter_states + hidden_states)
         return x
+
+
+class FusedThorMoE(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.scatter_router = FusedRandomScatterRouter(
+            route_num=config.expert_num,
+            supported_capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+        )
+        self.gather_router = FusedRandomGatherRouter(route_num=config.expert_num)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.fused_expert = FusedThorExpert(config)
+
+    def forward(self, hidden_states):
+        # B x T x H -> T x H
+        inter_states = hidden_states.view(-1, hidden_states.size(-1))
+        x, reverse_indices, capacities = self.scatter_router(inter_states)
+        x = self.fused_expert(x, capacities)
+        inter_states = self.gather_router(x, reverse_indices)
+        # T x H -> B x T x H
+        inter_states = inter_states.view(
+            hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
+        )
+        x = self.layer_norm(inter_states + hidden_states)
+        return x
+
+    # def forward(self, hidden_states):
+    # self.start_event = torch.cuda.Event(enable_timing=True)
+    # self.end_event = torch.cuda.Event(enable_timing=True)
+    # self.stream = torch.cuda.default_stream()
+    #     # B x T x H -> T x H
+    #     self.start_event.record(stream=self.stream)
+    #     inter_states = hidden_states.view(-1, hidden_states.size(-1))
+    #     x, reverse_indices, capacities = self.scatter_router(inter_states)
+    #     self.end_event.record(stream=self.stream)
+    #     self.stream.synchronize()
+    #     print("scatter router time: ", self.start_event.elapsed_time(self.end_event))
+    #     # print(x)
+    #     # print(reverse_indices)
+    #     # print(capacities.tolist())
+    #     self.start_event.record(stream=self.stream)
+    #     x = self.fused_expert(x, capacities)
+    #     self.end_event.record(stream=self.stream)
+    #     self.stream.synchronize()
+    #     print("fused expert time: ", self.start_event.elapsed_time(self.end_event))
+
+    #     self.start_event.record(stream=self.stream)
+    #     inter_states = self.gather_router(x, reverse_indices)
+    #     self.end_event.record(stream=self.stream)
+    #     self.stream.synchronize()
+    #     print("gather router time: ", self.start_event.elapsed_time(self.end_event))
+    #     # T x H -> B x T x H
+    #     self.start_event.record(stream=self.stream)
+    #     inter_states = inter_states.view(
+    #         hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
+    #     )
+    #     x = self.layer_norm(inter_states + hidden_states)
+    #     self.end_event.record(stream=self.stream)
+    #     self.stream.synchronize()
+    #     print("layer norm time: ", self.start_event.elapsed_time(self.end_event))
+    #     return x
 
 
 class MaskSerialThorMoE(nn.Module):

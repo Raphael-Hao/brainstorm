@@ -116,7 +116,7 @@ class FusedRandomScatterRouter(ScatterRouter):
         self.dispatcher = FusedDispatcher(self.route_num, supported_capacities)
 
     def route(
-        self, inputs
+        self, inputs: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """routing logic of random router
 
@@ -131,8 +131,8 @@ class FusedRandomScatterRouter(ScatterRouter):
         """
 
         # calculate the scatter indices
-        inputs_size, inputs_shape, _ = self.inspect_inputs(inputs)
-        route_dsts = torch.randint(0, self.route_num, (inputs_size,))
+        # inputs_size, inputs_shape, _ = self.inspect_inputs(inputs)
+        route_dsts = torch.randint(0, self.route_num, (inputs.size(0),), device=inputs.device)
 
         # dispatch according to the indices
         results, reverse_indices, capacities = self.dispatcher.dispatch(
