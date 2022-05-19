@@ -6,8 +6,6 @@ from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
 
 from .raw_func import RawFunction
 
-# from .tvm import TVMTuner
-
 
 class Templator:
     template_pool = dict()

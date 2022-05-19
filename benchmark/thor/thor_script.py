@@ -20,7 +20,8 @@ def symbolic_trace_model(model):
 
 #%%
 import torch.nn as nn
-from brainstorm.router import BranchRouter, Router
+from brt.router import BranchRouter, Router
+
 
 class DynamicRouting(nn.Module):
     def __init__(self):

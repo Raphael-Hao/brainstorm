@@ -39,19 +39,14 @@ class FusedDispatcher(Dispatcher):
         Dispatch the inputs into the the list of torch.Tensor with indices
         """
         # dsts[0, 1, 2, 1, 2, 3] -> route_capacities[1, 2, 2, 1]
-        logger.debug("input route_dsts:", route_dsts)
         route_capacities = torch.bincount(route_dsts)
-        logger.debug("route_capacities:", route_capacities)
         total_capacity = 0
         # route_capacities[1, 2, 2, 1] -> route_capacities[2, 2, 2, 2]
         for i in range(len(route_capacities)):
             capacity = self.capacity(route_capacities[i])
             route_capacities[i] = capacity
             total_capacity += capacity
-        logger.debug(
-            f"padded route capacities: {route_capacities} , total capacity: {total_capacity}",
-        )
-        # route_shape = torch.Size([total_capacity] + list(inputs.shape[1:]))
+        
         route_start = torch.zeros_like(route_capacities)
         start_idx = 0
         # route_start[0, 2, 4, 6]
@@ -64,11 +59,38 @@ class FusedDispatcher(Dispatcher):
             start_idx = route_start[route_dsts[i]].item()
             route_start[route_dsts[i]] += 1
             route_dsts[i] = start_idx
-        logger.debug("reverse indices:", route_dsts)
 
         repeat_size = inputs.numel() // inputs.size(0)
         route_indices = route_dsts.view(-1, 1).repeat(1, repeat_size).view_as(inputs)
-        route_results = torch.zeros(total_capacity, *inputs.shape[1:])
+        route_results = torch.zeros(total_capacity, *inputs.shape[1:], device=inputs.device)
+        route_results = torch.scatter(route_results, 0, route_indices, inputs)
+        return route_results, route_dsts, route_capacities
+    
+    def dispatch(self, inputs: torch.Tensor, route_dsts: torch.Tensor):
+        """
+        Dispatch the inputs into a torch.Tensor with indices
+        """
+        route_capacities = torch.bincount(route_dsts)
+        total_capacity = 0
+        for i in range(len(route_capacities)):
+            capacity = self.capacity(route_capacities[i])
+            route_capacities[i] = capacity
+            total_capacity += capacity
+        
+        route_start = torch.zeros_like(route_capacities)
+        start_idx = 0
+        for i in range(len(route_capacities)):
+            route_start[i] = start_idx
+            start_idx += route_capacities[i]
+        
+        for i in range(route_dsts.numel()):
+            start_idx = route_start[route_dsts[i]].item()
+            route_start[route_dsts[i]] += 1
+            route_dsts[i] = start_idx
+
+        repeat_size = inputs.numel() // inputs.size(0)
+        route_indices = route_dsts.view(-1, 1).repeat(1, repeat_size).view_as(inputs)
+        route_results = torch.zeros(total_capacity, *inputs.shape[1:], device=inputs.device)
         route_results = torch.scatter(route_results, 0, route_indices, inputs)
         return route_results, route_dsts, route_capacities
 

@@ -64,15 +64,40 @@ def tvm_tune(model, input_shape, K, N):
         with open(template_fpath, "w") as f:
             f.write(kernel_template)
 
+def tvm_export(model, input_shape, K, N):
+    input_data = torch.randn(input_shape)
+    script_model = torch.jit.trace(model, input_data)
+    mod, params = relay.frontend.from_pytorch(script_module=script_model, input_infos=[("input0", input_data.shape)])
+    target = tvm.target.Target("cuda")
+    log_kernel_name = f"matmul_{input_shape[0]}_{K}_{N}"
+    template_kernel_name = f"matmul_{K}_{N}_{input_shape[0]}"
+    log_file = log_kernel_name+".json"
+    log_fpath= BRT_KERNEL_TUNE_LOG_PATH / log_file
+    tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target)
+    for idx, task in enumerate(tasks):
+        print("========== Task %d  (workload key: %s) ==========" % (idx, task.workload_key))
+        print(task.compute_dag)
+    assert len(tasks) == 1
+    tvm_sch, tvm_args = tasks[0].apply_best(str(log_fpath))
+    tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
+    culaunch_config = get_culaunch_config(tvm_ir)
+    source_code = tasks[0].print_best(str(log_fpath), print_mode="cuda")
+    kernel_template = culaunch_config + source_code
+    template_fpath = BRT_KERNEL_TEMPLATE_PATH / (template_kernel_name+".cu")
+    with open(template_fpath, "w") as f:
+        f.write(kernel_template)
+
 def main():
-    input_bs = [512, 1024]
+    input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
     input_shapes = [[bs, 512] for bs in input_bs]
     for input_shape in input_shapes:
-        tvm_tune(Expert1(), input_shape, 512, 1024)
+        # tvm_tune(Expert1(), input_shape, 512, 1024)
+        tvm_export(Expert1(), input_shape, 512, 1024)
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
     input_shapes = [[bs, 1024] for bs in input_bs]
     for input_shape in input_shapes:
-        tvm_tune(Expert2(), input_shape, 1024, 512)
+        # tvm_tune(Expert2(), input_shape, 1024, 512)
+        tvm_export(Expert2(), input_shape, 1024, 512)
 
 if __name__ == "__main__":
     main()
