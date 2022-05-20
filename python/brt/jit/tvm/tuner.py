@@ -40,7 +40,10 @@ class TVMTuner:
             task_scheduler_cls = auto_scheduler.TaskScheduler
         self.task_scheduler_cls = task_scheduler_cls
 
-    def import_pt_netlet(self, script_module: torch.ScriptModule, input_infos):
+    def import_pt_netlet(
+        self, script_module: torch.ScriptModule, input_infos, capacity_id
+    ):
+        shape = "_".join(str(x) for x in input_infos[0][1])
         self.kernel_name = script_module.original_name
         self.tvm_module, self.tvm_params = relay.frontend.from_pytorch(
             script_module, input_infos

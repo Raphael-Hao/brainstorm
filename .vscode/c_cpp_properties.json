@@ -5,9 +5,9 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/include",
-                "/home/whcui/.pyenv/versions/miniconda3-3.8-4.11.0/include/python3.8",
-                "/home/whcui/.pyenv/versions/miniconda3-3.8-4.11.0/lib/python3.8/site-packages/torch/include",
-                "/home/whcui/.pyenv/versions/miniconda3-3.8-4.11.0/lib/python3.8/site-packages/torch/include/torch/csrc/api/include/"
+                "/state/partition/whcui/tools/pyenv/versions/miniconda3-3.8-4.10.3/include/python3.8",
+                "/state/partition/whcui/tools/pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/torch/include",
+                "/state/partition/whcui/tools/pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/torch/include/torch/csrc/api/include/"
             ],
             "defines": [
                 "USE_CUDA"
@@ -15,24 +15,6 @@
             "compilerPath": "/usr/bin/g++-8",
             "cStandard": "c11",
             "cppStandard": "c++14",
-            "intelliSenseMode": "linux-gcc-x64",
-            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
-        },
-        {
-            "name": "A100-Linux",
-            "includePath": [
-                "${workspaceFolder}/src",
-                "${workspaceFolder}/include",
-                "/state/partition/whcui/tools/pyenv/versions/miniconda3-4.7.12/include/python3.7m",
-                "/state/partition/whcui/tools/pyenv/versions/miniconda3-4.7.12/lib/python3.7/site-packages/torch/include",
-                "/state/partition/whcui/tools/pyenv/versions/miniconda3-4.7.12/lib/python3.7/site-packages/torch/include/torch/csrc/api/include/"
-            ],
-            "defines": [
-                "USE_GPU",
-                "USE_NCCL"
-            ],
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "gnu11",
             "intelliSenseMode": "linux-gcc-x64",
             "compileCommands": "${workspaceFolder}/build/compile_commands.json"
         }

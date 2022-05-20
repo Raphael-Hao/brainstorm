@@ -5,7 +5,7 @@ import logging
 import pathlib
 import sys
 
-from .pkg_info import BRT_LOG_FILENAME, BRT_PKG_PATH
+from .pkg_info import BRT_LOG_FNAME, BRT_PKG_PATH
 
 _BRT_MODULES = [
     "user",
@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 logging.basicConfig(
-    handlers=[logging.FileHandler(BRT_LOG_FILENAME), logging.StreamHandler(sys.stdout)]
+    handlers=[logging.FileHandler(BRT_LOG_FNAME), logging.StreamHandler(sys.stdout)]
 )
 
 

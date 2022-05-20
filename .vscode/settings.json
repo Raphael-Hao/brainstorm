@@ -167,7 +167,7 @@
   "python.testing.unittestArgs": [
     "-v",
     "-s",
-    "./test/unittest",
+    "./test/python",
     "-p",
     "*_test.py"
   ],
