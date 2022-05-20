@@ -173,55 +173,42 @@ class FusedThorMoE(nn.Module):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.fused_expert = FusedThorExpert(config)
+        self.start_event = torch.cuda.Event(enable_timing=True)
+        self.end_event = torch.cuda.Event(enable_timing=True)
+        self.stream = torch.cuda.default_stream()
 
     def forward(self, hidden_states):
         # B x T x H -> T x H
+        self.start_event.record(stream=self.stream)
         inter_states = hidden_states.view(-1, hidden_states.size(-1))
         x, reverse_indices, capacities = self.scatter_router(inter_states)
+        self.end_event.record(stream=self.stream)
+        self.stream.synchronize()
+        print("scatter router time: ", self.start_event.elapsed_time(self.end_event))
+        # print(x)
+        # print(reverse_indices)
+        # print(capacities.tolist())
+        self.start_event.record(stream=self.stream)
         x = self.fused_expert(x, capacities)
+        self.end_event.record(stream=self.stream)
+        self.stream.synchronize()
+        print("fused expert time: ", self.start_event.elapsed_time(self.end_event))
+
+        self.start_event.record(stream=self.stream)
         inter_states = self.gather_router(x, reverse_indices)
+        self.end_event.record(stream=self.stream)
+        self.stream.synchronize()
+        print("gather router time: ", self.start_event.elapsed_time(self.end_event))
         # T x H -> B x T x H
+        self.start_event.record(stream=self.stream)
         inter_states = inter_states.view(
             hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
         )
         x = self.layer_norm(inter_states + hidden_states)
+        self.end_event.record(stream=self.stream)
+        self.stream.synchronize()
+        print("layer norm time: ", self.start_event.elapsed_time(self.end_event))
         return x
-
-    # def forward(self, hidden_states):
-    # self.start_event = torch.cuda.Event(enable_timing=True)
-    # self.end_event = torch.cuda.Event(enable_timing=True)
-    # self.stream = torch.cuda.default_stream()
-    #     # B x T x H -> T x H
-    #     self.start_event.record(stream=self.stream)
-    #     inter_states = hidden_states.view(-1, hidden_states.size(-1))
-    #     x, reverse_indices, capacities = self.scatter_router(inter_states)
-    #     self.end_event.record(stream=self.stream)
-    #     self.stream.synchronize()
-    #     print("scatter router time: ", self.start_event.elapsed_time(self.end_event))
-    #     # print(x)
-    #     # print(reverse_indices)
-    #     # print(capacities.tolist())
-    #     self.start_event.record(stream=self.stream)
-    #     x = self.fused_expert(x, capacities)
-    #     self.end_event.record(stream=self.stream)
-    #     self.stream.synchronize()
-    #     print("fused expert time: ", self.start_event.elapsed_time(self.end_event))
-
-    #     self.start_event.record(stream=self.stream)
-    #     inter_states = self.gather_router(x, reverse_indices)
-    #     self.end_event.record(stream=self.stream)
-    #     self.stream.synchronize()
-    #     print("gather router time: ", self.start_event.elapsed_time(self.end_event))
-    #     # T x H -> B x T x H
-    #     self.start_event.record(stream=self.stream)
-    #     inter_states = inter_states.view(
-    #         hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
-    #     )
-    #     x = self.layer_norm(inter_states + hidden_states)
-    #     self.end_event.record(stream=self.stream)
-    #     self.stream.synchronize()
-    #     print("layer norm time: ", self.start_event.elapsed_time(self.end_event))
-    #     return x
 
 
 class MaskSerialThorMoE(nn.Module):
