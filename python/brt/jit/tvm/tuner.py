@@ -17,7 +17,7 @@ import tvm
 from tvm import auto_scheduler, relay
 from tvm.auto_scheduler.utils import deserialize_args
 
-from .utils import get_culaunch_config
+from .utils import get_culaunch_config, make_inputs
 
 logger = log.get_logger(__file__)
 
@@ -41,8 +41,12 @@ class TVMTuner:
         self.task_scheduler_cls = task_scheduler_cls
 
     def import_pt_netlet(
-        self, script_module: torch.ScriptModule, input_infos, capacity_id
+        self, module: torch.nn.Module, input_infos
     ):
+        training = module.training
+        module.eval()
+        inputs = make_inputs(input_infos)
+        script_module = torch.jit.trace(module, inputs)
         shape = "_".join(str(x) for x in input_infos[0][1])
         self.kernel_name = script_module.original_name
         self.tvm_module, self.tvm_params = relay.frontend.from_pytorch(
