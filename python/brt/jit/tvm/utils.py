@@ -1,11 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import re
-from typing import Tuple
+from typing import Dict, List, Tuple
+
+import torch
 
 import tvm
 
-__all__ = ["get_culaunch_config"]
+__all__ = ["get_culaunch_config", "make_inputs"]
 
 def parse_culaunch_config(
     tvm_ir: tvm.IRModule,
@@ -39,3 +41,9 @@ def get_culaunch_config(tvm_ir: tvm.IRModule) -> str:
     culaunch_config += f"// [thread_extent] threadIdx.ydim = {block_dim[1]}\n"
     culaunch_config += f"// [thread_extent] threadIdx.zdim = {block_dim[2]}\n"
     return culaunch_config
+
+def make_inputs(input_infos: Dict[str, List[int]], input_dtype=None) -> List[torch.Tensor]:
+    inputs = []
+    for input_name, input_shape in input_infos.items():
+        inputs.append(torch.randn(input_shape, dtype=input_dtype))
+    return inputs
