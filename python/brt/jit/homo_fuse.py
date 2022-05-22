@@ -108,12 +108,12 @@ class HomoFuseFunctionV1(HorizFuseFunction):
         for func in self.candidates:
             self.grid_size.append(func.grid_size)
             self.block_size.append(func.block_size)
-        self.blockidx_xdim = self.grid_size
-        self.blockidx_ydim = 1
-        self.blockidx_zdim = 1
-        self.threadidx_xdim = self.block_size
-        self.threadidx_ydim = 1
-        self.threadidx_zdim = 1
+        self.blockidx_x = self.grid_size
+        self.blockidx_y = 1
+        self.blockidx_z = 1
+        self.threadidx_x = self.block_size
+        self.threadidx_y = 1
+        self.threadidx_z = 1
 
     def alloc_array_for_capacity_dims(self):
         self.add_line_with_indent(
@@ -274,12 +274,12 @@ class HomoFuseFunctionV2(HorizFuseFunction):
         for func in self.candidates:
             self.grid_size.append(func.grid_size)
             self.block_size.append(func.block_size)
-        self.blockidx_xdim = self.grid_size
-        self.blockidx_ydim = 1
-        self.blockidx_zdim = 1
-        self.threadidx_xdim = self.block_size
-        self.threadidx_ydim = 1
-        self.threadidx_zdim = 1
+        self.blockidx_x = self.grid_size
+        self.blockidx_y = 1
+        self.blockidx_z = 1
+        self.threadidx_x = self.block_size
+        self.threadidx_y = 1
+        self.threadidx_z = 1
 
     def set_branch_num(self,):
         self.add_line_with_indent(

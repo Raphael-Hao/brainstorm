@@ -244,7 +244,7 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
     case KernelType::kGlobal:
     case KernelType::kHorizFuse: {
       kernel.blocks.x = capture_with_default(
-          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.xdim\s*=\s*(\d+)\s*)"), 1);
+          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*(\d+)\s*)"), 1);
       kernel.threads.x = capture_with_default(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.xdim\s*=\s*(\d+)\s*)"),
           1);
@@ -253,22 +253,22 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
     case KernelType::kHeteroFuse: {
       auto fused_kernel_grids_str = capture_with_default(
           kernel.code,
-          std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.xdim\s*=\s*\[([0-9,\s]+)\])"), "");
+          std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"), "");
       kernel.grid_sizes = to_uint_vector(fused_kernel_grids_str, ',');
       auto fused_kernel_blocks_str = capture_with_default(
           kernel.code,
-          std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.xdim\s*=\s*\[([0-9,\s]+)\])"), "");
+          std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*\[([0-9,\s]+)\])"), "");
       kernel.block_sizes = to_uint_vector(fused_kernel_blocks_str, ',');
       break;
     }
     case KernelType::kHomoFuseV2: {
       auto fused_kernel_grids_str = capture_with_default(
           kernel.code,
-          std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.xdim\s*=\s*\[([0-9,\s]+)\])"), "");
+          std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"), "");
       kernel.grid_sizes = to_uint_vector(fused_kernel_grids_str, ',');
       auto fused_kernel_blocks_str = capture_with_default(
           kernel.code,
-          std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.xdim\s*=\s*\[([0-9,\s]+)\])"), "");
+          std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*\[([0-9,\s]+)\])"), "");
       kernel.block_sizes = to_uint_vector(fused_kernel_blocks_str, ',');
       kernel.branch_num = capture_with_default(
           kernel.code, std::regex(R"(\/\/\s+\[homo_fuse_info\]\s+branch_num\s*=\s*(\d+)\s*)"), 1);
@@ -292,9 +292,9 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
     }
     case KernelType::kElasticHomoFuse: {
       kernel.blocks.x = capture_with_default(
-          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.xdim\s*=\s*(\d+)\s*)"), 1);
+          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*(\d+)\s*)"), 1);
       kernel.threads.x = capture_with_default(
-          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.xdim\s*=\s*(\d+)\s*)"),
+          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*(\d+)\s*)"),
           1);
       break;
     }
@@ -303,13 +303,13 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
       break;
   }
   kernel.blocks.y = capture_with_default(
-      kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.ydim\s+=\s+(\d+)\s*)"), 1);
+      kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.y\s+=\s+(\d+)\s*)"), 1);
   kernel.blocks.z = capture_with_default(
-      kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.zdim\s+=\s+(\d+)\s*)"), 1);
+      kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.z\s+=\s+(\d+)\s*)"), 1);
   kernel.threads.y = capture_with_default(
-      kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.ydim\s+=\s+(\d+)\s*)"), 1);
+      kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.y\s+=\s+(\d+)\s*)"), 1);
   kernel.threads.z = capture_with_default(
-      kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.zdim\s+=\s+(\d+)\s*)"), 1);
+      kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.z\s+=\s+(\d+)\s*)"), 1);
   return {kernel_type_str, fd};
 }
 

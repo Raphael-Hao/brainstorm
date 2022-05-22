@@ -85,12 +85,12 @@ class HorizFuseFunction(GlobalFunction):
         for func in self.candidates:
             self.grid_size += func.grid_size
             self.block_size = max(self.block_size, func.block_size)
-        self.blockidx_xdim = self.grid_size
-        self.blockidx_ydim = 1
-        self.blockidx_zdim = 1
-        self.threadidx_xdim = self.block_size
-        self.threadidx_ydim = 1
-        self.threadidx_zdim = 1
+        self.blockidx_x = self.grid_size
+        self.blockidx_y = 1
+        self.blockidx_z = 1
+        self.threadidx_x = self.block_size
+        self.threadidx_y = 1
+        self.threadidx_z = 1
 
     def get_code(self, sync_method="asm"):
         self.fuse()
