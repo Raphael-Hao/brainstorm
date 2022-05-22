@@ -9,8 +9,8 @@ from .utils import remove_empty_lines
 
 logger = log.get_logger(__file__)
 
+
 class RawFunction(GlobalFunction):
-    
     def __init__(self, raw_source) -> None:
         self.raw_source = raw_source
         self.extract_raw_source()
@@ -48,43 +48,43 @@ class RawFunction(GlobalFunction):
         self.body = self.body[self.body.find("{") + 1 : self.body.rfind("}")]
 
     def extract_culaunch_dims(self):
-        self.blockidx_xdim = int(
+        self.blockidx_x = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*blockIdx.xdim\s*=\s*(\d+)", self.raw_source
+                r"\/\/\s*\[thread_extent\]\s*blockIdx.x\s*=\s*(\d+)", self.raw_source
             ).group(1)
         )
-        self.blockidx_ydim = int(
+        self.blockidx_y = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*blockIdx.ydim\s*=\s*(\d+)", self.raw_source
+                r"\/\/\s*\[thread_extent\]\s*blockIdx.y\s*=\s*(\d+)", self.raw_source
             ).group(1)
         )
-        self.blockidx_zdim = int(
+        self.blockidx_z = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*blockIdx.zdim\s*=\s*(\d+)", self.raw_source
+                r"\/\/\s*\[thread_extent\]\s*blockIdx.z\s*=\s*(\d+)", self.raw_source
             ).group(1)
         )
-        self.threadidx_xdim = int(
+        self.threadidx_x = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*threadIdx.xdim\s*=\s*(\d+)",
+                r"\/\/\s*\[thread_extent\]\s*threadIdx.x\s*=\s*(\d+)",
                 self.raw_source,
             ).group(1)
         )
-        self.threadidx_ydim = int(
+        self.threadidx_y = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*threadIdx.ydim\s*=\s*(\d+)",
+                r"\/\/\s*\[thread_extent\]\s*threadIdx.y\s*=\s*(\d+)",
                 self.raw_source,
             ).group(1)
         )
-        self.threadidx_zdim = int(
+        self.threadidx_z = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*threadIdx.zdim\s*=\s*(\d+)",
+                r"\/\/\s*\[thread_extent\]\s*threadIdx.z\s*=\s*(\d+)",
                 self.raw_source,
             ).group(1)
         )
-        self.blockidx_xydim = self.blockidx_xdim * self.blockidx_ydim
-        self.threadidx_xydim = self.threadidx_xdim * self.threadidx_ydim
-        self.grid_size = self.blockidx_xydim * self.blockidx_zdim
-        self.block_size = self.threadidx_xydim * self.threadidx_zdim
+        self.blockidx_xydim = self.blockidx_x * self.blockidx_y
+        self.threadidx_xydim = self.threadidx_x * self.threadidx_y
+        self.grid_size = self.blockidx_xydim * self.blockidx_z
+        self.block_size = self.threadidx_xydim * self.threadidx_z
 
     def extract_func_args(self):
         # find all function arguments

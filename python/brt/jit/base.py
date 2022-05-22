@@ -140,22 +140,22 @@ __device__ __forceinline__ void CppCgWarpSync() {
             # self.clean_code += f"  // [thread_extent] gridSize = {self.grid_size}\n"
             # self.clean_code += f"  // [thread_extent] blockSize = {self.block_size}\n"
             self.add_line_with_indent(
-                f"// [thread_extent] blockIdx.xdim = {self.blockidx_xdim}", end=True
+                f"// [thread_extent] blockIdx.x = {self.blockidx_x}", end=True
             )
             self.add_line_with_indent(
-                f"// [thread_extent] blockIdx.ydim = {self.blockidx_ydim}", end=True
+                f"// [thread_extent] blockIdx.y = {self.blockidx_y}", end=True
             )
             self.add_line_with_indent(
-                f"// [thread_extent] blockIdx.zdim = {self.blockidx_zdim}", end=True
+                f"// [thread_extent] blockIdx.z = {self.blockidx_z}", end=True
             )
             self.add_line_with_indent(
-                f"// [thread_extent] threadIdx.xdim = {self.threadidx_xdim}", end=True
+                f"// [thread_extent] threadIdx.x = {self.threadidx_x}", end=True
             )
             self.add_line_with_indent(
-                f"// [thread_extent] threadIdx.ydim = {self.threadidx_ydim}", end=True
+                f"// [thread_extent] threadIdx.y = {self.threadidx_y}", end=True
             )
             self.add_line_with_indent(
-                f"// [thread_extent] threadIdx.zdim = {self.threadidx_zdim}", end=True
+                f"// [thread_extent] threadIdx.z = {self.threadidx_z}", end=True
             )
         else:
             logger.error("Culaunch dims not supported in device mode")
@@ -185,21 +185,21 @@ __device__ __forceinline__ void CppCgWarpSync() {
             return "0xffffffff"
 
     def shadow_global_dims(self):
-        self.clean_code += f"  const dim3 gridDim({self.blockidx_xdim}, {self.blockidx_ydim}, {self.blockidx_zdim});\n"
-        self.clean_code += f"  const dim3 blockDim({self.threadidx_xdim}, {self.threadidx_ydim}, {self.threadidx_zdim});\n"
+        self.clean_code += f"  const dim3 gridDim({self.blockidx_x}, {self.blockidx_y}, {self.blockidx_z});\n"
+        self.clean_code += f"  const dim3 blockDim({self.threadidx_x}, {self.threadidx_y}, {self.threadidx_z});\n"
         self.clean_code += "\n"
-        if self.threadidx_ydim != 1 and self.threadidx_zdim == 1:
-            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_xdim}, thread_idx / {self.threadidx_xdim});\n"
-        elif self.threadidx_ydim == 1 and self.threadidx_zdim != 1:
-            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_xdim}, 1, thread_idx / {self.threadidx_xdim});\n"
-        elif self.threadidx_ydim != 1 and self.threadidx_zdim != 1:
-            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_xdim}, thread_idx / {self.threadidx_xdim} % {self.threadidx_ydim}, thread_idx / {self.threadidx_xydim});\n"
-        if self.blockidx_ydim == 1 and self.blockidx_zdim == 1:
+        if self.threadidx_y != 1 and self.threadidx_z == 1:
+            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_x}, thread_idx / {self.threadidx_x});\n"
+        elif self.threadidx_y == 1 and self.threadidx_z != 1:
+            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_x}, 1, thread_idx / {self.threadidx_x});\n"
+        elif self.threadidx_y != 1 and self.threadidx_z != 1:
+            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_x}, thread_idx / {self.threadidx_x} % {self.threadidx_y}, thread_idx / {self.threadidx_xydim});\n"
+        if self.blockidx_y == 1 and self.blockidx_z == 1:
             self.clean_code += f"  const dim3 blockIdx(block_idx);\n"
-        elif self.blockidx_zdim == 1:
-            self.clean_code += f"  const dim3 blockIdx(block_idx % {self.blockidx_xdim}, block_idx % {self.blockidx_xdim});\n"
+        elif self.blockidx_z == 1:
+            self.clean_code += f"  const dim3 blockIdx(block_idx % {self.blockidx_x}, block_idx % {self.blockidx_x});\n"
         else:
-            self.clean_code += f"  const dim3 blockIdx(block_idx % {self.blockidx_xdim}, block_idx / {self.blockidx_xdim} % {self.blockidx_ydim}, block_idx / {self.blockidx_xydim});\n"
+            self.clean_code += f"  const dim3 blockIdx(block_idx % {self.blockidx_x}, block_idx / {self.blockidx_x} % {self.blockidx_y}, block_idx / {self.blockidx_xydim});\n"
 
     def add_body_without_syncthreads(self, device_id: int, sync_method="asm"):
         if sync_method == "asm":
