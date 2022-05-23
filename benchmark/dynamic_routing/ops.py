@@ -104,7 +104,16 @@ class Conv2dNormAct(nn.Module):
         norm=None,
         activation=None,
     ) -> None:
-
+        print(f"Conv2dNormAct: {in_channels} -> {out_channels}")
+        print(f"kernel_size: {kernel_size}")
+        print(f"stride: {stride}")
+        print(f"padding: {padding}")
+        print(f"dilation: {dilation}")
+        print(f"groups: {groups}")
+        print(f"bias: {bias}")
+        print(f"padding_mode: {padding_mode}")
+        print(f"norm: {norm}")
+        print(f"activation: {activation}")
         super().__init__()
         self.conv2d = nn.Conv2d(
             in_channels,

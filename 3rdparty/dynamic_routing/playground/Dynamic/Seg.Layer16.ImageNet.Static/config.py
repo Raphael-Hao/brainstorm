@@ -1,11 +1,10 @@
 import os.path as osp
 
-import dl_lib
 from dl_lib.configs.segm_config import SemanticSegmentationConfig
 
 _config_dict = dict(
     MODEL=dict(
-        WEIGHTS="/home/whcui/checkpoints/dynamic_A_miou73_9.pth",
+        WEIGHTS="",
         CAL_FLOPS=False,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],
@@ -18,21 +17,22 @@ _config_dict = dict(
             DROP_PROB=0.0,
         ),
         GATE=dict(
-            GATE_ON=True,
+            GATE_ON=False,
             GATE_INIT_BIAS=1.5,
-            SMALL_GATE=True,
+            SMALL_GATE=False,
         ),
         SEM_SEG_HEAD=dict(
             IN_FEATURES=["layer_0", "layer_1", "layer_2", "layer_3"],
+            # IN_FEATURES=["layer_0", "layer_1", "layer_2"],
             NUM_CLASSES=19,
             IGNORE_VALUE=255,
             NORM="nnSyncBN",
             LOSS_WEIGHT=1.0,
         ),
         BUDGET=dict(
-            CONSTRAIN=True,
-            LOSS_WEIGHT=0.8,
-            LOSS_MU=0.1,
+            CONSTRAIN=False,
+            LOSS_WEIGHT=0.0,
+            LOSS_MU=0.0,
             FLOPS_ALL=26300.0,
             UNUPDATE_RATE=0.4,
             WARM_UP=True,
@@ -49,9 +49,10 @@ _config_dict = dict(
             MAX_ITER=190000,
         ),
         OPTIMIZER=dict(
-            BASE_LR=0.05,
+            BASE_LR=0.02,
+            GATE_LR_MULTI=2.5,
         ),
-        IMS_PER_BATCH=8,
+        IMS_PER_BATCH=1,
         CHECKPOINT_PERIOD=5000,
         GRAD_CLIP=5.0,
     ),
@@ -74,6 +75,22 @@ _config_dict = dict(
             SIZE=[768, 768],
         ),
     ),
+    TEST=dict(
+        AUG=dict(
+            ENABLED=False,
+            MIN_SIZES=(
+                512,
+                768,
+                1024,
+                1280,
+                1536,
+                2048,
+            ),
+            MAX_SIZE=4096,
+            FLIP=True,
+        ),
+        PRECISE_BN=dict(ENABLED=True),
+    ),
     OUTPUT_DIR=osp.join(
         "/home/whcui/model_logs/dl_lib_playground",
         osp.split(osp.realpath(__file__))[0].split("playground/")[-1],
@@ -81,7 +98,7 @@ _config_dict = dict(
     SEED=0,
     BRT=dict(
         PREDICT_MODE=True,
-        GATE_HISTORY_PATH="/home/whcui/model_logs/dl_lib_playground/Dynamic/Seg.Layer16.SmallGate.Dynamic_A/gate_history.csv",
+        GATE_HISTORY_PATH="/home/whcui/model_logs/dl_lib_playground/Dynamic/Seg.Layer16.ImageNet/gate_history.csv",
     ),
 )
 

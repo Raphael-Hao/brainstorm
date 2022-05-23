@@ -10,15 +10,15 @@ from brt.common import log
 
 from .base import GlobalFunction
 from .compiler import CUDACompiler
-from .horiz_fuse import HorizFuseFunction
-from .raw_func import RawFunction
+from .horiz_fuse import HorizFuseModuleFunction
+from .module_func import ModuleFunction
 from .template import Templator
 from .utils import check_if_pointer
 
 logger = log.get_logger(__file__)
 
 # TODO should be used for hetro with dynamic shape
-class HomoFuseFunctionV1(HorizFuseFunction):
+class HomoFuseModuleFunction(HorizFuseModuleFunction):
     def __init__(
         self,
         homo_func_name,
@@ -181,7 +181,7 @@ class HomoFuseFunctionV1(HorizFuseFunction):
         return self.clean_code
 
 
-class HomoFuseFunctionV2(HorizFuseFunction):
+class HomoFuseFunctionV2(HorizFuseModuleFunction):
     def __init__(
         self,
         homo_func_name,
@@ -359,6 +359,6 @@ class HomoFuseFunctionV2(HorizFuseFunction):
         return self.clean_code
 
 
-class ElaticHomoFuseFunction(HorizFuseFunction):
+class ElaticHomoFuseFunction(HorizFuseModuleFunction):
     def __init__(self, fuse_cadidate_templates: List[str]):
         pass

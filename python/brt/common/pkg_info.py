@@ -40,7 +40,7 @@ BRT_PYTORCH_CKPT_PATH = BRT_CKPT_PATH / "pytorch"
 # kernel tune
 BRT_KERNEL_TUNE_LOG_PATH = BRT_LOG_PATH / "kernel_tune"
 BRT_KERNEL_TEMPLATE_PATH = BRT_CACHE_PATH / "kernel_template"
-BRT_KERNEL_DB_FNAME = BRT_CACHE_PATH / "kernel_db.db"
+BRT_KERNEL_DB_FNAME = BRT_CACHE_PATH / "kernel_db.sqlite"
 
 
 BRT_CACHE_PATH.mkdir(parents=True, exist_ok=True)

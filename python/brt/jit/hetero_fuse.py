@@ -6,10 +6,10 @@ from typing import List, Union
 from brt.common import log
 
 from .base import GlobalFunction
-from .horiz_fuse import HorizFuseFunction
+from .horiz_fuse import HorizFuseModuleFunction
 
 
-class HeteroFuseFunction(HorizFuseFunction):
+class HeteroFuseModuleFunction(HorizFuseModuleFunction):
     def __init__(self, candidates: List[Union[GlobalFunction, str]]):
         super().__init__(candidates=candidates)
 

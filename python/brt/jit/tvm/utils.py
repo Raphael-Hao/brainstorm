@@ -1,13 +1,14 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import torch
 
 import tvm
 
-__all__ = ["get_culaunch_config", "make_inputs"]
+__all__ = ["parse_culaunch_config", "gen_culaunch_config_str", "make_inputs"]
+
 
 def parse_culaunch_config(
     tvm_ir: tvm.IRModule,
@@ -32,8 +33,7 @@ def parse_culaunch_config(
     )
 
 
-def get_culaunch_config(tvm_ir: tvm.IRModule) -> str:
-    grid_dim, block_dim = parse_culaunch_config(tvm_ir)
+def gen_culaunch_config_str(grid_dim, block_dim) -> str:
     culaunch_config = f"// [thread_extent] blockIdx.x = {grid_dim[0]}\n"
     culaunch_config += f"// [thread_extent] blockIdx.y = {grid_dim[1]}\n"
     culaunch_config += f"// [thread_extent] blockIdx.z = {grid_dim[2]}\n"
@@ -42,8 +42,39 @@ def get_culaunch_config(tvm_ir: tvm.IRModule) -> str:
     culaunch_config += f"// [thread_extent] threadIdx.z = {block_dim[2]}\n"
     return culaunch_config
 
-def make_inputs(input_infos: Dict[str, List[int]], input_dtype=None) -> List[torch.Tensor]:
+
+def make_inputs(
+    input_infos: Dict[str, List[int]], input_dtype=None
+) -> List[torch.Tensor]:
     inputs = []
     for input_name, input_shape in input_infos.items():
         inputs.append(torch.randn(input_shape, dtype=input_dtype))
     return inputs
+
+
+def make_tune_log_fname(
+    op_type,
+    input_infos: Dict[str, List[int]],
+    output_infos: Dict[str, List[int]],
+    parameters: Dict[str, List[Union[int, float]]],
+) -> str:
+    identifier = op_type
+    identifier += "_\{"
+    identifier += "_".join(
+        "\[" + "_".join(str(dim) for dim in shape) + "\]"
+        for shape in input_infos.values()
+    )
+    identifier += "\}_\{"
+    identifier += "_".join(
+        "\[" + ",".join(str(dim) for dim in shape) + "\]"
+        for shape in output_infos.values()
+    )
+    identifier += "\}_\{"
+    identifier += "_".join(
+        "\[" + "_".join(str(dim) for dim in parameter) + "\]"
+        if isinstance(parameter, list)
+        else str(parameter)
+        for parameter in parameters.values()
+    )
+    identifier += "\}"
+    return identifier

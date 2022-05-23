@@ -5,7 +5,7 @@ import time
 
 import torch
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
-from brt.jit import HeteroFuseFunction
+from brt.jit import HeteroFuseModuleFunction
 from brt.jit.compiler import CUDACompiler
 
 log.set_level("jit", "DEBUG")
@@ -16,7 +16,7 @@ kernel_template_filename = str(BRT_KERNEL_TEMPLATE_PATH / (kernel_name + ".cu"))
 
 kernel_template_source = open(kernel_template_filename, "r").read()
 
-fuser = HeteroFuseFunction([kernel_template_source, kernel_template_source])
+fuser = HeteroFuseModuleFunction([kernel_template_source, kernel_template_source])
 
 code = fuser.get_code()
 

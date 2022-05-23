@@ -107,28 +107,32 @@ __device__ __forceinline__ void CppCgWarpSync() {
 }
 """
     c_api_decorator = 'extern "C" '
-    global_decorator = "__global__ void "
-    device_decorator = "__device__ __forceinline__ void "
+    global_decorator = "__global__ "
+    device_decorator = "__device__ __forceinline__ "
 
     def __init__(self) -> None:
         pass
 
     def set_launch_bounds(self):
+        self.siganature = "void "
         if self.max_threads_per_block == 0:
             return
         if self.min_blocks_per_sm == 1:
-            self.clean_code += f"__launch_bounds__({self.max_threads_per_block}) "
+            self.siganature += f"__launch_bounds__({self.max_threads_per_block}) "
         else:
-            self.clean_code += f"__launch_bounds__({self.max_threads_per_block}, {self.min_blocks_per_sm}) "
+            self.siganature += f"__launch_bounds__({self.max_threads_per_block}, {self.min_blocks_per_sm}) "
+        self.clean_code += self.siganature
 
     def declare_name_args(self):
-        self.clean_code += f"{self.name}("
-        self.clean_code += f"{self.args}"
+        func_name_args = f"{self.name}("
+        func_name_args += f"{self.args}"
         if self.mode == "device":
-            self.clean_code += (
+            func_name_args += (
                 f", char* shared_buffer, const uint& block_idx, const uint& thread_idx"
             )
-        self.clean_code += ") "
+        func_name_args += ") "
+        self.clean_code += func_name_args
+        self.siganature = func_name_args
 
     def set_kernel_type(self, kernel_type: str = "global"):
         if self.mode == "device":
@@ -257,4 +261,3 @@ __device__ __forceinline__ void CppCgWarpSync() {
             raise ValueError("Invalid mode: %s" % mode)
         self.verify_code()
         return self.clean_code
-
