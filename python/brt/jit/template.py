@@ -4,7 +4,7 @@ import pathlib
 
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
 
-from .raw_func import RawFunction
+from .module_func import ModuleFunction
 
 
 class Templator:
@@ -23,5 +23,4 @@ class Templator:
                 raise NotImplementedError(
                     "not implemented yet by getting template from TVMTuner"
                 )
-        return RawFunction(template)
-
+        return ModuleFunction(template)

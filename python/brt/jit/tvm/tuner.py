@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 import json
 import pathlib
-from typing import Union
+from typing import Dict, List, Union
 
 import onnx
 import torch
@@ -12,12 +12,19 @@ from brt.common import (
     BRT_ONNX_CKPT_PATH,
     log,
 )
+from brt.jit.module_func import ModuleFunction
+from brt.jit.storage import kernel_storager
 
 import tvm
 from tvm import auto_scheduler, relay
 from tvm.auto_scheduler.utils import deserialize_args
 
-from .utils import get_culaunch_config, make_inputs
+from .utils import (
+    gen_culaunch_config_str,
+    make_inputs,
+    make_tune_log_fname,
+    parse_culaunch_config,
+)
 
 logger = log.get_logger(__file__)
 
@@ -26,12 +33,15 @@ class TVMTuner:
     def __init__(
         self,
         dtype="float32",
-        target="cuda",
+        platform="CUDA_GPU",
         task_scheduler_cls: auto_scheduler.TaskScheduler = None,
     ) -> None:
         self.dtype = dtype
-        self.raw_target = target
-        self.target = tvm.target.Target(self.raw_target)
+        self.platform = platform
+        if platform == "CUDA_GPU":
+            self.target = tvm.target.Target("cuda")
+        else:
+            raise NotImplementedError
         self.measure_ctx = auto_scheduler.LocalRPCMeasureContext(
             repeat=4, min_repeat_ms=300, timeout=10
         )
@@ -41,18 +51,30 @@ class TVMTuner:
         self.task_scheduler_cls = task_scheduler_cls
 
     def import_pt_netlet(
-        self, module: torch.nn.Module, input_infos
+        self,
+        module_name,
+        module: torch.nn.Module,
+        input_infos: Dict[str, List[Union[int, float]]],
+        output_infos: Dict[str, List[Union[int, float]]],
+        parameters: Dict[str, List[Union[int, float]]],
+        log_fname: str = None,  # for early tuned netlet
     ):
+        self.module_name = module_name
+        self.input_infos = input_infos
+        self.output_infos = output_infos
+        self.parameters = parameters
+        inputs = make_inputs(input_infos)
         training = module.training
         module.eval()
-        inputs = make_inputs(input_infos)
+        tvm_input_infos = [(name, shape) for name, shape in input_infos.items()]
         script_module = torch.jit.trace(module, inputs)
-        shape = "_".join(str(x) for x in input_infos[0][1])
-        self.kernel_name = script_module.original_name
         self.tvm_module, self.tvm_params = relay.frontend.from_pytorch(
-            script_module, input_infos
+            script_module, tvm_input_infos
         )
-        self._update_scheduler(self.kernel_name, self.tvm_module, self.tvm_params)
+        self._update_scheduler(
+            self.module_name, self.tvm_module, self.tvm_params, log_fname
+        )
+        module.train(training)
 
     def import_onnx_netlet(
         self, onnx_model: Union[onnx.ModelProto, str], model_name: str = None
@@ -65,18 +87,30 @@ class TVMTuner:
             if not onnx_model_path.exists():
                 logger.error(f"ONNX model {onnx_model_path} not found.")
             onnx_model_proto = onnx.load(onnx_model_path)
-            self.kernel_name = onnx_model
+            self.module_name = onnx_model
         elif isinstance(onnx_model, onnx.ModelProto):
             onnx_model_proto = onnx_model
-            self.kernel_name = model_name
+            self.module_name = model_name
         self.tvm_module, self.tvm_params = relay.frontend.from_onnx(
             onnx_model_proto, opset=11
         )
-        self._update_scheduler(self.kernel_name, self.tvm_module, self.tvm_params)
+        self._update_scheduler(self.module_name, self.tvm_module, self.tvm_params)
 
-    def _update_scheduler(self, kernel_name, tvm_module, tvm_params):
-        self.tune_log_filename = str(BRT_KERNEL_TUNE_LOG_PATH / f"{kernel_name}.log")
-        self.template_filename = str(BRT_KERNEL_TEMPLATE_PATH / f"{kernel_name}.cu")
+    def _update_scheduler(self, module_name, tvm_module, tvm_params, log_fname=None):
+        if log_fname is None:
+            log_fname = make_tune_log_fname(
+                module_name, self.input_infos, self.output_infos, self.parameters
+            )
+            print(log_fname)
+            self.tune_log_filename = str(BRT_KERNEL_TUNE_LOG_PATH / f"{log_fname}.json")
+        else:
+            self.tune_log_filename = str(BRT_KERNEL_TUNE_LOG_PATH / log_fname)
+        template_filename = module_name + "_".join(
+            ("_".join(str(i) for i in shape)) for shape in self.input_infos.values()
+        )
+        self.template_filename = str(
+            BRT_KERNEL_TEMPLATE_PATH / f"{template_filename}.cu"
+        )
         tvm_tasks, tvm_task_weights = auto_scheduler.extract_tasks(
             tvm_module["main"], tvm_params, self.target
         )
@@ -101,19 +135,39 @@ class TVMTuner:
             raise RuntimeError("No netlet imported.")
         task_scheduler.tune(self.option)
 
-    def export_netlet_template(self):
+    def get_best_template(self):
         workload = json.loads(self.tvm_task.workload_key)
         kernel_args = deserialize_args(workload[1:])
         logger.debug(f"kernel args: {kernel_args}")
         try:
             tvm_sch, tvm_args = self.tvm_task.apply_best(self.tune_log_filename)
             tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-            culaunch_config = get_culaunch_config(tvm_ir)
+            grid_dim, block_dim = parse_culaunch_config(tvm_ir)
             source_code = self.tvm_task.print_best(
                 self.tune_log_filename, print_mode="cuda"
             )
-            kernel_template = culaunch_config + source_code
-            with open(self.template_filename, "w") as f:
-                f.write(kernel_template)
+            return grid_dim, block_dim, source_code
         except Exception as e:
-            logger.error(f"Failed to export netlet template: {e}")
+            logger.error(f"Failed to get best netlet {e}")
+
+    def export_netlet_template(self):
+        grid_dim, block_dim, source_code = self.get_best_template()
+        culaunch_config = gen_culaunch_config_str(grid_dim, block_dim)
+        kernel_template = culaunch_config + source_code
+        with open(self.template_filename, "w") as f:
+            f.write(kernel_template)
+
+    def inject_netlet_to_storage(self):
+        grid_dim, block_dim, source_code = self.get_best_template()
+        culaunch_config = gen_culaunch_config_str(grid_dim, block_dim)
+        kernel_template = culaunch_config + source_code
+        module_function = ModuleFunction(
+            self.module_name,
+            kernel_template,
+            platform=self.platform,
+            input_infos=self.input_infos,
+            output_infos=self.output_infos,
+            parameters=self.parameters,
+        )
+        module_in_json = module_function.dump_json()
+        kernel_storager.add_kernel(module_in_json, overwrite=True)

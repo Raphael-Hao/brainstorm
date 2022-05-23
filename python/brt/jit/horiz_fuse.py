@@ -6,11 +6,11 @@ from typing import List, Union
 from brt.common import log
 
 from .base import GlobalFunction
-from .raw_func import RawFunction
+from .module_func import ModuleFunction
 
 logger = log.get_logger(__file__)
 
-class HorizFuseFunction(GlobalFunction):
+class HorizFuseModuleFunction(GlobalFunction):
     def __init__(self, candidates: List[Union[GlobalFunction, str]]):
         self.candidates: List[GlobalFunction] = []
         if isinstance(candidates[0], GlobalFunction):
@@ -19,7 +19,7 @@ class HorizFuseFunction(GlobalFunction):
                 self.candidates.append(func)
         else:
             for i, func_template in enumerate(candidates):
-                raw_func = RawFunction(func_template)
+                raw_func = ModuleFunction(func_template)
                 raw_func.name += f"_block_{i}"
                 self.candidates.append(raw_func)
 

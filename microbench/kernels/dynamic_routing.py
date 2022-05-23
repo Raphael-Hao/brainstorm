@@ -5,97 +5,138 @@
 #%%
 import argparse
 import itertools
+import json
+import logging
 import os
 
 import numpy as np
 import torch
 import torch.nn as nn
-import tvm
-import tvm.auto_scheduler as auto_scheduler
-import tvm.relay as relay
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
-from brt.jit.tvm.utils import get_culaunch_config
-from tvm.auto_scheduler.measure_record import load_best_record
+from brt.common import (
+    BRT_KERNEL_TEMPLATE_PATH,
+    BRT_KERNEL_TUNE_LOG_PATH,
+    BRT_LOG_PATH,
+    log,
+)
+from brt.jit.tvm import TVMTuner
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("brt.microbench.kernels.dynamic_routing")
 
-class Expert1(nn.Module):
-    def __init__(self) -> None:
+class Conv2dBNAct(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        padding,
+        dilation,
+        groups,
+        bias,
+        padding_mode,
+        norm,
+        activation,
+    ) -> None:
         super().__init__()
-        self.linear = nn.Linear(512, 1024)
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+            padding_mode=padding_mode,
+        )
+        if norm is None:
+            self.norm = None
+        else:
+            self.norm = norm
+        if activation is None:
+            self.activation = None
+        else:
+            self.activation = activation
+
     def forward(self, inputs):
-        return self.linear(inputs)
+        x = self.conv(inputs)
+        if self.norm is not None:
+            x = self.norm(x)
+        if self.activation is not None:
+            x = self.activation(x)
+        return x
 
-class Expert2(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.linear = nn.Linear(1024, 512)
-    def forward(self, inputs):
-        return self.linear(inputs)
-
-def tvm_tune(model, input_shape, K, N):
-    input_data = torch.randn(input_shape)
-    script_model = torch.jit.trace(model, input_data)
-    mod, params = relay.frontend.from_pytorch(script_module=script_model, input_infos=[("input0", input_data.shape)])
-    target = tvm.target.Target("cuda")
-    kernel_name = f"matmul_{input_shape[0]}_{K}_{N}"
-    log_file = kernel_name+".json"
-    log_fpath= BRT_KERNEL_TUNE_LOG_PATH / log_file
-    tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target)
-    for idx, task in enumerate(tasks):
-        print("========== Task %d  (workload key: %s) ==========" % (idx, task.workload_key))
-        print(task.compute_dag)
-    measure_ctx = auto_scheduler.LocalRPCMeasureContext(repeat=2, min_repeat_ms=300, timeout=10)
-    tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
-    tune_option = auto_scheduler.TuningOptions(
-        num_measure_trials=1000,  # change this to 20000 to achieve the best performance
-        runner=measure_ctx.runner,
-        measure_callbacks=[auto_scheduler.RecordToFile(str(log_fpath))],
-    )
-    tuner.tune(tune_option)
-    if len(tasks) == 1:
-        tvm_sch, tvm_args = tasks[0].apply_best(str(log_fpath))
-        tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-        culaunch_config = get_culaunch_config(tvm_ir)
-        source_code = tasks[0].print_best(str(log_fpath), print_mode="cuda")
-        kernel_template = culaunch_config + source_code
-        template_fpath = BRT_KERNEL_TEMPLATE_PATH / (kernel_name+".cu")
-        with open(template_fpath, "w") as f:
-            f.write(kernel_template)
-
-def tvm_export(model, input_shape, K, N):
-    input_data = torch.randn(input_shape)
-    script_model = torch.jit.trace(model, input_data)
-    mod, params = relay.frontend.from_pytorch(script_module=script_model, input_infos=[("input0", input_data.shape)])
-    target = tvm.target.Target("cuda")
-    log_kernel_name = f"matmul_{input_shape[0]}_{K}_{N}"
-    template_kernel_name = f"matmul_{K}_{N}_{input_shape[0]}"
-    log_file = log_kernel_name+".json"
-    log_fpath= BRT_KERNEL_TUNE_LOG_PATH / log_file
-    tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target)
-    for idx, task in enumerate(tasks):
-        print("========== Task %d  (workload key: %s) ==========" % (idx, task.workload_key))
-        print(task.compute_dag)
-    assert len(tasks) == 1
-    tvm_sch, tvm_args = tasks[0].apply_best(str(log_fpath))
-    tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-    culaunch_config = get_culaunch_config(tvm_ir)
-    source_code = tasks[0].print_best(str(log_fpath), print_mode="cuda")
-    kernel_template = culaunch_config + source_code
-    template_fpath = BRT_KERNEL_TEMPLATE_PATH / (template_kernel_name+".cu")
-    with open(template_fpath, "w") as f:
-        f.write(kernel_template)
 
 def main():
-    input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    input_shapes = [[bs, 512] for bs in input_bs]
-    for input_shape in input_shapes:
-        # tvm_tune(Expert1(), input_shape, 512, 1024)
-        tvm_export(Expert1(), input_shape, 512, 1024)
-    input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    input_shapes = [[bs, 1024] for bs in input_bs]
-    for input_shape in input_shapes:
-        # tvm_tune(Expert2(), input_shape, 1024, 512)
-        tvm_export(Expert2(), input_shape, 1024, 512)
+    tvm_tuner = TVMTuner()
+    conv_params_log_file = BRT_LOG_PATH / "dynamic_routing_conv_params.json"
+    conv_params_log_file_nodup = BRT_LOG_PATH / "dynamic_routing_conv_params_nodup.json"
+    ## remove duplicate lines
+    conv_param_set = set()
+    nodup_f = conv_params_log_file_nodup.open("w")
+    with conv_params_log_file.open("r") as f:
+        for line in f.readlines():
+            if line not in conv_param_set:
+                conv_param_set.add(line)
+                nodup_f.write(line)
+    nodup_f.close()
+    with conv_params_log_file_nodup.open("r") as f:
+        for line in f.readlines():
+            conv_param = json.loads(line)
+            module_name = "Conv2d"
+            in_channels = conv_param["in_channels"]
+            out_channels = conv_param["out_channels"]
+            kernel_size = conv_param["kernel_size"]
+            if conv_param["stride"] == None:
+                conv_param["stride"] = 1
+            stride = conv_param["stride"]
+            if conv_param["padding"] == None:
+                conv_param["padding"] = 0
+            padding = conv_param["padding"]
+            if conv_param["dilation"] == None:
+                conv_param["dilation"] = 1
+            dilation = conv_param["dilation"]
+            if conv_param["groups"] == None:
+                conv_param["groups"] = 1
+            groups = conv_param["groups"]
+            bias = conv_param.pop("bias")
+            if bias is True:
+                module_name += "Bias"
+            padding_mode = conv_param.pop("padding_mode")
+            norm = conv_param.pop("norm")
+            if norm == "SyncBatchNorm":
+                norm = nn.BatchNorm2d(out_channels)
+                module_name += "BatchNorm"
+            activation = conv_param.pop("activation")
+            if activation == "ReLU":
+                activation = nn.ReLU()
+                module_name += "ReLU"
+            conv2d_bn_act = Conv2dBNAct(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                dilation=dilation,
+                groups=groups,
+                bias=bias,
+                padding_mode=padding_mode,
+                norm=norm,
+                activation=activation,
+            )
+            input_infos = {"input_0": conv_param.pop("input_shape")}
+            output_infos = {"output_0": conv_param.pop("output_shape")}
+            parameters = conv_param
+            logger.info(conv_param)
+            tvm_tuner.import_pt_netlet(
+                module_name, conv2d_bn_act, input_infos, output_infos, parameters
+            )
+            logger.info(f"tuning {module_name} with: {parameters}")
+            tvm_tuner.tune_netlet()
+
 
 if __name__ == "__main__":
     main()
+
+# %%
