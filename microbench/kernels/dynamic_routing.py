@@ -3,21 +3,11 @@
 
 
 #%%
-import argparse
-import itertools
 import json
 import logging
-import os
 
-import numpy as np
-import torch
 import torch.nn as nn
-from brt.common import (
-    BRT_KERNEL_TEMPLATE_PATH,
-    BRT_KERNEL_TUNE_LOG_PATH,
-    BRT_LOG_PATH,
-    log,
-)
+from brt.common import BRT_LOG_PATH
 from brt.jit.tvm import TVMTuner
 
 logging.basicConfig(level=logging.INFO)
@@ -70,17 +60,17 @@ class Conv2dBNAct(nn.Module):
 
 def main():
     tvm_tuner = TVMTuner()
-    conv_params_log_file = BRT_LOG_PATH / "dynamic_routing_conv_params.json"
+    # conv_params_log_file = BRT_LOG_PATH / "dynamic_routing_conv_params.json"
     conv_params_log_file_nodup = BRT_LOG_PATH / "dynamic_routing_conv_params_nodup.json"
     ## remove duplicate lines
-    conv_param_set = set()
-    nodup_f = conv_params_log_file_nodup.open("w")
-    with conv_params_log_file.open("r") as f:
-        for line in f.readlines():
-            if line not in conv_param_set:
-                conv_param_set.add(line)
-                nodup_f.write(line)
-    nodup_f.close()
+    # conv_param_set = set()
+    # nodup_f = conv_params_log_file_nodup.open("w")
+    # with conv_params_log_file.open("r") as f:
+    #     for line in f.readlines():
+    #         if line not in conv_param_set:
+    #             conv_param_set.add(line)
+    #             nodup_f.write(line)
+    # nodup_f.close()
     with conv_params_log_file_nodup.open("r") as f:
         for line in f.readlines():
             conv_param = json.loads(line)
@@ -134,6 +124,7 @@ def main():
             )
             logger.info(f"tuning {module_name} with: {parameters}")
             tvm_tuner.tune_netlet()
+            tvm_tuner.export_netlet_template()
 
 
 if __name__ == "__main__":

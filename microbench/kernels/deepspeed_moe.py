@@ -14,7 +14,7 @@ import tvm
 import tvm.auto_scheduler as auto_scheduler
 import tvm.relay as relay
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
-from brt.jit.tvm.utils import gen_culaunch_config_str, parse_culaunch_config
+from brt.jit.tvm.utils import make_culaunch_config_str, parse_culaunch_config
 from tvm.auto_scheduler.measure_record import load_best_record
 
 
@@ -60,7 +60,7 @@ def tvm_tune(model, input_shape, K, N):
         tvm_sch, tvm_args = tasks[0].apply_best(str(log_fpath))
         tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
         grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-        culaunch_config = gen_culaunch_config_str(grid_dim, block_dim)
+        culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
         source_code = tasks[0].print_best(str(log_fpath), print_mode="cuda")
         kernel_template = culaunch_config + source_code
         template_fpath = BRT_KERNEL_TEMPLATE_PATH / (kernel_name + ".cu")
@@ -91,7 +91,7 @@ def tvm_export(model, input_shape, K, N):
     tvm_sch, tvm_args = tasks[0].apply_best(str(log_fpath))
     tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
     grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-    culaunch_config = gen_culaunch_config_str(grid_dim, block_dim)
+    culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
     source_code = tasks[0].print_best(str(log_fpath), print_mode="cuda")
     kernel_template = culaunch_config + source_code
     template_fpath = BRT_KERNEL_TEMPLATE_PATH / (template_kernel_name + ".cu")

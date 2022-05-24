@@ -20,9 +20,9 @@ from tvm import auto_scheduler, relay
 from tvm.auto_scheduler.utils import deserialize_args
 
 from .utils import (
-    gen_culaunch_config_str,
+    make_culaunch_config_str,
     make_inputs,
-    make_tune_log_fname,
+    make_fname,
     parse_culaunch_config,
 )
 
@@ -97,19 +97,15 @@ class TVMTuner:
         self._update_scheduler(self.module_name, self.tvm_module, self.tvm_params)
 
     def _update_scheduler(self, module_name, tvm_module, tvm_params, log_fname=None):
-        if log_fname is None:
-            log_fname = make_tune_log_fname(
+        filename = make_fname(
                 module_name, self.input_infos, self.output_infos, self.parameters
             )
-            print(log_fname)
-            self.tune_log_filename = str(BRT_KERNEL_TUNE_LOG_PATH / f"{log_fname}.json")
+        if log_fname is None:
+            self.tune_log_filename = str(BRT_KERNEL_TUNE_LOG_PATH / f"{filename}.json")
         else:
             self.tune_log_filename = str(BRT_KERNEL_TUNE_LOG_PATH / log_fname)
-        template_filename = module_name + "_".join(
-            ("_".join(str(i) for i in shape)) for shape in self.input_infos.values()
-        )
         self.template_filename = str(
-            BRT_KERNEL_TEMPLATE_PATH / f"{template_filename}.cu"
+            BRT_KERNEL_TEMPLATE_PATH / f"{filename}.cu"
         )
         tvm_tasks, tvm_task_weights = auto_scheduler.extract_tasks(
             tvm_module["main"], tvm_params, self.target
@@ -152,14 +148,14 @@ class TVMTuner:
 
     def export_netlet_template(self):
         grid_dim, block_dim, source_code = self.get_best_template()
-        culaunch_config = gen_culaunch_config_str(grid_dim, block_dim)
+        culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
         kernel_template = culaunch_config + source_code
         with open(self.template_filename, "w") as f:
             f.write(kernel_template)
 
     def inject_netlet_to_storage(self):
         grid_dim, block_dim, source_code = self.get_best_template()
-        culaunch_config = gen_culaunch_config_str(grid_dim, block_dim)
+        culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
         kernel_template = culaunch_config + source_code
         module_function = ModuleFunction(
             self.module_name,
