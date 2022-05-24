@@ -7,7 +7,7 @@ import torch
 
 import tvm
 
-__all__ = ["parse_culaunch_config", "gen_culaunch_config_str", "make_inputs"]
+__all__ = ["parse_culaunch_config", "make_culaunch_config_str", "make_inputs", "make_fname"]
 
 
 def parse_culaunch_config(
@@ -33,7 +33,7 @@ def parse_culaunch_config(
     )
 
 
-def gen_culaunch_config_str(grid_dim, block_dim) -> str:
+def make_culaunch_config_str(grid_dim, block_dim) -> str:
     culaunch_config = f"// [thread_extent] blockIdx.x = {grid_dim[0]}\n"
     culaunch_config += f"// [thread_extent] blockIdx.y = {grid_dim[1]}\n"
     culaunch_config += f"// [thread_extent] blockIdx.z = {grid_dim[2]}\n"
@@ -52,29 +52,29 @@ def make_inputs(
     return inputs
 
 
-def make_tune_log_fname(
+def make_fname(
     op_type,
     input_infos: Dict[str, List[int]],
     output_infos: Dict[str, List[int]],
     parameters: Dict[str, List[Union[int, float]]],
 ) -> str:
-    identifier = op_type
-    identifier += "_\{"
-    identifier += "_".join(
+    fname = op_type
+    fname += "_\{"
+    fname += "_".join(
         "\[" + "_".join(str(dim) for dim in shape) + "\]"
         for shape in input_infos.values()
     )
-    identifier += "\}_\{"
-    identifier += "_".join(
-        "\[" + ",".join(str(dim) for dim in shape) + "\]"
+    fname += "\}_\{"
+    fname += "_".join(
+        "\[" + "_".join(str(dim) for dim in shape) + "\]"
         for shape in output_infos.values()
     )
-    identifier += "\}_\{"
-    identifier += "_".join(
+    fname += "\}_\{"
+    fname += "_".join(
         "\[" + "_".join(str(dim) for dim in parameter) + "\]"
         if isinstance(parameter, list)
         else str(parameter)
         for parameter in parameters.values()
     )
-    identifier += "\}"
-    return identifier
+    fname += "\}"
+    return fname
