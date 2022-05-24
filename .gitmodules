@@ -6,14 +6,10 @@
 	path = 3rdparty/tvm
 	url = https://github.com/Apache/tvm.git
 	branch = main
-[submodule "3rdparty/nnfusion"]
-	path = 3rdparty/nnfusion
-	url = https://github.com/Raphael-Hao/nnfusion.git
-	branch = cmake_fix
 [submodule "3rdparty/transformers"]
 	path = 3rdparty/transformers
 	url = https://github.com/huggingface/transformers.git
-	branch = master
+	branch = main
 [submodule "3rdparty/dmlc-core"]
 	path = 3rdparty/dmlc-core
 	url = https://github.com/dmlc/dmlc-core.git
