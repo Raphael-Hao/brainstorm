@@ -252,8 +252,8 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
     }
     case KernelType::kHeteroFuse: {
       auto fused_kernel_grids_str = capture_with_default(
-          kernel.code,
-          std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"), "");
+          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"),
+          "");
       kernel.grid_sizes = to_uint_vector(fused_kernel_grids_str, ',');
       auto fused_kernel_blocks_str = capture_with_default(
           kernel.code,
@@ -263,8 +263,8 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
     }
     case KernelType::kHomoFuseV2: {
       auto fused_kernel_grids_str = capture_with_default(
-          kernel.code,
-          std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"), "");
+          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"),
+          "");
       kernel.grid_sizes = to_uint_vector(fused_kernel_grids_str, ',');
       auto fused_kernel_blocks_str = capture_with_default(
           kernel.code,
@@ -294,8 +294,7 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
       kernel.blocks.x = capture_with_default(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*(\d+)\s*)"), 1);
       kernel.threads.x = capture_with_default(
-          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*(\d+)\s*)"),
-          1);
+          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*(\d+)\s*)"), 1);
       break;
     }
     default:

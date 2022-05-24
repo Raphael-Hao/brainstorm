@@ -4,7 +4,7 @@
  */
 
 #include <algorithm>
-#include <brt/common/cuda_utils.h>
+#include <brt/runtime/cuda_utils.h>
 #include <cuda_runtime.h>
 #include <random>
 

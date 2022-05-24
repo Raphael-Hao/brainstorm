@@ -6,7 +6,6 @@ from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
 
 from .module_func import ModuleFunction
 
-
 class Templator:
     template_pool = dict()
 

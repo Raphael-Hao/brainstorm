@@ -2,7 +2,8 @@
  * Copyright (c) 2022 by Microsoft Corporation.
  * Licensed under the MIT license.
  */
-#include <thrust/host_vector.h>
+
+#pragma once
 
 template <typename T>
 __global__ void __launch_bounds__(32)
@@ -18,4 +19,8 @@ __global__ void __launch_bounds__(32)
   if (global_tid < array_size) {
     dst[global_tid] = src + index[global_tid] * granularity;
   }
+}
+
+void DevicePtr2PtrArray() {
+  
 }

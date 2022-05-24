@@ -3,8 +3,7 @@
  * Licensed under the MIT license.
  */
 
-#include <brt/common/cuda_utils.h>
-#include <cuda_runtime.h>
+#include <brt/runtime/cuda_utils.h>
 
 #include <algorithm>
 #include <brt/kernel/matmul.cuh>
