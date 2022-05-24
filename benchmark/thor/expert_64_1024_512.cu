@@ -1,7 +1,7 @@
 
 #include "./gather_64_512.cuh"
 #include <algorithm>
-#include <brt/common/cuda_utils.h>
+#include <brt/runtime/cuda_utils.h>
 #include <cmath>
 #include <cublas_v2.h>
 #include <random>

@@ -4,7 +4,9 @@
  */
 
 #pragma once
-#include <brt/common/cuda_utils.h>
+#include <brt/runtime/cuda_utils.h>
+
+#include <memory>
 
 namespace brt {
 namespace netlet {

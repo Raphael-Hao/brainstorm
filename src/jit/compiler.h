@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <brt/common/cuda_utils.h>
+#include <brt/runtime/cuda_utils.h>
 #include <dmlc/common.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>

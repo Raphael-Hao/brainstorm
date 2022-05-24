@@ -1,4 +1,4 @@
-#include <brt/common/cuda_utils.h>
+#include <brt/runtime/cuda_utils.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
