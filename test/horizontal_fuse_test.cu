@@ -6,7 +6,7 @@
 #include <brt/runtime/cuda_utils.h>
 
 #include <algorithm>
-#include <brt/kernel/matmul.cuh>
+#include "./matmul.cuh"
 #include <random>
 
 extern "C" {

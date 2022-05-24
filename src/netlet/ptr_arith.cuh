@@ -17,10 +17,13 @@ __global__ void __launch_bounds__(32)
   // [thread_extent] threadIdx.z = 1
   int global_tid = blockIdx.x * 32 + threadIdx.x;
   if (global_tid < array_size) {
-    dst[global_tid] = src + index[global_tid] * granularity;
+    dst[global_tid] = src + index[global_tid] * granularity * sizeof(T);
   }
 }
 
-void DevicePtr2PtrArray() {
-  
+template <typename T>
+void DevicePtr2PtrArray(T** dst, T* src, int index[], int array_size, int granularity) {
+  const dim3 block_dim(32);
+  const dim3 grid_dim((array_size + 31) / 32);
+  ptr_to_ptr_array<T><<<grid_dim, block_dim>>>(dst, src, index, array_size, granularity);
 }
