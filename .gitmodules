@@ -16,3 +16,6 @@
 [submodule "3rdparty/dlpack"]
 	path = 3rdparty/dlpack
 	url = https://github.com/dmlc/dlpack.git
+[submodule "3rdparty/nnfusion"]
+	path = 3rdparty/nnfusion
+	url = https://github.com/microsoft/nnfusion.git
