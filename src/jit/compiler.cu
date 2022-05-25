@@ -3,8 +3,9 @@
  * Licensed under the MIT license.
  */
 
-#include "../netlet/ptr_arith.cuh"
-#include "./compiler.h"
+#include <brt/jit/compiler.h>
+#include <brt/netlet/ptr_arith.h>
+
 #include "./utils.h"
 
 namespace brt {
@@ -184,9 +185,12 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
 
   for (auto arg_idx = 0; arg_idx < kernel.arg_num; arg_idx++) {
     if (arg_idx < kernel.shared_arg_num) {
-      ptr_to_ptr_array<<<kernel.arg_grid_size, kernel.arg_block_size, 0, stream>>>(
-          (char**)kernel.arg_dptr_array[arg_idx], (char*)shared_inputs_ptr[arg_idx],
-          kernel.shared_arg_offset, kernel.branch_num, kernel.shared_arg_grans[arg_idx]);
+      netlet::DevicePtr2PtrArray((char**)kernel.arg_dptr_array[arg_idx],
+                                 (char*)shared_inputs_ptr[arg_idx], kernel.shared_arg_offset,
+                                 kernel.branch_num, kernel.shared_arg_grans[arg_idx], stream);
+      // ptr_to_ptr_array<<<kernel.arg_grid_size, kernel.arg_block_size, 0, stream>>>(
+      //     (char**)kernel.arg_dptr_array[arg_idx], (char*)shared_inputs_ptr[arg_idx],
+      //     kernel.shared_arg_offset, kernel.branch_num, kernel.shared_arg_grans[arg_idx]);
       // CUDA_CHECK(cudaStreamSynchronize(stream));
     } else {
       CUDA_CHECK(cudaMemcpyAsync(kernel.arg_dptr_array[arg_idx],

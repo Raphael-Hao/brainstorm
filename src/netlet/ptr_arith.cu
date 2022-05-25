@@ -3,8 +3,10 @@
  * Licensed under the MIT license.
  */
 
-#pragma once
+#include <brt/netlet/ptr_arith.h>
 
+namespace brt {
+namespace netlet {
 template <typename T>
 __global__ void __launch_bounds__(32)
     ptr_to_ptr_array(T** __restrict__ dst, T* __restrict__ src, int index[], int array_size,
@@ -22,8 +24,11 @@ __global__ void __launch_bounds__(32)
 }
 
 template <typename T>
-void DevicePtr2PtrArray(T** dst, T* src, int index[], int array_size, int granularity) {
+void DevicePtr2PtrArray(T** dst, T* src, int index[], int array_size, int granularity,
+                        cudaStream_t stream) {
   const dim3 block_dim(32);
   const dim3 grid_dim((array_size + 31) / 32);
-  ptr_to_ptr_array<T><<<grid_dim, block_dim>>>(dst, src, index, array_size, granularity);
+  ptr_to_ptr_array<T><<<grid_dim, block_dim, 0, stream>>>(dst, src, index, array_size, granularity);
 }
+}  // namespace netlet
+}  // namespace brt
