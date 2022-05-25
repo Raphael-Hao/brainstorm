@@ -19,10 +19,14 @@
 #define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
 
-#include "../compiler.h"
+#include <brt/jit/compiler.h>
+#include <brt/netlet/ptr_arith.h>
+#include <brt/router/dispatcher/location.h>
 
 namespace brt {
-namespace jit {
+namespace extension {
+
+using namespace brt::jit;
 
 static void static_invoke(const std::vector<torch::Tensor>& ts, const std::vector<long>& args,
                           int fd) {
@@ -106,14 +110,32 @@ static std::pair<std::string, int> inject_source(const std::string& headless_cod
   return CUDACompiler::get_compiler().inject_source(headless_code);
 }
 
-}  // namespace jit
+static void get_location_with_load_map(const torch::Tensor& one_hot_mask,
+                                       const torch::Tensor& locations,
+                                       const torch::Tensor branch_loads,
+                                       const torch::Tensor supported_capacities, int sample_nums,
+                                       int branch_num, int supported_capacity_num) {
+  CHECK_ON_CUDA(one_hot_mask);
+  CHECK_ON_CUDA(locations);
+  CHECK_ON_CUDA(branch_loads);
+  CHECK_ON_CUDA(supported_capacities);
+  router::MakeLocationAndLoad(one_hot_mask.data_ptr<int>(), locations.data_ptr<int>(),
+                              branch_loads.data_ptr<int>(), supported_capacities.data_ptr<int>(),
+                              sample_nums, branch_num, supported_capacity_num,
+                              at::cuda::getDefaultCUDAStream().stream());
+}
+
+}  // namespace extension
 }  // namespace brt
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("static_invoke", &brt::jit::static_invoke, "Generic Invoke for GPU function (CUDA)");
-  m.def("hetero_invoke", &brt::jit::hetero_invoke,
+  m.def("get_location_with_load_map", &brt::extension::get_location_with_load_map,
+        "Get location with load map to supported capacity");
+  m.def("static_invoke", &brt::extension::static_invoke, "Generic Invoke for GPU function (CUDA)");
+  m.def("hetero_invoke", &brt::extension::hetero_invoke,
         "Invoke for horizontal fused GPU function (CUDA) of heterogenous kernels");
-  m.def("homo_invoke", &brt::jit::homo_invoke, "Generic Invoke for GPU (CUDA)");
-  m.def("elastic_homo_invoke", &brt::jit::elastic_homo_invoke, "Generic Invoke for GPU (CUDA)");
-  m.def("inject_source", &brt::jit::inject_source, "Inject Source for GPU (CUDA)");
+  m.def("homo_invoke", &brt::extension::homo_invoke, "Generic Invoke for GPU (CUDA)");
+  m.def("elastic_homo_invoke", &brt::extension::elastic_homo_invoke,
+        "Generic Invoke for GPU (CUDA)");
+  m.def("inject_source", &brt::extension::inject_source, "Inject Source for GPU (CUDA)");
 }

@@ -5,8 +5,8 @@
 
 // extract to string
 
-#include <cuda_runtime.h>
 #include <cuda_fp16.h>
+#include <cuda_runtime.h>
 
 #define thread_num 1024
 #define expert_num 1024
@@ -77,13 +77,11 @@ extern "C" __global__ __launch_bounds__(1024) void execute(__dtype* __restrict__
 
   for (int i = blockIdx.x; i < samples; i += gridDim.x)
     if (locations1_s[i] < capacity && indices1_s[i] >= 0) {
-#pragma unroll
       for (int j = threadIdx.x; j < hidden; j += 1024)
-        atomicAdd(&dispatched_input[(indices1_s[i] * capacity + locations1_s[i]) * (hidden) + j],
-                  gates1_s[i] * reshaped_input[i * (hidden) + j]);
+        dispatched_input[(indices1_s[i] * capacity + locations1_s[i]) * (hidden) + j] =
+            gates1_s[i] * reshaped_input[i * (hidden) + j];
     }
 }
-
 
 __global__ void staticReverse(int* d, int n) {
   __shared__ int s[64];
