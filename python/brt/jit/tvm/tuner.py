@@ -1,7 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import json
-import pathlib
 from typing import Dict, List, Union
 
 import onnx
@@ -21,8 +20,8 @@ from tvm.auto_scheduler.utils import deserialize_args
 
 from .utils import (
     make_culaunch_config_str,
-    make_inputs,
     make_fname,
+    make_inputs,
     parse_culaunch_config,
 )
 

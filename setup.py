@@ -37,11 +37,23 @@ def install():
         packages=find_packages("python"),
         ext_modules=[
             CUDAExtension(
-                name="brt.jit.cppjit",
+                name="brt.cpp.jit",
                 sources=[
-                    "./src/extension/torch.cc",
+                    "./src/backend/torch/jit.cc",
                     "./src/jit/compiler.cu",
-                    "./src/netlet/ptr_arith.cu",
+                ],
+                library_dirs=["/usr/local/cuda/lib64/stubs"],
+                libraries=ext_libs,
+                include_dirs=[
+                    root_path / "include",
+                    root_path / "3rdparty/dmlc-core/include",
+                ],
+                extra_compile_args=ext_args,
+            ),
+            CUDAExtension(
+                name="brt.cpp.router",
+                sources=[
+                    "./src/backend/torch/router.cc",
                     "./src/router/dispatcher/location.cu",
                 ],
                 library_dirs=["/usr/local/cuda/lib64/stubs"],

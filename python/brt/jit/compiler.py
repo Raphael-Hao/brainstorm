@@ -3,30 +3,29 @@
 
 
 import torch
-
-from . import cppjit
+from brt.cpp import jit
 
 
 class CUDACompiler:
     @staticmethod
     def create_raw(source):
         torch.cuda.init()
-        kernel_type, __ctx__ = cppjit.inject_source(source)
+        kernel_type, __ctx__ = jit.inject_source(source)
 
         if kernel_type == "global" or kernel_type == "horiz_fuse":
 
             def func(*inputs, extra=[]):
-                cppjit.static_invoke(inputs, extra, __ctx__)
+                jit.static_invoke(inputs, extra, __ctx__)
 
         elif kernel_type == "hetero_fuse":
 
             def func(*inputs, active_blocks=[]):
-                cppjit.hetero_invoke(inputs, active_blocks, __ctx__)
+                jit.hetero_invoke(inputs, active_blocks, __ctx__)
 
         elif kernel_type == "homo_fuse_v2":
 
             def func(shared_inputs, standalone_inputs, capacities=[]):
-                cppjit.homo_invoke(
+                jit.homo_invoke(
                     shared_inputs, standalone_inputs, capacities, __ctx__
                 )
 
