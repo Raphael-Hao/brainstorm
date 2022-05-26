@@ -9,9 +9,10 @@
 
 namespace brt {
 namespace router {
-void MakeLocationAndLoad(int* one_hot_mask, int* locations, int* branch_loads,
-                         int* supported_capacities, int num_samples, int branch_num,
-                         int supported_capacity_num, cudaStream_t stream);
+void GenerateIndicesWithLoadMap(int* one_hot_mask, int* locations, int* branch_loads,
+                                 int* branch_start_indices, int* supported_capacities,
+                                 int sample_num, int branch_num, int supported_capacity_num,
+                                 cudaStream_t stream);
 
 }  // namespace router
 }  // namespace brt

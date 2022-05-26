@@ -3,8 +3,6 @@
 
 from typing import List, Union
 
-from brt.common import log
-
 from .base import GlobalFunction
 from .horiz_fuse import HorizFuseModuleFunction
 
