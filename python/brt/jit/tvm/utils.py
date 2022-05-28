@@ -57,7 +57,7 @@ def make_inputs(
     return inputs
 
 
-def make_fname(
+def old_make_fname(
     op_type,
     input_infos: Dict[str, List[int]],
     output_infos: Dict[str, List[int]],
@@ -82,4 +82,31 @@ def make_fname(
         for parameter in parameters.values()
     )
     fname += "\}"
+    return fname
+
+
+def make_fname(
+    op_type,
+    input_infos: Dict[str, List[int]],
+    output_infos: Dict[str, List[int]],
+    parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
+) -> str:
+    fname = op_type
+    fname += "--"
+    fname += "-".join(
+        f"{name}-" + "-".join(str(dim) for dim in shape)
+        for name, shape in input_infos.items()
+    )
+    fname += "--"
+    fname += "-".join(
+        f"{name}-" + "-".join(str(dim) for dim in shape)
+        for name, shape in output_infos.items()
+    )
+    fname += "--"
+    fname += "-".join(
+        f"{name}-" + "-".join(str(dim) for dim in parameter)
+        if isinstance(parameter, list)
+        else f"{name}-" + str(parameter)
+        for name, parameter in parameters.items()
+    )
     return fname

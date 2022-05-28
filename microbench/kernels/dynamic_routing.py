@@ -60,17 +60,17 @@ class Conv2dBNAct(nn.Module):
 
 def main():
     tvm_tuner = TVMTuner()
-    # conv_params_log_file = BRT_LOG_PATH / "dynamic_routing_conv_params.json"
+    conv_params_log_file = BRT_LOG_PATH / "dynamic_routing_conv_params.json"
     conv_params_log_file_nodup = BRT_LOG_PATH / "dynamic_routing_conv_params_nodup.json"
     ## remove duplicate lines
-    # conv_param_set = set()
-    # nodup_f = conv_params_log_file_nodup.open("w")
-    # with conv_params_log_file.open("r") as f:
-    #     for line in f.readlines():
-    #         if line not in conv_param_set:
-    #             conv_param_set.add(line)
-    #             nodup_f.write(line)
-    # nodup_f.close()
+    conv_param_set = set()
+    nodup_f = conv_params_log_file_nodup.open("w")
+    with conv_params_log_file.open("r") as f:
+        for line in f.readlines():
+            if line not in conv_param_set:
+                conv_param_set.add(line)
+                nodup_f.write(line)
+    nodup_f.close()
     with conv_params_log_file_nodup.open("r") as f:
         for line in f.readlines():
             conv_param = json.loads(line)
@@ -123,7 +123,7 @@ def main():
                 module_name, conv2d_bn_act, input_infos, output_infos, parameters
             )
             logger.info(f"tuning {module_name} with: {parameters}")
-            tvm_tuner.tune_netlet()
+            # tvm_tuner.tune_netlet()
             tvm_tuner.export_netlet_template()
 
 
