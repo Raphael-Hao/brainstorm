@@ -32,41 +32,54 @@ class Function:
     def __init__(self) -> None:
         pass
 
+    def append_code(self, code: str, end=False):
+        formated_code = code
+        self.clean_code += formated_code
+        if end == True:
+            formated_code += self.new_line()
+        return formated_code
+
     def add_c_api(self):
-        self.clean_code += Function.c_api_decorator
+        formated_code = Function.c_api_decorator
+        self.clean_code += formated_code
+        return formated_code
 
     def end_c_api(self):
-        self.clean_code += '} // extern "C"\n'
+        formated_code = '} // extern "C"\n'
+        self.clean_code += formated_code
+        return formated_code
 
     def add_codeblock(self, codeblock: str):
-        self.clean_code += codeblock
-        self.new_emtpy_line()
+        formated_code = codeblock
+        self.clean_code += formated_code
+        formated_code += self.new_line()
+        return formated_code
 
-    def add_line_with_indent(self, code: str, end=False):
-        self.clean_code += "  " * self.indent
-        self.clean_code += code
+    def add_line_with_indent(self, code: str, end=False) -> str:
+        formated_code += "  " * self.indent
+        formated_code += code
+        self.clean_code += formated_code
         if end == True:
-            self.new_line()
-
-    def add_code(self, code: str, end=False):
-        self.clean_code += code
-        if end == True:
-            self.new_line()
+            formated_code += self.new_line()
+        return formated_code
 
     def new_line(self):
-        self.clean_code += "\n"
-
-    def new_emtpy_line(self):
-        self.clean_code += "\n"
+        formated_code = "\n"
+        self.clean_code += formated_code
+        return formated_code
 
     def new_codeblock(self):
-        self.clean_code += "{\n"
+        formated_code = "{\n"
+        self.clean_code += formated_code
         self.indent += 1
+        return formated_code
 
     def close_codeblock(self):
         self.indent -= 1
-        self.clean_code += "  " * self.indent
-        self.clean_code += "}\n"
+        formated_code = "  " * self.indent
+        formated_code += "}\n"
+        self.clean_code += formated_code
+        return formated_code
 
     def verify_code(self):
         try:
@@ -111,73 +124,89 @@ __device__ __forceinline__ void CppCgWarpSync() {
     device_decorator = "__device__ __forceinline__ "
 
     def __init__(self) -> None:
-        pass
+        self.kernel_type = "global"
+        self.initialized = False
 
-    def set_launch_bounds(self):
-        self.siganature = "void "
+    def declare_ret_with_launch_bounds(self):
+        formated_code = "void "
         if self.max_threads_per_block == 0:
-            return
+            self.append_code(formated_code)
+            return formated_code
         if self.min_blocks_per_sm == 1:
-            self.siganature += f"__launch_bounds__({self.max_threads_per_block}) "
+            formated_code += f"__launch_bounds__({self.max_threads_per_block}) "
         else:
-            self.siganature += f"__launch_bounds__({self.max_threads_per_block}, {self.min_blocks_per_sm}) "
-        self.clean_code += self.siganature
+            formated_code += f"__launch_bounds__({self.max_threads_per_block}, {self.min_blocks_per_sm}) "
+        self.append_code(formated_code)
+        return formated_code
 
     def declare_name_args(self):
-        func_name_args = f"{self.name}("
-        func_name_args += f"{self.args}"
+        formated_code = f"{self.func_name}("
+        formated_code += f"{self.args}"
         if self.mode == "device":
-            func_name_args += (
+            formated_code += (
                 f", char* shared_buffer, const uint& block_idx, const uint& thread_idx"
             )
-        func_name_args += ") "
-        self.clean_code += func_name_args
-        self.siganature = func_name_args
+        formated_code += ") "
+        self.append_code(formated_code)
+        return formated_code
 
-    def set_kernel_type(self, kernel_type: str = "global"):
+    def set_kernel_type(self):
         if self.mode == "device":
             logger.error("Kernel type not supported in device mode")
-        self.clean_code += f"  // [kernel_type] {kernel_type}\n"
+        formated_code = self.add_line_with_indent(
+            f"// [kernel_type] {self.kernel_type}", end=True
+        )
+        return formated_code
 
     def set_culaunch_dims(self):
         if self.mode == "global":
             # self.clean_code += f"  // [thread_extent] gridSize = {self.grid_size}\n"
             # self.clean_code += f"  // [thread_extent] blockSize = {self.block_size}\n"
-            self.add_line_with_indent(
+
+            formated_code = self.add_line_with_indent(
                 f"// [thread_extent] blockIdx.x = {self.blockidx_x}", end=True
             )
-            self.add_line_with_indent(
+            formated_code += self.add_line_with_indent(
                 f"// [thread_extent] blockIdx.y = {self.blockidx_y}", end=True
             )
-            self.add_line_with_indent(
+            formated_code += self.add_line_with_indent(
                 f"// [thread_extent] blockIdx.z = {self.blockidx_z}", end=True
             )
-            self.add_line_with_indent(
+            formated_code += self.add_line_with_indent(
                 f"// [thread_extent] threadIdx.x = {self.threadidx_x}", end=True
             )
-            self.add_line_with_indent(
+            formated_code += self.add_line_with_indent(
                 f"// [thread_extent] threadIdx.y = {self.threadidx_y}", end=True
             )
-            self.add_line_with_indent(
+            formated_code += self.add_line_with_indent(
                 f"// [thread_extent] threadIdx.z = {self.threadidx_z}", end=True
             )
+            formated_code += self.new_line()
+            return formated_code
         else:
             logger.error("Culaunch dims not supported in device mode")
-        self.clean_code += "\n"
 
     def alloc_shared_memory(self):
+        formated_code = ""
         if self.shm_size_in_bytes > 0:
             if self.mode == "device":
                 allocated_shm_size = 0
                 for i in range(len(self.shm_sizes)):
-                    self.clean_code += f"  {self.shm_types[i]}* {self.shm_symbols[i]} = ({self.shm_types[i]}*)(shared_buffer + {allocated_shm_size});\n"
+                    formated_code += self.add_line_with_indent(
+                        f"{self.shm_types[i]}* {self.shm_symbols[i]} = ({self.shm_types[i]}*)(shared_buffer + {allocated_shm_size});",
+                        end=True,
+                    )
                     allocated_shm_size += (
                         self.shm_sizes[i] * CUDATypeSizeInByte[self.shm_types[i]]
                     )
                 assert allocated_shm_size == self.shm_size_in_bytes
             else:
                 for i in range(len(self.shm_sizes)):
-                    self.clean_code += f"  __shared__ {self.shm_types[i]} {self.shm_symbols[i]}[{self.shm_sizes[i]}];\n"
+                    formated_code += self.add_line_with_indent(
+                        f"__shared__ {self.shm_types[i]} {self.shm_symbols[i]}[{self.shm_sizes[i]}];",
+                        end=True,
+                    )
+        return formated_code
 
     @property
     def sync_mask(self):
@@ -189,75 +218,112 @@ __device__ __forceinline__ void CppCgWarpSync() {
             return "0xffffffff"
 
     def shadow_global_dims(self):
-        self.clean_code += f"  const dim3 gridDim({self.blockidx_x}, {self.blockidx_y}, {self.blockidx_z});\n"
-        self.clean_code += f"  const dim3 blockDim({self.threadidx_x}, {self.threadidx_y}, {self.threadidx_z});\n"
-        self.clean_code += "\n"
+        formated_code = self.add_line_with_indent(
+            f"const dim3 gridDim({self.blockidx_x}, {self.blockidx_y}, {self.blockidx_z});",
+            end=True,
+        )
+        formated_code += self.add_line_with_indent(
+            f"const dim3 blockDim({self.threadidx_x}, {self.threadidx_y}, {self.threadidx_z});",
+            end=True,
+        )
+        formated_code += self.new_line()
         if self.threadidx_y != 1 and self.threadidx_z == 1:
-            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_x}, thread_idx / {self.threadidx_x});\n"
+            formated_code += self.add_line_with_indent(
+                f"const dim3 threadIdx(thread_idx % {self.threadidx_x}, thread_idx / {self.threadidx_x});",
+                end=True,
+            )
         elif self.threadidx_y == 1 and self.threadidx_z != 1:
-            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_x}, 1, thread_idx / {self.threadidx_x});\n"
+            formated_code += self.add_line_with_indent(
+                f"const dim3 threadIdx(thread_idx % {self.threadidx_x}, 1, thread_idx / {self.threadidx_x});",
+                end=True,
+            )
         elif self.threadidx_y != 1 and self.threadidx_z != 1:
-            self.clean_code += f"  const dim3 threadIdx(thread_idx % {self.threadidx_x}, thread_idx / {self.threadidx_x} % {self.threadidx_y}, thread_idx / {self.threadidx_xydim});\n"
+            formated_code += self.add_line_with_indent(
+                f"const dim3 threadIdx(thread_idx % {self.threadidx_x}, thread_idx / {self.threadidx_x} % {self.threadidx_y}, thread_idx / {self.threadidx_xydim});",
+                end=True,
+            )
         if self.blockidx_y == 1 and self.blockidx_z == 1:
-            self.clean_code += f"  const dim3 blockIdx(block_idx);\n"
+            formated_code += self.add_line_with_indent(
+                f"const dim3 blockIdx(block_idx);", end=True
+            )
         elif self.blockidx_z == 1:
-            self.clean_code += f"  const dim3 blockIdx(block_idx % {self.blockidx_x}, block_idx % {self.blockidx_x});\n"
+            formated_code += self.add_line_with_indent(
+                "const dim3 blockIdx(block_idx % {self.blockidx_x}, block_idx % {self.blockidx_x});",
+                end=True,
+            )
         else:
-            self.clean_code += f"  const dim3 blockIdx(block_idx % {self.blockidx_x}, block_idx / {self.blockidx_x} % {self.blockidx_y}, block_idx / {self.blockidx_xydim});\n"
+            formated_code += self.add_line_with_indent(
+                f"const dim3 blockIdx(block_idx % {self.blockidx_x}, block_idx / {self.blockidx_x} % {self.blockidx_y}, block_idx / {self.blockidx_xydim});",
+                end=True,
+            )
+        return formated_code
 
-    def add_body_without_syncthreads(self, device_id: int, sync_method="asm"):
+    def add_body_without_syncthreads(self, bar_id: int, sync_method="asm"):
         if sync_method == "asm":
             if self.block_size >= 32:
-                body_without_syncthreads = self.body.replace(
-                    "__syncthreads()", f"AsmBlockSync({device_id}, {self.block_size})"
+                body_without_syncthreads = self.raw_body.replace(
+                    "__syncthreads()", f"AsmBlockSync({bar_id}, {self.block_size})"
                 )
             else:
-                body_without_syncthreads = self.body.replace(
+                body_without_syncthreads = self.raw_body.replace(
                     "__syncthreads()", f"AsmWarpSync({self.sync_mask})"
                 )
         elif sync_method == "cpp":
             if self.block_size > 32:
                 logger.error("CPP sync is not supported for block size >= 32")
             else:
-                body_without_syncthreads = self.body.replace(
+                body_without_syncthreads = self.raw_body.replace(
                     "__syncthreads()", f"CppWarpSync({self.sync_mask})"
                 )
         else:
             logger.error("Unknown sync method")
-        self.clean_code += body_without_syncthreads
+        formated_code = self.add_codeblock(body_without_syncthreads)
+        return formated_code
 
     def reset_mode(self, mode="global"):
         self.mode = mode
         self.clean_code = ""
         self.indent = 0
 
-    def get_code(self, mode="global", device_id: int = 0, sync_method="asm"):
+    def generate_signature(self):
+        formated_code = self.add_line_with_indent(GlobalFunction.global_decorator)
+        formated_code += self.declare_ret_with_launch_bounds()
+        formated_code += self.declare_name_args()
+        return formated_code
+
+    def generate_body(self):
+        formated_code = self.new_codeblock()
+        formated_code += self.set_kernel_type()
+        formated_code += self.set_culaunch_dims()
+        formated_code += self.alloc_shared_memory()
+        formated_code += self.add_codeblock(self.raw_body)
+        formated_code += self.close_codeblock()
+        return formated_code
+
+    def get_code(self, mode="global", bar_id: int = 0, sync_method="asm"):
         self.reset_mode(mode)
         if self.mode == "global":
-            self.clean_code += GlobalFunction.common_defines
-            self.clean_code += GlobalFunction.c_api_decorator
-            self.clean_code += GlobalFunction.global_decorator
-            self.set_launch_bounds()
-            self.declare_name_args()
-            self.new_codeblock()
-            self.set_kernel_type("global")
-            self.set_culaunch_dims()
-            self.alloc_shared_memory()
-            self.clean_code += f"{self.body}"
-            self.close_codeblock()
+            self.add_codeblock(GlobalFunction.common_defines)
+            self.add_c_api()
+            self.func_sig = self.generate_signature()
+            self.func_body = self.generate_body()
+            self.end_c_api()
         elif self.mode == "device":
-            self.clean_code += GlobalFunction.device_decorator
+            self.add_line_with_indent(GlobalFunction.device_decorator)
             self.declare_name_args()
             self.new_codeblock()
-            self.clean_code += f"  if (thread_idx >= {self.block_size})"
+            self.add_line_with_indent(f"if (thread_idx >= {self.block_size})")
             self.new_codeblock()
-            self.clean_code += "    return;\n"
+            self.add_line_with_indent("return;", end=True)
             self.close_codeblock()
             self.shadow_global_dims()
             self.alloc_shared_memory()
-            self.add_body_without_syncthreads(device_id, sync_method)
+            self.add_body_without_syncthreads(bar_id, sync_method)
             self.close_codeblock()
         else:
             raise ValueError("Invalid mode: %s" % mode)
         self.verify_code()
-        return self.clean_code
+        if self.mode == "global":
+            return self.clean_code, self.func_sig, self.func_body
+        else:
+            return self.clean_code

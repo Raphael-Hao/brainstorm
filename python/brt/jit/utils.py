@@ -13,6 +13,33 @@ def check_if_pointer(param_type: str) -> bool:
     return re.search(r"\w+\s*\*", param_type) is not None
 
 
+def make_func_name(
+    op_type,
+    input_infos: Dict[str, List[int]],
+    output_infos: Dict[str, List[int]],
+    parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
+) -> str:
+    func_name = op_type
+    func_name += "__"
+    func_name += "_".join(
+        f"{name}_" + "_".join(str(dim) for dim in shape)
+        for name, shape in input_infos.items()
+    )
+    func_name += "__"
+    func_name += "_".join(
+        f"{name}_" + "_".join(str(dim) for dim in shape)
+        for name, shape in output_infos.items()
+    )
+    func_name += "__"
+    func_name += "_".join(
+        f"{name}_" + "_".join(str(dim) for dim in parameter)
+        if isinstance(parameter, list)
+        else f"{name}_" + str(parameter)
+        for name, parameter in parameters.items()
+    )
+    return func_name
+
+
 def make_identifier(
     op_type,
     input_infos: Dict[str, List[int]],
@@ -22,24 +49,20 @@ def make_identifier(
     identifier = op_type
     identifier += "{"
     identifier += ",".join(
-        "[" + ",".join(str(dim) for dim in shape) + "]"
-        for shape in input_infos.values()
+        f"{name}:[" + ",".join(str(dim) for dim in shape) + "]"
+        for name, shape in input_infos.items()
     )
     identifier += "};{"
     identifier += ",".join(
-        "[" + ",".join(str(dim) for dim in shape) + "]"
-        for shape in output_infos.values()
+        f"{name}:[" + ",".join(str(dim) for dim in shape) + "]"
+        for name, shape in output_infos.items()
     )
     identifier += "};{"
     identifier += ",".join(
-        "[" + ",".join(str(dim) for dim in parameter) + "]"
+        f"{name}:[" + ",".join(str(dim) for dim in parameter) + "]"
         if isinstance(parameter, list)
-        else str(parameter)
-        for parameter in parameters.values()
+        else f"{name}:[" + str(parameter)
+        for name, parameter in parameters.items()
     )
     identifier += "}"
     return identifier
-
-
-def make_attributes(param_type: str, param_name: str) -> str:
-    return f"{make_identifier(param_type, param_name)} = {make_identifier(param_type, param_name)}"

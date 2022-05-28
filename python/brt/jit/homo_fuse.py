@@ -26,7 +26,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
         capacities: List[int],
         shared_arg_indices: List[int],
     ):
-        self.name = homo_func_name
+        self.func_name = homo_func_name
         self.branch_num = branch_num
         self.capacities = capacities
         candidates = self.generate_candidates(homo_func_name, capacities)
@@ -34,6 +34,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
         self.shared_arg_indices = shared_arg_indices
         self.set_base_args()
         self.verify_candidates()
+        self.initialized = True
 
     def generate_candidates(self, candidate_base_name, candidates_dims):
         candidates: List[GlobalFunction] = []
@@ -100,7 +101,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
                 self.args += ", "
             self.args += f"{arg_type} {arg_decorator} {arg_name}[]"
         for i in range(self.branch_num):
-            self.args += f", uint {self.name}_{i}_capacity"
+            self.args += f", uint {self.func_name}_{i}_capacity"
 
     def calcu_culaunch_dims(self):
         self.grid_size = []
@@ -136,7 +137,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
                 func.get_code(mode="device", device_id=idx, sync_method=sync_method)
             )
         self.add_line_with_indent(GlobalFunction.global_decorator)
-        self.set_launch_bounds()
+        self.declare_ret_with_launch_bounds()
         self.declare_name_args()
         self.new_codeblock()
         self.set_kernel_type("homo_fuse_v1")
@@ -145,7 +146,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
         self.alloc_shared_memory()
         block_start = 0
         for branch_idx in range(self.branch_num):
-            condition = f"(capacity_dims[{self.name}_{branch_idx}_capacity])"
+            condition = f"(capacity_dims[{self.func_name}_{branch_idx}_capacity])"
             if branch_idx == 0:
                 self.add_line_with_indent(f"if (blockIdx.x < {condition}) ")
             else:
@@ -153,14 +154,14 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
                 for j in range(branch_idx):
                     if j != 0:
                         block_start += " + "
-                    block_start += f"capacity_dims[{self.name}_{j}_capacity]"
+                    block_start += f"capacity_dims[{self.func_name}_{j}_capacity]"
                 condition = (
-                    f"{block_start} + capacity_dims[{self.name}_{branch_idx}_capacity])"
+                    f"{block_start} + capacity_dims[{self.func_name}_{branch_idx}_capacity])"
                 )
                 block_start += ")"
                 self.add_line_with_indent(f"else if (blockIdx.x < {condition}) ")
             self.new_codeblock()
-            self.add_line_with_indent(f"switch ({self.name}_{branch_idx}_capacity) ")
+            self.add_line_with_indent(f"switch ({self.func_name}_{branch_idx}_capacity) ")
             self.new_codeblock()
             device_arg = self.device_args[branch_idx]
             if func.shm_size_in_bytes > 0:
@@ -171,7 +172,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
             for capacity_idx, func in enumerate(self.candidates):
                 self.add_line_with_indent(f"case {capacity_idx}: ")
                 self.new_codeblock()
-                self.add_line_with_indent(f"{func.name}({device_arg})", end=True)
+                self.add_line_with_indent(f"{func.func_name}({device_arg})", end=True)
                 self.close_codeblock()
             self.close_codeblock()
             self.close_codeblock()
@@ -190,7 +191,7 @@ class HomoFuseFunctionV2(HorizFuseModuleFunction):
         shared_arg_indices: List[int],
         shared_arg_grans: List[int],
     ):
-        self.name = homo_func_name
+        self.func_name = homo_func_name
         self.branch_num = branch_num
         self.capacities = capacities
         self.supported_capacity_num = len(self.capacities)
@@ -200,6 +201,7 @@ class HomoFuseFunctionV2(HorizFuseModuleFunction):
         super().__init__(candidates=candidates)
         self.set_base_args()
         self.verify_candidates()
+        self.initialized = True
 
     def generate_candidates(self, candidate_base_name, candidates_dims):
         candidates: List[GlobalFunction] = []
@@ -265,7 +267,7 @@ class HomoFuseFunctionV2(HorizFuseModuleFunction):
         # static array , length equal to the number of capacity
         for capacity_idx in range(self.supported_capacity_num):
             self.args += (
-                f", uint {self.name}_{self.capacities[capacity_idx]}_active_blocks"
+                f", uint {self.func_name}_{self.capacities[capacity_idx]}_active_blocks"
             )
 
     def calcu_culaunch_dims(self):
@@ -281,7 +283,7 @@ class HomoFuseFunctionV2(HorizFuseModuleFunction):
         self.threadidx_y = 1
         self.threadidx_z = 1
 
-    def set_branch_num(self,):
+    def set_branch_config(self,):
         self.add_line_with_indent(
             f"// [homo_fuse_info] branch_num = {self.branch_num}", end=True
         )
@@ -311,25 +313,25 @@ class HomoFuseFunctionV2(HorizFuseModuleFunction):
                 func.get_code(mode="device", device_id=idx, sync_method=sync_method)
             )
         self.add_line_with_indent(GlobalFunction.global_decorator)
-        self.set_launch_bounds()
+        self.declare_ret_with_launch_bounds()
         self.declare_name_args()
         self.new_codeblock()
         self.set_kernel_type("homo_fuse_v2")
-        self.set_branch_num()
+        self.set_branch_config()
         self.set_culaunch_dims()
         self.alloc_shared_memory()
         block_start = 0
         for capacity_idx, func in enumerate(self.candidates):
             if capacity_idx == 0:
-                condition = f"({self.grid_size[capacity_idx]} * {self.name}_{self.capacities[capacity_idx]}_active_blocks)"
+                condition = f"({self.grid_size[capacity_idx]} * {self.func_name}_{self.capacities[capacity_idx]}_active_blocks)"
                 self.add_line_with_indent(f"if (blockIdx.x < {condition}) ")
             else:
                 block_start = ""
                 for j in range(capacity_idx):
                     if j != 0:
                         block_start += " + "
-                    block_start += f"{self.grid_size[j]} * {self.name}_{self.capacities[j]}_active_blocks"
-                condition = f"({block_start} + {self.grid_size[capacity_idx]} * {self.name}_{self.capacities[capacity_idx]}_active_blocks)"
+                    block_start += f"{self.grid_size[j]} * {self.func_name}_{self.capacities[j]}_active_blocks"
+                condition = f"({block_start} + {self.grid_size[capacity_idx]} * {self.func_name}_{self.capacities[capacity_idx]}_active_blocks)"
                 self.add_line_with_indent(f"else if (blockIdx.x < {condition}) ")
             self.new_codeblock()
             self.add_line_with_indent(
@@ -339,8 +341,8 @@ class HomoFuseFunctionV2(HorizFuseModuleFunction):
                 f"auto arg_idx = blockidxx / {self.grid_size[capacity_idx]}"
             )
             for j in range(capacity_idx):
-                self.add_code(f" + {self.name}_{self.capacities[j]}_active_blocks")
-            self.add_code(";", end=True)
+                self.append_code(f" + {self.func_name}_{self.capacities[j]}_active_blocks")
+            self.append_code(";", end=True)
             device_arg = ""
             for arg_i, arg in enumerate(self.device_args):
                 if arg_i != 0:
@@ -351,7 +353,7 @@ class HomoFuseFunctionV2(HorizFuseModuleFunction):
             else:
                 device_arg += ", nullptr"
             device_arg += f", blockidxx, threadIdx.x"
-            self.add_line_with_indent(f"{func.name}({device_arg});", end=True)
+            self.add_line_with_indent(f"{func.func_name}({device_arg});", end=True)
             self.close_codeblock()
         self.close_codeblock()
         self.end_c_api()

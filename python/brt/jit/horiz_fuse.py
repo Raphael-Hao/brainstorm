@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Union
+from typing import Dict, List, Union
 
 from brt.common import log
 
@@ -10,18 +10,26 @@ from .module_func import ModuleFunction
 
 logger = log.get_logger(__file__)
 
+
 class HorizFuseModuleFunction(GlobalFunction):
-    def __init__(self, candidates: List[Union[GlobalFunction, str]]):
-        self.candidates: List[GlobalFunction] = []
-        if isinstance(candidates[0], GlobalFunction):
-            for i, func in enumerate(candidates):
-                func.name = func.name + f"_block_{i}"
-                self.candidates.append(func)
-        else:
-            for i, func_template in enumerate(candidates):
-                raw_func = ModuleFunction(func_template)
-                raw_func.name += f"_block_{i}"
-                self.candidates.append(raw_func)
+    def __init__(
+        self, candidates: List[ModuleFunction],
+    ):
+        super().__init__()
+        self.candidates = candidates
+        self.module_name = ""
+        self.platform = self.candidates[0].platform
+        self.input_infos = {}
+        self.output_infos = {}
+        self.param_infos = {}
+        for i, module_func in enumerate(candidates):
+            self.module_name += module_func.module_name
+            assert (
+                module_func.platform == self.platform
+            ), "platform not same, only support same platform for fuse"
+            self.input_infos.update(module_func.module_name)
+        self.kernel_type = "horiz_fuse"
+        self.initialized = True
 
     def fuse(self):
         self.generate_new_name()
@@ -31,14 +39,14 @@ class HorizFuseModuleFunction(GlobalFunction):
         self.calcu_culaunch_dims()
 
     def generate_new_name(self):
-        self.name = ""
+        self.func_name = ""
         first_block = True
         for func in self.candidates:
             if first_block:
                 first_block = False
             else:
-                self.name += "_"
-            self.name = self.name + func.name
+                self.func_name += "_"
+            self.func_name = self.func_name + func.func_name
 
     def generate_new_args(self):
         self.args = ""
@@ -92,26 +100,23 @@ class HorizFuseModuleFunction(GlobalFunction):
         self.threadidx_y = 1
         self.threadidx_z = 1
 
-    def get_code(self, sync_method="asm"):
-        self.fuse()
-        self.reset_mode("global")
-        self.clean_code += GlobalFunction.common_defines
-        self.clean_code += GlobalFunction.c_api_decorator
-        self.new_codeblock()
-        self.clean_code += GlobalFunction.asm_block_sync
-        self.clean_code += GlobalFunction.asm_warp_sync
-        self.new_emtpy_line()
-        for idx, func in enumerate(self.candidates):
-            self.clean_code += func.get_code(
-                mode="device", device_id=idx, sync_method=sync_method
+    def generate_dependency(self, sync_method):
+        dependencies = []
+        dependencies.append(self.add_codeblock(GlobalFunction.asm_block_sync))
+        dependencies.append(self.add_codeblock(GlobalFunction.asm_warp_sync))
+        self.new_line()
+        for _, func in enumerate(self.candidates):
+            device_code = func.get_code(
+                mode="device", bar_id=0, sync_method=sync_method
             )
-        self.clean_code += GlobalFunction.global_decorator
-        self.set_launch_bounds()
-        self.declare_name_args()
-        self.new_codeblock()
-        self.set_kernel_type("horiz_fuse")
-        self.set_culaunch_dims()
-        self.alloc_shared_memory()
+            dependencies.append(self.add_codeblock(device_code))
+        return dependencies
+
+    def generate_body(self):
+        formated_code = self.new_codeblock()
+        formated_code += self.set_kernel_type(self.kernel_type)
+        formated_code += self.set_culaunch_dims()
+        formated_code += self.alloc_shared_memory()
         block_start = 0
         block_end = 0
         for i, func in enumerate(self.candidates):
@@ -121,15 +126,24 @@ class HorizFuseModuleFunction(GlobalFunction):
             )
             if block_start == block_end:
                 if i == 0:
-                    self.clean_code += f"  if (blockIdx.x == {block_start})\n"
+                    formated_code += self.add_line_with_indent(
+                        f"if (blockIdx.x == {block_start})", end=True
+                    )
                 else:
-                    self.clean_code += f"  else if (blockIdx.x == {block_start})\n"
+                    formated_code += self.add_line_with_indent(
+                        f"else if (blockIdx.x == {block_start})", end=True
+                    )
             else:
                 if i == 0:
-                    self.clean_code += f"  if (blockIdx.x <= {block_end})\n"
+                    formated_code += self.add_line_with_indent(
+                        f"if (blockIdx.x <= {block_end})", end=True
+                    )
                 else:
-                    self.clean_code += f"  else if (blockIdx.x >= {block_start} && blockIdx.x <= {block_end})\n"
-            self.new_codeblock()
+                    formated_code += self.add_line_with_indent(
+                        f"else if (blockIdx.x >= {block_start} && blockIdx.x <= {block_end})",
+                        end=True,
+                    )
+            formated_code += self.new_codeblock()
             # pass shared memory ptr if needed else nullptr
             device_arg = self.device_args[i]
             if func.shm_size_in_bytes > 0:
@@ -137,14 +151,27 @@ class HorizFuseModuleFunction(GlobalFunction):
             else:
                 device_arg += ", nullptr"
             device_arg += f", blockIdx.x - {block_start}, threadIdx.x"
-            self.clean_code += f"    {func.name}({device_arg});\n"
-
-            self.close_codeblock()
+            formated_code += self.add_line_with_indent(
+                f"{func.func_name}({device_arg});", end=True
+            )
+            formated_code += self.close_codeblock()
             block_start = block_end + 1
         assert (
             block_start == self.grid_size
         ), f"block_fused: {block_start} != grid_size: {self.grid_size}"
-        self.close_codeblock()
-        self.close_codeblock()
-        return self.clean_code
+        formated_code += self.close_codeblock()
 
+    def get_code(self, sync_method="asm"):
+        self.fuse()
+        self.reset_mode("global")
+        self.add_codeblock(GlobalFunction.common_defines)
+        self.add_c_api()
+        self.func_deps = self.generate_dependency(sync_method=sync_method)
+        self.func_sig = self.generate_signature()
+        self.func_body = self.generate_body()
+        self.verify_code()
+        self.end_c_api()
+        return self.clean_code, self.func_sig, self.func_body, self.func_deps
+
+    def dump_json(self):
+        pass
