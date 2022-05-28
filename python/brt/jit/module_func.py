@@ -7,7 +7,7 @@ from typing import Dict, List, Union
 from brt.common import log
 
 from .base import CUDATypeSizeInByte, GlobalFunction
-from .utils import make_attributes, make_identifier, remove_empty_lines
+from .utils import make_identifier, remove_empty_lines
 
 logger = log.get_logger(__file__)
 

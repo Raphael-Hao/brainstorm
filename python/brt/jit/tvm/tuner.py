@@ -13,7 +13,6 @@ from brt.common import (
 )
 from brt.jit.module_func import ModuleFunction
 from brt.jit.storage import kernel_storager
-from brt.jit.utils import make_func_name
 
 import tvm
 from tvm import auto_scheduler, relay
@@ -23,6 +22,7 @@ from .utils import (
     make_culaunch_config_str,
     make_fname,
     make_inputs,
+    old_make_fname,
     parse_culaunch_config,
 )
 
@@ -97,10 +97,10 @@ class TVMTuner:
         self._update_scheduler(self.module_name, self.tvm_module, self.tvm_params)
 
     def _update_scheduler(self, module_name, tvm_module, tvm_params, log_fname=None):
-        origin_filename = make_fname(
+        origin_filename = old_make_fname(
             module_name, self.input_infos, self.output_infos, self.parameters
         )
-        filename = make_func_name(
+        filename = make_fname(
             module_name, self.input_infos, self.output_infos, self.parameters
         )
         if log_fname is None:
@@ -126,7 +126,7 @@ class TVMTuner:
         self.option = auto_scheduler.TuningOptions(
             num_measure_trials=2000,
             runner=self.measure_ctx.runner,
-            measure_callbacks=[auto_scheduler.RecordToFile(self.tune_log_filename)],
+            measure_callbacks=[auto_scheduler.RecordToFile(str(self.tune_log_file))],
         )
 
     def tune_netlet(self):
@@ -136,18 +136,16 @@ class TVMTuner:
         task_scheduler.tune(self.option)
 
     def get_best_template(self):
-        workload = json.loads(self.tvm_task.workload_key)
-        kernel_args = deserialize_args(workload[1:])
-        logger.debug(f"kernel args: {kernel_args}")
         try:
             if self.old_tune_log_file.exists():
+                print(f"Loading old tune log file {self.old_tune_log_file}")
                 log_contents = self.old_tune_log_file.read_text()
                 self.tune_log_file.write_text(log_contents)
             tvm_sch, tvm_args = self.tvm_task.apply_best(str(self.tune_log_file))
             tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
             grid_dim, block_dim = parse_culaunch_config(tvm_ir)
             source_code = self.tvm_task.print_best(
-                self.tune_log_filename, print_mode="cuda"
+                str(self.tune_log_file), print_mode="cuda"
             )
             return grid_dim, block_dim, source_code
         except Exception as e:
@@ -157,8 +155,9 @@ class TVMTuner:
         grid_dim, block_dim, source_code = self.get_best_template()
         culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
         kernel_template = culaunch_config + source_code
-        with open(self.template_filename, "w") as f:
-            f.write(kernel_template)
+        if self.template_file.exists():
+            logger.warn(f"{self.template_file} already exists.")
+        self.template_file.write_text(kernel_template)
 
     def inject_netlet_to_storage(self):
         grid_dim, block_dim, source_code = self.get_best_template()
