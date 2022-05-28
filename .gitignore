@@ -4,15 +4,14 @@ core
 !core/
 *.pkl_memoize_py3
 total_latency.tsv
-model_logs
-_nn.py
 *.qdrep
+
 .cache/*
 !.cache/kernel_db.sqlite
-
 !.cache/log/
 .cache/log/*
 !.cache/log/kernel_tune/
+!.cache/log/benchmark/
 
 .vscode/*
 !.vscode/settings.json
