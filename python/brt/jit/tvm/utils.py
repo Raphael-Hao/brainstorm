@@ -7,7 +7,12 @@ import torch
 
 import tvm
 
-__all__ = ["parse_culaunch_config", "make_culaunch_config_str", "make_inputs", "make_fname"]
+__all__ = [
+    "parse_culaunch_config",
+    "make_culaunch_config_str",
+    "make_inputs",
+    "make_fname",
+]
 
 
 def parse_culaunch_config(

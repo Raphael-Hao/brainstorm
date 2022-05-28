@@ -16,25 +16,32 @@ class ModuleFunction(GlobalFunction):
     def __init__(
         self,
         module_name,
-        kernel_source,
+        kernel_source=None,
         platform="CUDA_GPU",
         input_infos: Dict[str, List[int]] = None,
         output_infos: Dict[str, List[int]] = None,
         parameters: Dict[str, List[Union[int, float]]] = None,
     ):
+        super().__init__("global")
         self.module_name = module_name
         self.kernel_source = kernel_source
         self.platform = platform
         self.input_infos = input_infos
         self.output_infos = output_infos
         self.parameters = parameters
+        if self.kernel_source is not None:
+            self.initialize(source="raw")
+
+    def initialize(self, source="raw"):
         self.extract_raw_source()
         self.extract_culaunch_dims()
         self.extract_func_args()
         self.extract_shared_memory()
         self.clean_raw_body()
+        self.kernel_type = "global"
+        self.initialized = True
 
-    def extract_raw_source(self):
+    def extract_raw_source(self, source="raw"):
         """
         Parse raw source code to extract function name and arguments.
         """
@@ -57,10 +64,15 @@ class ModuleFunction(GlobalFunction):
             r"extern\s+\"C\"\s+__global__\s+void\s+(\w+)\s*\((.*)\)\s*(\{[\s\S]*)",
             source_without_launch_bound,
         )
-        self.name = parsed_source.group(1)
+        if source == "raw":
+            self.func_name = parsed_source.group(1)
+        else:
+            self.func_name = self.module_name
         self.args = parsed_source.group(2)
-        self.body = parsed_source.group(3)
-        self.body = self.body[self.body.find("{") + 1 : self.body.rfind("}")]
+        self.raw_body = parsed_source.group(3)
+        self.raw_body = self.raw_body[
+            self.raw_body.find("{") + 1 : self.raw_body.rfind("}")
+        ]
 
     def extract_culaunch_dims(self):
         self.blockidx_x = int(
@@ -123,7 +135,7 @@ class ModuleFunction(GlobalFunction):
     def extract_shared_memory(self):
         # find all shared memory declarations
         shm_regex = r"__shared__\s+(\w+)\s+(\w+)\s*\[\s*(\d+)\s*\]\s*;"
-        shm_declares = re.findall(shm_regex, self.body)
+        shm_declares = re.findall(shm_regex, self.raw_body)
         if len(shm_declares) == 0:
             self.shm_size_in_bytes = 0
             return
@@ -139,24 +151,17 @@ class ModuleFunction(GlobalFunction):
             self.shm_symbols.append(shm_symbol)
             self.shm_sizes.append(shm_size)
             self.shm_size_in_bytes += shm_size * CUDATypeSizeInByte[shm_type]
-        self.body = re.sub(shm_regex, "", self.body)
+        self.raw_body = re.sub(shm_regex, "", self.raw_body)
 
     def clean_raw_body(self):
-        self.body = remove_empty_lines(self.body)
-
-    def extract_syncthreads_times(self):
-        # only count the number of __syncthreads existing in the code
-        self.syncthreads_times = self.body.count("__syncthreads()")
+        self.raw_body = remove_empty_lines(self.raw_body)
 
     def dump_json(self):
         assert self.input_infos is not None and self.output_infos is not None
-        code = self.get_code()
+        code, func_signature, func_body = self.get_code()
         key = code
         identifier = make_identifier(
-            self.module_name,
-            self.input_infos,
-            self.output_infos,
-            self.parameters,
+            self.module_name, self.input_infos, self.output_infos, self.parameters,
         )
         source = "BRT"
         device_type = self.platform
@@ -165,11 +170,10 @@ class ModuleFunction(GlobalFunction):
         attribute_dict.update({"output_shape:": list(self.output_infos.values())})
         if self.parameters is not None:
             attribute_dict.update({"parameters:": list(self.parameters.values())})
-        print(attribute_dict)
         attributes = json.dumps(attribute_dict)
         function_dict = {}
-        function_dict.update({"function_signature": self.siganature})
-        function_dict.update({"function_body": code})
+        function_dict.update({"function_signature": func_signature})
+        function_dict.update({"function_body": func_body})
         function_dict.update(
             {"grid_dim": [self.blockidx_x, self.blockidx_y, self.blockidx_z]}
         )
@@ -187,10 +191,12 @@ class ModuleFunction(GlobalFunction):
             "Source": source,
             "DeviceType": device_type,
             "Function": function,
-            "Tags": "Module",
+            "Tags": self.kernel_type,
             "Miscs": miscs,
         }
         return module_json_dict
 
     def load_json(self, module_in_json):
-        pass
+        self.kernel_source = module_in_json["Key"]
+        self.initialize()
+

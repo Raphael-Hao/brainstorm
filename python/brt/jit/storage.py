@@ -48,7 +48,6 @@ CREATE TABLE IF NOT EXISTS KernelCache(
         self.model_kernels = []
 
     def add_kernel(self, kernel_in_json, overwrite=False):
-        print(kernel_in_json["Key"])
         if overwrite:
             self.cursor.execute(self.DEL_KERNEL_CMD, (kernel_in_json["Key"],))
 
