@@ -17,14 +17,7 @@
 namespace brt {
 namespace jit {
 
-enum class KernelType {
-  kGlobal,
-  kHorizFuse,
-  kHeteroFuse,
-  kHomoFuseV1,
-  kHomoFuseV2,
-  kElasticHomoFuse
-};
+enum class KernelType { kGlobal, kHorizFuse, kHeteroFuse, kHomoFuse, kElasticHomoFuse };
 
 static std::unordered_map<std::string, int> const DataTypeSize = {
     {"char", 1},    {"short", 2},    {"int", 4},      {"float", 4},    {"double", 8}, {"int8_t", 1},
@@ -33,9 +26,11 @@ static std::unordered_map<std::string, int> const DataTypeSize = {
 };
 
 static std::unordered_map<std::string, KernelType> const kernel_type_tb = {
-    {"global", KernelType::kGlobal},           {"horiz_fuse", KernelType::kHorizFuse},
-    {"hetero_fuse", KernelType::kHeteroFuse},  {"homo_fuse_v1", KernelType::kHomoFuseV1},
-    {"homo_fuse_v2", KernelType::kHomoFuseV2}, {"elastic_homo_fuse", KernelType::kElasticHomoFuse}};
+    {"global", KernelType::kGlobal},
+    {"horiz_fuse", KernelType::kHorizFuse},
+    {"hetero_fuse", KernelType::kHeteroFuse},
+    {"homo_fuse", KernelType::kHomoFuse},
+    {"elastic_homo_fuse", KernelType::kElasticHomoFuse}};
 
 struct KernelConfig {
   // Handling JIT compilation in Multi-gpu cases

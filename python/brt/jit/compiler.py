@@ -22,7 +22,7 @@ class CUDACompiler:
             def func(*inputs, active_blocks=[]):
                 jit.hetero_invoke(inputs, active_blocks, __ctx__)
 
-        elif kernel_type == "homo_fuse_v2":
+        elif kernel_type == "homo_fuse":
 
             def func(shared_inputs, standalone_inputs, capacities=[]):
                 jit.homo_invoke(

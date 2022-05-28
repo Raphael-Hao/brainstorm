@@ -47,22 +47,22 @@ CREATE TABLE IF NOT EXISTS KernelCache(
         self.init_kernel_cache_db()
         self.model_kernels = []
 
-    def add_kernel(self, kernel_in_json, overwrite=False):
+    def add_kernel(self, kernel_dict, overwrite=False):
         if overwrite:
-            self.cursor.execute(self.DEL_KERNEL_CMD, (kernel_in_json["Key"],))
+            self.cursor.execute(self.DEL_KERNEL_CMD, (kernel_dict["Key"],))
 
         self.cursor.execute(
             self.ADD_KERNEL_CMD,
             (
-                kernel_in_json["Key"],
-                kernel_in_json["Identifier"],
-                kernel_in_json["OpType"],
-                kernel_in_json["Attributes"],
-                kernel_in_json["Source"],
-                kernel_in_json["DeviceType"],
-                kernel_in_json["Function"],
-                kernel_in_json["Tags"],
-                kernel_in_json["Miscs"],
+                kernel_dict["Key"],
+                kernel_dict["Identifier"],
+                kernel_dict["OpType"],
+                kernel_dict["Attributes"],
+                kernel_dict["Source"],
+                kernel_dict["DeviceType"],
+                kernel_dict["Function"],
+                kernel_dict["Tags"],
+                kernel_dict["Miscs"],
             ),
         )
         self.flush()

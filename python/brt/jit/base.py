@@ -27,7 +27,7 @@ CUDATypeSizeInByte = {
 
 
 class Function:
-    c_api_decorator = 'extern "C" {\n'
+    c_api_decorator = 'extern "C" '
 
     def __init__(self) -> None:
         pass
@@ -56,7 +56,7 @@ class Function:
         return formated_code
 
     def add_line_with_indent(self, code: str, end=False) -> str:
-        formated_code += "  " * self.indent
+        formated_code = "  " * self.indent
         formated_code += code
         self.clean_code += formated_code
         if end == True:
@@ -97,24 +97,24 @@ class GlobalFunction(Function):
 #define uint64_t unsigned long long
 """
     asm_block_sync = """
-__device__ __forceinline__ void AsmBlockSync(int name, int numThreads) {
+extern "C" __device__ __forceinline__ void AsmBlockSync(int name, int numThreads) {
   asm volatile("bar.sync %0, %1;" : : "r"(name), "r"(numThreads) : "memory");
 }
 """
     asm_warp_sync = """
-__device__ __forceinline__ void AsmWarpSync(const unsigned threadsmask) {
+extern "C" __device__ __forceinline__ void AsmWarpSync(const unsigned threadsmask) {
   asm volatile("bar.warp.sync %0;" : : "r"(threadsmask) : "memory");
 }
 """
     cpp_warp_sync = """
-__device__ __forceinline__ void CppWarpSync(const unsigned threadsmask) {
+extern "C" __device__ __forceinline__ void CppWarpSync(const unsigned threadsmask) {
   __syncwarp(threadsmask);
 }   
 """
     cpp_cg_warp_sync = """
 #include <cooperative_groups.h>
 namespace cg = cooperative_groups;
-__device__ __forceinline__ void CppCgWarpSync() {
+extern "C" __device__ __forceinline__ void CppCgWarpSync() {
   cg::coalesced_group g = cg::coalesced_threads();
   g.sync();
 }
@@ -124,12 +124,13 @@ __device__ __forceinline__ void CppCgWarpSync() {
     device_decorator = "__device__ __forceinline__ "
 
     def __init__(self) -> None:
-        self.kernel_type = "global"
+        if not hasattr(self, "kernel_type"):
+            setattr(self, "kernel_type", "global")
         self.initialized = False
-
-    def declare_ret_with_launch_bounds(self):
+        
+    def declare_return_with_launch_bounds(self):
         formated_code = "void "
-        if self.max_threads_per_block == 0:
+        if self.max_threads_per_block == 0 or self.mode == "device":
             self.append_code(formated_code)
             return formated_code
         if self.min_blocks_per_sm == 1:
@@ -280,14 +281,18 @@ __device__ __forceinline__ void CppCgWarpSync() {
         formated_code = self.add_codeblock(body_without_syncthreads)
         return formated_code
 
-    def reset_mode(self, mode="global"):
+    def reset(self, mode):
         self.mode = mode
         self.clean_code = ""
         self.indent = 0
 
+    def generate_dependency(self):
+        deps = []
+        return deps
+
     def generate_signature(self):
         formated_code = self.add_line_with_indent(GlobalFunction.global_decorator)
-        formated_code += self.declare_ret_with_launch_bounds()
+        formated_code += self.declare_return_with_launch_bounds()
         formated_code += self.declare_name_args()
         return formated_code
 
@@ -300,30 +305,47 @@ __device__ __forceinline__ void CppCgWarpSync() {
         formated_code += self.close_codeblock()
         return formated_code
 
-    def get_code(self, mode="global", bar_id: int = 0, sync_method="asm"):
-        self.reset_mode(mode)
-        if self.mode == "global":
-            self.add_codeblock(GlobalFunction.common_defines)
+    def get_code(self):
+        assert self.initialized is True, "CodeGenerator is not initialized"
+        self.reset(mode="global")
+        self.add_codeblock(GlobalFunction.common_defines)
+        if (
+            hasattr(self, "func_deps")
+            and hasattr(self, "func_sig")
+            and hasattr(self, "func_body")
+        ):
+            func_deps = getattr(self, "func_deps")
+            func_sig = getattr(self, "func_sig")
+            func_body = getattr(self, "func_body")
+            for dependency in func_deps:
+                self.add_codeblock(dependency)
             self.add_c_api()
-            self.func_sig = self.generate_signature()
-            self.func_body = self.generate_body()
-            self.end_c_api()
-        elif self.mode == "device":
-            self.add_line_with_indent(GlobalFunction.device_decorator)
-            self.declare_name_args()
-            self.new_codeblock()
-            self.add_line_with_indent(f"if (thread_idx >= {self.block_size})")
-            self.new_codeblock()
-            self.add_line_with_indent("return;", end=True)
-            self.close_codeblock()
-            self.shadow_global_dims()
-            self.alloc_shared_memory()
-            self.add_body_without_syncthreads(bar_id, sync_method)
-            self.close_codeblock()
-        else:
-            raise ValueError("Invalid mode: %s" % mode)
+            self.append_code(func_sig)
+            self.append_code(func_body)
+            return self.clean_code, self.func_deps, self.func_sig, self.func_body
+        self.func_deps = self.generate_dependency()
+        self.add_c_api()
+        self.func_sig = self.generate_signature()
+        self.func_body = self.generate_body()
         self.verify_code()
-        if self.mode == "global":
-            return self.clean_code, self.func_sig, self.func_body
-        else:
-            return self.clean_code
+        return self.clean_code, self.func_deps, self.func_sig, self.func_body
+
+    def convert_to_device(self, bar_id: int = 0, sync_method="asm"):
+        assert (
+            self.kernel_type == "global"
+        ), "Only global kernel can be converted to device"
+        self.reset(mode="device")
+        self.add_c_api()
+        self.append_code(GlobalFunction.device_decorator)
+        self.declare_return_with_launch_bounds()
+        self.declare_name_args()
+        self.new_codeblock()
+        self.add_line_with_indent(f"if (thread_idx >= {self.block_size})")
+        self.new_codeblock()
+        self.add_line_with_indent("return;", end=True)
+        self.close_codeblock()
+        self.shadow_global_dims()
+        self.alloc_shared_memory()
+        self.add_body_without_syncthreads(bar_id, sync_method)
+        self.close_codeblock()
+        return self.clean_code

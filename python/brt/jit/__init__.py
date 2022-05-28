@@ -3,13 +3,7 @@
 
 from .compiler import CUDACompiler
 from .hetero_fuse import HeteroFuseModuleFunction
-from .homo_fuse import (
-    ElaticHomoFuseFunction,
-    HomoFuseFunctionV2,
-    HomoFuseModuleFunction,
-)
+from .homo_fuse import ElaticHomoFuseFunction, HomoFuseModuleFunction
 from .horiz_fuse import HorizFuseModuleFunction
 from .module_func import ModuleFunction
 from .template import Templator
-
-# from .tvm import TVMTuner

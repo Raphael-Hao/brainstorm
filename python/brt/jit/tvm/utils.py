@@ -61,7 +61,7 @@ def old_make_fname(
     op_type,
     input_infos: Dict[str, List[int]],
     output_infos: Dict[str, List[int]],
-    parameters: Dict[str, List[Union[int, float]]],
+    parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
 ) -> str:
     fname = op_type
     fname += "_\{"

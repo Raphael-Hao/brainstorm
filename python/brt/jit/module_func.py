@@ -7,7 +7,8 @@ from typing import Dict, List, Union
 from brt.common import log
 
 from .base import CUDATypeSizeInByte, GlobalFunction
-from .utils import make_identifier, remove_empty_lines
+from .storage import kernel_storager
+from .utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
 
 logger = log.get_logger(__file__)
 
@@ -22,7 +23,9 @@ class ModuleFunction(GlobalFunction):
         output_infos: Dict[str, List[int]] = None,
         parameters: Dict[str, List[Union[int, float]]] = None,
     ):
-        super().__init__("global")
+        if not hasattr(self, "kernel_type"):
+            setattr(self, "kernel_type", "global")
+        super().__init__()
         self.module_name = module_name
         self.kernel_source = kernel_source
         self.platform = platform
@@ -30,18 +33,20 @@ class ModuleFunction(GlobalFunction):
         self.output_infos = output_infos
         self.parameters = parameters
         if self.kernel_source is not None:
-            self.initialize(source="raw")
+            self.initialize()
 
-    def initialize(self, source="raw"):
+    def initialize(self):
+        self.func_name = make_func_name(
+            self.module_name, self.input_infos, self.output_infos, self.parameters
+        )
         self.extract_raw_source()
         self.extract_culaunch_dims()
         self.extract_func_args()
         self.extract_shared_memory()
         self.clean_raw_body()
-        self.kernel_type = "global"
         self.initialized = True
 
-    def extract_raw_source(self, source="raw"):
+    def extract_raw_source(self):
         """
         Parse raw source code to extract function name and arguments.
         """
@@ -64,10 +69,6 @@ class ModuleFunction(GlobalFunction):
             r"extern\s+\"C\"\s+__global__\s+void\s+(\w+)\s*\((.*)\)\s*(\{[\s\S]*)",
             source_without_launch_bound,
         )
-        if source == "raw":
-            self.func_name = parsed_source.group(1)
-        else:
-            self.func_name = self.module_name
         self.args = parsed_source.group(2)
         self.raw_body = parsed_source.group(3)
         self.raw_body = self.raw_body[
@@ -77,34 +78,34 @@ class ModuleFunction(GlobalFunction):
     def extract_culaunch_dims(self):
         self.blockidx_x = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*blockIdx.x\s*=\s*(\d+)", self.kernel_source
+                r"//\s*\[thread_extent\]\s*blockIdx.x\s*=\s*(\d+)", self.kernel_source
             ).group(1)
         )
         self.blockidx_y = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*blockIdx.y\s*=\s*(\d+)", self.kernel_source
+                r"//\s*\[thread_extent\]\s*blockIdx.y\s*=\s*(\d+)", self.kernel_source
             ).group(1)
         )
         self.blockidx_z = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*blockIdx.z\s*=\s*(\d+)", self.kernel_source
+                r"//\s*\[thread_extent\]\s*blockIdx.z\s*=\s*(\d+)", self.kernel_source
             ).group(1)
         )
         self.threadidx_x = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*threadIdx.x\s*=\s*(\d+)",
+                r"//\s*\[thread_extent\]\s*threadIdx.x\s*=\s*(\d+)",
                 self.kernel_source,
             ).group(1)
         )
         self.threadidx_y = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*threadIdx.y\s*=\s*(\d+)",
+                r"//\s*\[thread_extent\]\s*threadIdx.y\s*=\s*(\d+)",
                 self.kernel_source,
             ).group(1)
         )
         self.threadidx_z = int(
             re.search(
-                r"\/\/\s*\[thread_extent\]\s*threadIdx.z\s*=\s*(\d+)",
+                r"//\s*\[thread_extent\]\s*threadIdx.z\s*=\s*(\d+)",
                 self.kernel_source,
             ).group(1)
         )
@@ -154,24 +155,33 @@ class ModuleFunction(GlobalFunction):
         self.raw_body = re.sub(shm_regex, "", self.raw_body)
 
     def clean_raw_body(self):
+        self.raw_body = remove_comments(self.raw_body)
         self.raw_body = remove_empty_lines(self.raw_body)
 
-    def dump_json(self):
-        assert self.input_infos is not None and self.output_infos is not None
-        code, func_signature, func_body = self.get_code()
-        key = code
-        identifier = make_identifier(
-            self.module_name, self.input_infos, self.output_infos, self.parameters,
+    def make_identifier(self):
+        return make_identifier(
+            self.module_name,
+            self.input_infos,
+            self.output_infos,
+            self.parameters,
         )
+
+    def dump_to_db(self):
+        assert self.input_infos is not None and self.output_infos is not None
+        code, func_deps, func_signature, func_body = self.get_code()
+        key = code
+        identifier = self.make_identifier()
         source = "BRT"
         device_type = self.platform
         attribute_dict = {}
-        attribute_dict.update({"input_shape:": list(self.input_infos.values())})
-        attribute_dict.update({"output_shape:": list(self.output_infos.values())})
+        attribute_dict.update({"input_shape:": self.input_infos})
+        attribute_dict.update({"output_shape:": self.output_infos})
         if self.parameters is not None:
-            attribute_dict.update({"parameters:": list(self.parameters.values())})
+            attribute_dict.update({"parameters:": self.parameters})
+        print(attribute_dict)
         attributes = json.dumps(attribute_dict)
         function_dict = {}
+        function_dict.update({"function_deps": func_deps})
         function_dict.update({"function_signature": func_signature})
         function_dict.update({"function_body": func_body})
         function_dict.update(
@@ -181,9 +191,12 @@ class ModuleFunction(GlobalFunction):
             {"block_dim": [self.threadidx_x, self.threadidx_y, self.threadidx_z]}
         ),
         function = json.dumps(function_dict)
+        tag_dict = {}
+        tag_dict.update({"kernel_type": self.kernel_type})
+        tag = json.dumps(tag_dict)
         miscs_dict = {}
         miscs = json.dumps(miscs_dict)
-        module_json_dict = {
+        module_dict = {
             "Key": key,
             "Identifier": identifier,
             "OpType": self.module_name,
@@ -191,12 +204,23 @@ class ModuleFunction(GlobalFunction):
             "Source": source,
             "DeviceType": device_type,
             "Function": function,
-            "Tags": self.kernel_type,
+            "Tags": tag,
             "Miscs": miscs,
         }
-        return module_json_dict
+        kernel_storager.add_kernel(module_dict, overwrite=True)
 
-    def load_json(self, module_in_json):
-        self.kernel_source = module_in_json["Key"]
-        self.initialize()
-
+    def load_from_db(self):
+        identifier = self.make_identifier()
+        fetched_kernel = kernel_storager.query_kernel(identifier, self.platform)
+        attribute_dict = json.loads(fetched_kernel[3])
+        function_dict = json.loads(fetched_kernel[6])
+        tag_dict = json.loads(fetched_kernel[7])
+        assert self.kernel_type == tag_dict["kernel_type"]
+        if self.kernel_type == "global":
+            self.kernel_source = fetched_kernel[0]
+            self.initialize()
+        else:
+            self.func_deps = function_dict["function_deps"]
+            self.func_sig = function_dict["function_signature"]
+            self.func_body = function_dict["function_body"]
+            self.initialized = True

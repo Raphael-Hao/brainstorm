@@ -1,52 +1,56 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+import json
 from typing import Dict, List, Union
 
 from brt.common import log
 
 from .base import GlobalFunction
 from .module_func import ModuleFunction
+from .storage import kernel_storager
+from .utils import make_fused_identifier, make_identifier
 
 logger = log.get_logger(__file__)
 
 
 class HorizFuseModuleFunction(GlobalFunction):
     def __init__(
-        self, candidates: List[ModuleFunction],
+        self,
+        candidates: List[ModuleFunction],
     ):
+        if not hasattr(self, "kernel_type"):
+            setattr(self, "kernel_type", "horiz_fuse")
         super().__init__()
         self.candidates = candidates
-        self.module_name = ""
-        self.platform = self.candidates[0].platform
-        self.input_infos = {}
-        self.output_infos = {}
-        self.param_infos = {}
-        for i, module_func in enumerate(candidates):
-            self.module_name += module_func.module_name
+        self.input_infos = []
+        self.output_infos = []
+        self.parammeters = []
+        will_initialize = True
+        for _, module_func in enumerate(candidates):
+            if not module_func.initialized:
+                will_initialize = False
             assert (
                 module_func.platform == self.platform
             ), "platform not same, only support same platform for fuse"
-            self.input_infos.update(module_func.module_name)
-        self.kernel_type = "horiz_fuse"
-        self.initialized = True
+            self.input_infos.append(module_func.input_infos)
+            self.output_infos.append(module_func.output_infos)
+            self.parammeters.append(module_func.parameters)
+        self.module_name = "_".join(module.module_name for module in candidates)
+        self.func_name = (
+            "_".join(func.func_name for func in candidates) + self.kernel_type
+        )
+        self.platform = self.candidates[0].platform
+        if will_initialize:
+            self.initialize()
 
-    def fuse(self):
-        self.generate_new_name()
+    def initialize(self):
+        # self.generate_new_names()
         self.generate_new_args()
         self.infer_shared_memory()
         self.calcu_launch_bounds()
         self.calcu_culaunch_dims()
-
-    def generate_new_name(self):
-        self.func_name = ""
-        first_block = True
-        for func in self.candidates:
-            if first_block:
-                first_block = False
-            else:
-                self.func_name += "_"
-            self.func_name = self.func_name + func.func_name
+        self.initialized = True
 
     def generate_new_args(self):
         self.args = ""
@@ -106,15 +110,13 @@ class HorizFuseModuleFunction(GlobalFunction):
         dependencies.append(self.add_codeblock(GlobalFunction.asm_warp_sync))
         self.new_line()
         for _, func in enumerate(self.candidates):
-            device_code = func.get_code(
-                mode="device", bar_id=0, sync_method=sync_method
-            )
+            device_code = func.convert_to_device(bar_id=0, sync_method=sync_method)
             dependencies.append(self.add_codeblock(device_code))
         return dependencies
 
     def generate_body(self):
         formated_code = self.new_codeblock()
-        formated_code += self.set_kernel_type(self.kernel_type)
+        formated_code += self.set_kernel_type()
         formated_code += self.set_culaunch_dims()
         formated_code += self.alloc_shared_memory()
         block_start = 0
@@ -160,18 +162,16 @@ class HorizFuseModuleFunction(GlobalFunction):
             block_start == self.grid_size
         ), f"block_fused: {block_start} != grid_size: {self.grid_size}"
         formated_code += self.close_codeblock()
+        return formated_code
 
-    def get_code(self, sync_method="asm"):
-        self.fuse()
-        self.reset_mode("global")
-        self.add_codeblock(GlobalFunction.common_defines)
-        self.add_c_api()
-        self.func_deps = self.generate_dependency(sync_method=sync_method)
-        self.func_sig = self.generate_signature()
-        self.func_body = self.generate_body()
-        self.verify_code()
-        self.end_c_api()
-        return self.clean_code, self.func_sig, self.func_body, self.func_deps
-
-    def dump_json(self):
-        pass
+    def make_identifier(self):
+        identifiers = [
+            make_identifier(
+                module.module_name,
+                module.input_infos,
+                module.output_infos,
+                module.parameters,
+            )
+            for module in self.candidates
+        ]
+        return make_fused_identifier(identifiers=identifiers)
