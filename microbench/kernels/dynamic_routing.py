@@ -13,6 +13,7 @@ from brt.jit.tvm import TVMTuner
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brt.microbench.kernels.dynamic_routing")
 
+
 class Conv2dBNAct(nn.Module):
     def __init__(
         self,
@@ -60,8 +61,10 @@ class Conv2dBNAct(nn.Module):
 
 def main():
     tvm_tuner = TVMTuner()
-    conv_params_log_file = BRT_LOG_PATH / "dynamic_routing_conv_params.json"
-    conv_params_log_file_nodup = BRT_LOG_PATH / "dynamic_routing_conv_params_nodup.json"
+    conv_params_log_file = BRT_LOG_PATH / "benchmark/dynamic_routing/conv_params.json"
+    conv_params_log_file_nodup = (
+        BRT_LOG_PATH / "benchmark/benchdynamic_routing/conv_params_nodup.json"
+    )
     ## remove duplicate lines
     conv_param_set = set()
     nodup_f = conv_params_log_file_nodup.open("w")
@@ -125,6 +128,7 @@ def main():
             logger.info(f"tuning {module_name} with: {parameters}")
             # tvm_tuner.tune_netlet()
             tvm_tuner.export_netlet_template()
+            tvm_tuner.insert_netlet_to_storage()
 
 
 if __name__ == "__main__":

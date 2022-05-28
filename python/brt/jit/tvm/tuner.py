@@ -22,7 +22,6 @@ from .utils import (
     make_culaunch_config_str,
     make_fname,
     make_inputs,
-    old_make_fname,
     parse_culaunch_config,
 )
 
@@ -97,16 +96,10 @@ class TVMTuner:
         self._update_scheduler(self.module_name, self.tvm_module, self.tvm_params)
 
     def _update_scheduler(self, module_name, tvm_module, tvm_params, log_fname=None):
-        origin_filename = old_make_fname(
-            module_name, self.input_infos, self.output_infos, self.parameters
-        )
         filename = make_fname(
             module_name, self.input_infos, self.output_infos, self.parameters
         )
         if log_fname is None:
-            self.old_tune_log_file = (
-                BRT_KERNEL_TUNE_LOG_PATH / f"{origin_filename}.json"
-            )
             self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{filename}.json"
         else:
             self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / log_fname
@@ -137,10 +130,6 @@ class TVMTuner:
 
     def get_best_template(self):
         try:
-            if self.old_tune_log_file.exists():
-                print(f"Loading old tune log file {self.old_tune_log_file}")
-                log_contents = self.old_tune_log_file.read_text()
-                self.tune_log_file.write_text(log_contents)
             tvm_sch, tvm_args = self.tvm_task.apply_best(str(self.tune_log_file))
             tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
             grid_dim, block_dim = parse_culaunch_config(tvm_ir)
@@ -159,7 +148,7 @@ class TVMTuner:
             logger.warn(f"{self.template_file} already exists.")
         self.template_file.write_text(kernel_template)
 
-    def inject_netlet_to_storage(self):
+    def insert_netlet_to_storage(self):
         grid_dim, block_dim, source_code = self.get_best_template()
         culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
         kernel_source = culaunch_config + source_code
