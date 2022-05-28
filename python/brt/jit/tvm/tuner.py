@@ -16,7 +16,6 @@ from brt.jit.storage import kernel_storager
 
 import tvm
 from tvm import auto_scheduler, relay
-from tvm.auto_scheduler.utils import deserialize_args
 
 from .utils import (
     make_culaunch_config_str,
@@ -55,7 +54,7 @@ class TVMTuner:
         module: torch.nn.Module,
         input_infos: Dict[str, List[Union[int, float]]],
         output_infos: Dict[str, List[Union[int, float]]],
-        parameters: Dict[str, List[Union[int, float]]],
+        parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
         log_fname: str = None,  # for early tuned netlet
     ):
         self.module_name = module_name
@@ -103,7 +102,10 @@ class TVMTuner:
             self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{filename}.json"
         else:
             self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / log_fname
-        self.template_file = BRT_KERNEL_TEMPLATE_PATH / f"{filename}.cu"
+        self.template_file_origin = BRT_KERNEL_TEMPLATE_PATH / f"{filename}_origin.cu"
+        self.template_file_generated = (
+            BRT_KERNEL_TEMPLATE_PATH / f"{filename}_generated.cu"
+        )
         tvm_tasks, tvm_task_weights = auto_scheduler.extract_tasks(
             tvm_module["main"], tvm_params, self.target
         )
@@ -143,10 +145,21 @@ class TVMTuner:
     def export_netlet_template(self):
         grid_dim, block_dim, source_code = self.get_best_template()
         culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
-        kernel_template = culaunch_config + source_code
-        if self.template_file.exists():
-            logger.warn(f"{self.template_file} already exists.")
-        self.template_file.write_text(kernel_template)
+        kernel_source = culaunch_config + source_code
+        module_function = ModuleFunction(
+            self.module_name,
+            kernel_source=kernel_source,
+            platform=self.platform,
+            input_infos=self.input_infos,
+            output_infos=self.output_infos,
+            parameters=self.parameters,
+        )
+        if self.template_file_origin.exists():
+            logger.warn(f"{self.template_file_origin} already exists.")
+        if self.template_file_generated.exists():
+            logger.warn(f"{self.template_file_generated} already exists.")
+        self.template_file_origin.write_text(kernel_source)
+        self.template_file_generated.write_text(module_function.get_code()[0])
 
     def insert_netlet_to_storage(self):
         grid_dim, block_dim, source_code = self.get_best_template()
@@ -160,5 +173,4 @@ class TVMTuner:
             output_infos=self.output_infos,
             parameters=self.parameters,
         )
-        module_in_json = module_function.dump_json()
-        kernel_storager.add_kernel(module_in_json, overwrite=True)
+        module_function.dump_to_db()

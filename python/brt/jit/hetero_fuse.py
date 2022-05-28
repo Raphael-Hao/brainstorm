@@ -9,6 +9,8 @@ from .horiz_fuse import HorizFuseModuleFunction
 
 class HeteroFuseModuleFunction(HorizFuseModuleFunction):
     def __init__(self, candidates: List[Union[GlobalFunction, str]]):
+        if not hasattr(self, "kernel_type"):
+            setattr(self, "kernel_type", "hetero_fuse")
         super().__init__(candidates=candidates)
 
     def generate_new_args(self):
@@ -28,23 +30,11 @@ class HeteroFuseModuleFunction(HorizFuseModuleFunction):
         self.threadidx_x = self.block_size
         self.threadidx_y = 1
         self.threadidx_z = 1
-
-    def get_code(self, sync_method="asm"):
-        self.fuse()
-        self.reset_mode("global")
-        self.clean_code += GlobalFunction.common_defines
-        self.clean_code += GlobalFunction.c_api_decorator
-        self.new_codeblock()
-        self.clean_code += GlobalFunction.asm_block_sync
-        self.clean_code += GlobalFunction.asm_warp_sync
-        self.new_line()
-        for idx, func in enumerate(self.candidates):
-            self.clean_code += func.get_code(
-                mode="device", device_id=idx, sync_method=sync_method
-            )
-        self.clean_code += GlobalFunction.global_decorator
-        self.declare_ret_with_launch_bounds()
-        self.declare_name_args()
+    
+    def generate_signature(self):
+        return super().generate_signature()
+    
+    def generate_body(self):
         self.new_codeblock()
         self.set_kernel_type()
         self.set_culaunch_dims()
@@ -62,7 +52,9 @@ class HeteroFuseModuleFunction(HorizFuseModuleFunction):
                     block_start += (
                         f"{self.candidates[j].func_name}_active * {self.grid_size[j]}"
                     )
-                condition = f"{block_start} + {func.func_name}_active * {self.grid_size[i]})"
+                condition = (
+                    f"{block_start} + {func.func_name}_active * {self.grid_size[i]})"
+                )
                 block_start += ")"
                 self.clean_code += f"  else if (blockIdx.x < {condition}) "
             self.new_codeblock()
@@ -75,6 +67,7 @@ class HeteroFuseModuleFunction(HorizFuseModuleFunction):
             self.clean_code += f"    {func.func_name}({device_arg});\n"
             self.close_codeblock()
         self.close_codeblock()
-        self.close_codeblock()
-        self.verify_code()
-        return self.clean_code
+
+    def make_identifier(self):
+        return super().make_identifier()
+    

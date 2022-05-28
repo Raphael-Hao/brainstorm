@@ -7,8 +7,11 @@ import json
 import logging
 
 import torch.nn as nn
-from brt.common import BRT_LOG_PATH
+from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
+from brt.jit.module_func import ModuleFunction
+from brt.jit.storage import kernel_storager
 from brt.jit.tvm import TVMTuner
+from brt.jit.tvm.utils import make_fname
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brt.microbench.kernels.dynamic_routing")
@@ -63,7 +66,7 @@ def main():
     tvm_tuner = TVMTuner()
     conv_params_log_file = BRT_LOG_PATH / "benchmark/dynamic_routing/conv_params.json"
     conv_params_log_file_nodup = (
-        BRT_LOG_PATH / "benchmark/benchdynamic_routing/conv_params_nodup.json"
+        BRT_LOG_PATH / "benchmark/dynamic_routing/conv_params_nodup.json"
     )
     ## remove duplicate lines
     conv_param_set = set()
@@ -129,6 +132,15 @@ def main():
             # tvm_tuner.tune_netlet()
             tvm_tuner.export_netlet_template()
             tvm_tuner.insert_netlet_to_storage()
+            module_function = ModuleFunction(
+                module_name, None, "CUDA_GPU", input_infos, output_infos, parameters
+            )
+            module_function.load_from_db()
+            template_file_loaded = (
+                BRT_KERNEL_TEMPLATE_PATH
+                / f"{make_fname(module_name, input_infos, output_infos, parameters)}_loaded.cu"
+            )
+            template_file_loaded.write_text(module_function.get_code()[0])
 
 
 if __name__ == "__main__":

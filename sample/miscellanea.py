@@ -10,7 +10,7 @@ log.set_level("jit", "DEBUG")
 kernel_name = "sample"
 
 fuser = HomoFuseFunctionV2(
-    homo_func_name=kernel_name,
+    module_name=kernel_name,
     branch_num=2,
     capacities=[1, 2, 3],
     shared_arg_indices=[0, 2],
