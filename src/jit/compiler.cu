@@ -6,6 +6,7 @@
 #include <brt/jit/compiler.h>
 
 #include <brt/netlet/ptr_arith.cuh>
+
 #include "./utils.h"
 
 namespace brt {
@@ -102,7 +103,6 @@ CUfunction CUDACompiler::activate(int fd, int dev) {
     int func_end = image.find("(", func_entry);
     std::string func_name = image.substr(func_entry, func_end - func_entry);
     kernel.fname = func_name;
-
     CU_CHECK(cuModuleGetFunction(&kernel.hFunc[dev], hMod, func_name.c_str()));
     CHECK(nullptr != kernel.hFunc[dev]);
     printf("kernel %s is activated\n", func_name.c_str());
@@ -185,9 +185,9 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
 
   for (auto arg_idx = 0; arg_idx < kernel.arg_num; arg_idx++) {
     if (arg_idx < kernel.shared_arg_num) {
-      netlet::DevicePtr2PtrArray((char**)kernel.arg_dptr_array[arg_idx], (char*)shared_inputs_ptr[arg_idx],
-                         kernel.shared_arg_offset, kernel.branch_num,
-                         kernel.shared_arg_grans[arg_idx], stream);
+      netlet::DevicePtr2PtrArray((char**)kernel.arg_dptr_array[arg_idx],
+                                 (char*)shared_inputs_ptr[arg_idx], kernel.shared_arg_offset,
+                                 kernel.branch_num, kernel.shared_arg_grans[arg_idx], stream);
       // ptr_to_ptr_array<<<kernel.arg_grid_size, kernel.arg_block_size, 0, stream>>>(
       //     (char**)kernel.arg_dptr_array[arg_idx], (char*)shared_inputs_ptr[arg_idx],
       //     kernel.shared_arg_offset, kernel.branch_num, kernel.shared_arg_grans[arg_idx]);
@@ -265,7 +265,7 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
       kernel.block_sizes = to_uint_vector(fused_kernel_blocks_str, ',');
       break;
     }
-    case KernelType::kHomoFuseV2: {
+    case KernelType::kHomoFuse: {
       auto fused_kernel_grids_str = capture_with_default(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"),
           "");

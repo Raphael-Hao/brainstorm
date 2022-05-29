@@ -3,12 +3,12 @@
 
 from typing import List, Union
 
-from .base import GlobalFunction
 from .horiz_fuse import HorizFuseModuleFunction
+from .module_func import ModuleFunction
 
 
 class HeteroFuseModuleFunction(HorizFuseModuleFunction):
-    def __init__(self, candidates: List[Union[GlobalFunction, str]]):
+    def __init__(self, candidates: List[ModuleFunction]):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "hetero_fuse")
         super().__init__(candidates=candidates)

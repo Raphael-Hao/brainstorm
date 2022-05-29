@@ -7,7 +7,7 @@
 
 import torch
 import torch.nn as nn
-from brt.jit import CUDACompiler, HomoFuseFunctionV2
+from brt.jit import CUDACompiler, HomoFuseModuleFunction
 from brt.router import (
     FusedRandomGatherRouter,
     FusedRandomScatterRouter,
@@ -78,22 +78,32 @@ class FusedThorExpert(nn.Module):
             nn.Linear(config.intermediate_size, config.hidden_size)
             for _ in range(config.expert_num)
         ]
-        self.expert1_func = HomoFuseFunctionV2(
-            "matmul_512_1024",
+        self.expert1_func = HomoFuseModuleFunction(
+            "Linear",
             config.expert_num,
             capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
             shared_arg_indices=[0, 2],
             shared_arg_grans=[2048, 4096],
+            input_infos={"input_0": [1, config.hidden_size]},
+            output_infos={"output_0": [1, config.intermediate_size]},
+            parameters={
+                "in_features": config.hidden_size,
+                "out_features": config.intermediate_size,
+            },
         )
-        self.expert2_func = HomoFuseFunctionV2(
-            "matmul_1024_512",
+        self.expert2_func = HomoFuseModuleFunction(
+            "Linear",
             config.expert_num,
             capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
             shared_arg_indices=[0, 2],
             shared_arg_grans=[4096, 2048],
+            input_infos={"input_0": [1, config.intermediate_size]},
+            output_infos={"output_0": [1, config.hidden_size]},
+            parameters={
+                "in_features": config.intermediate_size,
+                "out_features": config.hidden_size,
+            },
         )
-        self.expert1_func.fuse()
-        self.expert2_func.fuse()
         self.expert1_kernel = CUDACompiler.generate_kernel(
             None, self.expert1_func.get_code()
         )

@@ -2,22 +2,21 @@ import time
 
 import torch
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
-from brt.jit import HomoFuseFunctionV2
+from brt.jit import HomoFuseModuleFunction
 from brt.jit.compiler import CUDACompiler
 
 log.set_level("jit", "DEBUG")
 
-kernel_name = "sample"
+kernel_name = "Linear"
 
-fuser = HomoFuseFunctionV2(
+fuser = HomoFuseModuleFunction(
     module_name=kernel_name,
     branch_num=2,
     capacities=[1, 2, 3],
     shared_arg_indices=[0, 2],
-    shared_arg_grans=[130712, 130712]
+    shared_arg_grans=[130712, 130712],
 )
 
-fuser.fuse()
 # print(fuser.args)
 
 code = fuser.get_code()
@@ -35,7 +34,7 @@ data_1 = torch.ones((8, 64, 64), device="cuda")
 weight_1 = torch.ones((8, 64, 64), device="cuda")
 outdata_1 = torch.ones((8, 64, 64), device="cuda")
 shared_inputs = [data_0, outdata_0]
-weights=[weight_0, weight_1]
+weights = [weight_0, weight_1]
 print(outdata_0)
 torch.cuda.synchronize()
 stream = torch.cuda.default_stream()
@@ -55,10 +54,10 @@ print("first time: {:.3f}".format(start_event.elapsed_time(end_event)))
 start_event.record(stream)
 for i in range(100):
     fused_matmul(
-    shared_inputs=shared_inputs,
-    standalone_inputs=weights,
-    capacities=branch_capacities,
-)
+        shared_inputs=shared_inputs,
+        standalone_inputs=weights,
+        capacities=branch_capacities,
+    )
 end_event.record(stream)
 stream.synchronize()
 print(outdata_0)
