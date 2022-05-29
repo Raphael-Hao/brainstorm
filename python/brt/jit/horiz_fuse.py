@@ -26,6 +26,7 @@ class HorizFuseModuleFunction(GlobalFunction):
         self.input_infos = []
         self.output_infos = []
         self.parammeters = []
+        self.platform = self.candidates[0].platform
         will_initialize = True
         for _, module_func in enumerate(candidates):
             if not module_func.initialized:
@@ -40,7 +41,6 @@ class HorizFuseModuleFunction(GlobalFunction):
         self.func_name = (
             "_".join(func.func_name for func in candidates) + self.kernel_type
         )
-        self.platform = self.candidates[0].platform
         if will_initialize:
             self.initialize()
 
@@ -104,13 +104,13 @@ class HorizFuseModuleFunction(GlobalFunction):
         self.threadidx_y = 1
         self.threadidx_z = 1
 
-    def generate_dependency(self, sync_method):
+    def generate_dependency(self, sync_method="asm"):
         dependencies = []
         dependencies.append(self.add_codeblock(GlobalFunction.asm_block_sync))
         dependencies.append(self.add_codeblock(GlobalFunction.asm_warp_sync))
         self.new_line()
         for _, func in enumerate(self.candidates):
-            device_code = func.convert_to_device(bar_id=0, sync_method=sync_method)
+            device_code = func.convert_to_device()
             dependencies.append(self.add_codeblock(device_code))
         return dependencies
 

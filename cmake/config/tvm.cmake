@@ -195,10 +195,10 @@ set(USE_EDGETPU OFF)
 # - ON: enable cuDNN with cmake's auto search in CUDA directory
 # - OFF: disable cuDNN
 # - /path/to/cudnn: use specific path to cuDNN path
-set(USE_CUDNN ON)
+set(USE_CUDNN OFF)
 
 # Whether use cuBLAS
-set(USE_CUBLAS ON)
+set(USE_CUBLAS OFF)
 
 # Whether use MIOpen
 set(USE_MIOPEN OFF)
@@ -333,18 +333,6 @@ set(USE_LIBBACKTRACE AUTO)
 # not be included in the final executable. This would make the corresponding
 # runtime functions to be unavailable to the program.
 set(BUILD_STATIC_RUNTIME OFF)
-
-
-# Caches the build so that building is faster when switching between branches.
-# If you switch branches, build and then encounter a linking error, you may
-# need to regenerate the build tree through "make .." (the cache will
-# still provide significant speedups).
-# Possible values:
-# - AUTO: search for path to ccache, disable if not found.
-# - ON: enable ccache by searching for the path to ccache, report an error if not found
-# - OFF: disable ccache
-# - /path/to/ccache: use specific path to ccache
-set(USE_CCACHE AUTO)
 
 # Whether to enable PAPI support in profiling. PAPI provides access to hardware
 # counters while profiling.

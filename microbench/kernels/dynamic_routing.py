@@ -17,6 +17,43 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("brt.microbench.kernels.dynamic_routing")
 
 
+def parse_conv2d_bn_act_params(json_params):
+    module_name = "Conv2d"
+    out_channels = json_params["out_channels"]
+    if json_params["stride"] == None:
+        json_params["stride"] = 1
+    if json_params["padding"] == None:
+        json_params["padding"] = 0
+    if json_params["dilation"] == None:
+        json_params["dilation"] = 1
+    if json_params["groups"] == None:
+        json_params["groups"] = 1
+    bias = json_params.pop("bias")
+    if bias is True:
+        module_name += "Bias"
+    padding_mode = json_params.pop("padding_mode")
+    norm = json_params.pop("norm")
+    if norm == "SyncBatchNorm":
+        norm = nn.BatchNorm2d(out_channels)
+        module_name += "BatchNorm"
+    activation = json_params.pop("activation")
+    if activation == "ReLU":
+        activation = nn.ReLU()
+        module_name += "ReLU"
+    input_infos = {"input_0": json_params.pop("input_shape")}
+    output_infos = {"output_0": json_params.pop("output_shape")}
+    parameters = json_params
+    return (
+        module_name,
+        input_infos,
+        output_infos,
+        parameters,
+        padding_mode,
+        norm,
+        activation,
+    )
+
+
 class Conv2dBNAct(nn.Module):
     def __init__(
         self,
@@ -80,51 +117,29 @@ def main():
     with conv_params_log_file_nodup.open("r") as f:
         for line in f.readlines():
             conv_param = json.loads(line)
-            module_name = "Conv2d"
-            in_channels = conv_param["in_channels"]
-            out_channels = conv_param["out_channels"]
-            kernel_size = conv_param["kernel_size"]
-            if conv_param["stride"] == None:
-                conv_param["stride"] = 1
-            stride = conv_param["stride"]
-            if conv_param["padding"] == None:
-                conv_param["padding"] = 0
-            padding = conv_param["padding"]
-            if conv_param["dilation"] == None:
-                conv_param["dilation"] = 1
-            dilation = conv_param["dilation"]
-            if conv_param["groups"] == None:
-                conv_param["groups"] = 1
-            groups = conv_param["groups"]
-            bias = conv_param.pop("bias")
-            if bias is True:
-                module_name += "Bias"
-            padding_mode = conv_param.pop("padding_mode")
-            norm = conv_param.pop("norm")
-            if norm == "SyncBatchNorm":
-                norm = nn.BatchNorm2d(out_channels)
-                module_name += "BatchNorm"
-            activation = conv_param.pop("activation")
-            if activation == "ReLU":
-                activation = nn.ReLU()
-                module_name += "ReLU"
+            (
+                module_name,
+                input_infos,
+                output_infos,
+                parameters,
+                padding_mode,
+                norm,
+                activation,
+            ) = parse_conv2d_bn_act_params(conv_param)
             conv2d_bn_act = Conv2dBNAct(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=kernel_size,
-                stride=stride,
-                padding=padding,
-                dilation=dilation,
-                groups=groups,
-                bias=bias,
+                in_channels=parameters["in_channels"],
+                out_channels=parameters["out_channels"],
+                kernel_size=parameters["kernel_size"],
+                stride=parameters["stride"],
+                padding=parameters["padding"],
+                dilation=parameters["dilation"],
+                groups=parameters["groups"],
+                bias=parameters["bias"],
                 padding_mode=padding_mode,
                 norm=norm,
                 activation=activation,
             )
-            input_infos = {"input_0": conv_param.pop("input_shape")}
-            output_infos = {"output_0": conv_param.pop("output_shape")}
-            parameters = conv_param
-            logger.info(conv_param)
+            logger.info(parameters)
             tvm_tuner.import_pt_netlet(
                 module_name, conv2d_bn_act, input_infos, output_infos, parameters
             )

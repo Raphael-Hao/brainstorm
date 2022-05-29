@@ -58,7 +58,7 @@ set(CMAKE_CUDA_STANDARD 14)
 
 file(GLOB_RECURSE BRT_SOURCE CMAKE_CONFIGURE_DEPENDS "src/*.cc" "src/*.cu")
 # remove srcs of extension for other frameworks, they will be compiled by python
-brt_src_exclude(BRT_SOURCE "extension/")
+brt_src_exclude(BRT_SOURCE "backend/torch")
 
 file(GLOB_RECURSE BRT_INCLUDE CMAKE_CONFIGURE_DEPENDS "src/*.h" "include/*.h")
 
@@ -72,7 +72,7 @@ target_include_directories(
 target_link_libraries(brt PUBLIC ${BRT_LINKER_LIBS})
 # set_target_properties(brt PROPERTIES LINKER_LANGUAGE CXX)
 
-file(GLOB_RECURSE BRT_TORCHSCRIPT_SOURCE CMAKE_CONFIGURE_DEPENDS "src/extension/torchscript.cc")
+file(GLOB_RECURSE BRT_TORCHSCRIPT_SOURCE CMAKE_CONFIGURE_DEPENDS "src/backend/torch/script.cc")
 add_library(brt_torchscript SHARED ${BRT_TORCHSCRIPT_SOURCE})
 target_compile_features(brt_torchscript PRIVATE cxx_std_14)
 target_link_libraries(brt_torchscript "${TORCH_LIBRARIES}")

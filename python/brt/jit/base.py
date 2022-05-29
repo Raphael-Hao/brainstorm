@@ -25,7 +25,6 @@ CUDATypeSizeInByte = {
     "uint64_t": 8,
 }
 
-
 class Function:
     c_api_decorator = 'extern "C" '
 
@@ -97,26 +96,25 @@ class GlobalFunction(Function):
 #define uint64_t unsigned long long
 """
     asm_block_sync = """
-extern "C" __device__ __forceinline__ void AsmBlockSync(int name, int numThreads) {
-  asm volatile("bar.sync %0, %1;" : : "r"(name), "r"(numThreads) : "memory");
+extern "C" __device__ __forceinline__ void AsmBlockSync(int name, int block_size) {
+  asm volatile("bar.sync %0, %1;" : : "r"(name), "r"(block_size) : "memory");
 }
 """
     asm_warp_sync = """
-extern "C" __device__ __forceinline__ void AsmWarpSync(const unsigned threadsmask) {
-  asm volatile("bar.warp.sync %0;" : : "r"(threadsmask) : "memory");
+extern "C" __device__ __forceinline__ void AsmWarpSync(const unsigned threads_mask) {
+  asm volatile("bar.warp.sync %0;" : : "r"(threads_mask) : "memory");
 }
 """
     cpp_warp_sync = """
-extern "C" __device__ __forceinline__ void CppWarpSync(const unsigned threadsmask) {
-  __syncwarp(threadsmask);
+extern "C" __device__ __forceinline__ void CppWarpSync(const unsigned threads_mask) {
+  __syncwarp(threads_mask);
 }   
 """
-    cpp_cg_warp_sync = """
+    cpp_cg_block_sync = """
 #include <cooperative_groups.h>
-namespace cg = cooperative_groups;
-extern "C" __device__ __forceinline__ void CppCgWarpSync() {
-  cg::coalesced_group g = cg::coalesced_threads();
-  g.sync();
+extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
+  thread_group real_blocks = cooperative_groups::partition(this_thread_block(), block_size);
+  real_blocks.sync();
 }
 """
     c_api_decorator = 'extern "C" '
@@ -127,7 +125,7 @@ extern "C" __device__ __forceinline__ void CppCgWarpSync() {
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "global")
         self.initialized = False
-        
+
     def declare_return_with_launch_bounds(self):
         formated_code = "void "
         if self.max_threads_per_block == 0 or self.mode == "device":
@@ -259,25 +257,18 @@ extern "C" __device__ __forceinline__ void CppCgWarpSync() {
             )
         return formated_code
 
-    def add_body_without_syncthreads(self, bar_id: int, sync_method="asm"):
-        if sync_method == "asm":
-            if self.block_size >= 32:
-                body_without_syncthreads = self.raw_body.replace(
-                    "__syncthreads()", f"AsmBlockSync({bar_id}, {self.block_size})"
-                )
-            else:
-                body_without_syncthreads = self.raw_body.replace(
-                    "__syncthreads()", f"AsmWarpSync({self.sync_mask})"
-                )
-        elif sync_method == "cpp":
-            if self.block_size > 32:
-                logger.error("CPP sync is not supported for block size >= 32")
-            else:
-                body_without_syncthreads = self.raw_body.replace(
-                    "__syncthreads()", f"CppWarpSync({self.sync_mask})"
-                )
+    def add_body_without_syncthreads(self):
+        if self.block_size >= 32:
+            real_block_size = self.block_size
+            if real_block_size % 32 != 0:
+                real_block_size = 32 * (real_block_size // 32 + 1)
+            body_without_syncthreads = self.raw_body.replace(
+                "__syncthreads()", f"AsmBlockSync(0, {real_block_size})"
+            )
         else:
-            logger.error("Unknown sync method")
+            body_without_syncthreads = self.raw_body.replace(
+                "__syncthreads()", f"AsmWarpSync({self.sync_mask})"
+            )
         formated_code = self.add_codeblock(body_without_syncthreads)
         return formated_code
 
@@ -286,7 +277,7 @@ extern "C" __device__ __forceinline__ void CppCgWarpSync() {
         self.clean_code = ""
         self.indent = 0
 
-    def generate_dependency(self):
+    def generate_dependency(self, sync_method="asm"):
         deps = []
         return deps
 
@@ -330,7 +321,7 @@ extern "C" __device__ __forceinline__ void CppCgWarpSync() {
         self.verify_code()
         return self.clean_code, self.func_deps, self.func_sig, self.func_body
 
-    def convert_to_device(self, bar_id: int = 0, sync_method="asm"):
+    def convert_to_device(self):
         assert (
             self.kernel_type == "global"
         ), "Only global kernel can be converted to device"
@@ -346,6 +337,6 @@ extern "C" __device__ __forceinline__ void CppCgWarpSync() {
         self.close_codeblock()
         self.shadow_global_dims()
         self.alloc_shared_memory()
-        self.add_body_without_syncthreads(bar_id, sync_method)
+        self.add_body_without_syncthreads()
         self.close_codeblock()
         return self.clean_code

@@ -12,7 +12,6 @@ from .base import GlobalFunction
 from .compiler import CUDACompiler
 from .horiz_fuse import HorizFuseModuleFunction
 from .module_func import ModuleFunction
-from .template import Templator
 from .utils import check_if_pointer
 
 logger = log.get_logger(__file__)
@@ -46,11 +45,9 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
             parameters,
         )
         super().__init__(candidates=candidates)
-        self.initialized = True
 
     @staticmethod
     def generate_candidates(
-        self,
         module_base_name,
         candidates_capacities,
         input_infos: Dict[str, List[int]] = None,
@@ -339,7 +336,7 @@ class HomoFuseModuleFunctionV2(HorizFuseModuleFunction):
                 f"capacity_dims[{i}] = {self.grid_size[i]}", end=True
             )
 
-    def get_code(self, sync_method="asm"):
+    def get_code(self):
         self.fuse()
         self.reset_mode("global")
         self.add_codeblock(GlobalFunction.common_defines)
@@ -348,7 +345,7 @@ class HomoFuseModuleFunctionV2(HorizFuseModuleFunction):
         self.add_codeblock(GlobalFunction.asm_warp_sync)
         for idx, func in enumerate(self.candidates):
             self.add_codeblock(
-                func.convert_to_device(bar_id=0, sync_method=sync_method)
+                func.convert_to_device()
             )
         self.add_line_with_indent(GlobalFunction.global_decorator)
         self.declare_return_with_launch_bounds()

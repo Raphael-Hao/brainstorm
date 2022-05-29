@@ -38,7 +38,7 @@ for i in range(10):
     y = fused_thor_moe(x)
 end_event.record(stream)
 stream.synchronize()
-print("elapsed time: {:.3f}".format(start_event.elapsed_time(end_event)/10))
+print("elapsed time: {:.3f}".format(start_event.elapsed_time(end_event) / 10))
 
 print(y)
 # %%
