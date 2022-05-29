@@ -88,7 +88,10 @@
     "*.inc": "cpp",
     "*.def": "cpp",
     "__split_buffer": "cpp",
-    "*.ipp": "cpp"
+    "*.ipp": "cpp",
+    "queue": "cpp",
+    "stack": "cpp",
+    "ranges": "cpp"
   },
   "psi-header.config": {
     "forceToTop": true,
