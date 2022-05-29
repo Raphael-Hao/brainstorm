@@ -46,8 +46,6 @@ static void static_invoke(const std::vector<::torch::Tensor>& ts, const std::vec
 
 static void hetero_invoke(const std::vector<::torch::Tensor>& ts,
                           const std::vector<long>& active_blocks, int fd) {
-  printf("ts.size() = %d\n", (int)ts.size());
-  printf("active_blocks.size() = %d\n", (int)active_blocks.size());
   std::vector<const void*> pargs(ts.size() + active_blocks.size()),
       ppargs(ts.size() + active_blocks.size());
 

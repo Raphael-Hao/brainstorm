@@ -105,7 +105,6 @@ CUfunction CUDACompiler::activate(int fd, int dev) {
     kernel.fname = func_name;
     CU_CHECK(cuModuleGetFunction(&kernel.hFunc[dev], hMod, func_name.c_str()));
     CHECK(nullptr != kernel.hFunc[dev]);
-    printf("kernel %s is activated\n", func_name.c_str());
   }
 
   return kernel.hFunc[dev];
