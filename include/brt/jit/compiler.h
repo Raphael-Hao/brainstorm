@@ -52,7 +52,6 @@ struct KernelConfig {
   std::vector<uint> shared_arg_grans;
 
   // runtime dispatching
-  dim3 arg_grid_size, arg_block_size;
   int* shared_arg_offset;
   thrust::host_vector<void**> standalone_arg_hptr_array;  // allocate 2
   thrust::host_vector<void**> arg_dptr_array;

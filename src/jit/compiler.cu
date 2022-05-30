@@ -18,8 +18,6 @@ void KernelConfig::InitBranchArgStore() {
   CHECK_GT(this->supported_capacity_num, 0);
   CHECK_GT(this->arg_num, 0);
   CHECK_EQ(this->arg_num, this->shared_arg_num + this->standalone_arg_num);
-  this->arg_block_size = {32};
-  this->arg_grid_size = {(this->branch_num + 31) / 32};
   CUDA_CHECK(cudaMallocHost(&this->shared_arg_offset, sizeof(int) * this->branch_num));
   this->standalone_arg_hptr_array.resize(this->standalone_arg_num, nullptr);
   for (auto& host_ptr : this->standalone_arg_hptr_array) {
@@ -187,9 +185,6 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
       netlet::DevicePtr2PtrArray((char**)kernel.arg_dptr_array[arg_idx],
                                  (char*)shared_inputs_ptr[arg_idx], kernel.shared_arg_offset,
                                  kernel.branch_num, kernel.shared_arg_grans[arg_idx], stream);
-      // ptr_to_ptr_array<<<kernel.arg_grid_size, kernel.arg_block_size, 0, stream>>>(
-      //     (char**)kernel.arg_dptr_array[arg_idx], (char*)shared_inputs_ptr[arg_idx],
-      //     kernel.shared_arg_offset, kernel.branch_num, kernel.shared_arg_grans[arg_idx]);
       // CUDA_CHECK(cudaStreamSynchronize(stream));
     } else {
       CUDA_CHECK(cudaMemcpyAsync(kernel.arg_dptr_array[arg_idx],

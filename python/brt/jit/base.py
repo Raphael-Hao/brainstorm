@@ -3,6 +3,7 @@
 from brt.common import log
 
 logger = log.get_logger(__file__)
+from .compiler import CUDACompiler
 
 CUDATypeSizeInByte = {
     # signed type
@@ -340,3 +341,7 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
         self.add_body_without_syncthreads()
         self.close_codeblock()
         return self.clean_code
+    
+    def get_function(self):
+        code, _func_deps, _func_sig, _func_body = self.get_code()
+        compiled_function = CUDACompiler.create_raw()
