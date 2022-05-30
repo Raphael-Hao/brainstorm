@@ -23,12 +23,24 @@ class HorizFuseModuleFunction(GlobalFunction):
             setattr(self, "kernel_type", "horiz_fuse")
         super().__init__()
         self.candidates = candidates
+        will_initialize = self.check_candidates()
+        if will_initialize:
+            self.initialize()
+
+    def initialize(self):
+        self.generate_new_args()
+        self.infer_shared_memory()
+        self.calcu_launch_bounds()
+        self.calcu_culaunch_dims()
+        self.initialized = True
+
+    def check_candidates(self):
         self.input_infos = []
         self.output_infos = []
         self.parammeters = []
         self.platform = self.candidates[0].platform
         will_initialize = True
-        for _, module_func in enumerate(candidates):
+        for _, module_func in enumerate(self.candidates):
             if not module_func.initialized:
                 will_initialize = False
             assert (
@@ -37,20 +49,14 @@ class HorizFuseModuleFunction(GlobalFunction):
             self.input_infos.append(module_func.input_infos)
             self.output_infos.append(module_func.output_infos)
             self.parammeters.append(module_func.parameters)
-        self.module_name = "_".join(module.module_name for module in candidates)
-        self.func_name = (
-            "_".join(func.func_name for func in candidates) + self.kernel_type
+        self.module_name = (
+            "_".join(module.module_name for module in self.candidates)
+            + self.kernel_type
         )
-        if will_initialize:
-            self.initialize()
-
-    def initialize(self):
-        # self.generate_new_names()
-        self.generate_new_args()
-        self.infer_shared_memory()
-        self.calcu_launch_bounds()
-        self.calcu_culaunch_dims()
-        self.initialized = True
+        self.func_name = (
+            "_".join(func.func_name for func in self.candidates) + self.kernel_type
+        )
+        return will_initialize
 
     def generate_new_args(self):
         self.args = ""

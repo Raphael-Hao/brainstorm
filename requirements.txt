@@ -3,6 +3,7 @@ cloudpickle
 decorator
 numpy
 psutil
+functorch
 synr==0.6.0
 appdirs
 attrs
