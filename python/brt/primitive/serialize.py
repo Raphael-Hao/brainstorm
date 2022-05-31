@@ -918,8 +918,8 @@ def torchscript_patch(cls) -> None:
     # I'm not sure whether there will be potential issues
     import torch
 
-    if hasattr(cls, "_get_nni_attr"):  # could not exist on non-linux
-        cls._get_nni_attr = torch.jit.ignore(cls._get_nni_attr)
+    if hasattr(cls, "_get_brt_attr"):  # could not exist on non-linux
+        cls._get_brt_attr = torch.jit.ignore(cls._get_brt_attr)
     if hasattr(cls, "trace_symbol"):
         # these must all exist or all non-exist
         try:

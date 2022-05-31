@@ -1,6 +1,8 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+from typing import List
+
 import torch
 
 from .base import Dispatcher
@@ -12,47 +14,51 @@ class DefaultDispatcher(Dispatcher):
     The default dispatcher will dispatch the inputs to the routers just according to the ground-truth routing indices.
     """
 
-    def __init__(self, route_num):
-        super().__init__(route_num)
+    def __init__(self, route_num, gran_dim, transform=True, reduction="add"):
+        super().__init__(route_num, gran_dim, transform, reduction)
 
-    def dispatch(self, inputs, route_indices):
+    def dispatch(self, inputs, route_indices, gates):
         """
         Dispatch the inputs into the the list of torch.Tensor with indices
         """
-        route_results = [torch.zeros((0, 0))] * self.route_num
-        reverse_indices = [None] * self.route_num
+        route_results = [torch.zeros(0, *self.route_shape)] * self.route_num
+        reverse_indices = [torch.zeros(0, 0)] * self.route_num
         for i in range(self.route_num):
-            indices = torch.nonzero(route_indices == i, as_tuple=True)[0]
-            if len(indices) > 0:
-                tmp_results = [inputs[j] for j in indices]
-                # TODO: current only support tensors with same shape
-                route_results[i] = torch.stack(tmp_results)
+            indices = torch.nonzero(route_indices[i])
+            if indices.numel() > 0:
                 reverse_indices[i] = indices
+                indices = indices.repeat(1, self.route_size).view(-1, *self.route_shape)
+                if self.transform:
+                    gate = gates[:, i].reshape(
+                        (inputs.size(0),) + (1,) * len(self.route_shape)
+                    )
+                    route_results[i] = torch.gather(inputs * gate, 0, indices)
+                else:
+                    route_results[i] = torch.gather(inputs, 0, indices)
         return route_results, reverse_indices
 
     def combine(
         self,
-        reverse_indices,
-        reverse_shape,
-        inputs,
-    ):
+        inputs: List[torch.Tensor],
+        reverse_indices: List[torch.Tensor],
+        loads: int,
+    ) -> torch.Tensor:
         """
         Combine the outputs of the routers into the final outputs
         """
         assert len(inputs) == self.route_num and len(reverse_indices) == self.route_num
-        if isinstance(reverse_shape, int):
-            route_size = reverse_shape
-        elif isinstance(reverse_shape, torch.Size):
-            route_size = reverse_shape[0]
-        else:
-            raise ValueError("origin_shape must be a int or torch.Size")
-        route_results = [[] for _ in range(route_size)]
+        route_results = torch.zeros(loads, *self.route_shape)
         for i in range(self.route_num):
-            if reverse_indices[i] is not None:
-                for j in range(len(reverse_indices[i])):
-                    route_results[reverse_indices[i][j]] = inputs[i][j]
-        if isinstance(reverse_shape, int):
-            return route_results
-        else:
-            route_results = torch.stack(route_results).view(reverse_shape)
+            if reverse_indices[i].numel() > 0:
+                indices = (
+                    reverse_indices[i]
+                    .repeat(1, self.route_size)
+                    .view(-1, *self.route_shape)
+                )
+                if self.reduction == "add":
+                    torch.scatter_add(route_results, 0, indices, inputs[i])
+                else:
+                    raise NotImplementedError(
+                        f"Reduction method {self.reduction} is not supported"
+                    )
         return route_results

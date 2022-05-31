@@ -8,6 +8,7 @@ from brt.common import log
 from brt.ir import Graph, Model, Node
 from brt.ir.operation import Cell, Operation
 from brt.primitive import get_init_parameters_or_fail
+from brt.primitive.helper import symbolize
 
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName
 from .utils import _convert_name, build_full_name, build_python_name
@@ -526,7 +527,7 @@ class GraphBuilder:
                     ir_graph.edges.append(edge)
 
         # ===================handle Router call===================
-        def handle_Router_callmethod(node):
+        def handle_router_callmethod(node):
             # get and handle the first input, which should be an Router (subclass of nn.Module)
             # node.inputsAt(0).type() is <class 'torch._C.ClassType'>
             submodule_type_str = self._remove_mangle(node.inputsAt(0).type().str())
@@ -657,24 +658,24 @@ class GraphBuilder:
 
             elif node.kind().startswith("prim::"):
                 self.global_seq += 1
-                if node.kind() == "prim::PythonOp":
-                    # TODO: filter out the routers
-                    handle_Router_callmethod(node)
-                else:
-                    prim_op_name = node.kind().replace("::", "__")
-                    prim_node = ir_graph.add_node(
-                        build_full_name(module_name, prim_op_name, self.global_seq),
-                        node.kind(),
-                    )
-                    node_index[node] = prim_node
-                    self._add_edge(
-                        ir_graph,
-                        node,
-                        graph_inputs,
-                        node_index,
-                        prim_node,
-                        output_remap,
-                    )
+                # if node.kind() == "prim::PythonOp":
+                #     # TODO: filter out the routers
+                #     handle_Router_callmethod(node)
+                # else:
+                prim_op_name = node.kind().replace("::", "__")
+                prim_node = ir_graph.add_node(
+                    build_full_name(module_name, prim_op_name, self.global_seq),
+                    node.kind(),
+                )
+                node_index[node] = prim_node
+                self._add_edge(
+                    ir_graph,
+                    node,
+                    graph_inputs,
+                    node_index,
+                    prim_node,
+                    output_remap,
+                )
             elif node.kind() == "aten::append":
                 self.global_seq += 1
                 aten_op_name = node.kind().replace("::", "__")
@@ -831,7 +832,7 @@ class GraphBuilder:
             m_attrs = get_init_parameters_or_fail(module)
 
         elif getattr(module, "_brt_router", False):
-            # this module is marked as serialize, won't continue to parse
+            # this module is marked as router, won't continue to parse
             m_attrs = get_init_parameters_or_fail(module)
             logger.debug(
                 f"building brt.router {original_type_name}, m_attrs: {m_attrs}"
@@ -913,9 +914,11 @@ def build_graph(module: torch.nn.Module, builder=None, **kwargs):
     """
 
     model = Model(_internal=True)
-    module_name = "_model"
+
+    module_name = module.__class__.__name__ + "_model"
     if builder is None:
         builder = GraphBuilder()
+    module = symbolize(module)
     script_module = torch.jit.script(module)
     builder.build_module(script_module, module, module_name, model, **kwargs)
 
