@@ -3,17 +3,15 @@
 
 import unittest
 
-import brt
 import brt.nn as nn
 import torch
 from brt.router import RandomGatherRouter, RandomScatterRouter
 
 
-@brt.domain
 class MoE(nn.Module):
     def __init__(self):
         super().__init__()
-        self.scatter_router = RandomScatterRouter(route_num=2)
+        self.scatter_router = RandomScatterRouter(route_num=2, gran_dim=10)
         self.expert1 = nn.Linear(10, 10)
         self.expert2 = nn.Linear(10, 10)
         self.gather_router = RandomGatherRouter(route_num=2)

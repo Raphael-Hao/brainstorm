@@ -87,4 +87,19 @@ def check_wrapped(cls: T, rewrap: str) -> bool:
         return True
     return False
 
+def _switch_symbolic(m, symbolic = True):
+    for child in m.children():
+        _switch_symbolic(child, symbolic)
+    if is_router(m):
+        m._brt_symbolic = symbolic
+        if m._brt_symbolic:
+            m.forward = m.symbolic_route
+        else:
+            m.forward = m.route
+    return m
 
+def symbolize(m):
+    return _switch_symbolic(m)
+
+def de_symbolize(m):
+    return _switch_symbolic(m, False)

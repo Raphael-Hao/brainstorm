@@ -8,12 +8,12 @@
 
 namespace brt {
 namespace torchscript {
-std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>, torch::Tensor> ScatterRoute(
-    const torch::Tensor& input, const long& router_kind, const long& route_num) {
-  std::vector<torch::Tensor> route_results(route_num, torch::empty_like(input, torch::kFloat32));
-  std::vector<torch::Tensor> route_indices(route_num, torch::ones(input.size(0), torch::kInt64));
-  torch::Tensor reverse_shape = at::_shape_as_tensor(input);
-  return std::make_tuple(route_results, route_indices, reverse_shape);
+std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>, long> ScatterRoute(
+    const torch::Tensor& inputs, const long& router_kind, const long& route_num) {
+  std::vector<torch::Tensor> route_results(route_num, torch::empty_like(inputs, torch::kFloat32));
+  std::vector<torch::Tensor> route_indices(route_num, torch::ones(inputs.size(0), torch::kInt64));
+  long loads = inputs.size(0);
+  return std::make_tuple(route_results, route_indices, loads);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> FusedPaddingScatterRoute(
@@ -26,16 +26,15 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> FusedPadd
   return std::make_tuple(route_results, route_indices, route_capacities, reverse_shape);
 }
 
-torch::Tensor GatherRoute(std::vector<torch::Tensor> inputs,
-                          std::vector<torch::Tensor> reverse_indices, torch::Tensor reverse_shape,
-                          long router_kind, long route_num) {
-  // auto output_dim = reverse_shape.numel();
-  // auto output_size_vec = std::vector<long>(output_dim, 0);
-  // for (auto i = 0; i < output_dim; i++) {
-  //   output_size_vec[i] = reverse_shape[i].item().toInt();
-  // }
-  std::vector<long> tensor_shape(reverse_shape.data_ptr<long>(),
-                                 reverse_shape.data_ptr<long>() + reverse_shape.numel());
+torch::Tensor GatherRoute(const std::vector<torch::Tensor>& inputs,
+                          const std::vector<torch::Tensor>& reverse_indices, const long& loads,
+                          const long& router_kind, const long& route_num) {
+  std::vector<long> tensor_shape;
+  auto& sample_input = inputs[0];
+  for (auto& dim : sample_input.sizes()) {
+    tensor_shape.push_back(dim);
+  }
+  tensor_shape[0] = loads;
   torch::Tensor route_results = torch::ones(tensor_shape, torch::kFloat32);
   return route_results;
 }

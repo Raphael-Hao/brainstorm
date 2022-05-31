@@ -91,7 +91,13 @@
     "*.ipp": "cpp",
     "queue": "cpp",
     "stack": "cpp",
-    "ranges": "cpp"
+    "ranges": "cpp",
+    "__config": "cpp",
+    "__debug": "cpp",
+    "__tuple": "cpp",
+    "compare": "cpp",
+    "concepts": "cpp",
+    "bit": "cpp"
   },
   "psi-header.config": {
     "forceToTop": true,
