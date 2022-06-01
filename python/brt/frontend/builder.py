@@ -914,7 +914,6 @@ def build_graph(module: torch.nn.Module, builder=None, **kwargs):
     """
 
     model = Model(_internal=True)
-
     module_name = module.__class__.__name__ + "_model"
     if builder is None:
         builder = GraphBuilder()

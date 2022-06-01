@@ -1,22 +1,20 @@
-# Copyright (c) 2022 by Microsoft Corporation.
-# Licensed under the MIT license.
-
 from typing import List
 
 import numpy as np
 import torch
 
-from .base import Dispatcher
+from .default_dispatcher import DefaultDispatcher
 
 
-class DefaultDispatcher(Dispatcher):
+class ResidualDispatcher(DefaultDispatcher):
     """
     Default dispatcher implement by Brainstorm
     The default dispatcher will dispatch the inputs to the routers just according to the ground-truth routing indices.
     """
 
-    def __init__(self, route_num, transform=True, reduction="add"):
+    def __init__(self, route_num, transform=True, reduction="add", residual_route=0):
         super().__init__(route_num, transform, reduction)
+        self.residual_route = residual_route
 
     def dispatch(
         self, inputs: torch.Tensor, route_indices: torch.Tensor, gates: torch.Tensor
@@ -30,8 +28,13 @@ class DefaultDispatcher(Dispatcher):
         route_tags = [
             torch.zeros(0, 1, dtype=torch.int64, device=inputs.device)
         ] * self.route_num
+        residual_indices = (route_indices.sum(dim=1) == 0).long().to(inputs.device)
         for i in range(self.route_num):
-            tags = torch.nonzero(route_indices[:, i])
+            tags = torch.nonzero(
+                route_indices[:, i] + residual_indices
+                if i == self.residual_route
+                else route_indices[:, i]
+            )
             if tags.numel() > 0:
                 route_tags[i] = tags
                 tags = tags.repeat(1, route_size).view(-1, *route_shape)
@@ -42,6 +45,7 @@ class DefaultDispatcher(Dispatcher):
                     route_results[i] = torch.gather(inputs * gate, 0, tags)
                 else:
                     route_results[i] = torch.gather(inputs, 0, tags)
+
         return route_results, route_tags
 
     def combine(
