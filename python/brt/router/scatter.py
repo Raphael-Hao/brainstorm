@@ -89,7 +89,71 @@ class ScatterRouter(BaseRouter):
         )
         return route_results, reverse_indices, loads
 
-    def symbolic_route(self, inputs):
+    def symbolic_route(
+        self, inputs: torch.Tensor, indices: torch.Tensor
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+        return symbolic_scatter_route(inputs, self.router_kind, self.route_num)
+
+
+@router
+class SparseScatterRouter(BaseRouter):
+    def __init__(
+        self,
+        route_num,
+        gran_dim: Union[int, List[int]],
+        route_func,
+        route_method="topk",
+        route_method_args=1,
+        transform=True,
+        dispatcher_cls=DefaultDispatcher,
+    ):
+        """base scatter router
+
+        Args:
+            route_num (int): routing number
+            gran_dim (int, optional): routing grainularity. Defaults to None.
+            route_method = "topk", "threshold"
+                topk: select the topk of gate results as the route destinations
+                threshold: select the gate results that are larger than threshold as the route destinations
+            transform (bool, optional): whether to transform the routing results. Defaults to True.
+        """
+        super().__init__(route_num=route_num, gran_dim=gran_dim)
+        self.route_func = route_func
+        self.route_method = route_method
+        self.route_method_args = route_method_args
+        self.transform = transform
+        self.router_kind = get_scatter_router_kind(route_method, route_method_args)
+        self.dispatcher = dispatcher_cls(
+            self.route_num, self.gran_dim, transform=transform
+        )
+
+    def route(
+        self, inputs: torch.Tensor
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+        """should be implemented by all scatter routers
+
+        Returns:
+            List[torch.Tensor]: routing results for each routing dst
+            List[torch.Tensor]: reverse indices for each routing dst
+            Union[int, torch.Size]]: indicate the reverse shape info
+        """
+        loads = inputs.size(0)
+        gates = self.route_func(inputs)
+        if self.route_method == "topk":
+            route_indices = torch.topk(gates, self.route_method_args, dim=1).indices
+            route_indices = torch.zeros(inputs.size(0), self.route_num).scatter_(
+                1, route_indices, 1
+            )
+        elif self.route_method == "threshold":
+            route_indices = (gates > self.route_method_args).long()
+        route_results, reverse_indices = self.dispatcher.dispatch(
+            inputs, route_indices, gates
+        )
+        return route_results, reverse_indices, loads
+
+    def symbolic_route(
+        self, inputs: torch.Tensor, indices: torch.Tensor
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
         return symbolic_scatter_route(inputs, self.router_kind, self.route_num)
 
 
@@ -99,8 +163,7 @@ class RandomScatterRouter(ScatterRouter):
         self,
         route_num: int,
         gran_dim: Union[int, List[int]],
-        transform=True,
-        DispatcherCLS=DefaultDispatcher,
+        dispatcher_cls=DefaultDispatcher,
     ):
         """random scatter router
 
@@ -118,39 +181,9 @@ class RandomScatterRouter(ScatterRouter):
             route_func=route_func,
             route_method="topk",
             route_method_args=1,
-            transform=True,
+            transform=False,
+            dispatcher_cls=dispatcher_cls,
         )
-        self.dispatcher = DispatcherCLS(self.route_num, self.gran_dim)
-
-    def route(
-        self, inputs: torch.Tensor
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], torch.Tensor]:
-        """routing logic of random router
-
-        Args:
-            inputs (_type_): inputs for routing
-
-        Returns:
-            Returns:
-            List[torch.Tensor]: routing results for each routing dst
-            List[torch.Tensor]: reverse indices for each routing dst
-            Union[int, torch.Size]]: indicate the reverse shape info
-        """
-
-        # calculate the scatter indices
-        inputs_shape = torch._shape_as_tensor(inputs)
-        route_indices = torch.randint(0, self.route_num, (inputs.size(0),))
-        route_indices = F.one_hot(route_indices, self.route_num).long()
-        gates = torch.ones((inputs.size(0), self.route_num), dtype=inputs.dtype)
-
-        # dispatch according to the indices
-        route_results, reverse_indices = self.dispatcher.dispatch(
-            inputs=inputs, route_indices=route_indices
-        )
-        return route_results, reverse_indices, inputs_shape
-
-    def symbolic_route(self, inputs):
-        return symbolic_scatter_route(inputs, 0, self.route_num)
 
 
 @router

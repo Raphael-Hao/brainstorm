@@ -8,6 +8,12 @@
 
 namespace brt {
 namespace torchscript {
+
+std::tuple<::torch::Tensor, ::torch::Tensor> TagRoute(const torch::Tensor& inputs) {
+  ::torch::Tensor route_indices = at::arange(inputs.size(0), inputs.options());
+  return std::make_tuple(inputs, route_indices);
+}
+
 std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>, long> ScatterRoute(
     const torch::Tensor& inputs, const long& router_kind, const long& route_num) {
   std::vector<torch::Tensor> route_results(route_num, torch::empty_like(inputs, torch::kFloat32));
@@ -42,6 +48,7 @@ torch::Tensor GatherRoute(const std::vector<torch::Tensor>& inputs,
 }  // namespace brt
 
 TORCH_LIBRARY(brt, m) {
-  m.def("symbolic_scatter_route", brt::torchscript::ScatterRoute)
+  m.def("symbolic_tag_route", brt::torchscript::TagRoute)
+      .def("symbolic_scatter_route", brt::torchscript::ScatterRoute)
       .def("symbolic_gather_route", brt::torchscript::GatherRoute);
 }
