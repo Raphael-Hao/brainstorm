@@ -15,7 +15,6 @@ class BaseRouter(nn.Module):
     def __init__(
         self,
         route_num: int,
-        gran_dim: Union[int, List[int]],
     ):
         """_summary_
 
@@ -25,12 +24,7 @@ class BaseRouter(nn.Module):
         """
         super().__init__()
         self.route_num = route_num
-        self.gran_dim = gran_dim
         self.active_counter = 0
-
-    # def __init_subclass__(cls):
-    #     if getattr(cls, "_traced", False) is False:
-    #         cls = router(cls)
 
     def route(self, *inputs):
         raise NotImplementedError
@@ -41,24 +35,15 @@ class BaseRouter(nn.Module):
 
 @router
 class TagRouter(BaseRouter):
-    def __init__(self, gran_dim: Union[int, List[int]]):
-        super().__init__(route_num=1, gran_dim=gran_dim)
+    def __init__(self):
+        super().__init__(route_num=1)
 
     def route(
         self, inputs: torch.Tensor
     ) -> Tuple[Tuple[torch.Tensor, torch.Tensor], int]:
         loads = inputs.size(0)
-        indices = torch.arange(0, loads, dtype=torch.long, device=inputs.device)
-        return inputs, indices, loads
+        tags = torch.arange(0, loads, dtype=torch.long, device=inputs.device)
+        return inputs, tags, loads
 
     def symbolic_route(self, inputs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         return symbolic_tag_route(inputs)
-
-
-class SparseRouter(BaseRouter):
-    def __init__(self, gran_dim: Union[int, List[int]]):
-        super().__init__(route_num=1, gran_dim=gran_dim)
-
-    def route(self, inputs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-
-        return inputs
