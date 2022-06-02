@@ -7,10 +7,7 @@ from brt.primitive import router
 
 @router
 class BaseRouter(nn.Module):
-    def __init__(
-        self,
-        route_num: int,
-    ):
+    def __init__(self, route_num: int):
         """_summary_
 
         Args:
@@ -19,7 +16,6 @@ class BaseRouter(nn.Module):
         """
         super().__init__()
         self.route_num = route_num
-        self.active_counter = 0
 
     def route(self, *inputs):
         raise NotImplementedError
