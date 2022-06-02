@@ -28,7 +28,6 @@ class ScatterRouter(BaseRouter):
         route_num,
         route_func,
         route_method: str = "topk",
-        dispatcher_cls=DefaultDispatcher,
         **kwargs,
     ):
         """base scatter router
@@ -51,7 +50,9 @@ class ScatterRouter(BaseRouter):
         else:
             raise ValueError(f"route_method {route_method} is not supported")
         transform = kwargs.pop("transform", True)
-        self.dispatcher = dispatcher_cls(self.route_num, transform=transform, **kwargs)
+        self.dispatcher = DefaultDispatcher(
+            self.route_num, transform=transform, **kwargs
+        )
 
     def route(
         self, inputs: torch.Tensor
@@ -113,7 +114,6 @@ class RandomScatterRouter(ScatterRouter):
     def __init__(
         self,
         route_num: int,
-        dispatcher_cls=DefaultDispatcher,
     ):
         """random scatter router
 
@@ -129,7 +129,6 @@ class RandomScatterRouter(ScatterRouter):
             route_num=route_num,
             route_func=route_func,
             route_method="topk",
-            dispatcher_cls=dispatcher_cls,
             transform=False,
         )
 
@@ -141,14 +140,12 @@ class SparseScatterRouter(ScatterRouter):
         route_num,
         route_func,
         route_method: str = "topk",
-        dispatcher_cls=DefaultDispatcher,
         **kwargs,
     ):
         super().__init__(
             route_num=route_num,
             route_func=route_func,
             route_method=route_method,
-            dispatcher_cls=dispatcher_cls,
             **kwargs,
         )
 
