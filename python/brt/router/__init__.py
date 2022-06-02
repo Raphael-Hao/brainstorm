@@ -2,6 +2,6 @@
 # Licensed under the MIT license.
 
 
-from .base import BaseRouter
+from .base import *
 from .gather import *
 from .scatter import *
