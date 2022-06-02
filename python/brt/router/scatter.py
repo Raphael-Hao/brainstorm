@@ -3,6 +3,7 @@
 
 from typing import List, Tuple
 
+import numpy as np
 import torch
 from brt.common import log
 from brt.primitive import router
@@ -63,8 +64,20 @@ class ScatterRouter(BaseRouter):
             int: Loads
         """
         loads = inputs.size(0)
+        route_indices, gates = self.make_indices(inputs)
+        route_results, route_tags = self.dispatcher.dispatch(
+            inputs, route_indices, gates
+        )
+        return route_results, route_tags, loads
+
+    def make_indices(self, inputs: torch.Tensor) -> torch.Tensor:
+        """generate gates with indices
+
+        Args:
+            inputs (torch.Tensor): input tensor
+        """
         gates = self.route_func(inputs)
-        assert gates.size(0) == loads and gates.size(1) == self.route_num
+        assert gates.size(0) == inputs.size(0) and gates.size(1) == self.route_num
         if self.route_method == "topk":
             route_indices = torch.topk(gates, self.k, dim=1).indices
             route_indices = torch.zeros(
@@ -87,10 +100,7 @@ class ScatterRouter(BaseRouter):
                 route_indices = torch.scatter_add(
                     route_indices, 1, residual_index, residual_indices
                 )
-        route_results, route_tags = self.dispatcher.dispatch(
-            inputs, route_indices, gates
-        )
-        return route_results, route_tags, loads
+        return route_indices, gates
 
     def symbolic_route(
         self, inputs: torch.Tensor
@@ -152,29 +162,7 @@ class SparseScatterRouter(ScatterRouter):
             List[torch.Tensor]: routing tags for each routing dst
             int: Loads
         """
-        gates = self.route_func(inputs)
-        if self.route_method == "topk":
-            route_indices = torch.topk(gates, self.k, dim=1).indices
-            route_indices = torch.zeros(
-                inputs.size(0), self.route_num, dtype=torch.int64, device=inputs.device
-            ).scatter_(1, route_indices, 1)
-        elif self.route_method == "threshold":
-            route_indices = (gates > self.threshold).long().to(inputs.device)
-            if self.residual_dst >= 0:
-                residual_indices = (
-                    (route_indices.sum(dim=1, keepdim=True) == 0)
-                    .long()
-                    .to(inputs.device)
-                )
-                residual_index = torch.full(
-                    (residual_indices.shape),
-                    self.residual_dst,
-                    dtype=torch.int64,
-                    device=inputs.device,
-                )
-                route_indices = torch.scatter_add(
-                    route_indices, 1, residual_index, residual_indices
-                )
+        route_indices, gates = self.make_indices(inputs)
         route_results, route_tags = self.dispatcher.dispatch(
             inputs, route_indices, gates, tags
         )
