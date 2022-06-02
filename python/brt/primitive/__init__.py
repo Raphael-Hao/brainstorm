@@ -5,20 +5,13 @@ import inspect
 from typing import Any
 
 from .domain import domain
-from .helper import is_netlet, is_router, is_traceable
+from .helper import (
+    de_symbolize,
+    get_init_parameters_or_fail,
+    is_netlet,
+    is_router,
+    is_traceable,
+    symbolize,
+)
 from .netlet import netlet
 from .router import router
-
-
-def get_init_parameters_or_fail(obj: Any):
-    if is_traceable(obj):
-        return obj.trace_kwargs
-    raise ValueError(
-        f"Object {obj} needs to be serializable but `trace_kwargs` is not available. "
-        "If it is a built-in module (like Conv2d), please import it from retiarii.nn. "
-        "If it is a customized module, please to decorate it with @basic_unit. "
-        "For other complex objects (e.g., trainer, optimizer, dataset, dataloader), "
-        "try to use @nni.trace."
-    )
-
-
