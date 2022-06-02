@@ -21,16 +21,10 @@ logger = log.get_logger(__file__)
 
 @router
 class GatherRouter(BaseRouter):
-    def __init__(
-        self,
-        route_num: int,
-        dispatcher_cls=DefaultDispatcher,
-        reduction: str = "add",
-        **kwargs
-    ):
+    def __init__(self, route_num: int, reduction: str = "add", **kwargs):
         super().__init__(route_num=route_num)
         self.reduction = reduction
-        self.dispatcher = dispatcher_cls(
+        self.dispatcher = DefaultDispatcher(
             route_num=self.route_num, reduction=self.reduction, **kwargs
         )
 
@@ -54,19 +48,8 @@ class GatherRouter(BaseRouter):
 
 @router
 class SparseGatherRouter(GatherRouter):
-    def __init__(
-        self,
-        route_num: int,
-        dispatcher_cls=DefaultDispatcher,
-        reduction: str = "add",
-        **kwargs
-    ):
-        super().__init__(
-            route_num=route_num,
-            dispatcher_cls=dispatcher_cls,
-            reduction=reduction,
-            **kwargs
-        )
+    def __init__(self, route_num: int, reduction: str = "add", **kwargs):
+        super().__init__(route_num=route_num, reduction=reduction, **kwargs)
 
     def route(
         self,
