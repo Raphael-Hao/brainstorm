@@ -4,6 +4,7 @@
 from typing import List, Union
 
 import torch
+from brt.common import log
 from brt.primitive import router
 
 from .base import BaseRouter
@@ -15,13 +16,14 @@ __all__ = [
     "FusedRandomGatherRouter",
 ]
 
+logger = log.get_logger(__file__)
 
 @router
 class GatherRouter(BaseRouter):
     def __init__(
         self,
         route_num: int,
-        route_method="truth",
+        route_method:str="truth",
         reduction: str = "add",
         dispatcher_cls=DefaultDispatcher,
         **kwargs
