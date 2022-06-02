@@ -31,7 +31,7 @@ class DefaultDispatcher(Dispatcher):
             torch.zeros(0, 1, dtype=torch.int64, device=inputs.device)
         ] * self.route_num
         for i in range(self.route_num):
-            tags = torch.nonzero(route_indices[:, i].squeeze())
+            tags = torch.nonzero(route_indices[:, i].view(-1))
             if tags.numel() > 0:
                 route_tags[i] = tags
                 tags = tags.repeat(1, route_size).view(-1, *route_shape)
