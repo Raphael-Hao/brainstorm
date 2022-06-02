@@ -18,18 +18,17 @@ __all__ = [
 
 logger = log.get_logger(__file__)
 
+
 @router
 class GatherRouter(BaseRouter):
     def __init__(
         self,
         route_num: int,
-        route_method:str="truth",
-        reduction: str = "add",
         dispatcher_cls=DefaultDispatcher,
+        reduction: str = "add",
         **kwargs
     ):
         super().__init__(route_num=route_num)
-        self.route_method = route_method
         self.reduction = reduction
         self.dispatcher = dispatcher_cls(
             route_num=self.route_num, reduction=self.reduction, **kwargs
@@ -42,13 +41,6 @@ class GatherRouter(BaseRouter):
         loads: int,
     ) -> torch.Tensor:
         route_results = self.dispatcher.combine(inputs, tags, loads)
-        if self.route_method == "restore" and route_results.numel() == 0:
-            route_results = torch.zeros(
-                loads,
-                *list(inputs[0].shape)[1:],
-                dtype=inputs[0].dtype,
-                device=inputs[0].device,
-            )
         return route_results
 
     def symbolic_route(
@@ -61,35 +53,35 @@ class GatherRouter(BaseRouter):
 
 
 @router
-class SparseGatherRouter(BaseRouter):
+class SparseGatherRouter(GatherRouter):
     def __init__(
         self,
         route_num: int,
-        gran_dim: Union[int, List[int]],
-        reduction: str = "add",
         dispatcher_cls=DefaultDispatcher,
+        reduction: str = "add",
+        **kwargs
     ):
-        super().__init__(route_num=route_num, gran_dim=gran_dim)
-        self.reduction = reduction
-        self.dispatcher = dispatcher_cls(
-            route_num=self.route_num, gran_dim=self.gran_dim, reduction=self.reduction
+        super().__init__(
+            route_num=route_num,
+            dispatcher_cls=dispatcher_cls,
+            reduction=reduction,
+            **kwargs
         )
 
     def route(
         self,
         inputs: List[torch.Tensor],
-        reverse_indices: List[torch.Tensor],
-        loads: int,
+        tags: List[torch.Tensor],
     ) -> torch.Tensor:
-        return self.dispatcher.combine(inputs, reverse_indices, loads)
+        route_results = self.dispatcher.combine(inputs, tags)
+        return route_results
 
     def symbolic_route(
         self,
         inputs: List[torch.Tensor],
-        reverse_indices: List[torch.Tensor],
-        loads: int,
+        tags: List[torch.Tensor],
     ) -> torch.Tensor:
-        return symbolic_gather_route(inputs, reverse_indices, loads, self.route_num)
+        return symbolic_gather_route(inputs, tags, self.route_num)
 
 
 @router
