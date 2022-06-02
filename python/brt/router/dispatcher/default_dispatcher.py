@@ -26,12 +26,14 @@ class DefaultDispatcher(Dispatcher):
         """
         route_shape = list(inputs.shape[1:])
         route_size = np.prod(route_shape)
-        route_results = [torch.zeros(0, *route_shape)] * self.route_num
+        route_results = [
+            torch.zeros(0, *route_shape, dtype=inputs.dtype, device=inputs.device)
+        ] * self.route_num
         route_tags = [
             torch.zeros(0, 1, dtype=torch.int64, device=inputs.device)
         ] * self.route_num
         for i in range(self.route_num):
-            tags = torch.nonzero(route_indices[:, i].view(-1))
+            tags = torch.nonzero(route_indices[:, i].view(-1)).to(inputs.device)
             if tags.numel() > 0:
                 route_tags[i] = tags
                 tags = tags.repeat(1, route_size).view(-1, *route_shape)
@@ -62,9 +64,13 @@ class DefaultDispatcher(Dispatcher):
             .view(-1, *route_shape)
         )
         if inputs.numel() == 0:
-            route_results = torch.zeros(0, *route_shape)
+            route_results = torch.zeros(
+                0, *route_shape, dtype=inputs.dtype, device=inputs.device
+            )
         else:
-            route_results = torch.zeros(loads, *route_shape)
+            route_results = torch.zeros(
+                loads, *route_shape, dtype=inputs.dtype, device=inputs.device
+            )
             if self.reduction == "add":
                 route_results = torch.scatter_add(route_results, 0, tags, inputs)
             else:
