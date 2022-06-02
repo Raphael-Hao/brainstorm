@@ -15,15 +15,18 @@ __all__ = [
     "FusedRandomGatherRouter",
 ]
 
+
 @router
 class GatherRouter(BaseRouter):
     def __init__(
         self,
         route_num: int,
+        route_method="truth",
         reduction: str = "add",
         dispatcher_cls=DefaultDispatcher,
     ):
         super().__init__(route_num=route_num)
+        self.route_method = route_method
         self.reduction = reduction
         self.dispatcher = dispatcher_cls(
             route_num=self.route_num, reduction=self.reduction
@@ -35,7 +38,15 @@ class GatherRouter(BaseRouter):
         tags: List[torch.Tensor],
         loads: int,
     ) -> torch.Tensor:
-        return self.dispatcher.combine(inputs, tags, loads)
+        route_results = self.dispatcher.combine(inputs, tags, loads)
+        if self.route_method == "restore" and route_results.numel() == 0:
+            route_results = torch.zeros(
+                loads,
+                *list(inputs[0].shape)[1:],
+                dtype=inputs[0].dtype,
+                device=inputs[0].device,
+            )
+        return route_results
 
     def symbolic_route(
         self,
