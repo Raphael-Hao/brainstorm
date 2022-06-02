@@ -4,8 +4,6 @@
 from typing import List, Tuple, Union
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from brt.common import log
 from brt.primitive import router
 
@@ -28,7 +26,7 @@ class ScatterRouter(BaseRouter):
         self,
         route_num,
         route_func,
-        route_method="topk",
+        route_method: str = "topk",
         dispatcher_cls=DefaultDispatcher,
         **kwargs,
     ):
@@ -66,6 +64,7 @@ class ScatterRouter(BaseRouter):
         """
         loads = inputs.size(0)
         gates = self.route_func(inputs)
+        assert gates.size(0) == loads and gates.size(1) == self.route_num
         if self.route_method == "topk":
             route_indices = torch.topk(gates, self.k, dim=1).indices
             route_indices = torch.zeros(
@@ -80,7 +79,10 @@ class ScatterRouter(BaseRouter):
                     .to(inputs.device)
                 )
                 residual_index = torch.full(
-                    (residual_indices.shape), self.residual_dst, dtype=torch.int64
+                    (residual_indices.shape),
+                    self.residual_dst,
+                    dtype=torch.int64,
+                    device=inputs.device,
                 )
                 route_indices = torch.scatter_add(
                     route_indices, 1, residual_index, residual_indices
