@@ -24,12 +24,13 @@ class GatherRouter(BaseRouter):
         route_method="truth",
         reduction: str = "add",
         dispatcher_cls=DefaultDispatcher,
+        **kwargs
     ):
         super().__init__(route_num=route_num)
         self.route_method = route_method
         self.reduction = reduction
         self.dispatcher = dispatcher_cls(
-            route_num=self.route_num, reduction=self.reduction
+            route_num=self.route_num, reduction=self.reduction, **kwargs
         )
 
     def route(
