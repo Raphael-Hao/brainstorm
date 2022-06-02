@@ -47,32 +47,3 @@ class ResidualDispatcher(DefaultDispatcher):
                     route_results[i] = torch.gather(inputs, 0, tags)
 
         return route_results, route_tags
-
-    def combine(
-        self,
-        inputs: List[torch.Tensor],
-        tags: List[torch.Tensor],
-        loads: int,
-    ) -> torch.Tensor:
-        """
-        Combine the outputs of the routers into the final outputs
-        """
-        assert len(inputs) == self.route_num and len(tags) == self.route_num
-        route_shape = list(inputs[0].shape[1:])
-        inputs = torch.cat(inputs, dim=0)
-        tags = (
-            torch.cat(tags, dim=0)
-            .repeat(1, np.prod(route_shape))
-            .view(-1, *route_shape)
-        )
-        if inputs.numel() == 0:
-            route_results = torch.zeros(0, *route_shape)
-        else:
-            route_results = torch.zeros(loads, *route_shape)
-            if self.reduction == "add":
-                route_results = torch.scatter_add(route_results, 0, tags, inputs)
-            else:
-                raise NotImplementedError(
-                    f"Reduction method {self.reduction} is not supported"
-                )
-        return route_results
