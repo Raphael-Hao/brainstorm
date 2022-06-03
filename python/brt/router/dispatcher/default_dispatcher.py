@@ -18,7 +18,8 @@ class DefaultDispatcher(Dispatcher):
     def __init__(self, route_num, transform=True, reduction="add"):
         """currently we only support add due to the scatter_reduce of torch
         is in development and will be released in 1.12, After that we will
-        support "sum", "prod", "mean", "amax", "amin
+        support "sum", "prod", "mean", "amax", "amin, see details in
+        https://github.com/pytorch/pytorch/issues/74770
         """
         super().__init__(route_num, transform, reduction)
 
