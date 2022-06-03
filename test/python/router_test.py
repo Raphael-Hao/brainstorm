@@ -123,18 +123,25 @@ class RouterTest(unittest.TestCase):
             self.drop_half_samples(SparseRouterModel, x, i, "upper", True)
             self.drop_half_samples(SparseRouterModel, x, i, "lower", True)
 
-    # def test_3dforward(self):
-    #     x = torch.arange(0, 30, dtype=torch.float32).view(3, 10)
-    #     for _ in range(10):
-    #         x = model(x)
-    #     return x
+    def test_3d_route(self):
+        for i in range(2):
+            x = torch.arange(0, 40, dtype=torch.float32).view(2, 2, 10)
+            self.all_to_single_route(RouterModel, x, i)
+            self.drop_half_samples(RouterModel, x, i, "upper")
+            self.drop_half_samples(RouterModel, x, i, "lower")
+            self.all_to_single_route(SparseRouterModel, x, i)
+            self.drop_half_samples(SparseRouterModel, x, i, "upper", True)
+            self.drop_half_samples(SparseRouterModel, x, i, "lower", True)
 
-    # def test_4dforward(self):
-    #     model = Router2D()
-    #     x = torch.arange(0, 30, dtype=torch.float32).view(3, 10)
-    #     for _ in range(10):
-    #         x = model(x)
-    #     return x
+    def test_4d_route(self):
+        for i in range(2):
+            x = torch.arange(0, 40, dtype=torch.float32).view(4, 1, 10, 1)
+            self.all_to_single_route(RouterModel, x, i)
+            self.drop_half_samples(RouterModel, x, i, "upper")
+            self.drop_half_samples(RouterModel, x, i, "lower")
+            self.all_to_single_route(SparseRouterModel, x, i)
+            self.drop_half_samples(SparseRouterModel, x, i, "upper", True)
+            self.drop_half_samples(SparseRouterModel, x, i, "lower", True)
 
     def test_script(self):
         route_func = nn.Sequential(nn.Linear(10, 2), nn.Softmax(dim=1))
@@ -151,9 +158,6 @@ class RouterTest(unittest.TestCase):
 
         jit_script(RouterModel)
         jit_script(SparseRouterModel)
-
-    def test_traced(self):
-        pass
 
 
 if __name__ == "__main__":
