@@ -35,15 +35,6 @@ def is_wrapped_with_trace(cls_or_func: Any) -> bool:
     )
 
 
-def is_domain(cls_or_instance) -> bool:
-    """check if the class is a domain for brainstorm."""
-
-    if not inspect.isclass(cls_or_instance):
-        cls_or_instance = cls_or_instance.__class__
-    import torch
-    assert issubclass(cls_or_instance, torch.nn.Module), "Only nn.Module is supported."
-    return getattr(cls_or_instance, "_brt_domain", False)
-
 def is_router(cls_or_instance) -> bool:
     """check if the class is a router for brainstorm."""
     if not inspect.isclass(cls_or_instance):

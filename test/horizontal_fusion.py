@@ -12,7 +12,7 @@ log.set_level("router", "DEBUG")
 # log.set_level("backend", "DEBUG")
 # log.set_level("ir", "DEBUG")
 
-@brt.netlet
+
 class MoE(nn.Module):
     def __init__(self):
         super().__init__()
@@ -28,7 +28,6 @@ class MoE(nn.Module):
         return x
 
 
-@brt.domain
 class MoEModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -47,4 +46,3 @@ x = x.cuda()
 moe_model.cuda()
 z = moe_model(x)
 print(z)
-

@@ -4,7 +4,6 @@
 import inspect
 from typing import Any
 
-from .domain import domain
 from .helper import (
     de_symbolize,
     get_init_parameters_or_fail,
