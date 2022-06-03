@@ -54,40 +54,74 @@ class SparseRouterModel(nn.Module):
 
 
 class RouterTest(unittest.TestCase):
-    def all_to_single_route(self, Model, inputs, route_dst):
+    def all_to_single_route(self, Model, inputs, dst):
         def route_func(inputs):
             gates = torch.zeros(
                 inputs.shape[0], 2, dtype=torch.int64, device=inputs.device
             )
-            gates[:, route_dst] = 1
+            gates[:, dst] = 1
             return gates
 
         model = Model(
             route_func=route_func,
-            route_method="topk",
+            route_method="threshold",
         )
         results = model(inputs)
-        return results
+        self.assertTrue(torch.allclose(results[dst], inputs))
+        self.assertTrue(results[1 - dst].numel() == 0)
+        self.assertTrue(torch.allclose(results[2], inputs))
 
-    def drop_half_samples(self, inputs, route_dst):
+    def drop_half_samples(self, Model, inputs, dst, which_half, sparse=False):
         def route_func(inputs):
             gates = torch.zeros(
                 inputs.shape[0], 2, dtype=torch.int64, device=inputs.device
             )
-            gates[:, route_dst] = 1
+            if which_half == "upper":
+                gates[inputs.shape[0] // 2 :, dst] = 1
+            else:
+                gates[: inputs.shape[0] // 2, dst] = 1
             return gates
 
-    def test_2d_route(self):
-        def route_2dtensor_single_route(Model, dst):
-            x = torch.arange(0, 20, dtype=torch.float32).view(2, 10)
-            y = self.all_to_single_route(Model, x, dst)
-            self.assertTrue(torch.allclose(y[dst], x))
-            self.assertTrue(y[1 - dst].numel() == 0)
-            self.assertTrue(torch.allclose(y[2], x))
+        model = Model(
+            route_func=route_func,
+            route_method="threshold",
+        )
+        results = model(inputs)
+        self.assertTrue(results[1 - dst].numel() == 0)
+        if which_half == "upper":
+            self.assertTrue(torch.allclose(results[dst], inputs[inputs.size(0) // 2 :]))
+            if sparse:
+                self.assertTrue(
+                    torch.allclose(results[2], inputs[inputs.size(0) // 2 :])
+                )
+            else:
+                self.assertTrue(
+                    torch.allclose(
+                        results[2][inputs.size(0) // 2 :], inputs[inputs.size(0) // 2 :]
+                    )
+                )
+        else:
+            self.assertTrue(torch.allclose(results[dst], inputs[: inputs.size(0) // 2]))
+            if sparse:
+                self.assertTrue(
+                    torch.allclose(results[2], inputs[: inputs.size(0) // 2])
+                )
+            else:
+                self.assertTrue(
+                    torch.allclose(
+                        results[2][: inputs.size(0) // 2], inputs[: inputs.size(0) // 2]
+                    )
+                )
 
+    def test_2d_route(self):
         for i in range(2):
-            route_2dtensor_single_route(RouterModel, i)
-            route_2dtensor_single_route(SparseRouterModel, i)
+            x = torch.arange(0, 40, dtype=torch.float32).view(4, 10)
+            self.all_to_single_route(RouterModel, x, i)
+            self.drop_half_samples(RouterModel, x, i, "upper")
+            self.drop_half_samples(RouterModel, x, i, "lower")
+            self.all_to_single_route(SparseRouterModel, x, i)
+            self.drop_half_samples(SparseRouterModel, x, i, "upper", True)
+            self.drop_half_samples(SparseRouterModel, x, i, "lower", True)
 
     # def test_3dforward(self):
     #     x = torch.arange(0, 30, dtype=torch.float32).view(3, 10)
