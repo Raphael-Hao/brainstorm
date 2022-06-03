@@ -15,13 +15,21 @@ std::tuple<::torch::Tensor, ::torch::Tensor> TagRoute(const ::torch::Tensor& inp
 }
 
 std::tuple<std::vector<::torch::Tensor>, std::vector<::torch::Tensor>, long> ScatterRoute(
-    const ::torch::Tensor& inputs, const long& route_num) {
+    const ::torch::Tensor& inputs, const ::torch::Tensor& tags, const long& route_num) {
   std::vector<::torch::Tensor> route_results(route_num,
                                              ::torch::empty_like(inputs, ::torch::kFloat32));
   std::vector<::torch::Tensor> route_tags(route_num,
                                           ::torch::ones(inputs.size(0), ::torch::kInt64));
   long loads = inputs.size(0);
   return std::make_tuple(route_results, route_tags, loads);
+}
+
+std::tuple<::torch::Tensor, ::torch::Tensor> GatherRoute(const std::vector<::torch::Tensor>& inputs,
+                                                         const std::vector<::torch::Tensor>& tags,
+                                                         const long& loads, const long& route_num) {
+  auto cat_inputs = ::at::cat(inputs, 0);
+  auto cat_tags = ::at::cat(tags, 0);
+  return std::make_tuple(cat_inputs, cat_tags);
 }
 
 std::tuple<::torch::Tensor, ::torch::Tensor, ::torch::Tensor, ::torch::Tensor>
@@ -34,18 +42,6 @@ FusedPaddingScatterRoute(const ::torch::Tensor& input, const long& route_num,
   return std::make_tuple(route_results, route_tags, route_capacities, reverse_shape);
 }
 
-::torch::Tensor GatherRoute(const std::vector<::torch::Tensor>& inputs,
-                            const std::vector<::torch::Tensor>& reverse_indices, const long& loads,
-                            const long& route_num) {
-  std::vector<long> tensor_shape;
-  auto& sample_input = inputs[0];
-  for (auto& dim : sample_input.sizes()) {
-    tensor_shape.push_back(dim);
-  }
-  tensor_shape[0] = loads;
-  ::torch::Tensor route_results = ::torch::ones(tensor_shape, ::torch::kFloat32);
-  return route_results;
-}
 }  // namespace torchscript
 }  // namespace brt
 

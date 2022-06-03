@@ -15,6 +15,7 @@ from .symbolic import symbolic_scatter_route
 __all__ = [
     "ScatterRouter",
     "RandomScatterRouter",
+    "SparseScatterRouter",
     "FusedRandomScatterRouter",
 ]
 
@@ -106,7 +107,8 @@ class ScatterRouter(BaseRouter):
     def symbolic_route(
         self, inputs: torch.Tensor
     ) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
-        return symbolic_scatter_route(inputs, self.route_num)
+        tags = torch.zeros(inputs.size(0), 1, dtype=torch.int64, device=inputs.device)
+        return symbolic_scatter_route(inputs, tags, self.route_num)
 
 
 @router
@@ -151,7 +153,7 @@ class SparseScatterRouter(ScatterRouter):
 
     def route(
         self, inputs: torch.Tensor, tags: torch.Tensor
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
         """should be implemented by all scatter routers
 
         Returns:
@@ -167,8 +169,11 @@ class SparseScatterRouter(ScatterRouter):
 
     def symbolic_route(
         self, inputs: torch.Tensor, tags: torch.Tensor
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
-        return symbolic_scatter_route(inputs, tags, self.route_num)
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+        route_results, route_tags, _ = symbolic_scatter_route(
+            inputs, tags, self.route_num
+        )
+        return route_results, route_tags
 
 
 @router
