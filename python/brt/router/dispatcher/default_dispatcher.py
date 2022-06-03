@@ -15,7 +15,11 @@ class DefaultDispatcher(Dispatcher):
     The default dispatcher will dispatch the inputs to the routers just according to the ground-truth routing indices.
     """
 
-    def __init__(self, route_num, transform=True, reduction="sum"):
+    def __init__(self, route_num, transform=True, reduction="add"):
+        """currently we only support add due to the scatter_reduce of torch
+        is in development and will be released in 1.12, After that we will
+        support "sum", "prod", "mean", "amax", "amin
+        """
         super().__init__(route_num, transform, reduction)
 
     def dispatch(
@@ -75,12 +79,13 @@ class DefaultDispatcher(Dispatcher):
             route_indices = inverse.repeat(1, np.prod(route_shape)).view(
                 -1, *route_shape
             )
-            route_results = torch.scatter_reduce(
-                inputs, 0, route_indices, self.reduction
-            )
+            # route_results = torch.scatter_reduce(inputs, 0, route_indices, self.reduction)
+            route_results = torch.zeros(
+                tags.size(0), *route_shape, dtype=inputs.dtype, device=inputs.device
+            ).scatter_(0, route_indices, inputs, reduce=self.reduction)
         else:
             route_indices = tags.repeat(1, np.prod(route_shape)).view(-1, *route_shape)
-            route_results = torch.scatter_reduce(
-                inputs, 0, route_indices, self.reduction, output_size=loads
-            )
+            route_results = torch.zeros(
+                loads, *route_shape, dtype=inputs.dtype, device=inputs.device
+            ).scatter_(0, route_indices, inputs, reduce=self.reduction)
         return route_results, tags
