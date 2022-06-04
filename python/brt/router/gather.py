@@ -64,7 +64,7 @@ class GatherRouter(BaseRouter):
             load, *route_shape, dtype=route_datas.dtype, device=route_datas.device
         ).scatter_(0, route_indices, route_datas, reduce=self.reduction)
         # results_data = torch.scatter_reduce(route_datas, 0, route_indices, self.reduction)
-        return FlowTensor(result_data, route_tags, load)
+        return FlowTensor(result_data, result_tag.view(-1, 1), load)
 
     def symbolic_route(
         self,
