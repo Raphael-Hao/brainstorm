@@ -6,50 +6,46 @@ import unittest
 import brt.nn as nn
 import torch
 from brt.primitive.helper import symbolize
-from brt.router import (
-    GatherRouter,
-    ScatterRouter,
-    SparseGatherRouter,
-    SparseScatterRouter,
-    TagRouter,
-)
+from brt.router import GatherRouter, ScatterRouter
 
 
 class RouterModel(nn.Module):
-    def __init__(self, route_func, route_method):
+    def __init__(self, route_func, route_method, **kwargs):
         super().__init__()
         self.scatter_router = ScatterRouter(
-            route_num=2, route_func=route_func, route_method=route_method
+            dst_num=2,
+            route_func=route_func,
+            route_method=route_method,
+            sparse=False,
+            **kwargs,
         )
         self.expert1 = nn.Identity()
         self.expert2 = nn.Identity()
-        self.gather_router = GatherRouter(route_num=2)
+        self.gather_router = GatherRouter(dst_num=2, sparse=False)
 
     def forward(self, x):
-        route_results, route_tags, loads = self.scatter_router(x)
+        route_results = self.scatter_router(x)
         x_0 = self.expert1(route_results[0])
         x_1 = self.expert2(route_results[1])
-        x = self.gather_router([x_0, x_1], route_tags, loads)
+        x = self.gather_router([x_0, x_1])
         return x_0, x_1, x
 
 
 class SparseRouterModel(nn.Module):
     def __init__(self, route_func, route_method):
         super().__init__()
-        self.tag_router = TagRouter()
-        self.scatter_router = SparseScatterRouter(
-            route_num=2, route_func=route_func, route_method=route_method
+        self.scatter_router = ScatterRouter(
+            dst_num=2, route_func=route_func, route_method=route_method
         )
         self.expert1 = nn.Identity()
         self.expert2 = nn.Identity()
-        self.gather_router = SparseGatherRouter(route_num=2)
+        self.gather_router = GatherRouter(dst_num=2)
 
     def forward(self, x):
-        x, tags = self.tag_router(x)
-        route_results, route_tags = self.scatter_router(x, tags)
+        route_results = self.scatter_router(x)
         x_0 = self.expert1(route_results[0])
         x_1 = self.expert2(route_results[1])
-        x, tags = self.gather_router([x_0, x_1], route_tags)
+        x = self.gather_router([x_0, x_1])
         return x_0, x_1, x
 
 
@@ -67,9 +63,9 @@ class RouterTest(unittest.TestCase):
             route_method="threshold",
         )
         results = model(inputs)
-        self.assertTrue(torch.allclose(results[dst], inputs))
-        self.assertTrue(results[1 - dst].numel() == 0)
-        self.assertTrue(torch.allclose(results[2], inputs))
+        self.assertTrue(torch.allclose(results[dst].data, inputs))
+        self.assertTrue(results[1 - dst].data.numel() == 0)
+        self.assertTrue(torch.allclose(results[2].data, inputs))
 
     def drop_half_samples(self, Model, inputs, dst, which_half, sparse=False):
         def route_func(inputs):
@@ -87,29 +83,33 @@ class RouterTest(unittest.TestCase):
             route_method="threshold",
         )
         results = model(inputs)
-        self.assertTrue(results[1 - dst].numel() == 0)
+        self.assertTrue(results[1 - dst].data.numel() == 0)
         if which_half == "upper":
-            self.assertTrue(torch.allclose(results[dst], inputs[inputs.size(0) // 2 :]))
+            self.assertTrue(
+                torch.allclose(results[dst].data, inputs[inputs.size(0) // 2 :])
+            )
             if sparse:
                 self.assertTrue(
-                    torch.allclose(results[2], inputs[inputs.size(0) // 2 :])
+                    torch.allclose(results[2].data, inputs[inputs.size(0) // 2 :])
                 )
             else:
                 self.assertTrue(
                     torch.allclose(
-                        results[2][inputs.size(0) // 2 :], inputs[inputs.size(0) // 2 :]
+                        results[2].data[inputs.size(0) // 2 :],
+                        inputs[inputs.size(0) // 2 :],
                     )
                 )
         else:
             self.assertTrue(torch.allclose(results[dst], inputs[: inputs.size(0) // 2]))
             if sparse:
                 self.assertTrue(
-                    torch.allclose(results[2], inputs[: inputs.size(0) // 2])
+                    torch.allclose(results[2].data, inputs[: inputs.size(0) // 2])
                 )
             else:
                 self.assertTrue(
                     torch.allclose(
-                        results[2][: inputs.size(0) // 2], inputs[: inputs.size(0) // 2]
+                        results[2].data[: inputs.size(0) // 2],
+                        inputs[: inputs.size(0) // 2],
                     )
                 )
 
