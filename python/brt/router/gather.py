@@ -39,32 +39,33 @@ class GatherRouter(BaseRouter):
         Combine the outputs of the routers into the final outputs
         """
         assert len(inputs) == self.dst_num
-        route_datas = torch.cat([_input.data for _input in inputs], dim=0)
+        route_datas = torch.cat(inputs, dim=0)
         route_tags = torch.cat([_input.tag for _input in inputs], dim=0)
         load = np.max([_input.load for _input in inputs])
         route_shape = list(route_datas.shape[1:])
         route_size = np.prod(route_shape)
         if route_datas.numel() == 0:
-            results_data = torch.zeros(
+            result_data = torch.zeros(
                 0, *route_shape, dtype=route_datas.dtype, device=route_datas.device
             )
-            return FlowTensor(results_data, route_tags, load)
-        if self.sparse:
-            result_tag, inverse = torch.unique(
-                route_tags, sorted=True, return_inverse=True
-            )
-            route_indices = inverse.repeat(1, route_size).view(-1, *route_shape)
-            load = result_tag.size(0)
+            result_tag = route_tags
         else:
-            route_indices = route_tags.repeat(1, route_size).view(-1, *route_shape)
-            result_tag = torch.arange(
-                0, load, dtype=torch.int64, device=route_datas.device
-            )
-        result_data = torch.zeros(
-            load, *route_shape, dtype=route_datas.dtype, device=route_datas.device
-        ).scatter_(0, route_indices, route_datas, reduce=self.reduction)
+            if self.sparse:
+                result_tag, inverse = torch.unique(
+                    route_tags, sorted=True, return_inverse=True
+                )
+                route_indices = inverse.repeat(1, route_size).view(-1, *route_shape)
+                load = result_tag.size(0)
+            else:
+                route_indices = route_tags.repeat(1, route_size).view(-1, *route_shape)
+                result_tag = torch.arange(
+                    0, load, dtype=torch.int64, device=route_datas.device
+                ).view(-1, 1)
+            result_data = torch.zeros(
+                load, *route_shape, dtype=route_datas.dtype, device=route_datas.device
+            ).scatter_(0, route_indices, route_datas, reduce=self.reduction)
         # results_data = torch.scatter_reduce(route_datas, 0, route_indices, self.reduction)
-        return FlowTensor(result_data, route_tags, load)
+        return FlowTensor(result_data).init_flow(result_tag, load)
 
     def symbolic_route(
         self,
