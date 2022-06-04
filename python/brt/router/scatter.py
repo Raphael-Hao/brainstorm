@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 import torch
@@ -10,6 +10,7 @@ from brt.primitive import router
 
 from .base import BaseRouter
 from .dispatcher import DefaultDispatcher, FusedDispatcher
+from .flow_tensor import FlowTensor
 from .symbolic import symbolic_scatter_route
 
 __all__ = [
@@ -55,9 +56,7 @@ class ScatterRouter(BaseRouter):
             self.route_num, transform=transform, **kwargs
         )
 
-    def route(
-        self, inputs: torch.Tensor
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+    def route(self, inputs: torch.Tensor) -> List[torch.Tensor]:
         """should be implemented by all scatter routers
 
         Returns:
@@ -65,48 +64,61 @@ class ScatterRouter(BaseRouter):
             List[torch.Tensor]: routing tags for each routing dst
             int: Loads
         """
-        loads = inputs.size(0)
-        route_indices, gates = self.make_indices(inputs)
-        route_results, route_tags = self.dispatcher.dispatch(
-            inputs, route_indices, gates
-        )
-        return route_results, route_tags, loads
+        inputs = self.tag_inputs(inputs)
+        route_indices, gates = self.make_indices(inputs.data)
+        route_results = self.dispatcher.dispatch(inputs, route_indices, gates)
+        return route_results
 
-    def make_indices(self, inputs: torch.Tensor) -> torch.Tensor:
+    def tag_inputs(self, inputs: Union[torch.Tensor, FlowTensor]) -> FlowTensor:
+        """tag inputs with routing tags"""
+        if isinstance(inputs, FlowTensor):
+            return inputs
+        elif isinstance(inputs, torch.Tensor):
+            tag = torch.arange(
+                0, inputs.size(0), dtype=torch.int64, device=inputs.device
+            ).view(-1, 1)
+            return FlowTensor(data=inputs, tag=tag, load=inputs.size(0))
+        else:
+            raise ValueError(f"unsupported input type {type(inputs)}")
+
+    def make_indices(
+        self, inputs_data: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.TensorType]:
         """generate gates with indices
 
         Args:
             inputs (torch.Tensor): input tensor
         """
-        gates = self.route_func(inputs)
-        assert gates.size(0) == inputs.size(0) and gates.size(1) == self.route_num
+        gates = self.route_func(inputs_data)
+        assert gates.size(0) == inputs_data.size(0) and gates.size(1) == self.route_num
         if self.route_method == "topk":
             route_indices = torch.topk(gates, self.k, dim=1).indices
             route_indices = torch.zeros(
-                inputs.size(0), self.route_num, dtype=torch.int64, device=inputs.device
+                inputs_data.size(0),
+                self.route_num,
+                dtype=torch.int64,
+                device=inputs_data.device,
             ).scatter_(1, route_indices, 1)
         elif self.route_method == "threshold":
-            route_indices = (gates > self.threshold).long().to(inputs.device)
+            route_indices = (gates > self.threshold).long().to(inputs_data.device)
             if self.residual_dst >= 0:
                 residual_indices = (
                     (route_indices.sum(dim=1, keepdim=True) == 0)
                     .long()
-                    .to(inputs.device)
+                    .to(inputs_data.device)
                 )
                 residual_index = torch.full(
                     (residual_indices.shape),
                     self.residual_dst,
                     dtype=torch.int64,
-                    device=inputs.device,
+                    device=inputs_data.device,
                 )
                 route_indices = torch.scatter_add(
                     route_indices, 1, residual_index, residual_indices
                 )
         return route_indices, gates
 
-    def symbolic_route(
-        self, inputs: torch.Tensor
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], int]:
+    def symbolic_route(self, inputs: torch.Tensor) -> List[torch.Tensor]:
         tags = torch.zeros(inputs.size(0), 1, dtype=torch.int64, device=inputs.device)
         return symbolic_scatter_route(inputs, tags, self.route_num)
 
@@ -123,8 +135,8 @@ class RandomScatterRouter(ScatterRouter):
             route_num (int): routing number
         """
 
-        def route_func(inputs):
-            gates = torch.randn((inputs.size(0), route_num))
+        def route_func(inputs_data):
+            gates = torch.randn((inputs_data.size(0), route_num))
             return gates
 
         super().__init__(
@@ -133,48 +145,6 @@ class RandomScatterRouter(ScatterRouter):
             route_method="topk",
             transform=False,
         )
-
-
-@router
-class SparseScatterRouter(ScatterRouter):
-    def __init__(
-        self,
-        route_num,
-        route_func,
-        route_method: str = "topk",
-        **kwargs,
-    ):
-        super().__init__(
-            route_num=route_num,
-            route_func=route_func,
-            route_method=route_method,
-            **kwargs,
-        )
-
-    def route(
-        self, inputs: torch.Tensor, tags: torch.Tensor
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
-        """should be implemented by all scatter routers
-
-        Returns:
-            List[torch.Tensor]: routing results for each routing dst
-            List[torch.Tensor]: routing tags for each routing dst
-            int: Loads
-        """
-        route_indices, gates = self.make_indices(inputs)
-        route_results, route_tags = self.dispatcher.dispatch(
-            inputs, route_indices, gates, tags
-        )
-        return route_results, route_tags
-
-    def symbolic_route(
-        self, inputs: torch.Tensor, tags: torch.Tensor
-    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
-        route_results, route_tags, _ = symbolic_scatter_route(
-            inputs, tags, self.route_num
-        )
-        return route_results, route_tags
-
 
 @router
 class FusedRandomScatterRouter(ScatterRouter):

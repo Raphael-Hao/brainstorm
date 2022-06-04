@@ -32,10 +32,8 @@ class GatherRouter(BaseRouter):
     def route(
         self,
         inputs: List[torch.Tensor],
-        tags: List[torch.Tensor],
-        loads: int,
     ) -> torch.Tensor:
-        route_results, _ = self.dispatcher.combine(inputs, tags, loads)
+        route_results, _ = self.dispatcher.combine(inputs)
         return route_results
 
     def symbolic_route(
