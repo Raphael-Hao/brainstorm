@@ -9,7 +9,7 @@ from brt.common import log
 from brt.primitive import router
 
 from .base import BaseRouter
-from .flow_tensor import FlowTensor
+from .flow_tensor import FlowTensor, deinit_flow_tensor, init_flow_tensor
 from .symbolic import symbolic_scatter_route
 
 __all__ = [
@@ -92,25 +92,26 @@ class ScatterRouter(BaseRouter):
             tag = torch.arange(
                 0, inputs.size(0), dtype=torch.int64, device=inputs.device
             ).view(-1, 1)
-            inputs = FlowTensor(inputs).init_flow(tag, load=tag.numel())
+            inputs = init_flow_tensor(inputs, tag, load=tag.numel())
             return inputs
         else:
             raise ValueError(f"unsupported input type {type(inputs)}")
 
     def gen_indices_and_gates(
         self, inputs_data: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.TensorType]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """generate gates with indices
 
         Args:
             inputs (torch.Tensor): input tensor
         """
         gates = self.route_func(inputs_data)
+        gates.__class__ = torch.Tensor
         assert gates.size(0) == inputs_data.size(0) and gates.size(1) == self.dst_num
         if self.route_method == "topk":
             route_indices = torch.topk(gates, self.k, dim=1).indices
             route_indices = torch.zeros(
-                inputs_data.size(0),
+                gates.size(0),
                 self.dst_num,
                 dtype=torch.int64,
                 device=inputs_data.device,
@@ -150,11 +151,10 @@ class ScatterRouter(BaseRouter):
         route_size = np.prod(route_shape)
 
         results = [
-            FlowTensor(
+            init_flow_tensor(
                 data=torch.zeros(
                     0, *route_shape, dtype=route_data.dtype, device=route_data.device
-                )
-            ).init_flow(
+                ),
                 tag=torch.zeros(0, 1, dtype=torch.int64, device=route_data.device),
                 load=load,
             )
@@ -174,7 +174,7 @@ class ScatterRouter(BaseRouter):
                     data = torch.gather(route_data * gate, 0, data_indices)
                 else:
                     data = torch.gather(route_data, 0, data_indices)
-                results[i] = FlowTensor(data).init_flow(tag, load)
+                results[i] = init_flow_tensor(data, tag, load)
             if self.sparse:
                 results[i].load = tag_indices.numel()
 

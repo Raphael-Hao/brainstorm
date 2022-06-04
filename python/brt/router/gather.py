@@ -9,7 +9,7 @@ from brt.common import log
 from brt.primitive import router
 
 from .base import BaseRouter
-from .flow_tensor import FlowTensor
+from .flow_tensor import FlowTensor, init_flow_tensor
 from .symbolic import symbolic_gather_route
 
 __all__ = [
@@ -39,9 +39,9 @@ class GatherRouter(BaseRouter):
         Combine the outputs of the routers into the final outputs
         """
         assert len(inputs) == self.dst_num
-        route_datas = torch.cat(inputs, dim=0)
         route_tags = torch.cat([_input.tag for _input in inputs], dim=0)
         load = np.max([_input.load for _input in inputs])
+        route_datas = torch.cat(inputs, dim=0)
         route_shape = list(route_datas.shape[1:])
         route_size = np.prod(route_shape)
         if route_datas.numel() == 0:
@@ -65,7 +65,7 @@ class GatherRouter(BaseRouter):
                 load, *route_shape, dtype=route_datas.dtype, device=route_datas.device
             ).scatter_(0, route_indices, route_datas, reduce=self.reduction)
         # results_data = torch.scatter_reduce(route_datas, 0, route_indices, self.reduction)
-        return FlowTensor(result_data).init_flow(result_tag, load)
+        return init_flow_tensor(result_data, result_tag, load)
 
     def symbolic_route(
         self,
