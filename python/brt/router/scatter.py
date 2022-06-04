@@ -74,19 +74,26 @@ class ScatterRouter(BaseRouter):
             int: Loads
         """
         inputs = self.tag_inputs(inputs)
-        route_indices, gates = self.gen_indices_and_gates(inputs.data)
+        route_indices, gates = self.gen_indices_and_gates(inputs)
         route_results = self.dispatch(inputs, route_indices, gates)
         return route_results
 
     def tag_inputs(self, inputs: Union[torch.Tensor, FlowTensor]) -> FlowTensor:
         """tag inputs with routing tags"""
         if isinstance(inputs, FlowTensor):
+            if inputs.size(0) != inputs.tag.numel():
+                # route granularity changed, we will re-tag the inputs
+                new_tag = torch.arange(
+                    0, inputs.size(0), dtype=torch.int64, device=inputs.device
+                ).view(-1, 1)
+                inputs.init_flow(new_tag, load=new_tag.numel())
             return inputs
         elif isinstance(inputs, torch.Tensor):
             tag = torch.arange(
                 0, inputs.size(0), dtype=torch.int64, device=inputs.device
             ).view(-1, 1)
-            return FlowTensor(data=inputs, tag=tag, load=inputs.size(0))
+            inputs = FlowTensor(inputs).init_flow(tag, load=tag.numel())
+            return inputs
         else:
             raise ValueError(f"unsupported input type {type(inputs)}")
 
@@ -146,7 +153,8 @@ class ScatterRouter(BaseRouter):
             FlowTensor(
                 data=torch.zeros(
                     0, *route_shape, dtype=route_data.dtype, device=route_data.device
-                ),
+                )
+            ).init_flow(
                 tag=torch.zeros(0, 1, dtype=torch.int64, device=route_data.device),
                 load=load,
             )
@@ -157,17 +165,19 @@ class ScatterRouter(BaseRouter):
                 route_data.device
             )
             if tag_indices.numel() > 0:
-                results[i].tag = torch.gather(route_tag, 0, tag_indices)
+                tag = torch.gather(route_tag, 0, tag_indices)
                 data_indices = tag_indices.repeat(1, route_size).view(-1, *route_shape)
                 if self.transform:
                     gate = gates[:, i].reshape(
                         (route_data.size(0),) + (1,) * len(route_shape)
                     )
-                    results[i].data = torch.gather(route_data * gate, 0, data_indices)
+                    data = torch.gather(route_data * gate, 0, data_indices)
                 else:
-                    results[i].data = torch.gather(route_data, 0, data_indices)
+                    data = torch.gather(route_data, 0, data_indices)
+                results[i] = FlowTensor(data).init_flow(tag, load)
             if self.sparse:
                 results[i].load = tag_indices.numel()
+
         return results
 
     def symbolic_route(self, inputs: torch.Tensor) -> List[torch.Tensor]:
