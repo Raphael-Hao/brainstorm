@@ -195,6 +195,7 @@ class RandomScatterRouter(ScatterRouter):
             route_func=route_func,
             route_method="topk",
             transform=False,
+            k=1,
         )
 
 
