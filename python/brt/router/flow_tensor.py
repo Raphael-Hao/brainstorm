@@ -8,6 +8,9 @@ class FlowTensor(object):
         self.data = data
         self.tag = tag
         self.load = load
+    
+    def numel(self):
+        return self.data.numel()
 
     def __repr__(self):
         return f"FlowTensor:\ndata: {self.data}\ntags: {self.tag}\nload: {self.load}"
