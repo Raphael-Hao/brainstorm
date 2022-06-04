@@ -1,37 +1,61 @@
+from collections.abc import Iterable
+from typing import List
+
 import torch
 
 
-class FlowTensor(object):
+class FlowTensor(torch.Tensor):
     CHECK_TAGS = False
 
-    def __init__(self, data: torch.Tensor, tag: torch.Tensor, load):
-        self.data = data
+    def init_flow(self, tag: torch.Tensor, load):
         self.tag = tag
         self.load = load
-    
-    def numel(self):
-        return self.data.numel()
+        return self
 
     def __repr__(self):
-        return f"FlowTensor:\ndata: {self.data}\ntags: {self.tag}\nload: {self.load}"
+        return f"FlowTensor:\ndata: {super().__repr__()}\ntag: {self.tag}\nload: {self.load}"
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         if kwargs is None:
             kwargs = {}
-        new_args = []
-        new_tags = []
-        new_loads = []
-        for i, arg in enumerate(args):
-            new_args.append(arg.data if hasattr(arg, "data") else arg)
-            if hasattr(arg, "tag"):
-                new_tags.append(arg.tag)
-            if hasattr(arg, "load"):
-                new_loads.append(arg.load)
-        assert len(new_tags) > 0 and len(new_loads) > 0
-        ret = func(*new_args, **kwargs)
-        ret_flow_tensor = FlowTensor(ret, tag=new_tags[0], load=new_loads[0])
-        if cls.CHECK_TAGS:
-            for tag in new_tags:
-                assert torch.allclose(ret_flow_tensor.tag, tag)
-        return ret_flow_tensor
+        tags = []
+        loads = []
+        for _, arg in enumerate(args):
+            if isinstance(arg, FlowTensor):
+                tags.append(arg.tag)
+                loads.append(arg.load)
+                continue
+            if isinstance(arg, torch.Tensor):
+                continue
+            if isinstance(arg, Iterable):
+                for t in arg:
+                    if isinstance(t, FlowTensor):
+                        tags.append(t.tag)
+                        loads.append(t.load)
+        assert len(tags) > 0 and len(loads) > 0
+        ret = super().__torch_function__(func, types, args, kwargs)
+        if isinstance(ret, torch.Tensor):
+            ret.tag = tags[0]
+            ret.load = loads[0]
+            return ret
+        if isinstance(ret, Iterable):
+            for t in ret:
+                if isinstance(t, torch.Tensor):
+                    t.tag = tags[0]
+                    t.load = loads[0]
+        # if cls.CHECK_TAGS:
+        #     for tag in tags:
+        #         assert torch.allclose(tags[0], tag)
+        return ret
+
+
+def init_flow_tensor(data: torch.Tensor, tag: torch.Tensor, load: int) -> FlowTensor:
+    data.__class__ = FlowTensor
+    data.init_flow(tag, load)
+    return data
+
+
+def deinit_flow_tensor(data: FlowTensor, tag: torch.Tensor, load: int) -> torch.Tensor:
+    data.__class__ = torch.Tensor
+    return data
