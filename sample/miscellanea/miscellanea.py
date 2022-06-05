@@ -1,26 +1,22 @@
-
 #%%
-def wrapper(cls):
-    print("wrapping the Inherited class")
-    cls._brt = True
-    return cls
+class FlowTensor(object):
+    @property
+    def tags(self):
+        return getattr(self, "_tags", [])
 
+    def init_flow(self):
+        if not hasattr(self, "tags"):
+            setattr(self, "tags", [])
+        if not hasattr(self, "loads"):
+            setattr(self, "loads", [])
 
-class BaseClass:
-    def __init__(self) -> None:
-        pass
+    def add_flow(self, tag, load):
+        self.tags = tag
+        self.loads = load
+        return self
 
-    def __init_subclass__(cls, **kwargs) -> None:
-        super().__init_subclass__(**kwargs)
-        cls = wrapper(cls)
+flow_tensor = FlowTensor()
+flow_tensor.tags.append(1)
 
-
-class InheritClass(BaseClass):
-    def __init__(self) -> None:
-        super().__init__()
-
-
-a = InheritClass()
-print(a._brt)
-
+print(flow_tensor.tags)
 # %%
