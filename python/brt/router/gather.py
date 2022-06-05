@@ -31,6 +31,7 @@ class GatherRouter(BaseRouter):
         self,
         in_flows: List[FlowTensor],
     ) -> FlowTensor:
+        in_flows = self.verify_in_flow(in_flows)
         out_flow = self.combine(in_flows)
         out_flow = self.verify_out_flow(out_flow)
         return out_flow
@@ -86,11 +87,6 @@ class GatherRouter(BaseRouter):
         out_flow_tags = in_flows_tags + [out_flow_tag]
         # results_data = torch.scatter_reduce(route_datas, 0, route_indices, self.reduction)
         return init_flow_tensor(out_flow_data, out_flow_tags, in_flows_loads_with_current)
-
-    def verify_out_flow(self, out_flow: FlowTensor) -> Union[torch.Tensor, FlowTensor]:
-        if out_flow.tag.numel() == out_flow.load:
-            out_flow, _, _ = out_flow.unpack()
-        return out_flow
 
     def symbolic_route(
         self,

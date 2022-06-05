@@ -46,29 +46,22 @@ class BaseRouter(nn.Module):
             in_flow = type(in_flow)([self.verify_in_flow(f) for f in in_flow])
 
         else:
-            raise ValueError(f"unsupported input type {type(in_flow)}")
+            raise ValueError(f"unsupported input flow type {type(in_flow)}")
 
         return in_flow
-    
-    def verify_out_flow(self, out_flow):
-        if isinstance(out_flow, FlowTensor):
-            if out_flow.size(0) != out_flow.tag.numel():
-                # route granularity changed, we will re-tag the inputs
-                new_tag = torch.arange(
-                    0, out_flow.size(0), dtype=torch.int64, device=out_flow.device
-                ).view(-1, 1)
-                out_flow.pack(new_tag, load=new_tag.numel())
 
-        elif isinstance(out_flow, torch.Tensor):
-            tag = torch.arange(
-                0, out_flow.size(0), dtype=torch.int64, device=out_flow.device
-            ).view(-1, 1)
-            out_flow = init_flow_tensor(out_flow, [tag], [tag.numel()])
+    def verify_out_flow(self, out_flow):
+        # FIXME complete the out_flow verification
+        if isinstance(out_flow, FlowTensor):
+            if out_flow.tag.numel() == out_flow.load:
+                out_flow, _, _ = out_flow.unpack()
+            if out_flow.flow_empty():
+                out_flow = deinit_flow_tensor(out_flow)
 
         elif isinstance(out_flow, (List, Tuple)):
             out_flow = type(out_flow)([self.verify_out_flow(f) for f in out_flow])
 
         else:
-            raise ValueError(f"unsupported input type {type(out_flow)}")
+            raise ValueError(f"unsupported output flow type {type(out_flow)}")
 
         return out_flow
