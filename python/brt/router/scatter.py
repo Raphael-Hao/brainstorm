@@ -79,26 +79,9 @@ class ScatterRouter(BaseRouter):
         out_flows = self.dispatch(
             in_flow_data, in_flow_tags, in_flow_loads, route_indices, gates
         )
+        out_flows = self.verify_out_flow(out_flows)
         return out_flows
 
-    def verify_in_flow(self, in_flow: Union[torch.Tensor, FlowTensor]) -> FlowTensor:
-        """tag inputs with routing tags"""
-        if isinstance(in_flow, FlowTensor):
-            if in_flow.size(0) != in_flow.tag.numel():
-                # route granularity changed, we will re-tag the inputs
-                new_tag = torch.arange(
-                    0, in_flow.size(0), dtype=torch.int64, device=in_flow.device
-                ).view(-1, 1)
-                in_flow.pack(new_tag, load=new_tag.numel())
-            return in_flow
-        elif isinstance(in_flow, torch.Tensor):
-            tag = torch.arange(
-                0, in_flow.size(0), dtype=torch.int64, device=in_flow.device
-            ).view(-1, 1)
-            in_flow = init_flow_tensor(in_flow, [tag], [tag.numel()])
-            return in_flow
-        else:
-            raise ValueError(f"unsupported input type {type(in_flow)}")
 
     def gen_indices_and_gates(
         self, in_flow_data: torch.Tensor
@@ -157,6 +140,7 @@ class ScatterRouter(BaseRouter):
         # torch.zeros(0, 1, dtype=torch.int64, device=in_flow_data.device)]
         out_flows = []
         for i in range(self.dst_num):
+            # FIXME check if this support empty flow
             tag_indices = torch.nonzero(route_indices[:, i].view(-1)).to(
                 in_flow_data.device
             )
