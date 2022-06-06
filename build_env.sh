@@ -18,3 +18,4 @@ make cpptest -j
 make install -j
 cd ../../../
 pip install -r requirements.txt
+pip install --editable .

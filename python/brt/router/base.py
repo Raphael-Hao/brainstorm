@@ -6,7 +6,9 @@ import torch
 import torch.nn as nn
 from brt.primitive import router
 
-from .flow_tensor import FlowTensor, deinit_flow_tensor, init_flow_tensor
+from .flow_tensor import deinit_flow_tensor, init_flow_tensor
+
+__all__ = ["BaseRouter"]
 
 
 @router
@@ -28,6 +30,8 @@ class BaseRouter(nn.Module):
         raise NotImplementedError
 
     def verify_in_flow(self, in_flow):
+        from .flow_tensor import FlowTensor
+
         if isinstance(in_flow, FlowTensor):
             if in_flow.size(0) != in_flow.tag.numel():
                 # route granularity changed, we will re-tag the inputs
@@ -51,12 +55,13 @@ class BaseRouter(nn.Module):
         return in_flow
 
     def verify_out_flow(self, out_flow):
-        # FIXME complete the out_flow verification
+        from .flow_tensor import FlowTensor
+
         if isinstance(out_flow, FlowTensor):
             if out_flow.tag.numel() == out_flow.load:
-                out_flow, _, _ = out_flow.unpack()
+                out_flow, _, _, _ = out_flow.unpack()
             if out_flow.flow_empty():
-                out_flow, _, _ = deinit_flow_tensor(out_flow)
+                out_flow, _, _, _ = deinit_flow_tensor(out_flow)
 
         elif isinstance(out_flow, (List, Tuple)):
             out_flow = type(out_flow)([self.verify_out_flow(f) for f in out_flow])

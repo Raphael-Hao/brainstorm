@@ -3,12 +3,8 @@
 
 from typing import TypeVar
 
-from brt.common import log
-
-from .helper import check_wrapped, is_wrapped_with_trace
+from .helper import check_wrapped
 from .serialize import torchscript_patch, trace
-
-logger = log.get_logger(__file__)
 
 __all__ = ["netlet"]
 T = TypeVar("T")
