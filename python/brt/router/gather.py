@@ -43,16 +43,18 @@ class GatherRouter(BaseRouter):
         assert len(in_flows) == self.dst_num
         in_flows_data = []
         in_flows_tag = []
+        in_flows_load = []
         flow_tags, flow_loads = [], []
         for flow in in_flows:
             data, flow_tags, flow_loads = deinit_flow_tensor(flow)
             in_flows_data.append(data)
             in_flows_tag.append(flow_tags.pop())
+            in_flows_load.append(flow_loads.pop())
         in_flows_data = torch.cat(in_flows_data, dim=0)
         in_flows_tag = torch.cat(in_flows_tag, dim=0)
+        in_flows_load = np.max(in_flows_load)
         in_flows_tags = flow_tags
-        in_flows_loads_with_current = flow_loads
-        in_flows_load = in_flows_loads_with_current[-1]
+        in_flows_loads = flow_loads
 
         route_shape = list(in_flows_data.shape[1:])
         route_size = np.prod(route_shape)
@@ -85,8 +87,11 @@ class GatherRouter(BaseRouter):
                 device=in_flows_data.device
             ).scatter_(0, route_indices, in_flows_data, reduce=self.reduction)
         out_flow_tags = in_flows_tags + [out_flow_tag]
+        out_flow_loads = in_flows_loads + [in_flows_load]
         # results_data = torch.scatter_reduce(route_datas, 0, route_indices, self.reduction)
-        return init_flow_tensor(out_flow_data, out_flow_tags, in_flows_loads_with_current)
+        return init_flow_tensor(
+            out_flow_data, out_flow_tags, out_flow_loads
+        )
 
     def symbolic_route(
         self,
