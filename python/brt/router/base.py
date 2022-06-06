@@ -56,7 +56,7 @@ class BaseRouter(nn.Module):
             if out_flow.tag.numel() == out_flow.load:
                 out_flow, _, _ = out_flow.unpack()
             if out_flow.flow_empty():
-                out_flow = deinit_flow_tensor(out_flow)
+                out_flow, _, _ = deinit_flow_tensor(out_flow)
 
         elif isinstance(out_flow, (List, Tuple)):
             out_flow = type(out_flow)([self.verify_out_flow(f) for f in out_flow])

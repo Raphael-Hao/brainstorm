@@ -1,3 +1,4 @@
+import copy
 from typing import List, Tuple
 
 import torch
@@ -21,10 +22,11 @@ class FlowTensor(torch.Tensor):
     @property
     def tag(self) -> torch.Tensor:
         if self.flow_empty():
-            logger.warning(
+            print(self)
+            logger.error(
                 "Trying to get tag from an FlowTensor without packed tag and load"
             )
-            return torch.zeros(0, 1, dtype=torch.int64, device=self.device)
+            # return torch.zeros(0, 1, dtype=torch.int64, device=self.device)
         return self.tags[-1]
 
     @property
@@ -51,8 +53,8 @@ class FlowTensor(torch.Tensor):
         return self, tag, load
 
     def deep_pack(self, tags: List[torch.Tensor], loads: List[int]):
-        self.tags = tags
-        self.loads = loads
+        self.tags = copy.deepcopy(tags)
+        self.loads = copy.deepcopy(loads)
         return self
 
     def deep_unpack(self):
@@ -81,14 +83,13 @@ class FlowTensor(torch.Tensor):
         if kwargs is None:
             kwargs = {}
         all_tags, all_loads = collect_tags_loads(args)
-        assert len(all_tags) > 0 and len(all_loads) > 0
+        assert len(all_tags[0]) > 0 and len(all_loads[0]) > 0
         if cls.CHECK_TAGS:
             for tags in all_tags:
                 for i in range(len(tags)):
                     assert torch.allclose(all_tags[0][i], tags[i])
         ret = super().__torch_function__(func, types, args, kwargs)
         pack_ret(ret, all_tags[0], all_loads[0])
-
         return ret
 
 
@@ -115,7 +116,7 @@ def pack_ret(ret, tags, loads):
         ret = ret.deep_pack(tags, loads)
 
     if isinstance(ret, (Tuple, List)):
-        ret = type(ret)(pack_ret(t) for t in ret)
+        ret = type(ret)(pack_ret(t, tags, loads) for t in ret)
 
     return ret
 
