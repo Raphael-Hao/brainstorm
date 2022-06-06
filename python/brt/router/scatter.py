@@ -30,7 +30,6 @@ class ScatterRouter(BaseRouter):
         route_method: str = "topk",
         residual_dst: int = -1,
         transform=True,
-        sparse=True,
         **kwargs,
     ):
         """base scatter router
@@ -45,7 +44,6 @@ class ScatterRouter(BaseRouter):
         super().__init__(dst_num=dst_num)
         self.route_func = route_func
         self.route_method = route_method.lower()
-        self.sparse = sparse
         self.residual_dst = residual_dst
         self.transform = transform
         if self.route_method == "topk":
