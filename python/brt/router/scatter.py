@@ -82,7 +82,6 @@ class ScatterRouter(BaseRouter):
         out_flows = self.verify_out_flow(out_flows)
         return out_flows
 
-
     def gen_indices_and_gates(
         self, in_flow_data: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -132,6 +131,7 @@ class ScatterRouter(BaseRouter):
         Dispatch the inputs into the the list of torch.Tensor with indices
         """
         in_flow_data = in_flow_data
+
         in_flow_tag = in_flow_tags.pop()
         in_flow_load = in_flow_loads.pop()
 
@@ -154,28 +154,24 @@ class ScatterRouter(BaseRouter):
                     out_flow_data = torch.gather(in_flow_data * gate, 0, data_indices)
                 else:
                     out_flow_data = torch.gather(in_flow_data, 0, data_indices)
-                out_flows.append(
-                    init_flow_tensor(out_flow_data, in_flow_tags, in_flow_loads)
-                )
-                out_flows[-1].pack(out_flow_tag, in_flow_load)
+                out_flow = init_flow_tensor(out_flow_data, in_flow_tags, in_flow_loads)
+                out_flow.pack(out_flow_tag, in_flow_load)
             else:
-                out_flows.append(
-                    init_flow_tensor(
-                        torch.zeros(
-                            0,
-                            *route_shape,
-                            dtype=in_flow_data.dtype,
-                            device=in_flow_data.device,
-                        ),
-                        in_flow_tags,
-                        in_flow_loads,
-                    )
+                out_flow = init_flow_tensor(
+                    torch.zeros(
+                        0,
+                        *route_shape,
+                        dtype=in_flow_data.dtype,
+                        device=in_flow_data.device,
+                    ),
+                    in_flow_tags,
+                    in_flow_loads,
                 )
-                out_flows[-1].pack(
+                out_flow.pack(
                     torch.zeros(0, 1, dtype=torch.int64, device=in_flow_data.device),
                     in_flow_load,
                 )
-
+            out_flows.append(out_flow)
         return out_flows
 
     def symbolic_route(self, inputs: torch.Tensor) -> List[torch.Tensor]:
