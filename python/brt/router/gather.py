@@ -45,6 +45,7 @@ class GatherRouter(BaseRouter):
         in_flows_tag = []
         in_flows_load = []
         flow_tags, flow_loads = [], []
+        
         for flow in in_flows:
             data, flow_tags, flow_loads, _ = deinit_flow_tensor(flow)
             in_flows_data.append(data)

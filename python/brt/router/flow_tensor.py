@@ -207,13 +207,13 @@ def _make_flow_tensor(extra_attrs: List[str], default_values: List[Any]):
         def deep_unpack(self):
             assert self.flow_initilized
 
-            tag_stack = self.tag_stack
-            load_stack = self.load_stack
+            tag_stack = copy.copy(self.tag_stack)
+            load_stack = copy.copy(self.load_stack)
             extra_attrs_stack_dict = {}
 
             for attr_stack in extra_attrs_stack:
                 value = self._get_brt_attr_stack(attr_stack)
-                extra_attrs_stack_dict[attr_stack] = value
+                extra_attrs_stack_dict[attr_stack] = copy.copy(value)
 
             return self, tag_stack, load_stack, extra_attrs_stack_dict
 
@@ -222,7 +222,7 @@ def _make_flow_tensor(extra_attrs: List[str], default_values: List[Any]):
             return len(self.tag_stack)
 
         def __repr__(self):
-            return f"FlowTensor:\ndata: {super().__repr__()}\ntag_stack: {self.tag_stack}\nload stack: {self.load_stack}"
+            return f"FlowTensor(\ndata: {super().__repr__()}\ntag_stack: {self.tag_stack}\nload stack: {self.load_stack})"
 
         @classmethod
         def __torch_function__(cls, func, types, args=(), kwargs=None):
