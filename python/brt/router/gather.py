@@ -46,7 +46,7 @@ class GatherRouter(BaseRouter):
         in_flows_load = []
         flow_tags, flow_loads = [], []
         for flow in in_flows:
-            data, flow_tags, flow_loads = deinit_flow_tensor(flow)
+            data, flow_tags, flow_loads, _ = deinit_flow_tensor(flow)
             in_flows_data.append(data)
             in_flows_tag.append(flow_tags.pop())
             in_flows_load.append(flow_loads.pop())
@@ -89,9 +89,7 @@ class GatherRouter(BaseRouter):
         out_flow_tags = in_flows_tags + [out_flow_tag]
         out_flow_loads = in_flows_loads + [in_flows_load]
         # results_data = torch.scatter_reduce(route_datas, 0, route_indices, self.reduction)
-        return init_flow_tensor(
-            out_flow_data, out_flow_tags, out_flow_loads
-        )
+        return init_flow_tensor(out_flow_data, out_flow_tags, out_flow_loads)
 
     def symbolic_route(
         self,
