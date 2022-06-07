@@ -63,9 +63,8 @@ class RouterTest(unittest.TestCase):
             route_method="threshold",
         )
         results = model(inputs)
+        print(f"results:", results)
         self.assertTrue(torch.allclose(results[dst].data, inputs))
-        print(results[1-dst])
-        print(results[dst])
         self.assertTrue(results[1 - dst].data.numel() == 0)
         self.assertTrue(torch.allclose(results[2].data, inputs))
 
@@ -118,12 +117,12 @@ class RouterTest(unittest.TestCase):
     def test_2d_route(self):
         for i in range(2):
             x = torch.arange(0, 40, dtype=torch.float32).view(4, 10)
-            self.all_to_single_route(RouterModel, x, i)
-            self.drop_half_samples(RouterModel, x, i, "upper")
-            self.drop_half_samples(RouterModel, x, i, "lower")
+            # self.all_to_single_route(RouterModel, x, i)
+            # self.drop_half_samples(RouterModel, x, i, "upper")
+            # self.drop_half_samples(RouterModel, x, i, "lower")
             self.all_to_single_route(SparseRouterModel, x, i)
-            self.drop_half_samples(SparseRouterModel, x, i, "upper", True)
-            self.drop_half_samples(SparseRouterModel, x, i, "lower", True)
+            # self.drop_half_samples(SparseRouterModel, x, i, "upper", True)
+            # self.drop_half_samples(SparseRouterModel, x, i, "lower", True)
 
     def test_3d_route(self):
         for i in range(2):
