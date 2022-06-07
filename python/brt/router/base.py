@@ -29,8 +29,8 @@ class BaseRouter(nn.Module):
     def symbolic_route(self, *inputs):
         raise NotImplementedError
 
-    def verify_in_flow(self, in_flow):
-        from .flow_tensor import FlowTensor
+    def pack_invalid_flow(self, in_flow):
+        from .flow_tensor import FlowTensor  # we need to keep FlowTensor updated
 
         if isinstance(in_flow, FlowTensor):
             if in_flow.size(0) != in_flow.tag.numel():
@@ -47,15 +47,15 @@ class BaseRouter(nn.Module):
             in_flow = init_flow_tensor(in_flow, [tag], [tag.numel()])
 
         elif isinstance(in_flow, (List, Tuple)):
-            in_flow = type(in_flow)([self.verify_in_flow(f) for f in in_flow])
+            in_flow = type(in_flow)([self.pack_invalid_flow(f) for f in in_flow])
 
         else:
             raise ValueError(f"unsupported input flow type {type(in_flow)}")
 
         return in_flow
 
-    def verify_out_flow(self, out_flow):
-        from .flow_tensor import FlowTensor
+    def remove_needless_pack(self, out_flow):
+        from .flow_tensor import FlowTensor  # we need to keep FlowTensor updated
 
         if isinstance(out_flow, FlowTensor):
             if out_flow.tag.numel() == out_flow.load:
@@ -64,7 +64,7 @@ class BaseRouter(nn.Module):
                 out_flow, _, _, _ = deinit_flow_tensor(out_flow)
 
         elif isinstance(out_flow, (List, Tuple)):
-            out_flow = type(out_flow)([self.verify_out_flow(f) for f in out_flow])
+            out_flow = type(out_flow)([self.remove_needless_pack(f) for f in out_flow])
 
         else:
             raise ValueError(f"unsupported output flow type {type(out_flow)}")

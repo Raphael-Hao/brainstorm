@@ -71,13 +71,13 @@ class ScatterRouter(BaseRouter):
             List[torch.Tensor]: routing tags for each routing dst
             int: Loads
         """
-        in_flow = self.verify_in_flow(in_flow)
+        in_flow = self.pack_invalid_flow(in_flow)
         in_flow_data, in_flow_tags, in_flow_loads, _ = deinit_flow_tensor(in_flow)
         route_indices, gates = self.gen_indices_and_gates(in_flow_data)
         out_flows = self.dispatch(
             in_flow_data, in_flow_tags, in_flow_loads, route_indices, gates
         )
-        out_flows = self.verify_out_flow(out_flows)
+        out_flows = self.remove_needless_pack(out_flows)
         return out_flows
 
     def gen_indices_and_gates(
@@ -203,7 +203,7 @@ class RandomScatterRouter(ScatterRouter):
 
 @router
 class MoEScatterRouter(ScatterRouter):
-    def __init__(self, dst_num, topk = 1, post_score = False):
+    def __init__(self, global_expert, topk = 1, post_score = False, ):
         super().__init__(dst_num, route_func, route_method, residual_dst, transform, **kwargs)
 
 
