@@ -46,8 +46,8 @@ def _make_flow_tensor(extra_attrs: List[str], default_values: List[Any]):
         Returns:
             all_attr_stack: including mandatory tag stack, load stack and extra attrs stack
         """
-        all_tag_stack = []
-        all_load_stack = []
+        all_tag_stack = None
+        all_load_stack = None
         all_extra_attrs_stack_dict = {
             attr_stack: [] for attr_stack in extra_attrs_stack
         }
@@ -64,7 +64,7 @@ def _make_flow_tensor(extra_attrs: List[str], default_values: List[Any]):
                 _all_tags, _all_loads, _all_extra_attrs_stack_dict = collect_attr_stack(
                     a
                 )
-                if _all_tags and _all_loads:
+                if _all_tags is not None and _all_loads is not None:
                     return _all_tags, _all_loads, _all_extra_attrs_stack_dict
 
         return all_tag_stack, all_load_stack, all_extra_attrs_stack_dict
@@ -205,7 +205,7 @@ def _make_flow_tensor(extra_attrs: List[str], default_values: List[Any]):
             return self
 
         def deep_unpack(self):
-            assert self.flow_initilized and not self.flow_empty()
+            assert self.flow_initilized
 
             tag_stack = self.tag_stack
             load_stack = self.load_stack
@@ -229,7 +229,7 @@ def _make_flow_tensor(extra_attrs: List[str], default_values: List[Any]):
             if kwargs is None:
                 kwargs = {}
             tag_stack, load_stack, extra_attrs_stack_dict = collect_attr_stack(args)
-            assert tag_stack and load_stack
+            assert tag_stack is not None and load_stack is not None
             ret = super().__torch_function__(func, types, args, kwargs)
             pack_ret(ret, tag_stack, load_stack, extra_attrs_stack_dict)
             return ret

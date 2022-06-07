@@ -64,6 +64,8 @@ class RouterTest(unittest.TestCase):
         )
         results = model(inputs)
         self.assertTrue(torch.allclose(results[dst].data, inputs))
+        print(results[1-dst])
+        print(results[dst])
         self.assertTrue(results[1 - dst].data.numel() == 0)
         self.assertTrue(torch.allclose(results[2].data, inputs))
 
