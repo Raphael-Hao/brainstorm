@@ -31,9 +31,9 @@ class GatherRouter(BaseRouter):
         self,
         in_flows: List[FlowTensor],
     ) -> FlowTensor:
-        in_flows = self.verify_in_flow(in_flows)
+        in_flows = self.pack_invalid_flow(in_flows)
         out_flow = self.combine(in_flows)
-        out_flow = self.verify_out_flow(out_flow)
+        out_flow = self.remove_needless_pack(out_flow)
         return out_flow
 
     def combine(self, in_flows: List[FlowTensor]) -> Union[FlowTensor, torch.Tensor]:
