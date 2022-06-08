@@ -14,7 +14,6 @@ from .symbolic import symbolic_gather_route
 
 __all__ = [
     "GatherRouter",
-    "FusedRandomGatherRouter",
 ]
 
 logger = log.get_logger(__file__)
@@ -22,7 +21,7 @@ logger = log.get_logger(__file__)
 
 @router
 class GatherRouter(BaseRouter):
-    def __init__(self, dst_num: int, reduction: str = "add", sparse=True, **kwargs):
+    def __init__(self, dst_num: int, reduction: str = "add", sparse=True):
         super().__init__(dst_num=dst_num)
         self.sparse = sparse
         self.reduction = reduction
@@ -45,7 +44,7 @@ class GatherRouter(BaseRouter):
         in_flows_tag = []
         in_flows_load = []
         flow_tags, flow_loads = [], []
-        
+
         for flow in in_flows:
             data, flow_tags, flow_loads, _ = deinit_flow_tensor(flow)
             in_flows_data.append(data)
@@ -98,16 +97,3 @@ class GatherRouter(BaseRouter):
     ) -> torch.Tensor:
         return symbolic_gather_route(inputs, self.dst_num)
 
-
-@router
-class FusedRandomGatherRouter(GatherRouter):
-    def __init__(self, dst_num: int, gran_dim: int = None, dtype=None):
-        super().__init__(dst_num=dst_num, gran_dim=gran_dim, dtype=dtype)
-
-    def route(
-        self,
-        inputs: torch.Tensor,
-        reverse_indices: torch.Tensor,
-    ) -> torch.Tensor:
-        route_results = self.dispatcher.combine(inputs, reverse_indices)
-        return route_results

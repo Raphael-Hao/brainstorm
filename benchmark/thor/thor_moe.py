@@ -8,7 +8,7 @@
 import torch
 import torch.nn as nn
 from brt.jit import CUDACompiler, HomoFuseModuleFunction
-from brt.router import (
+from brt.router.random import (
     FusedRandomGatherRouter,
     FusedRandomScatterRouter,
     RandomGatherRouter,
