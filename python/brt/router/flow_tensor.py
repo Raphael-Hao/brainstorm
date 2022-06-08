@@ -65,7 +65,7 @@ def pack_ret(
     ret,
     tag_stack: List[torch.Tensor],
     load_stack: List[int],
-    extra_attrs_stack_dict: Dict[str, List[Any]],
+    extra_attrs_stack_dict: Dict[str, List[Any]] = {},
 ):
 
     if isinstance(ret, FlowTensor):
@@ -120,6 +120,11 @@ class FlowTensor(torch.Tensor):
     def _pop_brt_attr(self, attr):
         return self.__dict__["brt_" + attr + "_stack"].pop()
 
+    def flow_empty(self):
+        if not self.tag_stack or not self.load_stack:
+            return True
+        return False
+
     @property
     def tag_stack(self) -> List[torch.Tensor]:
         return self._get_brt_attr_stack("tag_stack")
@@ -139,12 +144,6 @@ class FlowTensor(torch.Tensor):
     @property
     def flow_initilized(self):
         return hasattr(self, "brt_tag_stack") and hasattr(self, "brt_load_stack")
-
-    # @property
-    def flow_empty(self):
-        if not self.tag_stack or not self.load_stack:
-            return True
-        return False
 
     @property
     def tag(self) -> torch.Tensor:
@@ -205,6 +204,20 @@ class FlowTensor(torch.Tensor):
     def deep_unpack(self):
         assert self.flow_initilized
 
+        tag_stack, self.tag_stack = self.tag_stack, []
+        load_stack, self.load_stack = self.load_stack, []
+        extra_attrs_stack_dict = {}
+
+        for attr_stack in FlowTensor.EXTRA_ATTRS_STACK:
+            value = self._get_brt_attr_stack(attr_stack)
+            extra_attrs_stack_dict[attr_stack] = value
+            self._set_brt_attr_stack(attr_stack, [])
+
+        return self, tag_stack, load_stack, extra_attrs_stack_dict
+
+    def copy_stacks(self):
+        assert self.flow_initilized
+
         tag_stack = copy.copy(self.tag_stack)
         load_stack = copy.copy(self.load_stack)
         extra_attrs_stack_dict = {}
@@ -225,8 +238,8 @@ class FlowTensor(torch.Tensor):
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         """
-        make sure we don't call the functions of FlowTensor inside the __torch_function__,
-        otherwise it causes infinite recursion
+        make sure we don't call the built-in functions of torch.Tensor redefined in FlowTensor
+        inside the __torch_function__, otherwise it causes infinite recursion
         """
         if kwargs is None:
             kwargs = {}
@@ -283,12 +296,12 @@ def make_flow_tensor_cls(extra_attrs: List[str], default_values: List[Any]):
 
 
 def init_flow_tensor(
-    data: torch.Tensor,
+    _torch_tensor: torch.Tensor,
     tag_stack: List[torch.Tensor] = [],
     load_stack: List[int] = [],
     **kwargs,
 ) -> FlowTensor:
-    _flow_tensor: FlowTensor = data.as_subclass(FlowTensor)
+    _flow_tensor: FlowTensor = _torch_tensor.as_subclass(FlowTensor)
     if tag_stack and load_stack:
         _flow_tensor.deep_pack(tag_stack, load_stack, **kwargs)
     else:
@@ -297,11 +310,44 @@ def init_flow_tensor(
 
 
 def deinit_flow_tensor(
-    data: FlowTensor,
+    _flow_tensor: FlowTensor,
 ) -> Tuple[torch.Tensor, List[torch.Tensor], List[int]]:
-    data, tag_stack, load_stack, extra_attrs_stack_dict = data.deep_unpack()
-    data = data.as_subclass(torch.Tensor)
-    return data, tag_stack, load_stack, extra_attrs_stack_dict
+    (
+        _flow_tensor,
+        tag_stack,
+        load_stack,
+        extra_attrs_stack_dict,
+    ) = _flow_tensor.deep_unpack()
+    _torch_tensor = _flow_tensor.as_subclass(torch.Tensor)
+    return _torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
+
+
+def to_flow_tensor(_torch_tensor: torch.Tensor):
+    """
+    restore a torch.Tensor to a FlowTensor without any pack operation
+    """
+    _flow_tensor: FlowTensor = _torch_tensor.as_subclass(FlowTensor)
+    assert _flow_tensor.flow_initilized
+    return _flow_tensor
+
+
+def to_torch_tensor(_flow_tensor: FlowTensor, copy_stack=False):
+    """
+    we avoid broadcasting stack information by restore a FlowTensor to
+    torch.Tensor when we do not need it, e.g., inside the routers
+    """
+    if copy_stack:
+        (
+            _flow_tensor,
+            tag_stack,
+            load_stack,
+            extra_attrs_stack_dict,
+        ) = _flow_tensor.copy_stacks()
+    _torch_tensor = _flow_tensor.as_subclass(torch.Tensor)
+    if copy_stack:
+        return _torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
+    else:
+        return _torch_tensor
 
 
 # class FlowTensor(torch.Tensor):
