@@ -9,7 +9,12 @@ from brt.common import log
 from brt.primitive import router
 
 from .base import BaseRouter
-from .flow_tensor import FlowTensor, deinit_flow_tensor, init_flow_tensor
+from .flow_tensor import (
+    FlowTensor,
+    deinit_flow_tensor,
+    init_flow_tensor,
+    to_torch_tensor,
+)
 from .symbolic import symbolic_scatter_route
 
 __all__ = [
@@ -72,7 +77,9 @@ class ScatterRouter(BaseRouter):
             int: Loads
         """
         in_flow = self.pack_invalid_flow(in_flow)
-        in_flow_data, in_flow_tags, in_flow_loads, _ = deinit_flow_tensor(in_flow)
+        in_flow_data, in_flow_tags, in_flow_loads, _ = to_torch_tensor(
+            in_flow, copy_stack=True
+        )
         route_indices, gates = self.gen_indices_and_gates(in_flow_data)
         out_flows = self.dispatch(
             in_flow_data, in_flow_tags, in_flow_loads, route_indices, gates
@@ -203,8 +210,15 @@ class RandomScatterRouter(ScatterRouter):
 
 @router
 class MoEScatterRouter(ScatterRouter):
-    def __init__(self, global_expert, topk = 1, post_score = False, ):
-        super().__init__(dst_num, route_func, route_method, residual_dst, transform, **kwargs)
+    def __init__(
+        self,
+        global_expert,
+        topk=1,
+        post_score=False,
+    ):
+        super().__init__(
+            dst_num, route_func, route_method, residual_dst, transform, **kwargs
+        )
 
 
 @router
