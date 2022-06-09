@@ -5,7 +5,7 @@ from typing import List, Union
 
 import numpy as np
 import torch
-from brt.router.flow_tensor import FlowTensor
+from brt.routers.flow_tensor import FlowTensor
 
 from .base import Dispatcher
 

@@ -5,8 +5,7 @@ from typing import List, Tuple, Union
 import torch
 from brt.primitive import router
 
-from .gather import GatherRouter
-from .scatter import ScatterRouter
+from .base import GatherRouter, ScatterRouter
 
 
 @router
@@ -38,7 +37,6 @@ class RandomScatterRouter(ScatterRouter):
 class RandomGatherRouter(GatherRouter):
     def __init__(self, dst_num: int, reduction: str = "add", sparse=True):
         super().__init__(dst_num, reduction, sparse)
-
 
 
 @router
