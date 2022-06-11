@@ -8,10 +8,10 @@ import torch.nn as nn
 from brt.common import log
 from brt.primitive import router
 
-from .flow_tensor import (
-    FlowTensor,
-    deinit_flow_tensor,
-    init_flow_tensor,
+from .proto_tensor import (
+    ProtoTensor,
+    deinit_proto_tensor,
+    init_proto_tensor,
     to_torch_tensor,
 )
 from .symbolic import symbolic_gather_route, symbolic_scatter_route
@@ -44,9 +44,9 @@ class BaseRouter(nn.Module):
         raise NotImplementedError
 
     def pack_invalid_flow(self, in_flow):
-        from .flow_tensor import FlowTensor  # we need to keep FlowTensor updated
+        from .proto_tensor import ProtoTensor  # we need to keep ProtoTensor updated
 
-        if isinstance(in_flow, FlowTensor):
+        if isinstance(in_flow, ProtoTensor):
             if in_flow.size(0) != in_flow.tag.numel():
                 # route granularity changed, we will re-tag the inputs
                 new_tag = torch.arange(
@@ -58,7 +58,7 @@ class BaseRouter(nn.Module):
             tag = torch.arange(
                 0, in_flow.size(0), dtype=torch.int64, device=in_flow.device
             ).view(-1, 1)
-            in_flow = init_flow_tensor(in_flow, [tag], [tag.numel()])
+            in_flow = init_proto_tensor(in_flow, [tag], [tag.numel()])
 
         elif isinstance(in_flow, (List, Tuple)):
             in_flow = type(in_flow)([self.pack_invalid_flow(f) for f in in_flow])
@@ -69,13 +69,13 @@ class BaseRouter(nn.Module):
         return in_flow
 
     def remove_needless_pack(self, out_flow):
-        from .flow_tensor import FlowTensor  # we need to keep FlowTensor updated
+        from .proto_tensor import ProtoTensor  # we need to keep ProtoTensor updated
 
-        if isinstance(out_flow, FlowTensor):
+        if isinstance(out_flow, ProtoTensor):
             if out_flow.tag.numel() == out_flow.load:
                 out_flow, _, _, _ = out_flow.unpack()
-            if out_flow.flow_empty():
-                out_flow, _, _, _ = deinit_flow_tensor(out_flow)
+            if out_flow.proto_empty():
+                out_flow, _, _, _ = deinit_proto_tensor(out_flow)
 
         elif isinstance(out_flow, (List, Tuple)):
             out_flow = type(out_flow)([self.remove_needless_pack(f) for f in out_flow])
@@ -128,14 +128,14 @@ class ScatterRouter(BaseRouter):
         else:
             raise ValueError(f"route_method {route_method} is not supported")
 
-    def route(self, in_flow: Union[torch.Tensor, FlowTensor]) -> List[FlowTensor]:
+    def route(self, in_flow: Union[torch.Tensor, ProtoTensor]) -> List[ProtoTensor]:
         in_flow = self.pack_invalid_flow(in_flow)
-        in_flow_data, in_flow_tags, in_flow_loads, _ = to_torch_tensor(
+        in_flow_data, in_flow_tag_stack, in_flow_load_stack, _ = to_torch_tensor(
             in_flow, copy_stack=True
         )
         route_indices, gates = self.gen_indices_and_gates(in_flow_data)
         out_flows = self.dispatch(
-            in_flow_data, in_flow_tags, in_flow_loads, route_indices, gates
+            in_flow_data, in_flow_tag_stack, in_flow_load_stack, route_indices, gates
         )
         out_flows = self.remove_needless_pack(out_flows)
         return out_flows
@@ -148,16 +148,20 @@ class ScatterRouter(BaseRouter):
         Args:
             inputs (torch.Tensor): input tensor
         """
-        gates = self.route_func(in_flow_data)
+        gates = self.route_func(in_flow_data)  # sample x dst_num
         assert gates.size(0) == in_flow_data.size(0) and gates.size(1) == self.dst_num
         if self.route_method == "topk":
-            route_indices = torch.topk(gates, self.k, dim=1).indices
+
+            route_indices = torch.topk(gates, self.k, dim=1).indices  # sample x k
             route_indices = torch.zeros(
                 gates.size(0),
                 self.dst_num,
                 dtype=torch.int64,
                 device=in_flow_data.device,
-            ).scatter_(1, route_indices, 1)
+            ).scatter_(
+                1, route_indices, 1
+            )  # sample x dst_num
+
         elif self.route_method == "threshold":
             route_indices = (gates > self.threshold).long().to(in_flow_data.device)
             if self.residual_dst >= 0:
@@ -184,38 +188,39 @@ class ScatterRouter(BaseRouter):
         in_flow_loads: List[int],
         route_indices: torch.Tensor,
         gates: torch.Tensor,
-    ) -> List[FlowTensor]:
+    ) -> List[ProtoTensor]:
         """
         Dispatch the inputs into the the list of torch.Tensor with indices
         """
-        in_flow_data = in_flow_data
 
         in_flow_tag = in_flow_tags.pop()
         in_flow_load = in_flow_loads.pop()
 
         route_shape = list(in_flow_data.shape[1:])
         route_size = np.prod(route_shape)
-        # torch.zeros(0, 1, dtype=torch.int64, device=in_flow_data.device)]
+        gates_T = torch.transpose(gates, 1, 0)  # [dst_num x sample]
+        route_indices_T = torch.transpose(route_indices, 1, 0)  # [dst_num x sample]
+
         out_flows = []
         for i in range(self.dst_num):
-            # FIXME check if this support empty flow
-            tag_indices = torch.nonzero(route_indices[:, i].view(-1)).to(
-                in_flow_data.device
-            )
+            tag_indices = torch.nonzero(
+                route_indices_T[i].view(-1)
+            )  # TODO torch.nonzero will cause hostside synchronization, we need a async one
+            print(tag_indices)
             if tag_indices.numel() > 0:
                 out_flow_tag = torch.gather(in_flow_tag, 0, tag_indices)
                 data_indices = tag_indices.repeat(1, route_size).view(-1, *route_shape)
                 if self.transform:
-                    gate = gates[:, i].reshape(
+                    gate = gates_T[i].reshape(
                         (in_flow_data.size(0),) + (1,) * len(route_shape)
                     )
                     out_flow_data = torch.gather(in_flow_data * gate, 0, data_indices)
                 else:
                     out_flow_data = torch.gather(in_flow_data, 0, data_indices)
-                out_flow = init_flow_tensor(out_flow_data, in_flow_tags, in_flow_loads)
+                out_flow = init_proto_tensor(out_flow_data, in_flow_tags, in_flow_loads)
                 out_flow.pack(out_flow_tag, in_flow_load)
             else:
-                out_flow = init_flow_tensor(
+                out_flow = init_proto_tensor(
                     torch.zeros(
                         0,
                         *route_shape,
@@ -243,13 +248,13 @@ class GatherRouter(BaseRouter):
         self.sparse = sparse
         self.reduction = reduction
 
-    def route(self, in_flows: List[FlowTensor]) -> FlowTensor:
+    def route(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
         in_flows = self.pack_invalid_flow(in_flows)
         out_flow = self.combine(in_flows)
         out_flow = self.remove_needless_pack(out_flow)
         return out_flow
 
-    def combine(self, in_flows: List[FlowTensor]) -> Union[FlowTensor, torch.Tensor]:
+    def combine(self, in_flows: List[ProtoTensor]) -> Union[ProtoTensor, torch.Tensor]:
         """
         Combine the outputs of the routers into the final outputs
         """
@@ -260,7 +265,7 @@ class GatherRouter(BaseRouter):
         flow_tags, flow_loads = [], []
 
         for flow in in_flows:
-            data, flow_tags, flow_loads, _ = to_torch_tensor(flow)
+            data, flow_tags, flow_loads, _ = to_torch_tensor(flow, copy_stack=True)
             in_flows_data.append(data)
             in_flows_tag.append(flow_tags.pop())
             in_flows_load.append(flow_loads.pop())
@@ -303,7 +308,7 @@ class GatherRouter(BaseRouter):
         out_flow_tags = in_flows_tags + [out_flow_tag]
         out_flow_loads = in_flows_loads + [in_flows_load]
         # results_data = torch.scatter_reduce(route_datas, 0, route_indices, self.reduction)
-        return init_flow_tensor(out_flow_data, out_flow_tags, out_flow_loads)
+        return init_proto_tensor(out_flow_data, out_flow_tags, out_flow_loads)
 
     def symbolic_route(
         self,

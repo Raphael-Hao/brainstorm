@@ -1,5 +1,5 @@
 #%%
-class FlowTensor(object):
+class ProtoTensor(object):
     @property
     def tags(self):
         return getattr(self, "_tags", [])
@@ -15,8 +15,8 @@ class FlowTensor(object):
         self.loads = load
         return self
 
-flow_tensor = FlowTensor()
-flow_tensor.tags.append(1)
+proto_tensor = ProtoTensor()
+proto_tensor.tags.append(1)
 
-print(flow_tensor.tags)
+print(proto_tensor.tags)
 # %%

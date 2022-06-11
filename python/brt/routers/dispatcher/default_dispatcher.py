@@ -5,7 +5,7 @@ from typing import List, Union
 
 import numpy as np
 import torch
-from brt.routers.flow_tensor import FlowTensor
+from brt.routers.proto_tensor import ProtoTensor
 
 from .base import Dispatcher
 
@@ -27,10 +27,10 @@ class DefaultDispatcher(Dispatcher):
 
     def dispatch(
         self,
-        inputs: FlowTensor,
+        inputs: ProtoTensor,
         route_indices: torch.Tensor,
         gates: torch.Tensor,
-    ) -> List[FlowTensor]:
+    ) -> List[ProtoTensor]:
         """
         Dispatch the inputs into the the list of torch.Tensor with indices
         """
@@ -41,7 +41,7 @@ class DefaultDispatcher(Dispatcher):
         route_size = np.prod(route_shape)
 
         results = [
-            FlowTensor(
+            ProtoTensor(
                 data=torch.zeros(
                     0, *route_shape, dtype=route_data.dtype, device=route_data.device
                 ),
@@ -68,7 +68,7 @@ class DefaultDispatcher(Dispatcher):
                 results[i].load = tag_indices.numel()
         return results
 
-    def combine(self, inputs: List[FlowTensor]) -> FlowTensor:
+    def combine(self, inputs: List[ProtoTensor]) -> ProtoTensor:
         """
         Combine the outputs of the routers into the final outputs
         """
@@ -82,7 +82,7 @@ class DefaultDispatcher(Dispatcher):
             results_data = torch.zeros(
                 0, *route_shape, dtype=route_datas.dtype, device=route_datas.device
             )
-            return FlowTensor(results_data, route_tags, load)
+            return ProtoTensor(results_data, route_tags, load)
         if self.sparse:
             result_tag, inverse = torch.unique(
                 route_tags, sorted=True, return_inverse=True
@@ -98,4 +98,4 @@ class DefaultDispatcher(Dispatcher):
             load, *route_shape, dtype=route_datas.dtype, device=route_datas.device
         ).scatter_(0, route_indices, route_datas, reduce=self.reduction)
         # results_data = torch.scatter_reduce(route_datas, 0, route_indices, self.reduction)
-        return FlowTensor(result_data, route_tags, load)
+        return ProtoTensor(result_data, route_tags, load)

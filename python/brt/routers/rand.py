@@ -21,7 +21,9 @@ class RandomScatterRouter(ScatterRouter):
         """
 
         def route_func(inputs_data):
-            gates = torch.randn((inputs_data.size(0), dst_num))
+            gates = torch.randn(
+                (inputs_data.size(0), dst_num), device=inputs_data.device
+            )
             return gates
 
         super().__init__(

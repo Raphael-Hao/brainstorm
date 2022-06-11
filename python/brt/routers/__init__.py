@@ -3,4 +3,4 @@
 
 
 from .base import *
-from .flow_tensor import *
+from .proto_tensor import *
