@@ -4,16 +4,17 @@ from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from brt.primitive import router
 from tutel.gates.cosine_top import CosineTopKGate
 from tutel.gates.top import LinearTopKGate
 
 from .base import GatherRouter, ScatterRouter
-from .flow_tensor import (
-    FlowTensor,
-    init_flow_tensor,
-    make_flow_tensor_cls,
-    to_flow_tensor,
+from .proto_tensor import (
+    ProtoTensor,
+    init_proto_tensor,
+    make_proto_tensor_cls,
+    to_proto_tensor,
     to_torch_tensor,
 )
 
@@ -27,13 +28,23 @@ class CosineRouteFunc(nn.Module):
         fp32_gate = kwargs.pop("fp32_gate", False)
         proj_dim = kwargs.pop("proj_dim", 256)
         int_t = kwargs.pop("int_t", 0.5)
+        self.global_expert_num = global_expert_num
         self.cosine_gate = CosineTopKGate(
             model_dim, global_expert_num, k, fp32_gate, proj_dim, int_t
         )
 
     def forward(self, x):
-        x = self.cosine_gate(x)
+        logits = self.cosine_gate(x)
+        if self.training and self.gate_noise > 0:
+            logits_w_noise = (
+                logits
+                + self.gate_noise * torch.randn_like(logits) / self.global_expert_num
+            )
+        else:
+            logits_w_noise = logits
+        scores = F.softmax(logits_w_noise, dim=1)
         
+
 
 @router
 class MoEInferenceScatterRouter(ScatterRouter):
@@ -74,7 +85,7 @@ class MoEInferenceScatterRouter(ScatterRouter):
             transform=post_score,
         )
 
-    def route(self, in_flow: Union[torch.Tensor, FlowTensor]) -> List[FlowTensor]:
+    def route(self, in_flow: Union[torch.Tensor, ProtoTensor]) -> List[ProtoTensor]:
         self.pack_invalid_flow(in_flow)
         in_flow_data, in_flow_tags, in_flow_loads, _ = to_torch_tensor(
             in_flow, copy_stack=True
