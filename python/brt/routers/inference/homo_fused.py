@@ -1,7 +1,3 @@
-# Copyright (c) 2022 by Microsoft Corporation.
-# Licensed under the MIT license.
-
-
 from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
@@ -15,13 +11,14 @@ from brt.routers.proto_tensor import (
     to_torch_tensor,
 )
 from brt.routers.symbolic import symbolic_gather_route, symbolic_scatter_route
+from brt.cpp.router import generate_indices_with_load_map
 
 
-def hetero_make_proto_tensor_cls():
-    make_proto_tensor_cls(["active_branch"], [torch.zeros(0, dtype=torch.int64)])
+def homo_make_proto_tensor_cls():
+    make_proto_tensor_cls(["capacity"], [torch.zeros(0, dtype=torch.int64)])
 
 
-class HeteroFusedScatterRouter(ScatterRouter):
+class HomoFusedScatterRouter(ScatterRouter):
     def __init__(
         self,
         dst_num: int,
@@ -43,10 +40,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
         extra_attr_stack: Dict[str, List[Any]],
         route_indices: torch.Tensor,
         gates: torch.Tensor,
-    ) -> List[ProtoTensor]:
-        assert (
-            in_flow_data.size(0) == 1
-        ), "HeteroFusedScatterRouter only supports batch size 1"
+    ) -> ProtoTensor:
         _in_flow_tag = in_flow_tag_stack.pop()
         _in_flow_load = in_flow_load_stack.pop()
 
@@ -104,6 +98,9 @@ class HeteroFusedScatterRouter(ScatterRouter):
     def remove_needless_pack(self, out_flow):
         return out_flow
 
+    def symbolic_route(self, inputs: torch.Tensor) -> torch.Tensor:
+        return symbolic_scatter_route(inputs, 1)[0]
+
 
 class HeteroFusedGatherRouter(GatherRouter):
     def __init__(self, dst_num: int, reduction: str = "add", sparse=True):
@@ -151,3 +148,6 @@ class HeteroFusedGatherRouter(GatherRouter):
             out_flow.pack(
                 torch.zeros(1, 1), dtype=torch.int64, device=out_flow_data.device
             )
+            
+    def symbolic_route(self, inputs: torch.Tensor) -> torch.Tensor:
+        return symbolic_gather_route([inputs], 1)
