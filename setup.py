@@ -54,7 +54,8 @@ def install():
                 name="brt.cpp.router",
                 sources=[
                     "./src/backend/torch/router.cc",
-                    "./src/router/dispatcher/location.cu",
+                    "./src/router/location.cu",
+                    "./src/router/route.cu",
                 ],
                 library_dirs=["/usr/local/cuda/lib64/stubs"],
                 libraries=ext_libs,

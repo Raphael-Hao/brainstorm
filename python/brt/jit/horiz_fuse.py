@@ -6,7 +6,7 @@ from typing import Dict, List, Union
 
 from brt.common import log
 
-from .base import GlobalFunction
+from .base_function import GlobalFunction
 from .module_func import ModuleFunction
 from .storage import kernel_storager
 from .utils import make_fused_identifier, make_identifier

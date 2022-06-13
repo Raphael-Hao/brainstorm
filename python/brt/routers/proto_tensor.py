@@ -64,7 +64,11 @@ def collect_proto_attr_stack(
 
     if isinstance(args, (Tuple, List)):
         for a in args:
-            _all_tags, _all_loads, _all_extra_attrs_stack_dict = collect_proto_attr_stack(a)
+            (
+                _all_tags,
+                _all_loads,
+                _all_extra_attrs_stack_dict,
+            ) = collect_proto_attr_stack(a)
             if _all_tags is not None and _all_loads is not None:
                 return _all_tags, _all_loads, _all_extra_attrs_stack_dict
 
@@ -83,7 +87,8 @@ def pack_proto_attr_stack(
 
     if isinstance(ret, (Tuple, List)):
         ret = type(ret)(
-            pack_proto_attr_stack(t, tag_stack, load_stack, extra_attrs_stack_dict) for t in ret
+            pack_proto_attr_stack(t, tag_stack, load_stack, extra_attrs_stack_dict)
+            for t in ret
         )
 
     return ret
@@ -272,34 +277,62 @@ def reset_proto_tensor_cls():
     return ProtoTensor
 
 
-def make_proto_tensor_cls(extra_attrs: List[str], default_values: List[Any]):
+def make_proto_tensor_cls(extra_attrs: List[str], default_values: List[Any], mode="a"):
 
     global ProtoTensor
-    reset_proto_tensor_cls()
+    if mode == "n":
+        reset_proto_tensor_cls()
 
-    # verify that the extra_attrs and default_values are the same length
-    extra_attrs_set = set(extra_attrs)
-    assert (len(extra_attrs_set) == len(extra_attrs)) and (
-        len(extra_attrs_set) == len(default_values)
-    )
-    extra_attrs_stack = [attr + "_stack" for attr in extra_attrs]
+        # verify that the extra_attrs and default_values are the same length
+        extra_attrs_set = set(extra_attrs)
+        assert (len(extra_attrs_set) == len(extra_attrs)) and (
+            len(extra_attrs_set) == len(default_values)
+        )
+        extra_attrs_stack = [attr + "_stack" for attr in extra_attrs]
 
-    # modify the ProtoTensor class extra attrs names and default values
-    ProtoTensor.EXTRA_ATTRS = extra_attrs
-    ProtoTensor.EXTRA_ATTRS_STACK = extra_attrs_stack
-    for i in range(len(extra_attrs)):
-        attr = extra_attrs[i]
-        ProtoTensor.EXTRA_ATTRS_DEFAULT_VALUES[attr] = default_values[i]
-        attr_stack = extra_attrs_stack[i]
-        ProtoTensor.EXTRA_ATTRS_STACK_DEFAULT_VALUES[attr_stack] = [default_values[i]]
+        # modify the ProtoTensor class extra attrs names and default values
+        ProtoTensor.EXTRA_ATTRS = extra_attrs
+        ProtoTensor.EXTRA_ATTRS_STACK = extra_attrs_stack
+        for i in range(len(extra_attrs)):
+            attr = extra_attrs[i]
+            ProtoTensor.EXTRA_ATTRS_DEFAULT_VALUES[attr] = default_values[i]
+            attr_stack = extra_attrs_stack[i]
+            ProtoTensor.EXTRA_ATTRS_STACK_DEFAULT_VALUES[attr_stack] = [
+                default_values[i]
+            ]
 
-    # register property setter and getter for the extra attrs stack
-    for attr_stack in ProtoTensor.EXTRA_ATTRS_STACK:
-        setattr(ProtoTensor, attr_stack, proto_attr_stack_factory(attr_stack))
+        # register property setter and getter for the extra attrs stack
+        for attr_stack in ProtoTensor.EXTRA_ATTRS_STACK:
+            setattr(ProtoTensor, attr_stack, proto_attr_stack_factory(attr_stack))
 
-    # register property setter and getter for the extra attrs
-    for attr in ProtoTensor.EXTRA_ATTRS:
-        setattr(ProtoTensor, attr, proto_attr_factory(attr))
+        # register property setter and getter for the extra attrs
+        for attr in ProtoTensor.EXTRA_ATTRS:
+            setattr(ProtoTensor, attr, proto_attr_factory(attr))
+    elif mode == "a":
+        extra_attrs_set = set(extra_attrs)
+        assert (len(extra_attrs_set) == len(extra_attrs)) and (
+            len(extra_attrs_set) == len(default_values)
+        )
+        extra_attrs_stack = [attr + "_stack" for attr in extra_attrs]
+
+        # modify the ProtoTensor class extra attrs names and default values
+        ProtoTensor.EXTRA_ATTRS.extend(extra_attrs)
+        ProtoTensor.EXTRA_ATTRS_STACK.extend(extra_attrs_stack)
+        for i in range(len(extra_attrs)):
+            attr = extra_attrs[i]
+            ProtoTensor.EXTRA_ATTRS_DEFAULT_VALUES[attr] = default_values[i]
+            attr_stack = extra_attrs_stack[i]
+            ProtoTensor.EXTRA_ATTRS_STACK_DEFAULT_VALUES[attr_stack] = [
+                default_values[i]
+            ]
+
+        # register property setter and getter for the extra attrs stack
+        for attr_stack in ProtoTensor.EXTRA_ATTRS_STACK:
+            setattr(ProtoTensor, attr_stack, proto_attr_stack_factory(attr_stack))
+
+        # register property setter and getter for the extra attrs
+        for attr in ProtoTensor.EXTRA_ATTRS:
+            setattr(ProtoTensor, attr, proto_attr_factory(attr))
 
     return ProtoTensor
 

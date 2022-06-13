@@ -3,7 +3,7 @@
 
 from typing import Dict, List, Union
 
-from .base import GlobalFunction
+from .base_function import GlobalFunction
 from .horiz_fuse import HorizFuseModuleFunction
 from .module_func import ModuleFunction
 
