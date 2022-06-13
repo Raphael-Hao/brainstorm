@@ -44,7 +44,6 @@ __device__ __forceinline__ void blockwise_cum_sum_sub(int* input, int* output_su
     __syncthreads();
     if (S + threadIdx.x < cumsum_num) {
       int location = partial_dst_mask[threadIdx.x + 1] + sub_num;
-      printf("%d\n", sub_num);
       output_sum[threadIdx.x * parallel_num + blockIdx.x] = location;
     }
     __syncthreads();
@@ -64,10 +63,9 @@ __global__ void generate_location_and_load_map(
   int sub_num = 0;
   blockwise_cum_sum_sub(hot_mask, locations, sample_num, sub_num);
   if (threadIdx.x == 0) {
+    auto& real_load = locations[gridDim.x * (sample_num - 1) + blockIdx.x];
     for (int i = 0; i < supported_capacity_num; i++) {
-      printf("dst: %d, real load: %d, mapped load: %d\n", blockIdx.x, sub_num,
-             supported_capacities[i]);
-      if (sub_num <= supported_capacities[i]) {
+      if (real_load <= supported_capacities[i]) {
         dst_loads[blockIdx.x] = supported_capacities[i];
         break;
       }
