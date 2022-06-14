@@ -9,14 +9,14 @@
 
 namespace brt {
 namespace router {
-void GenerateGlobalRouteIndices(int* hot_mask /*[sample_num x dst_num]*/,
+void GenerateGlobalIndices(int* hot_mask /*[sample_num x dst_num]*/,
                                 int* route_indices /*[sample_num x dst_num]*/,
                                 int* dst_loads /*[dst_num]*/, int* dst_start_indices /*[dst_num]*/,
                                 int* supported_capacities /*[supported_capacity_num]*/,
                                 int sample_num, int dst_num, int supported_capacity_num,
                                 cudaStream_t stream);
 
-void GenerateLocalRouteIndices(int* hot_mask /*[sample_num x dst_num]*/,
+void GenerateLocalIndices(int* hot_mask /*[sample_num x dst_num]*/,
                                int* route_indices /*[sample_num x dst_num]*/,
                                int* dst_loads /*[dst_num]*/,
                                int* supported_capacities /*[supported_capacity_num]*/,

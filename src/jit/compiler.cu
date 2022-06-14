@@ -4,6 +4,7 @@
  */
 
 #include <brt/jit/compiler.h>
+#include <dmlc/common.h>
 
 #include <brt/netlet/ptr_arith.cuh>
 
