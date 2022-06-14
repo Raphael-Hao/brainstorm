@@ -25,7 +25,8 @@ namespace brt {
 namespace backend {
 namespace torch {
 std::vector<::torch::Tensor> generate_global_route_indices(
-    const ::torch::Tensor& hot_mask, const ::torch::Tensor& supported_capacities) {
+    const ::torch::Tensor& hot_mask /*[sample_num x sample_dim]*/,
+    const ::torch::Tensor& supported_capacities /*[supported_capacity_num]*/) {
   CHECK_ON_CUDA(hot_mask);
   CHECK_ON_CUDA(supported_capacities);
 
@@ -44,7 +45,8 @@ std::vector<::torch::Tensor> generate_global_route_indices(
 }
 
 std::vector<::torch::Tensor> generate_local_route_indices(
-    const ::torch::Tensor& hot_mask, const ::torch::Tensor& supported_capacities) {
+    const ::torch::Tensor& hot_mask /*[sample_num x sample_dim]*/,
+    const ::torch::Tensor& supported_capacities /*[supported_capacity_num]*/) {
   CHECK_ON_CUDA(hot_mask);
   CHECK_ON_CUDA(supported_capacities);
 
@@ -61,21 +63,51 @@ std::vector<::torch::Tensor> generate_local_route_indices(
   return {route_indices, dst_loads};
 }
 
-::torch::Tensor route_data_with_local_indices(const ::torch::Tensor& in_data,
-                                              const ::torch::Tensor& out_data,
-                                              const ::torch::Tensor& gates,
-                                              const ::torch::Tensor& route_indices,
-                                              const ::torch::Tensor& dst_loads) {
+::torch::Tensor route_with_local_indices(
+    const ::torch::Tensor& in_data /*[sample_num x sample_dim]*/,
+    const ::torch::Tensor& gates /*[sample_num x dst_num]*/,
+    const ::torch::Tensor& route_indices /*[sample_num x dst_num]*/,
+    const ::torch::Tensor& dst_loads /*[dst_num]*/) {
   CHECK_ON_CUDA(in_data);
-  CHECK_ON_CUDA(out_data);
   CHECK_ON_CUDA(gates);
   CHECK_ON_CUDA(route_indices);
   CHECK_ON_CUDA(dst_loads);
+
   int sample_num = in_data.size(0);
   int sample_dim = in_data.size(1);
   int dst_num = route_indices.size(1);
+  int total_load = dst_loads.sum().item<int>();
   auto gates_data_ptr = gates.numel() > 0 ? gates.data_ptr<float>() : nullptr;
-  router::RouteDataWithLocalIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
+
+  auto out_data = ::at::zeros({total_load, sample_dim}, in_data.options());
+  CHECK_ON_CUDA(out_data);
+
+  router::RouteWithLocalIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
+                                gates_data_ptr, route_indices.data_ptr<int>(),
+                                dst_loads.data_ptr<int>(), sample_num, sample_dim, dst_num,
+                                at::cuda::getDefaultCUDAStream().stream());
+  return out_data;
+}
+
+::torch::Tensor route_back_with_local_indices(
+    const ::torch::Tensor& in_data /*[?load*dst_num x sample_dim]*/,
+    const ::torch::Tensor& gates /*[sample_num x dst_num]*/,
+    const ::torch::Tensor& route_indices /*[sample_num x dst_num]*/,
+    const ::torch::Tensor& dst_loads /*[dst_num]*/) {
+  CHECK_ON_CUDA(in_data);
+  CHECK_ON_CUDA(gates);
+  CHECK_ON_CUDA(route_indices);
+  CHECK_ON_CUDA(dst_loads);
+
+  int sample_num = gates.size(0);
+  int sample_dim = in_data.size(1);
+  int dst_num = route_indices.size(1);
+  auto gates_data_ptr = gates.numel() > 0 ? gates.data_ptr<float>() : nullptr;
+
+  ::torch::Tensor out_data = ::at::zeros({sample_num, sample_dim}, in_data.options());
+  CHECK_ON_CUDA(out_data);
+
+  router::RouteBackWithLocalIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
                                     gates_data_ptr, route_indices.data_ptr<int>(),
                                     dst_loads.data_ptr<int>(), sample_num, sample_dim, dst_num,
                                     at::cuda::getDefaultCUDAStream().stream());
@@ -91,6 +123,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Get global indices with each dst's load mapped to supported capacity");
   m.def("generate_local_route_indices", &brt::backend::torch::generate_local_route_indices,
         "Get local indices with each dst's load mapped to supported capacity");
-  m.def("route_data_with_local_indices", &brt::backend::torch::route_data_with_local_indices,
+  m.def("route_with_local_indices", &brt::backend::torch::route_with_local_indices,
+        "Route data with local indices");
+  m.def("route_back_with_local_indices", &brt::backend::torch::route_back_with_local_indices,
         "Route data with local indices");
 }
