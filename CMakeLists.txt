@@ -6,8 +6,8 @@ include(cmake/utils/Utils.cmake)
 include(cmake/utils/FindCUDA.cmake)
 
 include(cmake/config/brainstorm.cmake)
-# include(cmake/config/tvm.cmake) include(cmake/config/nnfusion.cmake)
 
+# include(cmake/config/tvm.cmake) include(cmake/config/nnfusion.cmake)
 brt_option(PTX_INFO "print ptx info for each cuda kernel" OFF)
 
 include(cmake/modules/CUDA.cmake)
@@ -24,8 +24,8 @@ include_directories(${CMAKE_INCLUDE_PATH})
 include_directories(include)
 include_directories(SYSTEM 3rdparty/dmlc-core/include)
 include_directories(SYSTEM 3rdparty/dlpack/include)
-# include_directories(SYSTEM 3rdparty/tvm/include)
 
+# include_directories(SYSTEM 3rdparty/tvm/include)
 set(BRT_LINKER_LIBS "")
 set(WARNING_FLAG -Wall)
 
@@ -41,13 +41,15 @@ else()
     set(CMAKE_CUDA_FLAGS
         "-O2 -Xcompiler=-Wall -Xcompiler=-fPIC ${CMAKE_CUDA_FLAGS}")
     set(BRT_VISIBILITY_FLAG "")
+
     if(HIDE_PRIVATE_SYMBOLS)
         message(STATUS "Hide private symbols...")
         set(BRT_VISIBILITY_FLAG "-fvisibility=hidden")
     endif(HIDE_PRIVATE_SYMBOLS)
 endif()
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION
-                                           VERSION_GREATER 7.0)
+    VERSION_GREATER 7.0)
     set(CMAKE_CXX_FLAGS "-faligned-new ${CMAKE_CXX_FLAGS}")
 endif()
 
@@ -57,6 +59,7 @@ set(CMAKE_CXX_FLAGS "-std=c++14 ${CMAKE_CXX_FLAGS}")
 set(CMAKE_CUDA_STANDARD 14)
 
 file(GLOB_RECURSE BRT_SOURCE CMAKE_CONFIGURE_DEPENDS "src/*.cc" "src/*.cu")
+
 # remove srcs of extension for other frameworks, they will be compiled by python
 brt_src_exclude(BRT_SOURCE "backend/torch")
 
@@ -64,14 +67,13 @@ file(GLOB_RECURSE BRT_INCLUDE CMAKE_CONFIGURE_DEPENDS "src/*.h" "include/*.h")
 
 list(APPEND BRT_SRCS ${BRT_SOURCE} ${BRT_INCLUDE})
 
-
 add_compile_definitions("USE_CUDA" "USE_CUBLAS")
 add_library(brt SHARED ${BRT_SRCS})
 target_include_directories(
     brt PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_link_libraries(brt PUBLIC ${BRT_LINKER_LIBS})
-# set_target_properties(brt PROPERTIES LINKER_LANGUAGE CXX)
 
+# set_target_properties(brt PROPERTIES LINKER_LANGUAGE CXX)
 file(GLOB_RECURSE BRT_TORCHSCRIPT_SOURCE CMAKE_CONFIGURE_DEPENDS "src/backend/torch/script.cc")
 add_library(brt_torchscript SHARED ${BRT_TORCHSCRIPT_SOURCE})
 target_compile_features(brt_torchscript PRIVATE cxx_std_14)
