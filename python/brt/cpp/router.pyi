@@ -6,18 +6,23 @@ from typing import List, Tuple
 import torch
 
 
-def generate_global_route_indices(
+def generate_global_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
-def generate_local_route_indices(
+def generate_local_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
-def route_data_with_local_indices(
+def route_with_local_indices(
     in_data: torch.Tensor,
-    out_data: torch.Tensor,
-    gates: torch.Tensor,
     route_indices: torch.Tensor,
     dst_loads: torch.Tensor,
+    gates: torch.Tensor,
+) -> torch.Tensor: ...
+def route_back_with_local_indices(
+    in_data: torch.Tensor,
+    route_indices: torch.Tensor,
+    dst_loads: torch.Tensor,
+    gates: torch.Tensor,
 ) -> torch.Tensor: ...

@@ -1,6 +1,6 @@
 
 #include <brt/router/location.h>
-
+#include <dmlc/common.h>
 namespace brt {
 namespace router {
 
@@ -53,17 +53,30 @@ __device__ __forceinline__ void blockwise_cum_sum_sub(int* input, int* output_su
   }
 }
 
-__global__ void generate_location_and_load_map(
+__global__ void generate_local_indices_and_load(
     int* __restrict__ hot_mask /* (sample_num, dst_num) */,
-    int* __restrict__ locations /* (sample_num, dst_num) */, int* __restrict__ dst_loads,
+    int* __restrict__ local_indices /* (sample_num, dst_num) */, int* __restrict__ dst_loads,
+    int sample_num, int dst_num) {
+  // [thread_extent] blockIdx.x = branch_num
+  // [thread_extent] threadIdx.x = 1024
+  int sub_num = 0;
+  blockwise_cum_sum_sub(hot_mask, local_indices, sample_num, sub_num);
+  if (threadIdx.x == 0) {
+    dst_loads[blockIdx.x] = local_indices[gridDim.x * (sample_num - 1) + blockIdx.x];
+  }
+}
+
+__global__ void generate_local_indices_and_load_map(
+    int* __restrict__ hot_mask /* (sample_num, dst_num) */,
+    int* __restrict__ local_indices /* (sample_num, dst_num) */, int* __restrict__ dst_loads,
     int* __restrict__ supported_capacities, int sample_num, int dst_num,
     int supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int sub_num = 0;
-  blockwise_cum_sum_sub(hot_mask, locations, sample_num, sub_num);
+  blockwise_cum_sum_sub(hot_mask, local_indices, sample_num, sub_num);
   if (threadIdx.x == 0) {
-    auto& real_load = locations[gridDim.x * (sample_num - 1) + blockIdx.x];
+    auto& real_load = local_indices[gridDim.x * (sample_num - 1) + blockIdx.x];
     for (int i = 0; i < supported_capacity_num; i++) {
       if (real_load <= supported_capacities[i]) {
         dst_loads[blockIdx.x] = supported_capacities[i];
@@ -73,59 +86,65 @@ __global__ void generate_location_and_load_map(
   }
 }
 
-__global__ void generate_branch_start_indices(int* __restrict__ dst_loads,
-                                              int* __restrict__ dst_start_indices, int dst_num) {
+__global__ void generate_dst_start_indices(int* __restrict__ dst_loads,
+                                           int* __restrict__ dst_start_indices, int dst_num) {
   int sub_num = 0;
   dst_start_indices = dst_start_indices + 1;
   blockwise_cum_sum_sub(dst_loads, dst_start_indices, dst_num, sub_num);
 }
 
-__global__ void generate_route_indices(int* route_indices /* [sample_num, dst_num]  */,
-                                       int* locations, int* dst_start_indices, int sample_num,
-                                       int dst_num) {
+__global__ void generate_global_indices(int* route_indices /* [sample_num, dst_num]  */,
+                                        int* indices, int* dst_start_indices, int sample_num,
+                                        int dst_num) {
   int sample_id = blockIdx.x * blockDim.x + threadIdx.x;
   int index = 0;
   if (sample_id < sample_num) {
 #pragma unroll
     for (int i = 0; i < dst_num; i++) {
-      index += locations[sample_id * dst_num + i] + dst_start_indices[i];
+      index += indices[sample_id * dst_num + i] + dst_start_indices[i];
     }
   }
   route_indices[sample_id] = index;
 }
 
-void GenerateGlobalRouteIndices(int* hot_mask, int* route_indices, int* dst_loads,
-                                int* dst_start_indices, int* supported_capacities, int sample_num,
-                                int dst_num, int supported_capacity_num, cudaStream_t stream) {
+void GenerateGlobalIndices(int* hot_mask, int* route_indices, int* dst_loads,
+                           int* dst_start_indices, int* supported_capacities, int sample_num,
+                           int dst_num, int supported_capacity_num, cudaStream_t stream) {
   {
     const dim3 block_size = 1024;
     const dim3 grid_size = dst_num;
-    generate_location_and_load_map<<<grid_size, block_size, 0, stream>>>(
+    generate_local_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
         hot_mask, hot_mask, dst_loads, supported_capacities, sample_num, dst_num,
         supported_capacity_num);
   }
   {
     constexpr dim3 block_size = 1024;
     constexpr dim3 grid_size = 1;
-    generate_branch_start_indices<<<grid_size, block_size, 0, stream>>>(dst_loads,
-                                                                        dst_start_indices, dst_num);
+    generate_dst_start_indices<<<grid_size, block_size, 0, stream>>>(dst_loads, dst_start_indices,
+                                                                     dst_num);
   }
   {
     constexpr dim3 block_size = 64;
     const dim3 grid_size = (sample_num + 63) / 64;
-    generate_route_indices<<<grid_size, block_size, 0, stream>>>(
+    generate_global_indices<<<grid_size, block_size, 0, stream>>>(
         route_indices, hot_mask, dst_start_indices, sample_num, dst_num);
   }
 }
 
-void GenerateLocalRouteIndices(int* hot_mask, int* route_indices, int* dst_loads,
-                               int* supported_capacities, int sample_num, int dst_num,
-                               int supported_capacity_num, cudaStream_t stream) {
+void GenerateLocalIndices(int* hot_mask, int* route_indices, int* dst_loads,
+                          int* supported_capacities, int sample_num, int dst_num,
+                          int supported_capacity_num, cudaStream_t stream) {
   const dim3 block_size = 1024;
   const dim3 grid_size = dst_num;
-  generate_location_and_load_map<<<grid_size, block_size, 0, stream>>>(
-      hot_mask, route_indices, dst_loads, supported_capacities, sample_num, dst_num,
-      supported_capacity_num);
+  if (supported_capacity_num == 0) {
+    generate_local_indices_and_load<<<grid_size, block_size, 0, stream>>>(
+        hot_mask, route_indices, dst_loads, sample_num, dst_num);
+  } else {
+    CHECK_GE(supported_capacity_num, 1);
+    generate_local_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
+        hot_mask, route_indices, dst_loads, supported_capacities, sample_num, dst_num,
+        supported_capacity_num);
+  }
 }
 
 }  // namespace router

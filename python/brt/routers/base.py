@@ -163,14 +163,14 @@ class ScatterRouter(BaseRouter):
             )  # sample x dst_num
 
         elif self.route_method == "threshold":
-            route_indices = (gates > self.threshold).long().to(in_flow_data.device)
+            route_indices = (gates > self.threshold).long().to(in_flow_data.device) # [bs x dst_num]
             if self.residual_dst >= 0:
                 residual_indices = (
                     (route_indices.sum(dim=1, keepdim=True) == 0)
                     .long()
                     .to(in_flow_data.device)
                 )
-                residual_index = torch.full(
+                residual_index = torch.full( # [bs x 1]
                     (residual_indices.shape),
                     self.residual_dst,
                     dtype=torch.int64,
@@ -188,7 +188,7 @@ class ScatterRouter(BaseRouter):
         in_flow_loads: List[int],
         route_indices: torch.Tensor,
         gates: torch.Tensor,
-    ) -> List[ProtoTensor]:
+    ) -> List[ProtoTensor]: # {dst}
         """
         Dispatch the inputs into the the list of torch.Tensor with indices
         """
@@ -206,7 +206,6 @@ class ScatterRouter(BaseRouter):
             tag_indices = torch.nonzero(
                 route_indices_T[i].view(-1)
             )  # TODO torch.nonzero will cause hostside synchronization, we need a async one
-            print(tag_indices)
             if tag_indices.numel() > 0:
                 out_flow_tag = torch.gather(in_flow_tag, 0, tag_indices)
                 data_indices = tag_indices.repeat(1, route_size).view(-1, *route_shape)

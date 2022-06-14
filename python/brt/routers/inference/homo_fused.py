@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
+from brt.cpp.router import generate_local_indices, route_with_local_indices
 from brt.routers.base import GatherRouter, ScatterRouter
 from brt.routers.proto_tensor import (
     ProtoTensor,
@@ -11,7 +12,6 @@ from brt.routers.proto_tensor import (
     to_torch_tensor,
 )
 from brt.routers.symbolic import symbolic_gather_route, symbolic_scatter_route
-from brt.cpp.router import generate_indices_with_load_map
 
 
 def homo_make_proto_tensor_cls():
@@ -26,11 +26,18 @@ class HomoFusedScatterRouter(ScatterRouter):
         route_method: str = "topk",
         residual_dst: int = -1,
         transform: bool = False,
+        supported_capacities: List[int] = None,
         **kwargs,
     ):
         super().__init__(
             dst_num, route_func, route_method, residual_dst, transform, **kwargs
         )
+        if supported_capacities is None:
+            self.supported_capacities = supported_capacities
+        else:
+            self.supported_capacities = torch.tensor(
+                supported_capacities, dtype=torch.int32
+            )
 
     def dispatch(
         self,
@@ -46,7 +53,14 @@ class HomoFusedScatterRouter(ScatterRouter):
 
         for key in extra_attr_stack.keys():
             extra_attr_stack[key].pop()
-
+        if self.supported_capacities is not None:
+            self.supported_capacities.to(in_flow_data.device)
+        local_indices, loads = generate_local_indices(
+            route_indices, self.supported_capacities
+        )
+        
+        out_flow_data = route_with_local_indices(in_flow_data, local_indices, loads)
+        
         route_shape = list(in_flow_data.shape[1:])
         route_size = np.prod(route_shape)
 
@@ -102,7 +116,7 @@ class HomoFusedScatterRouter(ScatterRouter):
         return symbolic_scatter_route(inputs, 1)[0]
 
 
-class HeteroFusedGatherRouter(GatherRouter):
+class HomoFusedGatherRouter(GatherRouter):
     def __init__(self, dst_num: int, reduction: str = "add", sparse=True):
         super().__init__(dst_num=dst_num)
         self.sparse = sparse
@@ -148,6 +162,6 @@ class HeteroFusedGatherRouter(GatherRouter):
             out_flow.pack(
                 torch.zeros(1, 1), dtype=torch.int64, device=out_flow_data.device
             )
-            
+
     def symbolic_route(self, inputs: torch.Tensor) -> torch.Tensor:
         return symbolic_gather_route([inputs], 1)
