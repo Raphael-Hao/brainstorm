@@ -7,12 +7,12 @@
 
 import torch
 import torch.nn as nn
-from brt.jit import CUDACompiler, HomoFuseModuleFunction
-from brt.router.random import (
-    FusedRandomGatherRouter,
-    FusedRandomScatterRouter,
-    RandomGatherRouter,
-    RandomScatterRouter,
+from brt.jit import CUDACompiler, HomoFusedModuleFunction
+from brt.routers.app.rand import (
+    RandGatherRouter,
+    RandHomoFusedGatherRouter,
+    RandHomoFusedScatterRouter,
+    RandScatterRouter,
 )
 from transformers.activations import ACT2FN
 
@@ -78,7 +78,7 @@ class FusedThorExpert(nn.Module):
             nn.Linear(config.intermediate_size, config.hidden_size)
             for _ in range(config.expert_num)
         ]
-        self.expert1_func = HomoFuseModuleFunction(
+        self.expert1_func = HomoFusedModuleFunction(
             "Linear",
             config.expert_num,
             capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
@@ -91,7 +91,7 @@ class FusedThorExpert(nn.Module):
                 "out_features": config.intermediate_size,
             },
         )
-        self.expert2_func = HomoFuseModuleFunction(
+        self.expert2_func = HomoFusedModuleFunction(
             "Linear",
             config.expert_num,
             capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
@@ -148,22 +148,19 @@ class ThorMoE(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.experts = [ThorExpert(config) for _ in range(config.expert_num)]
-        self.scatter_router = RandomScatterRouter(route_num=config.expert_num)
-        self.gather_router = RandomGatherRouter(route_num=config.expert_num)
+        self.scatter_router = RandScatterRouter(dst_num=config.expert_num)
+        self.gather_router = RandGatherRouter(dst_num=config.expert_num)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states):
         # B x T x H -> T x H
         inter_states = hidden_states.view(-1, hidden_states.size(-1))
-        inputs = torch.chunk(inter_states, inter_states.size(0), dim=0)
-        route_results, reverse_indices, reverse_shape = self.scatter_router(inputs)
+        route_results = self.scatter_router(inter_states)
         expert_results = []
         for i, expert in enumerate(self.experts):
             expert_results.append(expert(route_results[i]))
-        inter_states = self.gather_router(
-            expert_results, reverse_indices, reverse_shape
-        )
+        inter_states = self.gather_router(expert_results)
         # T x H -> B x T x H
         inter_states = inter_states.view(
             hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
@@ -175,11 +172,11 @@ class ThorMoE(nn.Module):
 class FusedThorMoE(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
-        self.scatter_router = FusedRandomScatterRouter(
-            route_num=config.expert_num,
+        self.scatter_router = RandHomoFusedScatterRouter(
+            dst_num=config.expert_num,
             supported_capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
         )
-        self.gather_router = FusedRandomGatherRouter(route_num=config.expert_num)
+        self.gather_router = RandHomoFusedGatherRouter(dst_num=config.expert_num)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.fused_expert = FusedThorExpert(config)
@@ -194,7 +191,6 @@ class FusedThorMoE(nn.Module):
         x, reverse_indices, capacities = self.scatter_router(inter_states)
         self.end_event.record(stream=self.stream)
         self.stream.synchronize()
-        print("scatter router time: ", self.start_event.elapsed_time(self.end_event))
         # print(x)
         # print(reverse_indices)
         # print(capacities.tolist())

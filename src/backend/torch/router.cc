@@ -80,7 +80,7 @@ std::vector<::torch::Tensor> generate_local_indices(
   CHECK_ON_CUDA(dst_loads);
 
   int sample_num = in_data.size(0);
-  int sample_dim = in_data.size(1);
+  int sample_dim = in_data.numel() / sample_num;
   int dst_num = route_indices.size(1);
   int total_load = dst_loads.sum().item<int>();
 
@@ -90,7 +90,9 @@ std::vector<::torch::Tensor> generate_local_indices(
     gates_data_ptr = gates.value().data_ptr<float>();
   }
 
-  auto out_data = ::at::zeros({total_load, sample_dim}, in_data.options());
+  auto out_shape = in_data.sizes().vec();
+  out_shape[0] = total_load;
+  auto out_data = ::at::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
   router::RouteWithLocalIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
@@ -110,7 +112,7 @@ std::vector<::torch::Tensor> generate_local_indices(
   CHECK_ON_CUDA(dst_loads);
 
   int sample_num = route_indices.size(0);
-  int sample_dim = in_data.size() ;
+  int sample_dim = in_data.numel() / in_data.size(0);
   int dst_num = route_indices.size(1);
 
   float* gates_data_ptr = nullptr;
@@ -119,7 +121,9 @@ std::vector<::torch::Tensor> generate_local_indices(
     gates_data_ptr = gates.value().data_ptr<float>();
   }
 
-  ::torch::Tensor out_data = ::at::zeros({sample_num, sample_dim}, in_data.options());
+  auto out_shape = in_data.sizes().vec();
+  out_shape[0] = sample_num;
+  ::torch::Tensor out_data = ::at::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
   router::RouteBackWithLocalIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
@@ -142,5 +146,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("route_indices"),
         pybind11::arg("dst_loads"), pybind11::arg("gates") = pybind11::none());
   m.def("route_back_with_local_indices", &brt::backend::torch::route_back_with_local_indices,
-        "Route data with local indices");
+        "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("route_indices"),
+        pybind11::arg("dst_loads"), pybind11::arg("gates") = pybind11::none());
 }

@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 from .compiler import CUDACompiler
-from .hetero_fuse import HeteroFuseModuleFunction
-from .homo_fuse import ElaticHomoFuseFunction, HomoFuseModuleFunction
-from .horiz_fuse import HorizFuseModuleFunction
+from .hetero_fused import HeteroFusedModuleFunction
+from .homo_fused import HomoFusedModuleFunction
+from .horiz_fused import HorizFusedModuleFunction
 from .module_func import ModuleFunction

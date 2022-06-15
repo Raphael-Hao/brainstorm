@@ -6,17 +6,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from brt.primitive import router
-from tutel.gates.cosine_top import CosineTopKGate
-from tutel.gates.top import LinearTopKGate
-
-from .base import GatherRouter, ScatterRouter
-from .proto_tensor import (
+from brt.routers import GatherRouter, ScatterRouter
+from brt.routers.proto_tensor import (
     ProtoTensor,
     init_proto_tensor,
     make_proto_tensor_cls,
     to_proto_tensor,
     to_torch_tensor,
 )
+from tutel.gates.cosine_top import CosineTopKGate
+from tutel.gates.top import LinearTopKGate
 
 
 class CosineRouteFunc(nn.Module):
@@ -43,7 +42,6 @@ class CosineRouteFunc(nn.Module):
         else:
             logits_w_noise = logits
         scores = F.softmax(logits_w_noise, dim=1)
-        
 
 
 @router

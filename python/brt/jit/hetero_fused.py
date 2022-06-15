@@ -4,11 +4,11 @@
 from typing import Dict, List, Union
 
 from .base_function import GlobalFunction
-from .horiz_fuse import HorizFuseModuleFunction
+from .horiz_fused import HorizFusedModuleFunction
 from .module_func import ModuleFunction
 
 
-class HeteroFuseModuleFunction(HorizFuseModuleFunction):
+class HeteroFusedModuleFunction(HorizFusedModuleFunction):
     def __init__(self, candidates: List[ModuleFunction]):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "hetero_fuse")
@@ -73,7 +73,7 @@ class HeteroFuseModuleFunction(HorizFuseModuleFunction):
         return super().make_identifier()
 
 
-class DynamicHeteroFuseModuleFunction(HorizFuseModuleFunction):
+class DynamicHeteroFuseModuleFunction(HorizFusedModuleFunction):
     def __init__(
         self,
         candidate_module_names: List[str],

@@ -341,11 +341,11 @@ def init_proto_tensor(
     _torch_tensor: torch.Tensor,
     tag_stack: List[torch.Tensor] = [],
     load_stack: List[int] = [],
-    **kwargs,
+    extra_attrs_stack_dict: Dict[str, List[Any]] = {},
 ) -> ProtoTensor:
     _flow_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
     if tag_stack and load_stack:
-        _flow_tensor.deep_pack(tag_stack, load_stack, **kwargs)
+        _flow_tensor.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
     else:
         _flow_tensor.init_proto()
     return _flow_tensor

@@ -16,7 +16,7 @@ config.num_attention_heads = 8
 config.num_hidden_layers = 1
 config.expert_num = 2
 
-fused_thor_moe = brt.domain(FusedThorMoE)(config)
+fused_thor_moe = FusedThorMoE(config)
 
 # %%
 
