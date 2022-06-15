@@ -14,7 +14,7 @@ from .utils import make_fused_identifier, make_identifier
 logger = log.get_logger(__file__)
 
 
-class HorizFuseModuleFunction(GlobalFunction):
+class HorizFusedModuleFunction(GlobalFunction):
     def __init__(
         self,
         candidates: List[ModuleFunction],

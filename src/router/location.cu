@@ -4,13 +4,66 @@
 namespace brt {
 namespace router {
 
-__device__ __forceinline__ void blockwise_cum_sum_sub(int* input, int* output_sum,
-                                                      const int& cumsum_num, int& sub_num) {
+__device__ __forceinline__ void blockwise_mask_cum_sum(int* mask, int* output_sum,
+                                                       const int& cumsum_num, int& prefix) {
   constexpr int thread_num = 1024;
   int parallel_num = gridDim.x;
   __shared__ int partial_dst_mask[thread_num + 1];
 
   for (int S = 0; S < cumsum_num; S += thread_num) {
+    partial_dst_mask[threadIdx.x] = 0;
+    int offset = 1;
+    int dst_mask = 0;
+    if (S + threadIdx.x < cumsum_num) {
+      partial_dst_mask[threadIdx.x] = mask[threadIdx.x * parallel_num + blockIdx.x];
+      dst_mask = partial_dst_mask[threadIdx.x];
+    }
+    // sum all partial_mask_per_branch[0:threadIdx.x] to partial_mask_per_branch[thread_num - 1]
+    for (int d = thread_num >> 1; d > 0; d >>= 1) {
+      __syncthreads();
+      if (threadIdx.x < d) {
+        partial_dst_mask[offset * (2 * threadIdx.x + 2) - 1] +=
+            partial_dst_mask[offset * (2 * threadIdx.x + 1) - 1];
+      }
+      offset *= 2;
+    }
+    // store the sum of temp[0:threadIdx.x] to temp[thread_num] and put temp[thread_num - 1] to 0
+    if (threadIdx.x == 0) {
+      partial_dst_mask[thread_num] = partial_dst_mask[thread_num - 1];
+      partial_dst_mask[thread_num - 1] = 0;
+    }
+    // reverse dispatch the sum of temp[0:threadIdx.x] to temp[threadIdx.x+1]
+    for (int d = 1; d < thread_num; d *= 2) {
+      offset >>= 1;
+      __syncthreads();
+      if (threadIdx.x < d) {
+        int ai = offset * (2 * threadIdx.x + 1) - 1;
+        int bi = offset * (2 * threadIdx.x + 2) - 1;
+        int t = partial_dst_mask[ai];
+        partial_dst_mask[ai] = partial_dst_mask[bi];
+        partial_dst_mask[bi] += t;
+      }
+    }
+    __syncthreads();
+    if (S + threadIdx.x < cumsum_num) {
+      int location = partial_dst_mask[threadIdx.x + 1] + prefix;
+      output_sum[threadIdx.x * parallel_num + blockIdx.x] = location * dst_mask;
+    }
+    __syncthreads();
+    prefix += partial_dst_mask[thread_num];
+    output_sum += thread_num * parallel_num;
+    mask += thread_num * parallel_num;
+  }
+}
+
+__device__ __forceinline__ void blockwise_cum_sum(int* input, int* output_sum,
+                                                  const int& cumsum_num, int& prefix) {
+  constexpr int thread_num = 1024;
+  int parallel_num = gridDim.x;
+  __shared__ int partial_dst_mask[thread_num + 1];
+
+  for (int S = 0; S < cumsum_num; S += thread_num) {
+    partial_dst_mask[threadIdx.x] = 0;
     int offset = 1;
     if (S + threadIdx.x < cumsum_num) {
       partial_dst_mask[threadIdx.x] = input[threadIdx.x * parallel_num + blockIdx.x];
@@ -43,11 +96,11 @@ __device__ __forceinline__ void blockwise_cum_sum_sub(int* input, int* output_su
     }
     __syncthreads();
     if (S + threadIdx.x < cumsum_num) {
-      int location = partial_dst_mask[threadIdx.x + 1] + sub_num;
+      int location = partial_dst_mask[threadIdx.x + 1] + prefix;
       output_sum[threadIdx.x * parallel_num + blockIdx.x] = location;
     }
     __syncthreads();
-    sub_num += partial_dst_mask[thread_num];
+    prefix += partial_dst_mask[thread_num];
     output_sum += thread_num * parallel_num;
     input += thread_num * parallel_num;
   }
@@ -59,10 +112,10 @@ __global__ void generate_local_indices_and_load(
     int sample_num, int dst_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
-  int sub_num = 0;
-  blockwise_cum_sum_sub(hot_mask, local_indices, sample_num, sub_num);
+  int prefix = 0;
+  blockwise_mask_cum_sum(hot_mask, local_indices, sample_num, prefix);
   if (threadIdx.x == 0) {
-    dst_loads[blockIdx.x] = local_indices[gridDim.x * (sample_num - 1) + blockIdx.x];
+    dst_loads[blockIdx.x] = prefix;
   }
 }
 
@@ -73,10 +126,10 @@ __global__ void generate_local_indices_and_load_map(
     int supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
-  int sub_num = 0;
-  blockwise_cum_sum_sub(hot_mask, local_indices, sample_num, sub_num);
+  int prefix = 0;
+  blockwise_mask_cum_sum(hot_mask, local_indices, sample_num, prefix);
   if (threadIdx.x == 0) {
-    auto& real_load = local_indices[gridDim.x * (sample_num - 1) + blockIdx.x];
+    auto& real_load = prefix;
     for (int i = 0; i < supported_capacity_num; i++) {
       if (real_load <= supported_capacities[i]) {
         dst_loads[blockIdx.x] = supported_capacities[i];
@@ -90,7 +143,7 @@ __global__ void generate_dst_start_indices(int* __restrict__ dst_loads,
                                            int* __restrict__ dst_start_indices, int dst_num) {
   int sub_num = 0;
   dst_start_indices = dst_start_indices + 1;
-  blockwise_cum_sum_sub(dst_loads, dst_start_indices, dst_num, sub_num);
+  blockwise_cum_sum(dst_loads, dst_start_indices, dst_num, sub_num);
 }
 
 __global__ void generate_global_indices(int* route_indices /* [sample_num, dst_num]  */,

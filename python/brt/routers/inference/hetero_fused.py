@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
+from brt.primitive import router
 from brt.routers.base import GatherRouter, ScatterRouter
 from brt.routers.proto_tensor import (
     ProtoTensor,
@@ -16,11 +17,18 @@ from brt.routers.proto_tensor import (
 )
 from brt.routers.symbolic import symbolic_gather_route, symbolic_scatter_route
 
+__all__ = [
+    "make_hetero_proto_tensor_cls",
+    "HeteroFusedScatterRouter",
+    "HeteroFusedGatherRouter",
+]
 
-def hetero_make_proto_tensor_cls():
-    make_proto_tensor_cls(["active_branch"], [torch.zeros(0, dtype=torch.int64)])
+
+def make_hetero_proto_tensor_cls():
+    make_proto_tensor_cls(["active_branch"], [torch.zeros(0, dtype=torch.int32)])
 
 
+@router
 class HeteroFusedScatterRouter(ScatterRouter):
     def __init__(
         self,
@@ -84,7 +92,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
                     )
                 )
                 out_flow_tag = torch.zeros(
-                    (0, 1), dtype=torch.int64, device=in_flow_data.device
+                    (0, 1), dtype=torch.int32, device=in_flow_data.device
                 )
             else:
                 out_flows.append(
@@ -96,7 +104,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
                     )
                 )
                 out_flow_tag = torch.zeros(
-                    (1, 1), dtype=torch.int64, device=in_flow_data.device
+                    (1, 1), dtype=torch.int32, device=in_flow_data.device
                 )
             out_flows[i].pack(out_flow_tag, out_flow_load, active_branch=active_branch)
         return out_flows
@@ -105,6 +113,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
         return out_flow
 
 
+@router
 class HeteroFusedGatherRouter(GatherRouter):
     def __init__(self, dst_num: int, reduction: str = "add", sparse=True):
         super().__init__(dst_num=dst_num)
@@ -145,9 +154,9 @@ class HeteroFusedGatherRouter(GatherRouter):
         )
         if out_flow_data.numel() == 0:
             out_flow.pack(
-                torch.zeros((0, 1), dtype=torch.int64, device=out_flow_data.device), 1
+                torch.zeros((0, 1), dtype=torch.int32, device=out_flow_data.device), 1
             )
         else:
             out_flow.pack(
-                torch.zeros(1, 1), dtype=torch.int64, device=out_flow_data.device
+                torch.zeros(1, 1), dtype=torch.int32, device=out_flow_data.device
             )

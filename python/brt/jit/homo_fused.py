@@ -8,18 +8,18 @@ from typing import Dict, List, Union
 
 from brt.common import log
 
-from .horiz_fuse import HorizFuseModuleFunction
+from .horiz_fused import HorizFusedModuleFunction
 from .module_func import ModuleFunction
 from .utils import check_if_pointer
 
 logger = log.get_logger(__file__)
 
 
-class HomoFuseModuleFunction(HorizFuseModuleFunction):
+class HomoFusedModuleFunction(HorizFusedModuleFunction):
     def __init__(
         self,
         module_name,
-        branch_num,  # branch num, e.g., expert num, for horizontal fusion
+        dst_num,  # branch num, e.g., expert num, for horizontal fusion
         capacities: List[int],  # supported dynamic shape
         shared_arg_indices: List[int],
         shared_arg_grans: List[int],
@@ -29,7 +29,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
     ):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "homo_fuse")
-        self.branch_num = branch_num
+        self.dst_num = dst_num
         self.capacities = capacities
         self.supported_capacity_num = len(self.capacities)
         self.shared_arg_indices = shared_arg_indices
@@ -75,7 +75,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
             + "_"
             + str(self.supported_capacity_num)
             + "_"
-            + str(self.branch_num)
+            + str(self.dst_num)
             + "_"
             + self.kernel_type
         )
@@ -157,7 +157,7 @@ class HomoFuseModuleFunction(HorizFuseModuleFunction):
         self,
     ):
         formated_code = self.add_line_with_indent(
-            f"// [homo_fuse_info] branch_num = {self.branch_num}", end=True
+            f"// [homo_fuse_info] branch_num = {self.dst_num}", end=True
         )
         formated_code += self.add_line_with_indent(
             f"// [homo_fuse_info] supported_capacity = {self.capacities}", end=True
