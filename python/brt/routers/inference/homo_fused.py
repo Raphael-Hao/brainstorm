@@ -1,8 +1,6 @@
 from typing import Any, Dict, List, Tuple, Union
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 from brt.cpp.router import (
     generate_local_indices,
     route_back_with_local_indices,
@@ -28,6 +26,7 @@ __all__ = [
 def make_homo_proto_tensor_cls():
     make_proto_tensor_cls(["gates"], [None])
     from brt.routers import ProtoTensor
+
     assert hasattr(ProtoTensor, "gates")
     assert hasattr(ProtoTensor, "gates_stack")
 
@@ -73,9 +72,13 @@ class HomoFusedScatterRouter(ScatterRouter):
             self.supported_capacities = self.supported_capacities.to(
                 in_flow_data.device
             )
+        self.start_timer()
         local_indices, loads = generate_local_indices(
             route_indices, self.supported_capacities
         )
+        self.end_timer("generate_local_indices")
+
+        self.start_timer()
         if self.transform:
             out_flow_data = route_with_local_indices(
                 in_flow_data, local_indices, loads, gates
@@ -85,6 +88,7 @@ class HomoFusedScatterRouter(ScatterRouter):
             out_flow_data = route_with_local_indices(
                 in_flow_data, local_indices, loads, None
             )
+        self.end_timer("route_with_local_indices")
         out_flow = init_proto_tensor(
             out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack
         )
@@ -126,6 +130,8 @@ class HomoFusedGatherRouter(GatherRouter):
         local_indices = in_flow_tag_stack.pop()
         loads = in_flow_load_stack.pop()
         gates = extra_attr_stack["gates_stack"].pop()
+
+        self.start_timer()
         if self.transform:
             out_flow_data = route_back_with_local_indices(
                 in_flow_data, local_indices, loads, gates
@@ -134,6 +140,7 @@ class HomoFusedGatherRouter(GatherRouter):
             out_flow_data = route_back_with_local_indices(
                 in_flow_data, local_indices, loads, None
             )
+        self.end_timer("route_back_with_local_indices")
 
         out_flow = init_proto_tensor(
             out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack
