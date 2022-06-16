@@ -7,6 +7,7 @@
 
 import torch
 import torch.nn as nn
+from brt.common import BRT_KERNEL_TEMPLATE_PATH
 from brt.jit import CUDACompiler, HomoFusedModuleFunction
 from brt.routers.app.rand import (
     RandGatherRouter,
@@ -81,7 +82,7 @@ class FusedThorExpert(nn.Module):
         self.expert1_func = HomoFusedModuleFunction(
             "Linear",
             config.expert_num,
-            capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+            capacities=[1, 2, 4],  # 8, 16, 32, 64, 128, 256, 512, 1024],
             shared_arg_indices=[0, 2],
             shared_arg_grans=[2048, 4096],
             input_infos={"input_0": [1, config.hidden_size]},
@@ -94,7 +95,7 @@ class FusedThorExpert(nn.Module):
         self.expert2_func = HomoFusedModuleFunction(
             "Linear",
             config.expert_num,
-            capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+            capacities=[1, 2, 4],  # 8, 16, 32, 64, 128, 256, 512, 1024],
             shared_arg_indices=[0, 2],
             shared_arg_grans=[4096, 2048],
             input_infos={"input_0": [1, config.intermediate_size]},
@@ -104,11 +105,18 @@ class FusedThorExpert(nn.Module):
                 "out_features": config.hidden_size,
             },
         )
+        expert1_code = self.expert1_func.get_code()[0]
+        expert1_code_fpath = BRT_KERNEL_TEMPLATE_PATH / "thor_expert1.cu"
+        expert1_code_fpath.write_text(expert1_code)
+        expert2_code = self.expert2_func.get_code()[0]
+        expert2_code_fpath = BRT_KERNEL_TEMPLATE_PATH / "thor_expert2.cu"
+        expert2_code_fpath.write_text(expert2_code)
+
         self.expert1_kernel = CUDACompiler.generate_kernel(
-            None, self.expert1_func.get_code()
+            None, self.expert1_func.get_code()[0]
         )
         self.expert2_kernel = CUDACompiler.generate_kernel(
-            None, self.expert2_func.get_code()
+            None, self.expert2_func.get_code()[0]
         )
         self.expert1_standalone_inputs = [linear.weight for linear in dense1s]
         self.expert1_standalone_inputs.extend([linear.bias for linear in dense1s])
@@ -122,24 +130,27 @@ class FusedThorExpert(nn.Module):
         )
 
     def forward(
-        self, inter_state: torch.Tensor, capacities: torch.Tensor
+        self,
+        inter_state: torch.Tensor,
     ) -> torch.Tensor:
-        expert1_out = torch.empty(
+        expert1_out = torch.zeros(
             inter_state.shape[0], self.intermediate_size, device=inter_state.device
         )
+        print(inter_state)
+        print(expert1_out.shape)
         self.expert1_kernel(
             shared_inputs=[inter_state, expert1_out],
             standalone_inputs=self.expert1_standalone_inputs,
-            capacities=capacities.tolist(),
+            capacities=inter_state.load.tolist(),
         )
         x = self.intermediate_act_fn(expert1_out)
-        expert2_out = torch.empty(
+        expert2_out = torch.zeros(
             inter_state.shape[0], self.hidden_size, device=inter_state.device
         )
         self.expert2_kernel(
             shared_inputs=[x, expert2_out],
             standalone_inputs=self.expert2_standalone_inputs,
-            capacities=capacities.tolist(),
+            capacities=inter_state.load.tolist(),
         )
         return expert2_out
 
@@ -186,22 +197,22 @@ class FusedThorMoE(nn.Module):
 
     def forward(self, hidden_states):
         # B x T x H -> T x H
-        self.start_event.record(stream=self.stream)
         inter_states = hidden_states.view(-1, hidden_states.size(-1))
-        x, reverse_indices, capacities = self.scatter_router(inter_states)
+        self.start_event.record(stream=self.stream)
+        x = self.scatter_router(inter_states)
         self.end_event.record(stream=self.stream)
         self.stream.synchronize()
-        # print(x)
+        print("fused scatter time: ", self.start_event.elapsed_time(self.end_event))
         # print(reverse_indices)
         # print(capacities.tolist())
         self.start_event.record(stream=self.stream)
-        x = self.fused_expert(x, capacities)
+        x = self.fused_expert(x)
         self.end_event.record(stream=self.stream)
         self.stream.synchronize()
         print("fused expert time: ", self.start_event.elapsed_time(self.end_event))
 
         self.start_event.record(stream=self.stream)
-        inter_states = self.gather_router(x, reverse_indices)
+        inter_states = self.gather_router(x)
         self.end_event.record(stream=self.stream)
         self.stream.synchronize()
         print("gather router time: ", self.start_event.elapsed_time(self.end_event))

@@ -36,6 +36,21 @@ class BaseRouter(nn.Module):
         """
         super().__init__()
         self.dst_num = dst_num
+        self.stream = torch.cuda.default_stream()
+        self.start_event = torch.cuda.Event(enable_timing=True)
+        self.end_event = torch.cuda.Event(enable_timing=True)
+
+    def start_timer(self):
+        self.start_event.record(self.stream)
+
+    def end_timer(self, timer_name):
+        self.end_event.record(self.stream)
+        self.stream.synchronize()
+        print(
+            "{} elapsed time: {:.3f}".format(
+                timer_name, self.start_event.elapsed_time(self.end_event)
+            )
+        )
 
     def route(self, *inputs):
         raise NotImplementedError

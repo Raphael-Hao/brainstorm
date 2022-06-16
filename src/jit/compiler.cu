@@ -150,49 +150,59 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
                                 const std::vector<long>& branch_capacities, int fd, int dev,
                                 cudaStream_t stream) {
   auto& kernel = kernels_[fd];
+
+  for (auto i = 0; i < kernel.shared_arg_num; i++) {
+    printf("shared_inputs_ptr[%d] = %p\n", i, shared_inputs_ptr[i]);
+  }
+
+  for (auto i = 0; i < kernel.standalone_arg_num * kernel.branch_num; i++) {
+    printf("standalone_inputs_ptr[%d] = %p\n", i, standalone_inputs_ptr[i]);
+  }
+
   std::vector<int> active_blocks(kernel.supported_capacity_num, 0);
   // reorder the arguments for kernel based on capacities
   auto branch_indice_with_order = sort_indice(branch_capacities);
 
   int real_branch_index = 0;
-  // printf("runtime arg dispatch begin\n");
+  printf("runtime arg dispatch begin\n");
   for (auto branch_idx = 0; branch_idx < kernel.branch_num; branch_idx++) {
     auto& branch_idx_in_order = branch_indice_with_order[branch_idx];
-    // printf("sorted branch: %d -> origin branch %d\n", branch_idx, branch_idx_in_order);
+    printf("sorted branch: %d -> origin branch %d\n", branch_idx, branch_idx_in_order);
     auto& capacity = branch_capacities[branch_idx_in_order];
-    // printf("capacity: %d\n", capacity);
+    printf("capacity: %d\n", capacity);
     if (capacity == 0) continue;
     active_blocks[kernel.capacity_index_map[capacity]]++;
-    // printf("active_blocks[%d] capacity updated to: %d\n", kernel.capacity_index_map[capacity],
-    //        active_blocks[kernel.capacity_index_map[capacity]]);
+    printf("active_blocks[%d] capacity updated to: %d\n", kernel.capacity_index_map[capacity],
+           active_blocks[kernel.capacity_index_map[capacity]]);
     auto shared_arg_branch_index = std::accumulate(
         branch_capacities.begin(), branch_capacities.begin() + branch_idx_in_order, 0);
-    // printf("shared_arg_branch_index: %d for branch: %d, real: %d\n", shared_arg_branch_index,
-    //        branch_idx, real_branch_index);
+    printf("shared_arg_branch_index: %d for branch: %d, real: %d\n", shared_arg_branch_index,
+           branch_idx, real_branch_index);
     kernel.shared_arg_offset[real_branch_index] = shared_arg_branch_index;
+
     for (auto arg_idx = 0; arg_idx < (kernel.arg_num - kernel.shared_arg_num); arg_idx++) {
       kernel.standalone_arg_hptr_array[arg_idx][real_branch_index] =
           (void*)standalone_inputs_ptr[kernel.standalone_arg_num * branch_idx_in_order + arg_idx];
-      // printf("branch: %d, standalone_arg_hptr_array[%d][%d] = %p\n", branch_idx, arg_idx,
-      //        real_branch_index, kernel.standalone_arg_hptr_array[arg_idx][real_branch_index]);
+      printf("branch: %d, standalone_arg_hptr_array[%d][%d] = %p\n", branch_idx, arg_idx,
+             real_branch_index, kernel.standalone_arg_hptr_array[arg_idx][real_branch_index]);
     }
     real_branch_index++;
   }
   // print debug info
-  // printf("runtime arg dispatch end\n");
+  printf("runtime arg dispatch end\n");
 
   for (auto arg_idx = 0; arg_idx < kernel.arg_num; arg_idx++) {
     if (arg_idx < kernel.shared_arg_num) {
       netlet::DevicePtr2PtrArray((char**)kernel.arg_dptr_array[arg_idx],
                                  (char*)shared_inputs_ptr[arg_idx], kernel.shared_arg_offset,
                                  kernel.branch_num, kernel.shared_arg_grans[arg_idx], stream);
-      // CUDA_CHECK(cudaStreamSynchronize(stream));
+      CUDA_CHECK(cudaStreamSynchronize(stream));
     } else {
       CUDA_CHECK(cudaMemcpyAsync(kernel.arg_dptr_array[arg_idx],
                                  kernel.standalone_arg_hptr_array[arg_idx - kernel.shared_arg_num],
                                  real_branch_index * sizeof(void*), cudaMemcpyHostToDevice,
                                  stream));
-      // CUDA_CHECK(cudaStreamSynchronize(stream));
+      CUDA_CHECK(cudaStreamSynchronize(stream));
     }
   }
 

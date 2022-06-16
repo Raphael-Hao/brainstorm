@@ -2,7 +2,6 @@
 # Licensed under the MIT license.
 
 # %%
-import brt
 import torch
 
 from thor_config import ThorConfig
@@ -18,11 +17,10 @@ config.expert_num = 2
 
 fused_thor_moe = FusedThorMoE(config)
 
-# %%
 
 fused_thor_moe.cuda()
 
-x = torch.zeros(1, 64, 512).cuda()
+x = torch.randn(1, 4, 512).cuda()
 x = fused_thor_moe(x)
 
 print(x)
