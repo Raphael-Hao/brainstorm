@@ -6,9 +6,9 @@ from typing import Dict, List, Union
 
 from brt.common import log
 
-from .base_function import CUDATypeSizeInByte, GlobalFunction
-from .storage import kernel_storager
-from .utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
+from .function import CUDATypeSizeInByte, GlobalFunction
+from ..storage import kernel_storager
+from ..utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
 
 logger = log.get_logger(__file__)
 

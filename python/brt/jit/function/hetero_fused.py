@@ -3,7 +3,7 @@
 
 from typing import Dict, List, Union
 
-from .base_function import GlobalFunction
+from .cuda_function import GlobalFunction
 from .horiz_fused import HorizFusedModuleFunction
 from .module_func import ModuleFunction
 
@@ -197,7 +197,7 @@ class DynamicHeteroFuseModuleFunction(HorizFusedModuleFunction):
         self.fuse()
         self.reset_mode("global")
         self.add_codeblock(GlobalFunction.common_defines)
-        self.add_c_api()
+        self.add_single_c_api()
         self.add_codeblock(GlobalFunction.asm_block_sync)
         self.add_codeblock(GlobalFunction.asm_warp_sync)
         for idx, func in enumerate(self.candidates):

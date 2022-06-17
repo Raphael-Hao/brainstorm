@@ -50,7 +50,7 @@ class HomoFusedScatterRouter(ScatterRouter):
             self.supported_capacities = supported_capacities
         else:
             self.supported_capacities = torch.tensor(
-                supported_capacities, dtype=torch.int32
+                supported_capacities, dtype=torch.int64
             )
 
     def dispatch(

@@ -25,7 +25,7 @@ __all__ = [
 
 
 def make_hetero_proto_tensor_cls():
-    make_proto_tensor_cls(["active_branch"], [torch.zeros(0, dtype=torch.int32)])
+    make_proto_tensor_cls(["active_branch"], [torch.zeros(0, dtype=torch.int64)])
 
 
 @router
@@ -92,7 +92,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
                     )
                 )
                 out_flow_tag = torch.zeros(
-                    (0, 1), dtype=torch.int32, device=in_flow_data.device
+                    (0, 1), dtype=torch.int64, device=in_flow_data.device
                 )
             else:
                 out_flows.append(
@@ -104,7 +104,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
                     )
                 )
                 out_flow_tag = torch.zeros(
-                    (1, 1), dtype=torch.int32, device=in_flow_data.device
+                    (1, 1), dtype=torch.int64, device=in_flow_data.device
                 )
             out_flows[i].pack(out_flow_tag, out_flow_load, active_branch=active_branch)
         return out_flows
@@ -154,9 +154,9 @@ class HeteroFusedGatherRouter(GatherRouter):
         )
         if out_flow_data.numel() == 0:
             out_flow.pack(
-                torch.zeros((0, 1), dtype=torch.int32, device=out_flow_data.device), 1
+                torch.zeros((0, 1), dtype=torch.int64, device=out_flow_data.device), 1
             )
         else:
             out_flow.pack(
-                torch.zeros(1, 1), dtype=torch.int32, device=out_flow_data.device
+                torch.zeros(1, 1), dtype=torch.int64, device=out_flow_data.device
             )
