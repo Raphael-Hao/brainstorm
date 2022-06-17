@@ -29,7 +29,7 @@ if nn_cache_file_path.exists():
             nn_cache_file_path.unlink()
         if git_ignore_file_path.exists():
             git_ignore_file_path.unlink()
-        for module_name in _nn.all_module_names:
+        for module_name in _nn.__all_module_names__:
             # delete module_fpath if exist
             module_fpath = Path(__file__).parent / (module_name + ".py")
             if module_fpath.exists():

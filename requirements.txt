@@ -19,4 +19,4 @@ scipy
 xgboost==1.5.2
 tornado==6.1
 tqdm
-
+json_tricks

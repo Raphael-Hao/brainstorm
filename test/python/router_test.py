@@ -16,7 +16,6 @@ class RouterModel(nn.Module):
             dst_num=2,
             route_func=route_func,
             route_method=route_method,
-            sparse=False,
             **kwargs,
         )
         self.expert1 = nn.Identity()
@@ -63,7 +62,6 @@ class RouterTest(unittest.TestCase):
             route_method="threshold",
         )
         results = model(inputs)
-        print(f"results:", results)
         self.assertTrue(torch.allclose(results[dst].data, inputs))
         self.assertTrue(results[1 - dst].data.numel() == 0)
         self.assertTrue(torch.allclose(results[2].data, inputs))

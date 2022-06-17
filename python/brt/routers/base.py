@@ -36,15 +36,14 @@ class BaseRouter(nn.Module):
         """
         super().__init__()
         self.dst_num = dst_num
-        self.stream = torch.cuda.default_stream()
-        self.start_event = torch.cuda.Event(enable_timing=True)
-        self.end_event = torch.cuda.Event(enable_timing=True)
+        self.start_event = torch.jit.unused(torch.cuda.Event(enable_timing=True))
+        self.end_event = torch.jit.unused(torch.cuda.Event(enable_timing=True))
 
     def start_timer(self):
-        self.start_event.record(self.stream)
+        self.start_event.record(torch.cuda.current_stream())
 
     def end_timer(self, timer_name):
-        self.end_event.record(self.stream)
+        self.end_event.record(torch.cuda.current_stream())
         self.stream.synchronize()
         print(
             "{} elapsed time: {:.3f}".format(
