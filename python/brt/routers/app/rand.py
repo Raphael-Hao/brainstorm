@@ -5,27 +5,35 @@ from typing import List, Tuple, Union
 
 import torch
 from brt.primitive import router
-from brt.routers import reset_proto_tensor_cls
-from brt.routers.base import GatherRouter, ScatterRouter
+from brt.routers import GatherRouter, ScatterRouter, reset_proto_tensor_cls
 from brt.routers.inference import (
     HomoFusedGatherRouter,
     HomoFusedScatterRouter,
     make_homo_proto_tensor_cls,
 )
 
-__all__ = ["RandScatterRouter", "RandHomoFusedScatterRouter"]
+__all__ = [
+    "init_rand_router",
+    "RandScatterRouter",
+    "RandGatherRouter",
+    "init_rand_homo_fused_router",
+    "RandHomoFusedScatterRouter",
+    "RandHomoFusedGatherRouter",
+]
 
 
-def rand_route_func(inputs_data, dst_num):
+def _rand_route_func(inputs_data, dst_num):
     gates = torch.randn((inputs_data.size(0), dst_num), device=inputs_data.device)
     return gates
 
 
 def init_rand_router():
     reset_proto_tensor_cls()
-    
+
+
 def init_rand_homo_fused_router():
     make_homo_proto_tensor_cls()
+
 
 @router
 class RandScatterRouter(ScatterRouter):
@@ -41,7 +49,7 @@ class RandScatterRouter(ScatterRouter):
 
         super().__init__(
             dst_num=dst_num,
-            route_func=partial(rand_route_func, dst_num=dst_num),
+            route_func=partial(_rand_route_func, dst_num=dst_num),
             route_method="topk",
             transform=False,
             k=1,
@@ -77,7 +85,7 @@ class RandHomoFusedScatterRouter(HomoFusedScatterRouter):
 
         super().__init__(
             dst_num=dst_num,
-            route_func=partial(rand_route_func, dst_num=dst_num),
+            route_func=partial(_rand_route_func, dst_num=dst_num),
             route_method="topk",
             transform=False,
             supported_capacities=supported_capacities,
