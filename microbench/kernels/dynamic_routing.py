@@ -8,7 +8,7 @@ import logging
 
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
-from brt.jit.module_func import ModuleFunction
+from brt.jit.function.module_func import ModuleFunction
 from brt.jit.storage import kernel_storager
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname

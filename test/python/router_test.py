@@ -53,7 +53,7 @@ class RouterTest(unittest.TestCase):
     def all_to_single_route(self, Model, inputs, dst):
         def route_func(inputs):
             gates = torch.zeros(
-                inputs.shape[0], 2, dtype=torch.int32, device=inputs.device
+                inputs.shape[0], 2, dtype=torch.int64, device=inputs.device
             )
             gates[:, dst] = 1
             return gates
@@ -71,7 +71,7 @@ class RouterTest(unittest.TestCase):
     def drop_half_samples(self, Model, inputs, dst, which_half, sparse=False):
         def route_func(inputs):
             gates = torch.zeros(
-                inputs.shape[0], 2, dtype=torch.int32, device=inputs.device
+                inputs.shape[0], 2, dtype=torch.int64, device=inputs.device
             )
             if which_half == "upper":
                 gates[inputs.shape[0] // 2 :, dst] = 1

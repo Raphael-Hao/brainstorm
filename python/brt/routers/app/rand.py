@@ -81,7 +81,7 @@ class RandHomoFusedScatterRouter(HomoFusedScatterRouter):
             route_method="topk",
             transform=False,
             supported_capacities=supported_capacities,
-            k=4,
+            k=1,
         )
 
 

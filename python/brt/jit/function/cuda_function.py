@@ -1,9 +1,15 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+
 from brt.common import log
+from brt.jit.compiler import CUDACompiler
+
+from .function import Function
 
 logger = log.get_logger(__file__)
-from .compiler import CUDACompiler
+
+
+__all__ = ["CUDATypeSizeInByte", "GlobalFunctionG"]
 
 CUDATypeSizeInByte = {
     # signed type
@@ -25,67 +31,6 @@ CUDATypeSizeInByte = {
     "uint32_t": 4,
     "uint64_t": 8,
 }
-
-class Function:
-    c_api_decorator = 'extern "C" '
-
-    def __init__(self) -> None:
-        pass
-
-    def append_code(self, code: str, end=False):
-        formated_code = code
-        self.clean_code += formated_code
-        if end == True:
-            formated_code += self.new_line()
-        return formated_code
-
-    def add_c_api(self):
-        formated_code = Function.c_api_decorator
-        self.clean_code += formated_code
-        return formated_code
-
-    def end_c_api(self):
-        formated_code = '} // extern "C"\n'
-        self.clean_code += formated_code
-        return formated_code
-
-    def add_codeblock(self, codeblock: str):
-        formated_code = codeblock
-        self.clean_code += formated_code
-        formated_code += self.new_line()
-        return formated_code
-
-    def add_line_with_indent(self, code: str, end=False) -> str:
-        formated_code = "  " * self.indent
-        formated_code += code
-        self.clean_code += formated_code
-        if end == True:
-            formated_code += self.new_line()
-        return formated_code
-
-    def new_line(self):
-        formated_code = "\n"
-        self.clean_code += formated_code
-        return formated_code
-
-    def new_codeblock(self):
-        formated_code = "{\n"
-        self.clean_code += formated_code
-        self.indent += 1
-        return formated_code
-
-    def close_codeblock(self):
-        self.indent -= 1
-        formated_code = "  " * self.indent
-        formated_code += "}\n"
-        self.clean_code += formated_code
-        return formated_code
-
-    def verify_code(self):
-        try:
-            assert self.indent == 0
-        except AssertionError:
-            logger.exception("Code verify failed")
 
 
 class GlobalFunction(Function):
@@ -311,12 +256,12 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
             func_body = getattr(self, "func_body")
             for dependency in func_deps:
                 self.add_codeblock(dependency)
-            self.add_c_api()
+            self.add_single_c_api()
             self.append_code(func_sig)
             self.append_code(func_body)
             return self.clean_code, self.func_deps, self.func_sig, self.func_body
         self.func_deps = self.generate_dependency()
-        self.add_c_api()
+        self.add_single_c_api()
         self.func_sig = self.generate_signature()
         self.func_body = self.generate_body()
         self.verify_code()
@@ -327,7 +272,7 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
             self.kernel_type == "global"
         ), "Only global kernel can be converted to device"
         self.reset(mode="device")
-        self.add_c_api()
+        self.add_single_c_api()
         self.append_code(GlobalFunction.device_decorator)
         self.declare_return_with_launch_bounds()
         self.declare_name_args()
@@ -341,7 +286,8 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
         self.add_body_without_syncthreads()
         self.close_codeblock()
         return self.clean_code
-    
+
     def get_function(self):
         code, _func_deps, _func_sig, _func_body = self.get_code()
-        compiled_function = CUDACompiler.create_raw()
+        compiled_function = CUDACompiler.create_raw(code)
+        return compiled_function

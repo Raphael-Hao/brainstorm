@@ -6,6 +6,8 @@ import torch.fx as fx
 from brt.cpp import jit
 from functorch.compile import aot_function, aot_module
 
+__all__ = ["CUDACompiler"]
+
 
 class CUDACompiler:
     @staticmethod
@@ -28,7 +30,7 @@ class CUDACompiler:
             def func(shared_inputs, standalone_inputs, capacities=[]):
                 jit.homo_invoke(shared_inputs, standalone_inputs, capacities, __ctx__)
 
-        elif kernel_type == "elastic_homo_fuse":
+        else:
             raise NotImplementedError
         return func
 
@@ -129,6 +131,7 @@ def tvm_compile(target, tuning_logfile=None, use_ansor_tuning=False):
         use_ansor_tuning=use_ansor_tuning,
     )
 """
+
 
 def brt_compile(fx_module: fx.GraphModule, example_inputs, fuse_type):
     pass

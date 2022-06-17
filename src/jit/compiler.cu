@@ -229,8 +229,13 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
     blocks.x += kernels_[fd].grid_sizes[i] * active_blocks[i];
     threads.x = std::max(threads.x, kernels_[fd].block_sizes[i]);
   }
+
+  printf("blocks: %d, %d, %d\n", blocks.x, blocks.y, blocks.z);
+  printf("threads: %d, %d, %d\n", threads.x, threads.y, threads.z);
+
   CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
                              0, stream, (void**)ppargs.data(), nullptr));
+  CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headless_code) {

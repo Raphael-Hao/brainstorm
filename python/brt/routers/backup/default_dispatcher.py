@@ -45,7 +45,7 @@ class DefaultDispatcher(Dispatcher):
                 data=torch.zeros(
                     0, *route_shape, dtype=route_data.dtype, device=route_data.device
                 ),
-                tag=torch.zeros(0, 1, dtype=torch.int32, device=route_data.device),
+                tag=torch.zeros(0, 1, dtype=torch.int64, device=route_data.device),
                 load=load,
             )
             for _ in range(self.route_num)
@@ -92,7 +92,7 @@ class DefaultDispatcher(Dispatcher):
         else:
             route_indices = route_tags.repeat(1, route_size).view(-1, *route_shape)
             result_tag = torch.arange(
-                0, load, dtype=torch.int32, device=route_datas.device
+                0, load, dtype=torch.int64, device=route_datas.device
             )
         result_data = torch.zeros(
             load, *route_shape, dtype=route_datas.dtype, device=route_datas.device

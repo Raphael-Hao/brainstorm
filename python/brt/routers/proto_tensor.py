@@ -277,10 +277,10 @@ def reset_proto_tensor_cls():
     return ProtoTensor
 
 
-def make_proto_tensor_cls(extra_attrs: List[str], default_values: List[Any], mode="a"):
+def make_proto_tensor_cls(extra_attrs: List[str], default_values: List[Any], mode="add"):
 
     global ProtoTensor
-    if mode == "n":
+    if mode == "new":
         reset_proto_tensor_cls()
 
         # verify that the extra_attrs and default_values are the same length
@@ -308,7 +308,7 @@ def make_proto_tensor_cls(extra_attrs: List[str], default_values: List[Any], mod
         # register property setter and getter for the extra attrs
         for attr in ProtoTensor.EXTRA_ATTRS:
             setattr(ProtoTensor, attr, proto_attr_factory(attr))
-    elif mode == "a":
+    elif mode == "add":
         extra_attrs_set = set(extra_attrs)
         assert (len(extra_attrs_set) == len(extra_attrs)) and (
             len(extra_attrs_set) == len(default_values)

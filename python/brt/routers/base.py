@@ -65,13 +65,13 @@ class BaseRouter(nn.Module):
             if in_flow.size(0) != in_flow.tag.numel():
                 # route granularity changed, we will re-tag the inputs
                 new_tag = torch.arange(
-                    0, in_flow.size(0), dtype=torch.int32, device=in_flow.device
+                    0, in_flow.size(0), dtype=torch.int64, device=in_flow.device
                 ).view(-1, 1)
                 in_flow.pack(new_tag, load=new_tag.numel())
 
         elif isinstance(in_flow, torch.Tensor):
             tag = torch.arange(
-                0, in_flow.size(0), dtype=torch.int32, device=in_flow.device
+                0, in_flow.size(0), dtype=torch.int64, device=in_flow.device
             ).view(-1, 1)
             in_flow = init_proto_tensor(in_flow, [tag], [tag.numel()])
 
@@ -175,7 +175,7 @@ class ScatterRouter(BaseRouter):
             route_hot_mask = torch.zeros(
                 gates.size(0),
                 self.dst_num,
-                dtype=torch.int32,
+                dtype=torch.int64,
                 device=in_flow_data.device,
             ).scatter_(
                 1, route_hot_mask, 1
@@ -194,7 +194,7 @@ class ScatterRouter(BaseRouter):
                 residual_index = torch.full(
                     (residual_indices.shape),
                     self.residual_dst,
-                    dtype=torch.int32,
+                    dtype=torch.int64,
                     device=in_flow_data.device,
                 )
                 route_hot_mask = torch.scatter_add(
@@ -252,7 +252,7 @@ class ScatterRouter(BaseRouter):
                     in_flow_loads,
                 )
                 out_flow.pack(
-                    torch.zeros(0, 1, dtype=torch.int32, device=in_flow_data.device),
+                    torch.zeros(0, 1, dtype=torch.int64, device=in_flow_data.device),
                     in_flow_load,
                 )
             out_flows.append(out_flow)
@@ -320,7 +320,7 @@ class GatherRouter(BaseRouter):
                     -1, *route_shape
                 )
                 out_flow_tag = torch.arange(
-                    0, in_flows_load, dtype=torch.int32, device=in_flows_data.device
+                    0, in_flows_load, dtype=torch.int64, device=in_flows_data.device
                 ).view(-1, 1)
                 out_flow_load = in_flows_load
             out_flow_data = torch.zeros(

@@ -12,9 +12,9 @@ from brt.routers.proto_tensor import (
 )
 
 
-class TeFATest(unittest.TestCase):
+class ProtoTensorTest(unittest.TestCase):
     def test_runtime_flow_tensor_cls_modification(self):
-        make_proto_tensor_cls(extra_attrs=["dummy_a"], default_values=[0])
+        make_proto_tensor_cls(extra_attrs=["dummy_a"], default_values=[0], mode="new")
         from brt.routers.proto_tensor import ProtoTensor
 
         self.assertEqual(ProtoTensor.EXTRA_ATTRS, ["dummy_a"])
@@ -24,7 +24,7 @@ class TeFATest(unittest.TestCase):
             hasattr(ProtoTensor, "dummy_a") and hasattr(ProtoTensor, "dummy_a_stack")
         )
 
-        make_proto_tensor_cls(extra_attrs=["dummy_b"], default_values=[1])
+        make_proto_tensor_cls(extra_attrs=["dummy_b"], default_values=[1], mode="new")
         from brt.routers.proto_tensor import ProtoTensor
 
         self.assertEqual(ProtoTensor.EXTRA_ATTRS, ["dummy_b"])
@@ -63,7 +63,7 @@ class TeFATest(unittest.TestCase):
         proto_tensor.pack(torch.tensor([0, 1, 2]), 3)
         assert proto_tensor.proto_initilized is True
 
-        make_proto_tensor_cls(extra_attrs=["dummy"], default_values=[0])
+        make_proto_tensor_cls(extra_attrs=["dummy"], default_values=[0], mode="new")
         proto_tensor = init_proto_tensor(torch.Tensor([1, 2, 3]))
         proto_tensor.pack(torch.tensor([0, 1, 2]), 3)
         self.assertEqual(proto_tensor.dummy, 0)
@@ -236,3 +236,6 @@ class TeFATest(unittest.TestCase):
         self.assertEqual(collected_tag_stack, tag_stack)
         self.assertEqual(collected_load_stack, load_stack)
         self.assertEqual(collected_extra_attr_stack_dict, {})
+
+if __name__ == "__main__":
+    unittest.main()
