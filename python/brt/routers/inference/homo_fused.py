@@ -7,9 +7,10 @@ from brt.cpp.router import (
     route_with_local_indices,
 )
 from brt.primitive import router
-from brt.routers.base import GatherRouter, ScatterRouter
-from brt.routers.proto_tensor import (
+from brt.routers import (
+    GatherRouter,
     ProtoTensor,
+    ScatterRouter,
     init_proto_tensor,
     make_proto_tensor_cls,
     to_torch_tensor,

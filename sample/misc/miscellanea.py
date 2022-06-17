@@ -1,8 +1,7 @@
 import brt.nn as nn
 import torch
 from brt.common import log
-from brt.routers import GatherRouter
-from brt.routers.app import RandScatterRouter
+from brt.routers.app import RandGatherRouter, RandScatterRouter
 
 log.set_level("frontend", "INFO")
 log.set_level("backend", "INFO")
@@ -15,7 +14,7 @@ class MoE(nn.Module):
         self.scatter_router = RandScatterRouter(dst_num=2)
         self.expert1 = nn.Linear(10, 10)
         self.expert2 = nn.Linear(10, 10)
-        self.gather_router = GatherRouter(dst_num=2)
+        self.gather_router = RandGatherRouter(dst_num=2)
 
     def forward(self, x):
         route_results = self.scatter_router(x)
