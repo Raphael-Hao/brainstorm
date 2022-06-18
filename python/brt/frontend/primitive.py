@@ -2,37 +2,15 @@
 # Licensed under the MIT license.
 
 import inspect
-from typing import Any, TypeVar
+from typing import TypeVar
+
+import torch
+
+from .serialize import is_wrapped_with_trace, torchscript_patch, trace
+
+__all__ = ["netlet", "router", "symbolize", "de_symbolize"]
 
 T = TypeVar("T")
-
-
-def is_traceable(obj: Any) -> bool:
-    """
-    Check whether an object is a traceable instance or type.
-
-    Note that an object is traceable only means that it implements the "Traceable" interface,
-    and the properties have been implemented. It doesn't necessary mean that its type is wrapped with trace,
-    because the properties could be added **after** the instance has been created.
-    """
-    return (
-        hasattr(obj, "trace_copy")
-        and hasattr(obj, "trace_symbol")
-        and hasattr(obj, "trace_args")
-        and hasattr(obj, "trace_kwargs")
-    )
-
-
-def is_wrapped_with_trace(cls_or_func: Any) -> bool:
-    """
-    Check whether a function or class is already wrapped with ``@brt.trace``.
-    If a class or function is already wrapped with trace, then the created object must be "traceable".
-    """
-    return getattr(cls_or_func, "_traced", False) and (
-        not hasattr(cls_or_func, "__dict__")
-        or "_traced"  # in case it's a function
-        in cls_or_func.__dict__  # must be in this class, super-class traced doesn't count
-    )
 
 
 def is_router(cls_or_instance) -> bool:
@@ -78,7 +56,39 @@ def check_wrapped(cls: T, rewrap: str) -> bool:
         return True
     return False
 
-def _switch_symbolic(m, symbolic = True):
+
+def netlet(cls: T, netlet_tag: bool = True) -> T:
+    """
+    Decorator for annotating an nn.Module as a Netlet.
+    """
+    if check_wrapped(cls, "netlet"):
+        return cls
+
+    cls = trace(cls)
+
+    cls._brt_netlet = netlet_tag
+    torchscript_patch(cls)
+    return cls
+
+
+def router(cls: T, router_tag: bool = True) -> T:
+    """Decorator for annotating the class as a router for brainstorm."""
+
+    assert issubclass(cls, torch.nn.Module), "Only nn.Module is supported."
+
+    if check_wrapped(cls, "router"):
+        return cls
+
+    cls = trace(cls)
+    cls._brt_router = router_tag
+    cls.forward = cls.route
+    cls._brt_symbolic = False
+    torchscript_patch(cls)
+
+    return cls
+
+
+def _switch_symbolic(m, symbolic=True):
     for child in m.children():
         _switch_symbolic(child, symbolic)
     if is_router(m):
@@ -89,19 +99,10 @@ def _switch_symbolic(m, symbolic = True):
             m.forward = m.route
     return m
 
+
 def symbolize(m):
     return _switch_symbolic(m)
 
+
 def de_symbolize(m):
     return _switch_symbolic(m, False)
-
-def get_init_parameters_or_fail(obj: Any):
-    if is_traceable(obj):
-        return obj.trace_kwargs
-    raise ValueError(
-        f"Object {obj} needs to be serializable but `trace_kwargs` is not available. "
-        "If it is a built-in module (like Conv2d), please import it from retiarii.nn. "
-        "If it is a customized module, please to decorate it with @basic_unit. "
-        "For other complex objects (e.g., trainer, optimizer, dataset, dataloader), "
-        "try to use @nni.trace."
-    )

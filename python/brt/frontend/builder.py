@@ -7,10 +7,10 @@ import torch
 from brt.common import log
 from brt.ir import Graph, Model, Node
 from brt.ir.operation import Cell, Operation
-from brt.primitive import get_init_parameters_or_fail
-from brt.primitive.helper import symbolize
 
 from .op_types import MODULE_EXCEPT_LIST, OpTypeName
+from .primitive import symbolize
+from .serialize import get_init_parameters_or_fail
 from .utils import _convert_name, build_full_name, build_python_name
 
 logger = log.get_logger(__file__)

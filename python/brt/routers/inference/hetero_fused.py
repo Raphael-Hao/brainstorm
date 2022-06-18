@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
-from brt.primitive import router
+from brt.frontend import router
 from brt.routers import (
     GatherRouter,
     ProtoTensor,

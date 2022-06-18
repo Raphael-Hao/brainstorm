@@ -5,7 +5,7 @@ import unittest
 
 import brt.nn as nn
 import torch
-from brt.primitive.helper import symbolize
+from brt.frontend import symbolize
 from brt.routers import GatherRouter, ScatterRouter
 
 
