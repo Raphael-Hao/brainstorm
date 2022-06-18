@@ -90,7 +90,10 @@ def get_logger(file_path: str = None) -> logging.Logger:
         module = "user"
     else:
         file_path = pathlib.Path(file_path)
-        module = file_path.relative_to(BRT_PKG_PATH).parts[0]
+        if BRT_PKG_PATH in file_path.parents:
+            module = file_path.relative_to(BRT_PKG_PATH).parts[0]
+        else:
+            module = "user"
     if module in _BRT_MODULES:
         # print(f"using logger for brainstorm.{module}")
         m_logger = logging.getLogger(f"brainstorm.{module}")
