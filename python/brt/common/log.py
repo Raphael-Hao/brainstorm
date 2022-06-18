@@ -15,7 +15,6 @@ _BRT_MODULES = [
     "ir",
     "jit",
     "nn",
-    "primitive",
     "routers",
     "runtime",
     "transform",

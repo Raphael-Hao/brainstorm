@@ -4,7 +4,7 @@ from functools import partial
 from typing import List, Tuple, Union
 
 import torch
-from brt.primitive import router
+from brt.frontend import router
 from brt.routers import GatherRouter, ScatterRouter, reset_proto_tensor_cls
 from brt.routers.inference import (
     HomoFusedGatherRouter,

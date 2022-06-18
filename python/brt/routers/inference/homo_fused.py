@@ -6,7 +6,7 @@ from brt.cpp.router import (
     route_back_with_local_indices,
     route_with_local_indices,
 )
-from brt.primitive import router
+from brt.frontend import router
 from brt.routers import (
     GatherRouter,
     ProtoTensor,

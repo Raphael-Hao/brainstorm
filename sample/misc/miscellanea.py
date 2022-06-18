@@ -42,7 +42,7 @@ print(x)
 
 from brt.backend.pytorch import model_to_script
 from brt.frontend import build_graph
-from brt.primitive.helper import symbolize
+from brt.ir.helper import symbolize
 
 symbolized_moe = symbolize(moe_model.eval())
 script_moe_model = torch.jit.script(symbolize(moe_model))

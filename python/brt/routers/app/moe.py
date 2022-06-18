@@ -5,7 +5,7 @@ from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from brt.primitive import router
+from brt.frontend import router
 from brt.routers import GatherRouter, ScatterRouter
 from brt.routers.proto_tensor import (
     ProtoTensor,

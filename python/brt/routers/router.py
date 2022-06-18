@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from brt.common import log
-from brt.primitive import router
+from brt.frontend.primitive import router
 
 from .proto_tensor import (
     ProtoTensor,
