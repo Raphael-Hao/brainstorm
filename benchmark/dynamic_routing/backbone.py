@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import csv
 
-import brt.nn as nn
+import brt.frontend.nn as nn
 import numpy as np
 import torch
 

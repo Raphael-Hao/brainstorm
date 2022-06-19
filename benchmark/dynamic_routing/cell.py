@@ -1,7 +1,7 @@
 # encoding: utf-8
 # network file -> build Cell for Dynamic Backbone
 # @author: yanwei.li
-import brt.nn as nn
+import brt.frontend.nn as nn
 import torch
 import torch.nn.functional as F
 

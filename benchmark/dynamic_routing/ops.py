@@ -3,7 +3,7 @@
 # @author: yanwei.li
 from collections import namedtuple
 
-import brt.nn as nn
+import brt.frontend.nn as nn
 import torch
 
 OPS = {
