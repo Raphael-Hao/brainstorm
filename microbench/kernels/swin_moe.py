@@ -3,101 +3,83 @@
 
 
 #%%
-import argparse
-import itertools
-import os
 
-import numpy as np
 import torch
 import torch.nn as nn
 import tvm
 import tvm.auto_scheduler as auto_scheduler
 import tvm.relay as relay
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
-from brt.jit.tvm.utils import parse_culaunch_config,make_culaunch_config_str
+from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH, log
+from brt.jit.function import ModuleFunction
+from brt.jit.tvm import TVMTuner
+from brt.jit.tvm.utils import (
+    make_culaunch_config_str,
+    make_fname,
+    parse_culaunch_config,
+)
 from tvm.auto_scheduler.measure_record import load_best_record
 
+logger = log.get_logger()
 
-class Expert1(nn.Module):
-    def __init__(self) -> None:
+
+class Expert(nn.Module):
+    def __init__(self, in_features=512, out_features=1024, bias=True) -> None:
         super().__init__()
-        self.linear = nn.Linear(512, 1024)
+        self.linear = nn.Linear(in_features, out_features, bias)
+
     def forward(self, inputs):
         return self.linear(inputs)
 
-class Expert2(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.linear = nn.Linear(1024, 512)
-    def forward(self, inputs):
-        return self.linear(inputs)
-
-def tvm_tune(model, input_shape, K, N):
-    input_data = torch.randn(input_shape)
-    script_model = torch.jit.trace(model, input_data)
-    mod, params = relay.frontend.from_pytorch(script_module=script_model, input_infos=[("input0", input_data.shape)])
-    target = tvm.target.Target("cuda")
-    kernel_name = f"matmul_{input_shape[0]}_{K}_{N}"
-    log_file = kernel_name+".json"
-    log_fpath= BRT_KERNEL_TUNE_LOG_PATH / log_file
-    tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target)
-    for idx, task in enumerate(tasks):
-        print("========== Task %d  (workload key: %s) ==========" % (idx, task.workload_key))
-        print(task.compute_dag)
-    measure_ctx = auto_scheduler.LocalRPCMeasureContext(repeat=2, min_repeat_ms=300, timeout=10)
-    tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
-    tune_option = auto_scheduler.TuningOptions(
-        num_measure_trials=1000,  # change this to 20000 to achieve the best performance
-        runner=measure_ctx.runner,
-        measure_callbacks=[auto_scheduler.RecordToFile(str(log_fpath))],
-    )
-    tuner.tune(tune_option)
-    if len(tasks) == 1:
-        tvm_sch, tvm_args = tasks[0].apply_best(str(log_fpath))
-        tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-        grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-        culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
-        source_code = tasks[0].print_best(str(log_fpath), print_mode="cuda")
-        kernel_template = culaunch_config + source_code
-        template_fpath = BRT_KERNEL_TEMPLATE_PATH / (kernel_name+".cu")
-        with open(template_fpath, "w") as f:
-            f.write(kernel_template)
-
-def tvm_export(model, input_shape, K, N):
-    input_data = torch.randn(input_shape)
-    script_model = torch.jit.trace(model, input_data)
-    mod, params = relay.frontend.from_pytorch(script_module=script_model, input_infos=[("input0", input_data.shape)])
-    target = tvm.target.Target("cuda")
-    log_kernel_name = f"matmul_{input_shape[0]}_{K}_{N}"
-    template_kernel_name = f"matmul_{K}_{N}_{input_shape[0]}"
-    log_file = log_kernel_name+".json"
-    log_fpath= BRT_KERNEL_TUNE_LOG_PATH / log_file
-    tasks, task_weights = auto_scheduler.extract_tasks(mod["main"], params, target)
-    for idx, task in enumerate(tasks):
-        print("========== Task %d  (workload key: %s) ==========" % (idx, task.workload_key))
-        print(task.compute_dag)
-    assert len(tasks) == 1
-    tvm_sch, tvm_args = tasks[0].apply_best(str(log_fpath))
-    tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-    grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-    culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
-    source_code = tasks[0].print_best(str(log_fpath), print_mode="cuda")
-    kernel_template = culaunch_config + source_code
-    template_fpath = BRT_KERNEL_TEMPLATE_PATH / (template_kernel_name+".cu")
-    with open(template_fpath, "w") as f:
-        f.write(kernel_template)
 
 def main():
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    input_shapes = [[bs, 512] for bs in input_bs]
-    for input_shape in input_shapes:
-        # tvm_tune(Expert1(), input_shape, 512, 1024)
-        tvm_export(Expert1(), input_shape, 512, 1024)
-    input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    input_shapes = [[bs, 1024] for bs in input_bs]
-    for input_shape in input_shapes:
-        # tvm_tune(Expert2(), input_shape, 1024, 512)
-        tvm_export(Expert2(), input_shape, 1024, 512)
+    in_features_s = [96, 192, 384, 768]  # 512
+    out_features_s = [384, 768, 1536, 3072]  # 1024
+    tvm_tuner = TVMTuner()
+    for i in range(2):
+        bias = True if i == 0 else False
+        in_features_iterate = in_features_s if i == 0 else out_features_s
+        out_features_iterate = out_features_s if i == 0 else in_features_s
+        for in_features, out_features in zip(in_features_iterate, out_features_iterate):
+            for bs in input_bs:
+                input_infos = {"input_0": (bs, in_features)}
+                output_infos = {"output_0": (bs, out_features)}
+                parameters = {
+                    "in_features": in_features,
+                    "out_features": out_features,
+                }
+                module_name = "Linear" + ("Bias" if bias else "")
+                tvm_tuner.import_pt_netlet(
+                    module_name,
+                    "forward",
+                    Expert(in_features, out_features, bias),
+                    input_infos,
+                    output_infos,
+                    parameters,
+                )
+                print(f"tuning {module_name} with: {parameters}")
+                tvm_tuner.tune_netlet()
+                tvm_tuner.export_netlet_template()
+                tvm_tuner.insert_netlet_to_storage()
+                module_function = ModuleFunction(
+                    module_name,
+                    "forward",
+                    None,
+                    "CUDA_GPU",
+                    input_infos,
+                    output_infos,
+                    parameters,
+                )
+                module_function.load_from_db()
+                file_name = make_fname(
+                    module_name, "forward", input_infos, output_infos, parameters
+                )
+                template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
+                template_file_loaded.write_text(module_function.get_code()[0])
+    # turn off bias
+
 
 if __name__ == "__main__":
     main()
+
+# %%

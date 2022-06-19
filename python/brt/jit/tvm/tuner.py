@@ -11,8 +11,8 @@ from brt.common import (
     BRT_ONNX_CKPT_PATH,
     log,
 )
-from brt.jit.function.module import ModuleFunction
-from brt.jit.storage import kernel_storager
+from brt.jit import kernel_storager
+from brt.jit.function import ModuleFunction
 
 import tvm
 from tvm import auto_scheduler, relay
@@ -21,6 +21,7 @@ from .utils import (
     make_culaunch_config_str,
     make_fname,
     make_inputs,
+    old_make_fname,
     parse_culaunch_config,
 )
 
@@ -51,6 +52,7 @@ class TVMTuner:
     def import_pt_netlet(
         self,
         module_name,
+        method,
         module: torch.nn.Module,
         input_infos: Dict[str, List[Union[int, float]]],
         output_infos: Dict[str, List[Union[int, float]]],
@@ -58,6 +60,7 @@ class TVMTuner:
         log_fname: str = None,  # for early tuned netlet
     ):
         self.module_name = module_name
+        self.method = method
         self.input_infos = input_infos
         self.output_infos = output_infos
         self.parameters = parameters
@@ -70,7 +73,7 @@ class TVMTuner:
             script_module, tvm_input_infos
         )
         self._update_scheduler(
-            self.module_name, self.tvm_module, self.tvm_params, log_fname
+            self.module_name, self.method, self.tvm_module, self.tvm_params, log_fname
         )
         module.train(training)
 
@@ -92,16 +95,24 @@ class TVMTuner:
         self.tvm_module, self.tvm_params = relay.frontend.from_onnx(
             onnx_model_proto, opset=11
         )
-        self._update_scheduler(self.module_name, self.tvm_module, self.tvm_params)
+        self._update_scheduler(
+            self.module_name, "forward", self.tvm_module, self.tvm_params
+        )
 
-    def _update_scheduler(self, module_name, tvm_module, tvm_params, log_fname=None):
+    def _update_scheduler(
+        self, module_name, method, tvm_module, tvm_params, log_fname: str = None
+    ):
         filename = make_fname(
+            module_name, method, self.input_infos, self.output_infos, self.parameters
+        )
+        self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{filename}.json"
+        old_filename = old_make_fname(
             module_name, self.input_infos, self.output_infos, self.parameters
         )
-        if log_fname is None:
-            self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{filename}.json"
-        else:
-            self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / log_fname
+        if log_fname is not None:
+            old_filename = log_fname
+        if not self.tune_log_file.exists():
+            self.old_tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{old_filename}.json"
         self.template_file_origin = BRT_KERNEL_TEMPLATE_PATH / f"{filename}_origin.cu"
         self.template_file_generated = (
             BRT_KERNEL_TEMPLATE_PATH / f"{filename}_generated.cu"
@@ -109,10 +120,10 @@ class TVMTuner:
         tvm_tasks, tvm_task_weights = auto_scheduler.extract_tasks(
             tvm_module["main"], tvm_params, self.target
         )
-        if len(tvm_tasks) > 1:
-            logger.warning(
-                "TVM tuner of BRT only supports one task for horizontal kernel fusion once. We will use the first task for tuning."
-            )
+        assert (
+            len(tvm_tasks) == 1
+        ), "TVM tuner of BRT only supports one task for horizontal kernel fusion once."
+
         self.tvm_task = tvm_tasks[0]
         self.tvm_task_weight = tvm_task_weights[0]
         self.task_scheduler = self.task_scheduler_cls(
@@ -131,6 +142,9 @@ class TVMTuner:
         task_scheduler.tune(self.option)
 
     def get_best_template(self):
+        if self.old_tune_log_file.exists():
+            contents = self.old_tune_log_file.read_text()
+            self.tune_log_file.write_text(contents)
         try:
             tvm_sch, tvm_args = self.tvm_task.apply_best(str(self.tune_log_file))
             tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
@@ -148,6 +162,7 @@ class TVMTuner:
         kernel_source = culaunch_config + source_code
         module_function = ModuleFunction(
             self.module_name,
+            self.method,
             kernel_source=kernel_source,
             platform=self.platform,
             input_infos=self.input_infos,
@@ -167,6 +182,7 @@ class TVMTuner:
         kernel_source = culaunch_config + source_code
         module_function = ModuleFunction(
             self.module_name,
+            method=self.method,
             kernel_source=kernel_source,
             platform=self.platform,
             input_infos=self.input_infos,

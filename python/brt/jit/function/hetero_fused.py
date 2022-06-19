@@ -4,11 +4,13 @@
 from typing import Dict, List, Union
 
 from .cuda import GlobalFunction
-from .horiz_fused import HorizFusedModuleFunction
+from .horiz_fused import HorizFusedFunction
 from .module import ModuleFunction
 
+__all__ = ["HeteroFusedFunction"]
 
-class HeteroFusedModuleFunction(HorizFusedModuleFunction):
+
+class HeteroFusedFunction(HorizFusedFunction):
     def __init__(self, candidates: List[ModuleFunction]):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "hetero_fuse")
@@ -73,7 +75,7 @@ class HeteroFusedModuleFunction(HorizFusedModuleFunction):
         return super().make_identifier()
 
 
-class DynamicHeteroFuseModuleFunction(HorizFusedModuleFunction):
+class DynamicHeteroFuseModuleFunction(HorizFusedFunction):
     def __init__(
         self,
         candidate_module_names: List[str],
@@ -115,6 +117,7 @@ class DynamicHeteroFuseModuleFunction(HorizFusedModuleFunction):
                     output_infos[output_name] = [dim] + output_infos[output_name][1:]
                 candidate = ModuleFunction(
                     module_name,
+                    method=self.method,
                     input_infos=input_infos,
                     output_infos=output_infos,
                     parameters=parameters,

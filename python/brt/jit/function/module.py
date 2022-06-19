@@ -5,8 +5,8 @@ import re
 from typing import Dict, List, Union
 
 from brt.common import log
+from brt.jit import kernel_storager
 
-from brt.jit.storage import kernel_storager
 from .cuda import CUDATypeSizeInByte, GlobalFunction
 from .utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
 
@@ -17,23 +17,23 @@ class ModuleFunction(GlobalFunction):
     def __init__(
         self,
         module_name,
+        method: str,
         kernel_source=None,
         platform="CUDA_GPU",
         input_infos: Dict[str, List[int]] = None,
         output_infos: Dict[str, List[int]] = None,
         parameters: Dict[str, List[Union[int, float]]] = None,
-        method: str = "forward",
     ):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "global")
         super().__init__()
         self.module_name = module_name
+        self.method = method
         self.kernel_source = kernel_source
         self.platform = platform
         self.input_infos = input_infos
         self.output_infos = output_infos
         self.parameters = parameters
-        self.method = method
         if self.kernel_source is not None:
             self.initialize()
 
@@ -163,6 +163,7 @@ class ModuleFunction(GlobalFunction):
     def make_identifier(self):
         return make_identifier(
             self.module_name,
+            self.method,
             self.input_infos,
             self.output_infos,
             self.parameters,
