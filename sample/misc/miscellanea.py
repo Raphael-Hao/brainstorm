@@ -1,4 +1,4 @@
-import brt.nn as nn
+import brt.frontend.nn as nn
 import torch
 from brt.common import log
 from brt.routers.app import RandGatherRouter, RandScatterRouter

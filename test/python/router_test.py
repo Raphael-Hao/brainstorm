@@ -3,7 +3,7 @@
 
 import unittest
 
-import brt.nn as nn
+import brt.frontend.nn as nn
 import torch
 from brt.frontend import symbolize
 from brt.routers import GatherRouter, ScatterRouter

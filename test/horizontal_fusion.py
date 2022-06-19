@@ -1,10 +1,10 @@
 import brt
-import brt.nn as nn
+import brt.frontend.nn as nn
 import torch
 from brt.common import log
 
 # from brt.frontend import build_graph
-from brt.router import TopKScatterRouter
+from brt.routers.app import RandScatterRouter
 
 log.set_level("router", "DEBUG")
 # log.set_level("primitive", "DEBUG")
@@ -16,7 +16,7 @@ log.set_level("router", "DEBUG")
 class MoE(nn.Module):
     def __init__(self):
         super().__init__()
-        self.scatter_router = TopKScatterRouter(route_num=2, gran_dim=10)
+        self.scatter_router = RandScatterRouter(route_num=2, gran_dim=10)
         self.expert1 = nn.Linear(10, 10)
         self.expert2 = nn.Linear(10, 10)
 

@@ -14,7 +14,6 @@ _BRT_MODULES = [
     "frontend",
     "ir",
     "jit",
-    "nn",
     "routers",
     "runtime",
     "transform",
