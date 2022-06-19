@@ -32,9 +32,11 @@ class Expert(nn.Module):
 
 
 def main():
+    logger.setLevel("INFO")
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
     in_features_s = [96, 192, 384, 768]  # 512
     out_features_s = [384, 768, 1536, 3072]  # 1024
+    ignored_set = set(((1, 96, 384),))
     tvm_tuner = TVMTuner()
     for i in range(2):
         bias = True if i == 0 else False
@@ -57,8 +59,11 @@ def main():
                     output_infos,
                     parameters,
                 )
-                print(f"tuning {module_name} with: {parameters}")
-                tvm_tuner.tune_netlet()
+                if (bs, in_features, out_features) not in ignored_set:
+                    print(f"tuning {module_name} with: {parameters}")
+                    tvm_tuner.tune_netlet()
+                else:
+                    print(f"ignored {module_name} with: {parameters}")
                 tvm_tuner.export_netlet_template()
                 tvm_tuner.insert_netlet_to_storage()
                 module_function = ModuleFunction(
@@ -74,7 +79,9 @@ def main():
                 file_name = make_fname(
                     module_name, "forward", input_infos, output_infos, parameters
                 )
-                template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
+                template_file_loaded = (
+                    BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
+                )
                 template_file_loaded.write_text(module_function.get_code()[0])
     # turn off bias
 
