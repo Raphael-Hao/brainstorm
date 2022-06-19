@@ -1,5 +1,6 @@
 import unittest
 
+import torch
 from brt.jit import (
     CUDACompiler,
     HeteroFusedModuleFunction,
@@ -9,8 +10,12 @@ from brt.jit import (
 )
 
 
-class ModuleFunctionTest(unittest.TestCase):
+class JitFunctionTest(unittest.TestCase):
+    def run_test(self, function, input):
+        pass
+    
     def test_moduel_function(self):
+        ModuleFunction("Linear", input_infos={})
         pass
 
     def test_horiz_fused_function(self):

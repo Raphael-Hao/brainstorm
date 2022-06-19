@@ -5,11 +5,11 @@ import json
 from typing import Dict, List, Union
 
 from brt.common import log
+from brt.jit.storage import kernel_storager
 
-from .function import GlobalFunction
-from .module_func import ModuleFunction
-from ..storage import kernel_storager
-from ..utils import make_fused_identifier, make_identifier
+from .cuda import GlobalFunction
+from .module import ModuleFunction
+from .utils import make_fused_identifier, make_identifier
 
 logger = log.get_logger(__file__)
 
