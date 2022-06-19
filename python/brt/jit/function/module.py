@@ -6,9 +6,9 @@ from typing import Dict, List, Union
 
 from brt.common import log
 
-from .function import CUDATypeSizeInByte, GlobalFunction
-from ..storage import kernel_storager
-from ..utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
+from brt.jit.storage import kernel_storager
+from .cuda import CUDATypeSizeInByte, GlobalFunction
+from .utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
 
 logger = log.get_logger(__file__)
 
@@ -22,6 +22,7 @@ class ModuleFunction(GlobalFunction):
         input_infos: Dict[str, List[int]] = None,
         output_infos: Dict[str, List[int]] = None,
         parameters: Dict[str, List[Union[int, float]]] = None,
+        method: str = "forward",
     ):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "global")
@@ -32,6 +33,7 @@ class ModuleFunction(GlobalFunction):
         self.input_infos = input_infos
         self.output_infos = output_infos
         self.parameters = parameters
+        self.method = method
         if self.kernel_source is not None:
             self.initialize()
 

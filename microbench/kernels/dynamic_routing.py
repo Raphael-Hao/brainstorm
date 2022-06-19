@@ -8,7 +8,7 @@ import logging
 
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
-from brt.jit.function.module_func import ModuleFunction
+from brt.jit.function.module import ModuleFunction
 from brt.jit.storage import kernel_storager
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname
@@ -148,7 +148,13 @@ def main():
             tvm_tuner.export_netlet_template()
             tvm_tuner.insert_netlet_to_storage()
             module_function = ModuleFunction(
-                module_name, None, "CUDA_GPU", input_infos, output_infos, parameters
+                module_name,
+                None,
+                "CUDA_GPU",
+                input_infos,
+                output_infos,
+                parameters,
+                method="forward",
             )
             module_function.load_from_db()
             template_file_loaded = (

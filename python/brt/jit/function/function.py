@@ -3,7 +3,6 @@
 from brt.common import log
 
 logger = log.get_logger(__file__)
-from ..compiler import CUDACompiler
 
 __all__ = ["Function"]
 

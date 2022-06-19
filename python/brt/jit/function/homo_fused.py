@@ -9,8 +9,8 @@ from typing import Dict, List, Union
 from brt.common import log
 
 from .horiz_fused import HorizFusedModuleFunction
-from .module_func import ModuleFunction
-from ..utils import check_if_pointer
+from .module import ModuleFunction
+from .utils import check_if_pointer
 
 logger = log.get_logger(__file__)
 

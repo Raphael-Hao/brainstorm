@@ -49,12 +49,14 @@ def make_func_name(
 
 def make_identifier(
     op_type,
+    method: str,
     input_infos: Dict[str, List[int]],
     output_infos: Dict[str, List[int]],
     parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
 ) -> str:
     identifier_dict = {}
     identifier_dict["op_type"] = op_type
+    identifier_dict["method"] = method
     identifier_dict["input_infos"] = input_infos
     identifier_dict["output_infos"] = output_infos
     identifier_dict["parameters"] = parameters

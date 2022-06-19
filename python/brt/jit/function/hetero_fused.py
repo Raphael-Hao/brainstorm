@@ -3,9 +3,9 @@
 
 from typing import Dict, List, Union
 
-from .cuda_function import GlobalFunction
+from .cuda import GlobalFunction
 from .horiz_fused import HorizFusedModuleFunction
-from .module_func import ModuleFunction
+from .module import ModuleFunction
 
 
 class HeteroFusedModuleFunction(HorizFusedModuleFunction):
