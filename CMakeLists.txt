@@ -81,4 +81,4 @@ target_link_libraries(brt_torchscript "${TORCH_LIBRARIES}")
 target_include_directories(brt_torchscript PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>" "${TORCH_INCLUDE_DIR}")
 
 add_subdirectory(benchmark)
-add_subdirectory(test)
+add_subdirectory(sample/cpp)
