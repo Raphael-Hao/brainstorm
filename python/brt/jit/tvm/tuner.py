@@ -110,9 +110,8 @@ class TVMTuner:
             module_name, self.input_infos, self.output_infos, self.parameters
         )
         if log_fname is not None:
-            old_filename = log_fname
-        if not self.tune_log_file.exists():
-            self.old_tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{old_filename}.json"
+            old_filename = log_fname    
+        self.old_tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{old_filename}.json"
         self.template_file_origin = BRT_KERNEL_TEMPLATE_PATH / f"{filename}_origin.cu"
         self.template_file_generated = (
             BRT_KERNEL_TEMPLATE_PATH / f"{filename}_generated.cu"
@@ -142,7 +141,7 @@ class TVMTuner:
         task_scheduler.tune(self.option)
 
     def get_best_template(self):
-        if self.old_tune_log_file.exists():
+        if not self.tune_log_file.exists() and self.old_tune_log_file.exists():
             contents = self.old_tune_log_file.read_text()
             self.tune_log_file.write_text(contents)
         try:
