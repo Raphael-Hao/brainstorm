@@ -8,17 +8,20 @@ from typing import Dict, List, Union
 
 from brt.common import log
 
-from .horiz_fused import HorizFusedModuleFunction
+from .horiz_fused import HorizFusedFunction
 from .module import ModuleFunction
 from .utils import check_if_pointer
 
 logger = log.get_logger(__file__)
 
+__all__ = ["HomoFusedFunction"]
 
-class HomoFusedModuleFunction(HorizFusedModuleFunction):
+
+class HomoFusedFunction(HorizFusedFunction):
     def __init__(
         self,
         module_name,
+        method,
         dst_num,  # branch num, e.g., expert num, for horizontal fusion
         capacities: List[int],  # supported dynamic shape
         shared_arg_indices: List[int],
@@ -36,6 +39,7 @@ class HomoFusedModuleFunction(HorizFusedModuleFunction):
         self.shared_arg_grans = shared_arg_grans
         candidates = self.generate_candidates(
             module_name,
+            method,
             capacities,
             input_infos,
             output_infos,
@@ -46,6 +50,7 @@ class HomoFusedModuleFunction(HorizFusedModuleFunction):
     @staticmethod
     def generate_candidates(
         module_base_name,
+        method,
         candidates_capacities,
         input_infos: Dict[str, List[int]] = None,
         output_infos: Dict[str, List[int]] = None,
@@ -59,6 +64,7 @@ class HomoFusedModuleFunction(HorizFusedModuleFunction):
                 output_infos[output_name] = [dim] + output_infos[output_name][1:]
             candidate = ModuleFunction(
                 module_base_name,
+                method = method,
                 input_infos=input_infos,
                 output_infos=output_infos,
                 parameters=parameters,

@@ -10,8 +10,13 @@ import tvm
 import tvm.auto_scheduler as auto_scheduler
 import tvm.relay as relay
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
+from brt.jit.function import ModuleFunction
 from brt.jit.tvm import TVMTuner
-from brt.jit.tvm.utils import make_culaunch_config_str, parse_culaunch_config
+from brt.jit.tvm.utils import (
+    make_culaunch_config_str,
+    make_fname,
+    parse_culaunch_config,
+)
 from tvm.auto_scheduler.measure_record import load_best_record
 
 
@@ -76,8 +81,8 @@ def tvm_tune(model, input_shape, K, N):
 
 def main():
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    in_features = 1024
-    out_features = 512
+    in_features = 1024# 512
+    out_features = 512# 1024
     tvm_tuner = TVMTuner()
     for bs in input_bs:
         input_infos = {"input_0": (bs, in_features)}
@@ -87,16 +92,33 @@ def main():
             "out_features": out_features,
         }
         kernel_name = f"Linear_{bs}_{in_features}_{out_features}"
-        log_fname = kernel_name + ".json"
+        log_fname = kernel_name
         tvm_tuner.import_pt_netlet(
             "Linear",
+            "forward",
             Expert1(in_features, out_features),
             input_infos,
             output_infos,
             parameters,
             log_fname,
         )
+        tvm_tuner.export_netlet_template()
         tvm_tuner.insert_netlet_to_storage()
+        module_function = ModuleFunction(
+            "Linear",
+            "forward",
+            None,
+            "CUDA_GPU",
+            input_infos,
+            output_infos,
+            parameters,
+        )
+        module_function.load_from_db()
+        file_name = make_fname(
+            "Linear", "forward", input_infos, output_infos, parameters
+        )
+        template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
+        template_file_loaded.write_text(module_function.get_code()[0])
     # input_shapes = [[bs, 512] for bs in input_bs]
     # for input_shape in input_shapes:
     #     tvm_tune(Expert1(), input_shape, 512, 1024)

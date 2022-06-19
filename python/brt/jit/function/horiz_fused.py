@@ -5,7 +5,6 @@ import json
 from typing import Dict, List, Union
 
 from brt.common import log
-from brt.jit.storage import kernel_storager
 
 from .cuda import GlobalFunction
 from .module import ModuleFunction
@@ -13,8 +12,10 @@ from .utils import make_fused_identifier, make_identifier
 
 logger = log.get_logger(__file__)
 
+__all__ = ["HorizFusedFunction"]
 
-class HorizFusedModuleFunction(GlobalFunction):
+
+class HorizFusedFunction(GlobalFunction):
     def __init__(
         self,
         candidates: List[ModuleFunction],

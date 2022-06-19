@@ -2,14 +2,14 @@
 # Licensed under the MIT license.
 
 from brt.common import log
-from brt.jit.compiler import CUDACompiler
+from brt.jit import CUDACompiler
 
 from .function import Function
 
 logger = log.get_logger(__file__)
 
 
-__all__ = ["CUDATypeSizeInByte", "GlobalFunctionG"]
+__all__ = ["CUDATypeSizeInByte", "GlobalFunction"]
 
 CUDATypeSizeInByte = {
     # signed type

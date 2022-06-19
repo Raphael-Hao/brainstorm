@@ -8,7 +8,7 @@ import logging
 
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
-from brt.jit.function.module import ModuleFunction
+from brt.jit.function import ModuleFunction
 from brt.jit.storage import kernel_storager
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname
@@ -48,6 +48,7 @@ def parse_conv2d_bn_act_params(json_params):
         input_infos,
         output_infos,
         parameters,
+        bias,
         padding_mode,
         norm,
         activation,
@@ -122,6 +123,7 @@ def main():
                 input_infos,
                 output_infos,
                 parameters,
+                bias,
                 padding_mode,
                 norm,
                 activation,
@@ -134,14 +136,19 @@ def main():
                 padding=parameters["padding"],
                 dilation=parameters["dilation"],
                 groups=parameters["groups"],
-                bias=parameters["bias"],
+                bias=bias,
                 padding_mode=padding_mode,
                 norm=norm,
                 activation=activation,
             )
             logger.info(parameters)
             tvm_tuner.import_pt_netlet(
-                module_name, conv2d_bn_act, input_infos, output_infos, parameters
+                module_name,
+                "forward",
+                conv2d_bn_act,
+                input_infos,
+                output_infos,
+                parameters,
             )
             logger.info(f"tuning {module_name} with: {parameters}")
             # tvm_tuner.tune_netlet()
@@ -157,10 +164,10 @@ def main():
                 method="forward",
             )
             module_function.load_from_db()
-            template_file_loaded = (
-                BRT_KERNEL_TEMPLATE_PATH
-                / f"{make_fname(module_name, input_infos, output_infos, parameters)}_loaded.cu"
+            file_name = make_fname(
+                module_name, "forward", input_infos, output_infos, parameters
             )
+            template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
             template_file_loaded.write_text(module_function.get_code()[0])
 
 

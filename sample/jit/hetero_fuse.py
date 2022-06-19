@@ -6,10 +6,11 @@ from typing import List
 import torch
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
-from brt.jit import HeteroFuseModuleFunction, ModuleFunction
-from brt.jit.compiler import CUDACompiler
+from brt.jit import CUDACompiler
+from brt.jit.function import HeteroFusedFunction, ModuleFunction
 
 log.set_level("jit", "DEBUG")
+
 
 def parse_conv2d_bn_act_params(json_params):
     module_name = "Conv2d"
@@ -46,6 +47,7 @@ def parse_conv2d_bn_act_params(json_params):
         norm,
         activation,
     )
+
 
 conv_params = [
     {
@@ -108,6 +110,7 @@ for params in conv_params:
     candidates.append(
         ModuleFunction(
             module_name,
+            "forward",
             None,
             "CUDA_GPU",
             input_infos=input_infos,
@@ -117,7 +120,7 @@ for params in conv_params:
     )
     candidates[-1].load_from_db()
 
-module_func = HeteroFuseModuleFunction(candidates)
+module_func = HeteroFusedFunction(candidates)
 
 code, deps, sig, body = module_func.get_code()
 

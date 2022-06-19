@@ -57,35 +57,35 @@ def make_inputs(
     return inputs
 
 
-def old_make_fname(
-    op_type,
+def make_fname(
+    op_type: str,
+    method: str,
     input_infos: Dict[str, List[int]],
     output_infos: Dict[str, List[int]],
     parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
 ) -> str:
-    fname = op_type
-    fname += "_\{"
-    fname += "_".join(
-        "\[" + "_".join(str(dim) for dim in shape) + "\]"
-        for shape in input_infos.values()
+    fname = op_type + "_" + method
+    fname += "_"
+    fname += "-".join(
+        f"{name}_" + "_".join(str(dim) for dim in shape)
+        for name, shape in input_infos.items()
     )
-    fname += "\}_\{"
+    fname += "_"
     fname += "_".join(
-        "\[" + "_".join(str(dim) for dim in shape) + "\]"
-        for shape in output_infos.values()
+        f"{name}_" + "_".join(str(dim) for dim in shape)
+        for name, shape in output_infos.items()
     )
-    fname += "\}_\{"
+    fname += "_"
     fname += "_".join(
-        "\[" + "_".join(str(dim) for dim in parameter) + "\]"
+        f"{name}_" + "_".join(str(dim) for dim in parameter)
         if isinstance(parameter, list)
-        else str(parameter)
-        for parameter in parameters.values()
+        else f"{name}_" + str(parameter)
+        for name, parameter in parameters.items()
     )
-    fname += "\}"
     return fname
 
 
-def make_fname(
+def old_make_fname(
     op_type,
     input_infos: Dict[str, List[int]],
     output_infos: Dict[str, List[int]],
