@@ -5,6 +5,22 @@ import json
 import re
 from typing import Dict, List, Union
 
+__all__ = [
+    "to_list",
+    "remove_empty_lines",
+    "remove_comments",
+    "check_if_pointer",
+    "make_func_name",
+    "make_identifier",
+    "make_fused_identifier",
+]
+
+
+def to_list(x):
+    if isinstance(x, list):
+        return x
+    return [x]
+
 
 def remove_empty_lines(code: str) -> str:
     return re.sub(r"\n\s*\n", "\n", code)

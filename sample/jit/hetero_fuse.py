@@ -152,7 +152,7 @@ start_event = torch.cuda.Event(enable_timing=True)
 end_event = torch.cuda.Event(enable_timing=True)
 start_event.record(stream)
 
-active_blocks = [1, 0, 0]
+active_blocks = [1, 1, 1]
 
 fused_conv(
     data_0,
