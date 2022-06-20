@@ -8,7 +8,8 @@
 import torch
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH
-from brt.jit import CUDACompiler, HomoFusedModuleFunction
+from brt.jit import CUDACompiler
+from brt.jit.function import HomoFusedFunction
 from brt.routers.app.rand import (
     RandGatherRouter,
     RandHomoFusedGatherRouter,
@@ -79,7 +80,7 @@ class FusedThorExpert(nn.Module):
             nn.Linear(config.intermediate_size, config.hidden_size)
             for _ in range(config.expert_num)
         ]
-        self.expert1_func = HomoFusedModuleFunction(
+        self.expert1_func = HomoFusedFunction(
             "Linear",
             config.expert_num,
             capacities=[1, 2, 4],  # 8, 16, 32, 64, 128, 256, 512, 1024],
@@ -92,7 +93,7 @@ class FusedThorExpert(nn.Module):
                 "out_features": config.intermediate_size,
             },
         )
-        self.expert2_func = HomoFusedModuleFunction(
+        self.expert2_func = HomoFusedFunction(
             "Linear",
             config.expert_num,
             capacities=[1, 2, 4],  # 8, 16, 32, 64, 128, 256, 512, 1024],

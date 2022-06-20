@@ -1,23 +1,24 @@
-import time
 
+#%%
 import torch
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
-from brt.jit import HomoFuseModuleFunction
 from brt.jit.compiler import CUDACompiler
+from brt.jit.function import HomoFusedFunction
 
 log.set_level("jit", "DEBUG")
 
 kernel_name = "Linear"
 
-fuser = HomoFuseModuleFunction(
+fuser = HomoFusedFunction(
     module_name=kernel_name,
-    branch_num=2,
-    capacities=[1, 2, 3],
+    method="forward",
+    dst_num=2,
+    capacities=[1, 2, 4],
     shared_arg_indices=[0, 2],
     shared_arg_grans=[130712, 130712],
+    
 )
 
-# print(fuser.args)
 
 code = fuser.get_code()
 processed_template_fname = str(
@@ -25,6 +26,8 @@ processed_template_fname = str(
 )
 with open(processed_template_fname, "w") as f:
     f.write(code)
+
+#%%
 fused_matmul = CUDACompiler.generate_kernel(None, code)
 
 data_0 = torch.ones((16, 64, 64), device="cuda")

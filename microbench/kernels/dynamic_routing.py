@@ -141,6 +141,7 @@ def main():
                 norm=norm,
                 activation=activation,
             )
+            
             logger.info(parameters)
             tvm_tuner.import_pt_netlet(
                 module_name,
