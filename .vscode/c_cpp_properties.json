@@ -1,6 +1,26 @@
 {
     "configurations": [
         {
+            
+            "name": "P100Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/include",
+                "/home/v-weihaocui/local/miniconda3/include/python3.8",
+                "/home/v-weihaocui/local/miniconda3/lib/python3.8/site-packages/torch/include",
+                "/home/v-weihaocui/local/miniconda3/lib/python3.8/site-packages/torch/include/torch/csrc/api/include/"
+            ],
+            "defines": [
+                "USE_CUDA"
+            ],
+            "compilerPath": "/usr/bin/g++-7",
+            "cStandard": "c11",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+        },
+        {
+            
             "name": "R3090Linux",
             "includePath": [
                 "${workspaceFolder}/**",
