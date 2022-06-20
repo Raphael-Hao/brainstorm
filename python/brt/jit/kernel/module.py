@@ -7,13 +7,13 @@ from typing import Dict, List, Union
 from brt.common import log
 from brt.jit import kernel_storager
 
-from .cuda import CUDATypeSizeInByte, GlobalFunction
+from .cuda import CUDATypeSizeInByte, GlobalKernel
 from .utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
 
 logger = log.get_logger(__file__)
 
 
-class ModuleFunction(GlobalFunction):
+class ModuleKernel(GlobalKernel):
     def __init__(
         self,
         module_name,
@@ -211,6 +211,7 @@ class ModuleFunction(GlobalFunction):
             "Miscs": miscs,
         }
         kernel_storager.add_kernel(module_dict, overwrite=True)
+        return self
 
     def load_from_db(self):
         identifier = self.make_identifier()
@@ -227,3 +228,4 @@ class ModuleFunction(GlobalFunction):
             self.func_sig = function_dict["function_signature"]
             self.func_body = function_dict["function_body"]
             self.initialized = True
+        return self

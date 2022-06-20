@@ -12,7 +12,7 @@ from brt.common import (
     log,
 )
 from brt.jit import kernel_storager
-from brt.jit.function import ModuleFunction
+from brt.jit.kernel import ModuleKernel
 
 import tvm
 from tvm import auto_scheduler, relay
@@ -159,7 +159,7 @@ class TVMTuner:
         grid_dim, block_dim, source_code = self.get_best_template()
         culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
         kernel_source = culaunch_config + source_code
-        module_function = ModuleFunction(
+        module_function = ModuleKernel(
             self.module_name,
             self.method,
             kernel_source=kernel_source,
@@ -179,7 +179,7 @@ class TVMTuner:
         grid_dim, block_dim, source_code = self.get_best_template()
         culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
         kernel_source = culaunch_config + source_code
-        module_function = ModuleFunction(
+        module_function = ModuleKernel(
             self.module_name,
             method=self.method,
             kernel_source=kernel_source,

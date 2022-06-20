@@ -3,15 +3,15 @@
 
 from typing import Dict, List, Union
 
-from .cuda import GlobalFunction
-from .horiz_fused import HorizFusedFunction
-from .module import ModuleFunction
+from .cuda import GlobalKernel
+from .horiz_fused import HorizFusedKernel
+from .module import ModuleKernel
 
-__all__ = ["HeteroFusedFunction"]
+__all__ = ["HeteroFusedKernel"]
 
 
-class HeteroFusedFunction(HorizFusedFunction):
-    def __init__(self, candidates: List[ModuleFunction]):
+class HeteroFusedKernel(HorizFusedKernel):
+    def __init__(self, candidates: List[ModuleKernel]):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "hetero_fuse")
         super().__init__(candidates=candidates)
@@ -75,7 +75,7 @@ class HeteroFusedFunction(HorizFusedFunction):
         return super().make_identifier()
 
 
-class DynamicHeteroFuseModuleFunction(HorizFusedFunction):
+class DynamicHeteroFusedKernel(HorizFusedKernel):
     def __init__(
         self,
         candidate_module_names: List[str],
@@ -105,7 +105,7 @@ class DynamicHeteroFuseModuleFunction(HorizFusedFunction):
         output_infos,
         parameters,
     ):
-        candidates: Dict[str, List[ModuleFunction]] = []
+        candidates: Dict[str, List[ModuleKernel]] = []
         for module_name in candidate_module_names:
             input_infos = self.input_infos[module_name]
             output_infos = self.output_infos[module_name]
@@ -115,7 +115,7 @@ class DynamicHeteroFuseModuleFunction(HorizFusedFunction):
                     input_infos[input_name] = [dim] + input_infos[input_name][1:]
                 for output_name in output_infos.keys():
                     output_infos[output_name] = [dim] + output_infos[output_name][1:]
-                candidate = ModuleFunction(
+                candidate = ModuleKernel(
                     module_name,
                     method=self.method,
                     input_infos=input_infos,
@@ -199,13 +199,13 @@ class DynamicHeteroFuseModuleFunction(HorizFusedFunction):
     def get_code(self):
         self.fuse()
         self.reset_mode("global")
-        self.add_codeblock(GlobalFunction.common_defines)
+        self.add_codeblock(GlobalKernel.common_defines)
         self.add_single_c_api()
-        self.add_codeblock(GlobalFunction.asm_block_sync)
-        self.add_codeblock(GlobalFunction.asm_warp_sync)
+        self.add_codeblock(GlobalKernel.asm_block_sync)
+        self.add_codeblock(GlobalKernel.asm_warp_sync)
         for idx, func in enumerate(self.candidates):
             self.add_codeblock(func.convert_to_device())
-        self.add_line_with_indent(GlobalFunction.global_decorator)
+        self.add_line_with_indent(GlobalKernel.global_decorator)
         self.declare_return_with_launch_bounds()
         self.declare_name_args()
         self.new_codeblock()

@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
 from brt.jit import CUDACompiler
-from brt.jit.function import HeteroFusedFunction, ModuleFunction
+from brt.jit.kernel import HeteroFusedKernel, ModuleKernel
 
 log.set_level("jit", "DEBUG")
 
@@ -96,7 +96,7 @@ conv_params = [
         "output_shape": [1, 64, 511, 1023],
     },
 ]
-candidates: List[ModuleFunction] = []
+candidates: List[ModuleKernel] = []
 for params in conv_params:
     (
         module_name,
@@ -108,7 +108,7 @@ for params in conv_params:
         activation,
     ) = parse_conv2d_bn_act_params(params)
     candidates.append(
-        ModuleFunction(
+        ModuleKernel(
             module_name,
             "forward",
             None,
@@ -120,7 +120,7 @@ for params in conv_params:
     )
     candidates[-1].load_from_db()
 
-module_func = HeteroFusedFunction(candidates)
+module_func = HeteroFusedKernel(candidates)
 
 code, deps, sig, body = module_func.get_code()
 

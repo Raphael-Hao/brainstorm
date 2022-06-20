@@ -2,11 +2,11 @@ import unittest
 
 import torch
 from brt.jit import CUDACompiler
-from brt.jit.function import (
-    HeteroFusedFunction,
-    HomoFusedFunction,
-    HorizFusedFunction,
-    ModuleFunction,
+from brt.jit.kernel import (
+    HeteroFusedKernel,
+    HomoFusedKernel,
+    HorizFusedKernel,
+    ModuleKernel,
 )
 
 
@@ -15,12 +15,12 @@ class JitFunctionTest(unittest.TestCase):
         pass
 
     def test_moduel_function(self):
-        module_func = ModuleFunction("Linear", method="forward", input_infos={})
+        module_func = ModuleKernel("Linear", method="forward", input_infos={})
         pass
 
     def test_horiz_fused_function(self):
-        candidates = [ModuleFunction("Linear", method="forward") for _ in range(10)]
-        fused_function = HorizFusedFunction(candidates)
+        candidates = [ModuleKernel("Linear", method="forward") for _ in range(10)]
+        fused_function = HorizFusedKernel(candidates)
         pass
 
     def test_hetero_fused_function(self):

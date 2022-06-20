@@ -6,19 +6,19 @@ from typing import Dict, List, Union
 
 from brt.common import log
 
-from .cuda import GlobalFunction
-from .module import ModuleFunction
+from .cuda import GlobalKernel
+from .module import ModuleKernel
 from .utils import make_fused_identifier, make_identifier
 
 logger = log.get_logger(__file__)
 
-__all__ = ["HorizFusedFunction"]
+__all__ = ["HorizFusedKernel"]
 
 
-class HorizFusedFunction(GlobalFunction):
+class HorizFusedKernel(GlobalKernel):
     def __init__(
         self,
-        candidates: List[ModuleFunction],
+        candidates: List[ModuleKernel],
     ):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "horiz_fuse")
@@ -113,8 +113,8 @@ class HorizFusedFunction(GlobalFunction):
 
     def generate_dependency(self, sync_method="asm"):
         dependencies = []
-        dependencies.append(self.add_codeblock(GlobalFunction.asm_block_sync))
-        dependencies.append(self.add_codeblock(GlobalFunction.asm_warp_sync))
+        dependencies.append(self.add_codeblock(GlobalKernel.asm_block_sync))
+        dependencies.append(self.add_codeblock(GlobalKernel.asm_warp_sync))
         self.new_line()
         for _, func in enumerate(self.candidates):
             device_code = func.convert_to_device()

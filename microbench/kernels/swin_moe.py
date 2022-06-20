@@ -10,7 +10,7 @@ import tvm
 import tvm.auto_scheduler as auto_scheduler
 import tvm.relay as relay
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH, log
-from brt.jit.function import ModuleFunction
+from brt.jit.kernel import ModuleKernel
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import (
     make_culaunch_config_str,
@@ -68,7 +68,7 @@ def main():
                     print(f"ignored {module_name} with: {parameters}")
                 tvm_tuner.export_netlet_template()
                 tvm_tuner.insert_netlet_to_storage()
-                module_function = ModuleFunction(
+                module_function = ModuleKernel(
                     module_name,
                     "forward",
                     None,
