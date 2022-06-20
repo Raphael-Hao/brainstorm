@@ -36,7 +36,9 @@ def main():
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
     in_features_s = [96, 192, 384, 768]  # 512
     out_features_s = [384, 768, 1536, 3072]  # 1024
-    ignored_set = set(((1, 96, 384),))
+    ignored_set = set(
+        ((1, 96, 384), (2, 96, 384), (4, 96, 384), (8, 96, 384), (16, 96, 384))
+    )
     tvm_tuner = TVMTuner()
     for i in range(2):
         bias = True if i == 0 else False
