@@ -4,12 +4,12 @@
 from brt.common import log
 from brt.jit import CUDACompiler
 
-from .function import Function
+from .kernel import Kernel
 
 logger = log.get_logger(__file__)
 
 
-__all__ = ["CUDATypeSizeInByte", "GlobalFunction"]
+__all__ = ["CUDATypeSizeInByte", "GlobalKernel"]
 
 CUDATypeSizeInByte = {
     # signed type
@@ -33,7 +33,7 @@ CUDATypeSizeInByte = {
 }
 
 
-class GlobalFunction(Function):
+class GlobalKernel(Kernel):
     common_defines = """
 #define uint unsigned int
 #define uchar unsigned char
@@ -228,7 +228,7 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
         return deps
 
     def generate_signature(self):
-        formated_code = self.add_line_with_indent(GlobalFunction.global_decorator)
+        formated_code = self.add_line_with_indent(GlobalKernel.global_decorator)
         formated_code += self.declare_return_with_launch_bounds()
         formated_code += self.declare_name_args()
         return formated_code
@@ -245,7 +245,7 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
     def get_code(self):
         assert self.initialized is True, "CodeGenerator is not initialized"
         self.reset(mode="global")
-        self.add_codeblock(GlobalFunction.common_defines)
+        self.add_codeblock(GlobalKernel.common_defines)
         if (
             hasattr(self, "func_deps")
             and hasattr(self, "func_sig")
@@ -273,7 +273,7 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
         ), "Only global kernel can be converted to device"
         self.reset(mode="device")
         self.add_single_c_api()
-        self.append_code(GlobalFunction.device_decorator)
+        self.append_code(GlobalKernel.device_decorator)
         self.declare_return_with_launch_bounds()
         self.declare_name_args()
         self.new_codeblock()

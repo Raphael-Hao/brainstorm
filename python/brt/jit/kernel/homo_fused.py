@@ -8,16 +8,16 @@ from typing import Dict, List, Union
 
 from brt.common import log
 
-from .horiz_fused import HorizFusedFunction
-from .module import ModuleFunction
+from .horiz_fused import HorizFusedKernel
+from .module import ModuleKernel
 from .utils import check_if_pointer
 
 logger = log.get_logger(__file__)
 
-__all__ = ["HomoFusedFunction"]
+__all__ = ["HomoFusedKernel"]
 
 
-class HomoFusedFunction(HorizFusedFunction):
+class HomoFusedKernel(HorizFusedKernel):
     def __init__(
         self,
         module_name,
@@ -56,13 +56,13 @@ class HomoFusedFunction(HorizFusedFunction):
         output_infos: Dict[str, List[int]] = None,
         parameters: Dict[str, List[Union[int, float]]] = None,
     ):
-        candidates: List[ModuleFunction] = []
+        candidates: List[ModuleKernel] = []
         for dim in candidates_capacities:
             for input_name in input_infos.keys():
                 input_infos[input_name] = [dim] + input_infos[input_name][1:]
             for output_name in output_infos.keys():
                 output_infos[output_name] = [dim] + output_infos[output_name][1:]
-            candidate = ModuleFunction(
+            candidate = ModuleKernel(
                 module_base_name,
                 method = method,
                 input_infos=input_infos,

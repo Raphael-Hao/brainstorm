@@ -3,13 +3,13 @@
 import torch
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
 from brt.jit.compiler import CUDACompiler
-from brt.jit.function import HomoFusedFunction
+from brt.jit.kernel import HomoFusedKernel
 
 log.set_level("jit", "DEBUG")
 
 kernel_name = "Linear"
 
-fuser = HomoFusedFunction(
+fuser = HomoFusedKernel(
     module_name=kernel_name,
     method="forward",
     dst_num=2,
