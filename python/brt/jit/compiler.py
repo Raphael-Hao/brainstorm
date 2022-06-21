@@ -1,5 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import Callable
 
 import torch
 import torch.fx as fx
@@ -11,7 +12,7 @@ __all__ = ["CUDACompiler"]
 
 class CUDACompiler:
     @staticmethod
-    def create_raw(source):
+    def create_raw(source) -> Callable[..., None]:
         torch.cuda.init()
         kernel_type, __ctx__ = jit.inject_source(source)
 
@@ -35,7 +36,7 @@ class CUDACompiler:
         return func
 
     @staticmethod
-    def generate_kernel(keyword_dict, template: str):
+    def generate_kernel(keyword_dict, template: str) -> Callable[..., None]:
         if keyword_dict is not None:
             for key in keyword_dict:
                 template = template.replace("@%s@" % key, str(keyword_dict[key]))

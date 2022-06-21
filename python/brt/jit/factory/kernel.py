@@ -1,6 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Dict, List, Union
+from typing import Callable, Dict, List, Union
 
 import torch
 import torch.nn.functional as F
@@ -12,56 +12,29 @@ from ..kernel.module import ModuleKernel
 from .registry import ModuleInfo
 
 __all__ = [
-    "JitKernel"
     "KernelFactory",
 ]
 
 
-class JitKernel:
-    @staticmethod
-    def forward(*inputs):
-        raise NotImplementedError
-
-    @staticmethod
-    def backward(*grad_outputs):
-        raise NotImplementedError
-
-
 class KernelFactory:
     @staticmethod
-    def make_kernel(modules, sample_inputs, mode="eval", opt_mode="none"):
-        jit_kernel = JitKernel()
-        if opt_mode == "none":
-            kernel = ModuleKernelFactory.make_kernel(modules, "forward", sample_inputs)
-            kernel_code, _, _, _ = kernel.get_code()
-            jit_kernel.forward = CUDACompiler.generate_kernel(None, kernel_code)
+    def make_kernel(
+        modules, sample_inputs, method="forward", opt_level="none"
+    ) -> Callable[..., None]:
+        if opt_level == "none":
+            kernel = ModuleKernelFactory.make_kernel(modules, method, sample_inputs)
 
-        elif opt_mode == "hetero_fuse":
+        elif opt_level == "hetero_fuse":
             kernel = HeteroFusedKernelFactory.make_kernel(
-                modules, "forward", sample_inputs
+                modules, method, sample_inputs
             )
 
-        elif opt_mode == "homo_fuse":
-            kernel = HomoFusedKernelFactory.make_kernel(
-                modules, "forward", sample_inputs
-            )
+        elif opt_level == "homo_fuse":
+            kernel = HomoFusedKernelFactory.make_kernel(modules, method, sample_inputs)
+        else:
+            raise ValueError(f"Not supported optimize level: {opt_level}")
         kernel_code, _, _, _ = kernel.get_code()
-        jit_kernel.forward = CUDACompiler.generate_kernel(None, kernel_code)
-        if mode == "train":
-            if opt_mode == "none":
-                jit_kernel.backward = ModuleKernelFactory.make_kernel(
-                    modules, "backward", sample_inputs
-                )
-            elif opt_mode == "hetero_fuse":
-                raise ValueError("hetero_fuse is not supported in training mode")
-                # jit_kernel.forward = HeteroFusedKernelFactory.make_kernel(
-                #     modules, "backward", sample_inputs
-                # )
-            elif opt_mode == "homo_fuse":
-                raise ValueError("homo_fuse is not supported in training mode")
-                # jit_kernel.forward = HomoFusedKernelFactory.make_kernel(
-                #     modules, "backward", sample_inputs
-                # )
+        jit_kernel = CUDACompiler.generate_kernel(None, kernel_code)
         return jit_kernel
 
 
@@ -95,7 +68,10 @@ class HomoFusedKernelFactory:
         shared_arg_grans = None
         for subclass in ModuleInfo.__subclasses__():
             if subclass.ismodule(candidate_module):
-                shared_arg_indices, shared_arg_grans = subclass.extract_argument_infos(
+                (
+                    shared_arg_indices,
+                    shared_arg_grans,
+                ) = subclass.extract_shared_arg_infos(
                     candidate_module, method, sample_inputs[0]
                 )
                 break
