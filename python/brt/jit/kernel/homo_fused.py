@@ -20,64 +20,36 @@ __all__ = ["HomoFusedKernel"]
 class HomoFusedKernel(HorizFusedKernel):
     def __init__(
         self,
-        module_name,
-        method,
-        dst_num,  # branch num, e.g., expert num, for horizontal fusion
-        capacities: List[int],  # supported dynamic shape
+        dst_num,
+        capacities,
         shared_arg_indices: List[int],
         shared_arg_grans: List[int],
-        input_infos: Dict[str, List[int]] = None,
-        output_infos: Dict[str, List[int]] = None,
-        parameters: Dict[str, List[Union[int, float]]] = None,
+        candidates: List[ModuleKernel],
     ):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "homo_fuse")
+
         self.dst_num = dst_num
         self.capacities = capacities
         self.supported_capacity_num = len(self.capacities)
         self.shared_arg_indices = shared_arg_indices
         self.shared_arg_grans = shared_arg_grans
-        candidates = self.generate_candidates(
-            module_name,
-            method,
-            capacities,
-            input_infos,
-            output_infos,
-            parameters,
-        )
-        super().__init__(candidates=candidates)
 
-    @staticmethod
-    def generate_candidates(
-        module_base_name,
-        method,
-        candidates_capacities,
-        input_infos: Dict[str, List[int]] = None,
-        output_infos: Dict[str, List[int]] = None,
-        parameters: Dict[str, List[Union[int, float]]] = None,
-    ):
-        candidates: List[ModuleKernel] = []
-        for dim in candidates_capacities:
-            for input_name in input_infos.keys():
-                input_infos[input_name] = [dim] + input_infos[input_name][1:]
-            for output_name in output_infos.keys():
-                output_infos[output_name] = [dim] + output_infos[output_name][1:]
-            candidate = ModuleKernel(
-                module_base_name,
-                method = method,
-                input_infos=input_infos,
-                output_infos=output_infos,
-                parameters=parameters,
-            )
-            candidate.load_from_db()
-            assert candidate.initialized is True, "candidate not initialized"
-            candidates.append(candidate)
-        return candidates
+        super().__init__(candidates)
 
     def check_candidates(self):
         will_initialize = super().check_candidates()
         self.module_name = (
             self.candidates[0].module_name
+            + "_"
+            + str(self.supported_capacity_num)
+            + "_"
+            + str(self.dst_num)
+            + "_"
+            + self.kernel_type
+        )
+        self.func_name = (
+            self.candidates[0].func_name
             + "_"
             + str(self.supported_capacity_num)
             + "_"

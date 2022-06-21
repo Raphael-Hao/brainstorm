@@ -4,13 +4,23 @@ import json
 import re
 from typing import Dict, List, Union
 
+import torch
 from brt.common import log
-from brt.jit import kernel_storager
 
 from .cuda import CUDATypeSizeInByte, GlobalKernel
+from .storage import kernel_storager
 from .utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
 
 logger = log.get_logger(__file__)
+
+__all__ = ["ModuleKernel", "ModuleDTypeSizeInByte"]
+
+ModuleDTypeSizeInByte = {
+    torch.float32: 4,
+    torch.float64: 8,
+    torch.float16: 2,
+    torch.bfloat16: 2,
+}
 
 
 class ModuleKernel(GlobalKernel):
