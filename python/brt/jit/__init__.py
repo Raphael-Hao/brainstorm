@@ -2,4 +2,4 @@
 # Licensed under the MIT license.
 
 from .compiler import CUDACompiler
-from .kernel.factory import *
+from .factory.kernel import *
