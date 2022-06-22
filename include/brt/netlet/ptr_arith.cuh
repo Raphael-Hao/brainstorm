@@ -19,7 +19,7 @@ __global__ void __launch_bounds__(32)
   int global_tid = blockIdx.x * 32 + threadIdx.x;
   if (global_tid < array_size) {
     dst[global_tid] = src + index[global_tid] * granularity * sizeof(T);
-    printf("pointer array id: %d, pointer: %p\n", global_tid, dst[global_tid]);
+    // printf("pointer array id: %d, pointer: %p\n", global_tid, dst[global_tid]);
   }
 }
 

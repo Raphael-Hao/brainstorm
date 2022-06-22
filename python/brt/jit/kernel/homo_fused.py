@@ -183,13 +183,16 @@ class HomoFusedKernel(HorizFusedKernel):
                 f"auto blockidxx = blockIdx.x - ({block_start});", end=True
             )
             formated_code += self.add_line_with_indent(
-                f"auto arg_idx = blockidxx / {self.grid_size[capacity_idx]}"
+                f"auto arg_idx = blockidxx / ({self.grid_size[capacity_idx]})"
             )
             for j in range(capacity_idx):
                 formated_code += self.append_code(
                     f" + {self.func_name}_{self.capacities[j]}_active_blocks"
                 )
             formated_code += self.append_code(";", end=True)
+            formated_code += self.add_line_with_indent(
+                f"blockidxx = blockidxx % ({self.grid_size[capacity_idx]});", end=True
+            )
             device_arg = ""
             for arg_i, arg in enumerate(self.device_args):
                 if arg_i != 0:

@@ -1,6 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -33,7 +33,7 @@ def make_jit_kernel(
     kernel_code, _, _, _ = kernel.get_code()
 
     processed_template_fname = str(
-        BRT_KERNEL_TEMPLATE_PATH / ("processed_" + kernel.module_name + ".cu")
+        BRT_KERNEL_TEMPLATE_PATH / ("processed_" + kernel.func_name + ".cu")
     )
     with open(processed_template_fname, "w") as f:
         f.write(kernel_code)
@@ -68,7 +68,12 @@ class HomoFusedKernelFactory:
             candidate_module, method, sample_inputs
         )
         dst_num = len(modules)
-        capacities = [sample_input[0].size[0] for sample_input in sample_inputs]
+        capacities = [
+            sample_input[0].size(0)
+            if isinstance(sample_input, (list, tuple))
+            else sample_input.size(0)
+            for sample_input in sample_inputs
+        ]
         shared_arg_indices = None
         shared_arg_grans = None
         for subclass in ModuleInfo.__subclasses__():

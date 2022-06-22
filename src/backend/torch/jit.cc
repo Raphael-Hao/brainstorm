@@ -85,24 +85,6 @@ static void homo_invoke(const std::vector<::torch::Tensor>& shared_inputs,
                         at::cuda::getDefaultCUDAStream().stream());
 }
 
-static void elastic_homo_invoke(const std::vector<::torch::Tensor>& ts,
-                                const std::vector<long>& args, int fd) {
-  std::vector<const void*> pargs(ts.size() + args.size()), ppargs(ts.size() + args.size());
-  for (int i = 0; i < (int)ts.size(); ++i) {
-    CHECK_ON_CUDA(ts[i]);
-    pargs[i] = ts[i].data_ptr();
-    ppargs[i] = &pargs[i];
-  }
-  for (int i = (int)ts.size(); i < (int)pargs.size(); ++i) {
-    pargs[i] = (void*)args[i - ts.size()];
-    ppargs[i] = &pargs[i];
-  }
-
-  int dev = ts[0].device().index();
-  CHECK_EQ(0, cudaSetDevice(dev));
-  jit::CUDACompiler::get_compiler().execute(ppargs, fd, dev,
-                                            at::cuda::getDefaultCUDAStream().stream());
-}
 
 static std::pair<std::string, int> inject_source(const std::string& headless_code) {
   return jit::CUDACompiler::get_compiler().inject_source(headless_code);
@@ -116,9 +98,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("static_invoke", &brt::backend::torch::static_invoke,
         "Generic Invoke for GPU function (CUDA)");
   m.def("hetero_invoke", &brt::backend::torch::hetero_invoke,
-        "Invoke for horizontal fused GPU function (CUDA) of heterogenous kernels");
-  m.def("homo_invoke", &brt::backend::torch::homo_invoke, "Generic Invoke for GPU (CUDA)");
-  m.def("elastic_homo_invoke", &brt::backend::torch::elastic_homo_invoke,
-        "Generic Invoke for GPU (CUDA)");
+        "Invoke for horizontally fused GPU function (CUDA) of heterogenous kernels");
+  m.def("homo_invoke", &brt::backend::torch::homo_invoke, "Invoke for horizontally fused GPU function (CUDA) of homogenous kernels");
   m.def("inject_source", &brt::backend::torch::inject_source, "Inject Source for GPU (CUDA)");
 }
