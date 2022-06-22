@@ -2,30 +2,37 @@
 # Licensed under the MIT license.
 
 
-#%%
 import json
-import logging
+
+#%%
+from typing import Dict, List, Union
 
 import torch.nn as nn
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
+from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH, log
 from brt.jit.kernel import ModuleKernel
 from brt.jit.kernel.storage import kernel_storager
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname
+from torch.nn.modules.utils import _pair
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("brt.microbench.kernels.dynamic_routing")
-
-
+logger = log.get_logger()
+logger.setLevel("INFO")
 def parse_conv2d_bn_act_params(json_params):
     module_name = "Conv2d"
     out_channels = json_params["out_channels"]
+    json_params["kernel_size"] = _pair(json_params["kernel_size"])
     if json_params["stride"] == None:
-        json_params["stride"] = 1
+        json_params["stride"] = _pair(1)
+    else:
+        json_params["stride"] = _pair(json_params["stride"])
     if json_params["padding"] == None:
-        json_params["padding"] = 0
+        json_params["padding"] = _pair(0)
+    else:
+        json_params["padding"] = _pair(json_params["padding"])
     if json_params["dilation"] == None:
-        json_params["dilation"] = 1
+        json_params["dilation"] = _pair(1)
+    else:
+        json_params["dilation"] = _pair(json_params["dilation"])
     if json_params["groups"] == None:
         json_params["groups"] = 1
     bias = json_params.pop("bias")
@@ -100,6 +107,34 @@ class Conv2dBNAct(nn.Module):
         return x
 
 
+def make_log_fname(
+    op_type: str,
+    method: str,
+    input_infos: Dict[str, List[int]],
+    output_infos: Dict[str, List[int]],
+    parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
+) -> str:
+    fname = op_type + "_" + method
+    fname += "_"
+    fname += "-".join(
+        f"{name}_" + "_".join(str(dim) for dim in shape)
+        for name, shape in input_infos.items()
+    )
+    fname += "_"
+    fname += "_".join(
+        f"{name}_" + "_".join(str(dim) for dim in shape)
+        for name, shape in output_infos.items()
+    )
+    fname += "_"
+    fname += "_".join(
+        f"{name}_" + str(parameter[0])
+        if isinstance(parameter, (list, tuple))
+        else f"{name}_" + str(parameter)
+        for name, parameter in parameters.items()
+    )
+    return fname
+
+
 def main():
     tvm_tuner = TVMTuner()
     conv_params_log_file = BRT_LOG_PATH / "benchmark/dynamic_routing/conv_params.json"
@@ -141,7 +176,7 @@ def main():
                 norm=norm,
                 activation=activation,
             )
-            
+
             logger.info(parameters)
             tvm_tuner.import_pt_netlet(
                 module_name,
@@ -150,6 +185,9 @@ def main():
                 input_infos,
                 output_infos,
                 parameters,
+                make_log_fname(
+                    module_name, "forward", input_infos, output_infos, parameters
+                ),
             )
             logger.info(f"tuning {module_name} with: {parameters}")
             # tvm_tuner.tune_netlet()
@@ -157,12 +195,13 @@ def main():
             tvm_tuner.insert_netlet_to_storage()
             module_function = ModuleKernel(
                 module_name,
+                "forward",
                 None,
                 "CUDA_GPU",
                 input_infos,
                 output_infos,
                 parameters,
-                method="forward",
+                
             )
             module_function.load_from_db()
             file_name = make_fname(

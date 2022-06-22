@@ -31,13 +31,13 @@ def make_jit_kernel(
     else:
         raise ValueError(f"Not supported optimize level: {opt_level}")
     kernel_code, _, _, _ = kernel.get_code()
-    
+
     processed_template_fname = str(
         BRT_KERNEL_TEMPLATE_PATH / ("processed_" + kernel.module_name + ".cu")
     )
     with open(processed_template_fname, "w") as f:
         f.write(kernel_code)
-    
+
     jit_kernel = CUDACompiler.generate_kernel(None, kernel_code)
     return jit_kernel
 
@@ -45,10 +45,11 @@ def make_jit_kernel(
 class HeteroFusedKernelFactory:
     @staticmethod
     def make_kernel(modules: torch.nn.ModuleList, method, sample_inputs):
-        candidates = []
         assert len(modules) == len(
             sample_inputs
         ), "modules and sample_inputs must have the same length"
+
+        candidates = []
         for m, sample_input in zip(modules, sample_inputs):
             module_kernel = ModuleKernelFactory.make_kernel(m, method, sample_input)
             candidates.append(module_kernel)

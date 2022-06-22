@@ -4,8 +4,13 @@
 from typing import Dict, List, Tuple, Union
 
 import torch
+from brt.common import log
 
 from ..kernel.module import ModuleDTypeSizeInByte, ModuleKernel
+
+logger = log.get_logger(__file__)
+
+__all__ = ["ModuleInfo"]
 
 
 class ModuleInfo:
@@ -168,7 +173,14 @@ class Conv2dBNActInfo(ModuleInfo):
         sample_output = module(sample_input)
         input_infos = {"input_0": list(sample_input.shape)}
         output_infos = {"output_0": list(sample_output.shape)}
-
+        logger.debug(
+            f"""
+module name: {module_name}
+input_infos: {input_infos}
+output_infos: {output_infos}
+parameters: {parameters}
+"""
+        )
         return ModuleKernel(
             module_name=module_name,
             method=method,

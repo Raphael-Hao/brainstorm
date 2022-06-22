@@ -56,7 +56,7 @@ def make_func_name(
     func_name += "__"
     func_name += "_".join(
         f"{name}_" + "_".join(str(dim) for dim in parameter)
-        if isinstance(parameter, list)
+        if isinstance(parameter, (list, tuple))
         else f"{name}_" + str(parameter)
         for name, parameter in parameters.items()
     )

@@ -191,7 +191,6 @@ class ModuleKernel(GlobalKernel):
         attribute_dict.update({"output_shape:": self.output_infos})
         if self.parameters is not None:
             attribute_dict.update({"parameters:": self.parameters})
-        print(attribute_dict)
         attributes = json.dumps(attribute_dict)
         function_dict = {}
         function_dict.update({"function_deps": func_deps})
