@@ -4,6 +4,7 @@ from typing import Callable, Dict, List, Union
 
 import torch
 import torch.nn.functional as F
+from brt.common import BRT_KERNEL_TEMPLATE_PATH
 
 from ..compiler import CUDACompiler
 from ..kernel.hetero_fused import HeteroFusedKernel
@@ -12,30 +13,33 @@ from ..kernel.module import ModuleKernel
 from .registry import ModuleInfo
 
 __all__ = [
-    "KernelFactory",
+    "make_jit_kernel",
 ]
 
 
-class KernelFactory:
-    @staticmethod
-    def make_kernel(
-        modules, sample_inputs, method="forward", opt_level="none"
-    ) -> Callable[..., None]:
-        if opt_level == "none":
-            kernel = ModuleKernelFactory.make_kernel(modules, method, sample_inputs)
+def make_jit_kernel(
+    modules, sample_inputs, method="forward", opt_level="none"
+) -> Callable[..., None]:
+    if opt_level == "none":
+        kernel = ModuleKernelFactory.make_kernel(modules, method, sample_inputs)
 
-        elif opt_level == "hetero_fuse":
-            kernel = HeteroFusedKernelFactory.make_kernel(
-                modules, method, sample_inputs
-            )
+    elif opt_level == "hetero_fuse":
+        kernel = HeteroFusedKernelFactory.make_kernel(modules, method, sample_inputs)
 
-        elif opt_level == "homo_fuse":
-            kernel = HomoFusedKernelFactory.make_kernel(modules, method, sample_inputs)
-        else:
-            raise ValueError(f"Not supported optimize level: {opt_level}")
-        kernel_code, _, _, _ = kernel.get_code()
-        jit_kernel = CUDACompiler.generate_kernel(None, kernel_code)
-        return jit_kernel
+    elif opt_level == "homo_fuse":
+        kernel = HomoFusedKernelFactory.make_kernel(modules, method, sample_inputs)
+    else:
+        raise ValueError(f"Not supported optimize level: {opt_level}")
+    kernel_code, _, _, _ = kernel.get_code()
+    
+    processed_template_fname = str(
+        BRT_KERNEL_TEMPLATE_PATH / ("processed_" + kernel.module_name + ".cu")
+    )
+    with open(processed_template_fname, "w") as f:
+        f.write(kernel_code)
+    
+    jit_kernel = CUDACompiler.generate_kernel(None, kernel_code)
+    return jit_kernel
 
 
 class HeteroFusedKernelFactory:
