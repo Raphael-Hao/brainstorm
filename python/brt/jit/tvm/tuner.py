@@ -11,7 +11,6 @@ from brt.common import (
     BRT_ONNX_CKPT_PATH,
     log,
 )
-from brt.jit import kernel_storager
 from brt.jit.kernel import ModuleKernel
 
 import tvm

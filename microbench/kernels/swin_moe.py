@@ -4,20 +4,11 @@
 
 #%%
 
-import torch
 import torch.nn as nn
-import tvm
-import tvm.auto_scheduler as auto_scheduler
-import tvm.relay as relay
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH, log
+from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
 from brt.jit.kernel import ModuleKernel
 from brt.jit.tvm import TVMTuner
-from brt.jit.tvm.utils import (
-    make_culaunch_config_str,
-    make_fname,
-    parse_culaunch_config,
-)
-from tvm.auto_scheduler.measure_record import load_best_record
+from brt.jit.tvm.utils import make_fname
 
 logger = log.get_logger()
 
@@ -36,9 +27,25 @@ def main():
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
     in_features_s = [96, 192, 384, 768]  # 512
     out_features_s = [384, 768, 1536, 3072]  # 1024
-    ignored_set = set(
-        ((1, 96, 384), (2, 96, 384), (4, 96, 384), (8, 96, 384), (16, 96, 384))
-    )
+
+    all_ignored_features_s = [(96, 384), (192, 768), (384, 1536)]
+    ignored_set = set()
+    for in_features, out_features in all_ignored_features_s:
+        for bs in input_bs:
+            ignored_set.add((bs, in_features, out_features))
+    partial_ignored_features_s = [(768, 3072)]
+    partial_ignored_input_bs = [
+        1,
+        2,
+        4,
+        8,
+        16,
+        32,
+    ]
+    for in_features, out_features in partial_ignored_features_s:
+        for bs in partial_ignored_input_bs:
+            ignored_set.add((bs, in_features, out_features))
+    print("ignored_set:", ignored_set)
     tvm_tuner = TVMTuner()
     for i in range(2):
         bias = True if i == 0 else False
@@ -85,7 +92,6 @@ def main():
                     BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
                 )
                 template_file_loaded.write_text(module_function.get_code()[0])
-    # turn off bias
 
 
 if __name__ == "__main__":

@@ -7,3 +7,4 @@ from .homo_fused import *
 from .horiz_fused import *
 from .kernel import *
 from .module import *
+from .storage import *

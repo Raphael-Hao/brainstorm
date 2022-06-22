@@ -20,22 +20,12 @@ from brt.jit.tvm.utils import (
 from tvm.auto_scheduler.measure_record import load_best_record
 
 
-class Expert1(nn.Module):
+class Expert(nn.Module):
     def __init__(self, in_features=512, out_features=1024) -> None:
         super().__init__()
         self.linear = nn.Linear(in_features, out_features)
 
     def forward(self, inputs):
-        return self.linear(inputs)
-
-
-class Expert2(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.linear = nn.Linear(1024, 512)
-
-    def forward(self, inputs):
-
         return self.linear(inputs)
 
 
@@ -81,8 +71,10 @@ def tvm_tune(model, input_shape, K, N):
 
 def main():
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    in_features = 1024# 512
-    out_features = 512# 1024
+    # in_features = 1024
+    # out_features = 512
+    in_features = 512
+    out_features = 1024
     tvm_tuner = TVMTuner()
     for bs in input_bs:
         input_infos = {"input_0": (bs, in_features)}
@@ -94,18 +86,18 @@ def main():
         kernel_name = f"Linear_{bs}_{in_features}_{out_features}"
         log_fname = kernel_name
         tvm_tuner.import_pt_netlet(
-            "Linear",
+            "LinearBias",
             "forward",
-            Expert1(in_features, out_features),
+            Expert(in_features, out_features),
             input_infos,
             output_infos,
             parameters,
-            log_fname,
+            # log_fname,
         )
         tvm_tuner.export_netlet_template()
         tvm_tuner.insert_netlet_to_storage()
         module_function = ModuleKernel(
-            "Linear",
+            "LinearBias",
             "forward",
             None,
             "CUDA_GPU",
@@ -115,7 +107,7 @@ def main():
         )
         module_function.load_from_db()
         file_name = make_fname(
-            "Linear", "forward", input_infos, output_infos, parameters
+            "LinearBias", "forward", input_infos, output_infos, parameters
         )
         template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
         template_file_loaded.write_text(module_function.get_code()[0])

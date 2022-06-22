@@ -48,6 +48,7 @@ def parse_conv2d_bn_act_params(json_params):
         activation,
     )
 
+
 class Conv2dBNAct(nn.Module):
     def __init__(
         self,
@@ -90,8 +91,7 @@ class Conv2dBNAct(nn.Module):
 
     def get_submodues(self):
         return self.sub_modules
-    
-    
+
     def forward(self, inputs):
         x = self.conv(inputs)
         if self.norm is not None:
@@ -99,6 +99,7 @@ class Conv2dBNAct(nn.Module):
         if self.activation is not None:
             x = self.activation(x)
         return x
+
 
 conv_params = [
     {
@@ -161,20 +162,20 @@ for params in conv_params:
         activation,
     ) = parse_conv2d_bn_act_params(params)
     conv2d_bn_act = Conv2dBNAct(
-                in_channels=parameters["in_channels"],
-                out_channels=parameters["out_channels"],
-                kernel_size=parameters["kernel_size"],
-                stride=parameters["stride"],
-                padding=parameters["padding"],
-                dilation=parameters["dilation"],
-                groups=parameters["groups"],
-                bias=bias,
-                padding_mode=padding_mode,
-                norm=norm,
-                activation=activation,
-            )
-    print(conv2d_bn_act.get_submodues())
-    modules += nn.Sequential(*conv2d_bn_act.get_submodues())
+        in_channels=parameters["in_channels"],
+        out_channels=parameters["out_channels"],
+        kernel_size=parameters["kernel_size"],
+        stride=parameters["stride"],
+        padding=parameters["padding"],
+        dilation=parameters["dilation"],
+        groups=parameters["groups"],
+        bias=bias,
+        padding_mode=padding_mode,
+        norm=norm,
+        activation=activation,
+    )
+    modules.append(nn.Sequential(*conv2d_bn_act.get_submodues()))
+modules = torch.nn.ModuleList(modules).cuda()
 sample_inputs = []
 data_0 = torch.ones((1, 3, 1024, 2048), device="cuda")
 data_1 = torch.ones((1, 64, 511, 1023), device="cuda")
@@ -183,13 +184,10 @@ sample_inputs.append(data_0)
 sample_inputs.append(data_1)
 sample_inputs.append(data_2)
 
-jit_kernel = make_jit_kernel(modules, sample_inputs, opt_level="hetero_fuse")
-
+jit_conv_kernel = make_jit_kernel(modules, sample_inputs, opt_level="hetero_fuse")
 
 
 #%%
-
-# fused_conv = CUDACompiler.generate_kernel(None, code)
 
 data_0 = torch.ones((1, 3, 1024, 2048), device="cuda")
 weight_0 = torch.ones((3, 64, 3, 3), device="cuda")
@@ -211,7 +209,7 @@ start_event.record(stream)
 
 active_blocks = [1, 1, 1]
 
-fused_conv(
+jit_conv_kernel(
     data_0,
     weight_0,
     outdata_0,
@@ -232,7 +230,7 @@ print("first time: {:.3f}".format(start_event.elapsed_time(end_event)))
 
 start_event.record(stream)
 for i in range(100):
-    fused_conv(
+    jit_conv_kernel(
         data_0,
         weight_0,
         outdata_0,
