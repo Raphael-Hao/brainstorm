@@ -6,8 +6,7 @@ from typing import List
 import torch
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
-from brt.jit import CUDACompiler
-from brt.jit.kernel import HeteroFusedKernel, ModuleKernel
+from brt.jit import CUDACompiler, make_jit_kernel
 
 log.set_level("jit", "DEBUG")
 
@@ -43,11 +42,63 @@ def parse_conv2d_bn_act_params(json_params):
         input_infos,
         output_infos,
         parameters,
+        bias,
         padding_mode,
         norm,
         activation,
     )
 
+class Conv2dBNAct(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        padding,
+        dilation,
+        groups,
+        bias,
+        padding_mode,
+        norm,
+        activation,
+    ) -> None:
+        super().__init__()
+        self.sub_modules = []
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+            padding_mode=padding_mode,
+        )
+        self.sub_modules.append(self.conv)
+        if norm is None:
+            self.norm = None
+        else:
+            self.norm = norm
+            self.sub_modules.append(self.norm)
+        if activation is None:
+            self.activation = None
+        else:
+            self.activation = activation
+            self.sub_modules.append(self.activation)
+
+    def get_submodues(self):
+        return self.sub_modules
+    
+    
+    def forward(self, inputs):
+        x = self.conv(inputs)
+        if self.norm is not None:
+            x = self.norm(x)
+        if self.activation is not None:
+            x = self.activation(x)
+        return x
 
 conv_params = [
     {
@@ -96,43 +147,49 @@ conv_params = [
         "output_shape": [1, 64, 511, 1023],
     },
 ]
-candidates: List[ModuleKernel] = []
+
+modules = []
 for params in conv_params:
     (
         module_name,
         input_infos,
         output_infos,
         parameters,
+        bias,
         padding_mode,
         norm,
         activation,
     ) = parse_conv2d_bn_act_params(params)
-    candidates.append(
-        ModuleKernel(
-            module_name,
-            "forward",
-            None,
-            "CUDA_GPU",
-            input_infos=input_infos,
-            output_infos=output_infos,
-            parameters=parameters,
-        )
-    )
-    candidates[-1].load_from_db()
+    conv2d_bn_act = Conv2dBNAct(
+                in_channels=parameters["in_channels"],
+                out_channels=parameters["out_channels"],
+                kernel_size=parameters["kernel_size"],
+                stride=parameters["stride"],
+                padding=parameters["padding"],
+                dilation=parameters["dilation"],
+                groups=parameters["groups"],
+                bias=bias,
+                padding_mode=padding_mode,
+                norm=norm,
+                activation=activation,
+            )
+    print(conv2d_bn_act.get_submodues())
+    modules += nn.Sequential(*conv2d_bn_act.get_submodues())
+sample_inputs = []
+data_0 = torch.ones((1, 3, 1024, 2048), device="cuda")
+data_1 = torch.ones((1, 64, 511, 1023), device="cuda")
+data_2 = torch.ones((1, 64, 511, 1023), device="cuda")
+sample_inputs.append(data_0)
+sample_inputs.append(data_1)
+sample_inputs.append(data_2)
 
-module_func = HeteroFusedKernel(candidates)
+jit_kernel = make_jit_kernel(modules, sample_inputs, opt_level="hetero_fuse")
 
-code, deps, sig, body = module_func.get_code()
 
-processed_template_fname = str(
-    BRT_KERNEL_TEMPLATE_PATH / ("processed_" + module_func.module_name + ".cu")
-)
-with open(processed_template_fname, "w") as f:
-    f.write(code)
 
 #%%
 
-fused_conv = CUDACompiler.generate_kernel(None, code)
+# fused_conv = CUDACompiler.generate_kernel(None, code)
 
 data_0 = torch.ones((1, 3, 1024, 2048), device="cuda")
 weight_0 = torch.ones((3, 64, 3, 3), device="cuda")
