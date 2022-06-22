@@ -123,6 +123,7 @@ void CUDACompiler::static_execute(const std::vector<const void*>& ppargs, int fd
   CUfunction hfunc = activate(fd, dev);
   auto& blocks = kernels_[fd].blocks;
   auto& threads = kernels_[fd].threads;
+
   CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
                              0, stream, (void**)ppargs.data(), nullptr));
 }
@@ -151,61 +152,65 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
                                 cudaStream_t stream) {
   auto& kernel = kernels_[fd];
 
-  for (auto i = 0; i < kernel.shared_arg_num; i++) {
-    printf("shared_inputs_ptr[%d] = %p\n", i, shared_inputs_ptr[i]);
-  }
+  // for (auto i = 0; i < kernel.shared_arg_num; i++) {
+  //   printf("shared_inputs_ptr[%d] = %p\n", i, shared_inputs_ptr[i]);
+  // }
 
-  for (auto i = 0; i < kernel.standalone_arg_num * kernel.branch_num; i++) {
-    printf("standalone_inputs_ptr[%d] = %p\n", i, standalone_inputs_ptr[i]);
-  }
+  // for (auto i = 0; i < kernel.standalone_arg_num * kernel.branch_num; i++) {
+  //   printf("standalone_inputs_ptr[%d] = %p\n", i, standalone_inputs_ptr[i]);
+  // }
 
   std::vector<int> active_blocks(kernel.supported_capacity_num, 0);
   // reorder the arguments for kernel based on capacities
   auto branch_indice_with_order = sort_indice(branch_capacities);
 
   int real_branch_index = 0;
-  printf("runtime arg dispatch begin\n");
+  // printf("runtime arg dispatch begin\n");
   for (auto branch_idx = 0; branch_idx < kernel.branch_num; branch_idx++) {
     auto& branch_idx_in_order = branch_indice_with_order[branch_idx];
-    printf("sorted branch: %d -> origin branch %d\n", branch_idx, branch_idx_in_order);
+    // printf("sorted branch: %d -> origin branch %d\n", branch_idx, branch_idx_in_order);
     auto& capacity = branch_capacities[branch_idx_in_order];
-    printf("capacity: %d\n", capacity);
+    // printf("capacity: %d\n", capacity);
     if (capacity == 0) continue;
     active_blocks[kernel.capacity_index_map[capacity]]++;
-    printf("active_blocks[%d] capacity updated to: %d\n", kernel.capacity_index_map[capacity],
-           active_blocks[kernel.capacity_index_map[capacity]]);
+    // printf("active_blocks[%d] capacity updated to: %d\n", kernel.capacity_index_map[capacity],
+    //  active_blocks[kernel.capacity_index_map[capacity]]);
     auto shared_arg_branch_index = std::accumulate(
         branch_capacities.begin(), branch_capacities.begin() + branch_idx_in_order, 0);
-    printf("shared_arg_branch_index: %d for branch: %d, real: %d\n", shared_arg_branch_index,
-           branch_idx, real_branch_index);
+    // printf("shared_arg_branch_index: %d for branch: %d, real: %d\n", shared_arg_branch_index,
+    //  branch_idx, real_branch_index);
     kernel.shared_arg_offset[real_branch_index] = shared_arg_branch_index;
+    // printf("kernel.shared_arg_offset[%d] = %d\n", real_branch_index,
+    //  kernel.shared_arg_offset[real_branch_index]);
 
     for (auto arg_idx = 0; arg_idx < (kernel.arg_num - kernel.shared_arg_num); arg_idx++) {
       kernel.standalone_arg_hptr_array[arg_idx][real_branch_index] =
           (void*)standalone_inputs_ptr[kernel.standalone_arg_num * branch_idx_in_order + arg_idx];
-      printf("branch: %d, standalone_arg_hptr_array[%d][%d] = %p\n", branch_idx, arg_idx,
-             real_branch_index, kernel.standalone_arg_hptr_array[arg_idx][real_branch_index]);
+      // printf("branch: %d, standalone_arg_hptr_array[%d][%d] = %p\n", branch_idx, arg_idx,
+      //  real_branch_index, kernel.standalone_arg_hptr_array[arg_idx][real_branch_index]);
     }
     real_branch_index++;
   }
   // print debug info
-  printf("runtime arg dispatch end\n");
+  // printf("runtime arg dispatch end\n");
 
   for (auto arg_idx = 0; arg_idx < kernel.arg_num; arg_idx++) {
     if (arg_idx < kernel.shared_arg_num) {
       netlet::DevicePtr2PtrArray((char**)kernel.arg_dptr_array[arg_idx],
                                  (char*)shared_inputs_ptr[arg_idx], kernel.shared_arg_offset,
                                  kernel.branch_num, kernel.shared_arg_grans[arg_idx], stream);
-      CUDA_CHECK(cudaStreamSynchronize(stream));
+      // CUDA_CHECK(cudaStreamSynchronize(stream));
     } else {
       CUDA_CHECK(cudaMemcpyAsync(kernel.arg_dptr_array[arg_idx],
                                  kernel.standalone_arg_hptr_array[arg_idx - kernel.shared_arg_num],
                                  real_branch_index * sizeof(void*), cudaMemcpyHostToDevice,
                                  stream));
-      CUDA_CHECK(cudaStreamSynchronize(stream));
+      // CUDA_CHECK(cudaStreamSynchronize(stream));
     }
   }
-
+  // for (auto cap_idx = 0; cap_idx < kernel.supported_capacity_num; cap_idx++) {
+  //   printf("active_blocks[%d] = %d\n", cap_idx, active_blocks[cap_idx]);
+  // }
   // geneerate culaunch config
   std::vector<const void*> pargs(kernel.arg_dptr_array.size() + active_blocks.size()),
       ppargs(kernel.arg_dptr_array.size() + active_blocks.size());
@@ -230,12 +235,12 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
     threads.x = std::max(threads.x, kernels_[fd].block_sizes[i]);
   }
 
-  printf("blocks: %d, %d, %d\n", blocks.x, blocks.y, blocks.z);
-  printf("threads: %d, %d, %d\n", threads.x, threads.y, threads.z);
+  // printf("blocks: %d, %d, %d\n", blocks.x, blocks.y, blocks.z);
+  // printf("threads: %d, %d, %d\n", threads.x, threads.y, threads.z);
 
   CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
                              0, stream, (void**)ppargs.data(), nullptr));
-  CUDA_CHECK(cudaStreamSynchronize(stream));
+  // CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headless_code) {
@@ -260,8 +265,7 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
       kernel.blocks.x = capture_with_default(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*(\d+)\s*)"), 1);
       kernel.threads.x = capture_with_default(
-          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.xdim\s*=\s*(\d+)\s*)"),
-          1);
+          kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*(\d+)\s*)"), 1);
       break;
     }
     case KernelType::kHeteroFuse: {
@@ -323,6 +327,7 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
       kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.y\s+=\s+(\d+)\s*)"), 1);
   kernel.threads.z = capture_with_default(
       kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.z\s+=\s+(\d+)\s*)"), 1);
+
   return {kernel_type_str, fd};
 }
 

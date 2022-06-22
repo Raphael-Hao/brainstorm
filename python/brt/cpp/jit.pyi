@@ -15,6 +15,3 @@ def homo_invoke(
     active_blocks: List[int],
     ctx: int,
 ) -> None: ...
-def elastic_homo_invoke(
-    inputs: List[torch.Tensor], weights: List[torch.Tensor], extra: List[int], ctx: int
-) -> None: ...
