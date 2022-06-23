@@ -6,6 +6,7 @@ import torch
 from brt.routers import reset_proto_tensor_cls
 
 from thor_config import ThorConfig
+from thor_model import ThorEncoder
 from thor_moe import ThorMoE
 
 config = ThorConfig()
@@ -14,9 +15,11 @@ config.hidden_size = 512
 config.intermediate_size = 1024
 config.num_attention_heads = 8
 config.num_hidden_layers = 1
-config.expert_num = 2
+config.expert_num = 16
+config.expert_type = "brt_moe"
 
-thor_moe = ThorMoE(config).eval()
+# thor_moe = ThorMoE(config).eval()
+thor_moe = ThorEncoder(config).eval()
 
 
 thor_moe.cuda()
