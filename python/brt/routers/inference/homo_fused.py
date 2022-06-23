@@ -73,13 +73,14 @@ class HomoFusedScatterRouter(ScatterRouter):
             self.supported_capacities = self.supported_capacities.to(
                 in_flow_data.device
             )
-        self.start_timer()
+            
+        # self.start_timer()
         local_indices, loads = generate_local_indices(
             route_mask.to(torch.int32), self.supported_capacities
         )
-        self.end_timer("generate_local_indices")
+        # self.end_timer("generate_local_indices")
 
-        self.start_timer()
+        # self.start_timer()
         if self.transform:
             out_flow_data = route_with_local_indices(
                 in_flow_data, local_indices, loads, gates
@@ -89,7 +90,8 @@ class HomoFusedScatterRouter(ScatterRouter):
             out_flow_data = route_with_local_indices(
                 in_flow_data, local_indices, loads, None
             )
-        self.end_timer("route_with_local_indices")
+        # self.end_timer("route_with_local_indices")
+
         out_flow = init_proto_tensor(
             out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack
         )
@@ -132,7 +134,7 @@ class HomoFusedGatherRouter(GatherRouter):
         loads = in_flow_load_stack.pop()
         gates = extra_attr_stack["gates_stack"].pop()
 
-        self.start_timer()
+        # self.start_timer()
         if self.transform:
             out_flow_data = route_back_with_local_indices(
                 in_flow_data, local_indices, loads, gates
@@ -141,7 +143,7 @@ class HomoFusedGatherRouter(GatherRouter):
             out_flow_data = route_back_with_local_indices(
                 in_flow_data, local_indices, loads, None
             )
-        self.end_timer("route_back_with_local_indices")
+        # self.end_timer("route_back_with_local_indices")
 
         out_flow = init_proto_tensor(
             out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack

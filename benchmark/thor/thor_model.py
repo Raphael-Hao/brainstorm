@@ -16,7 +16,6 @@ import torch.utils.checkpoint
 from packaging import version
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
-
 from transformers.activations import ACT2FN
 from transformers.file_utils import (
     ModelOutput,
@@ -43,13 +42,15 @@ from transformers.modeling_utils import (
     prune_linear_layer,
 )
 from transformers.utils import logging
+
 from thor_config import ThorConfig
 from thor_moe import (
-    ThorInterOutput,
-    MaskSerialThorMoE,
+    FusedThorMoE,
     MaskFusionThorMoE,
-    SparseSerialThorMoE,
+    MaskSerialThorMoE,
     SparseFusionThorMoE,
+    SparseSerialThorMoE,
+    ThorInterOutput,
     ThorMoE,
 )
 
@@ -460,9 +461,12 @@ class BertLayer(nn.Module):
             elif config.expert_type == "sparse_fusion":
                 print("using sparse fusion inter output for moe")
                 self.inter_output = SparseFusionThorMoE(config)
-            elif config.expert_type == "router_moe":
-                print("using router moe inter output")
+            elif config.expert_type == "brt_moe":
+                print("using brt moe inter output")
                 self.inter_output = ThorMoE(config)
+            elif config.expert_type == "brt_homo_moe":
+                print("using brt homo fused inter output")
+                self.inter_output = FusedThorMoE(config)
             else:
                 raise ValueError(f"{config.expert_type} is not supported")
 

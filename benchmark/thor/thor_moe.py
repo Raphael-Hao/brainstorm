@@ -182,33 +182,34 @@ class FusedThorMoE(nn.Module):
     def forward(self, hidden_states):
         # B x T x H -> T x H
         inter_states = hidden_states.view(-1, hidden_states.size(-1))
-        self.start_event.record(stream=self.stream)
+        # self.start_event.record(stream=self.stream)
         x = self.scatter_router(inter_states)
-        self.end_event.record(stream=self.stream)
-        self.stream.synchronize()
-        print("fused scatter time: ", self.start_event.elapsed_time(self.end_event))
-        # print(reverse_indices)
-        # print(capacities.tolist())
-        self.start_event.record(stream=self.stream)
+        # self.end_event.record(stream=self.stream)
+        # self.stream.synchronize()
+        # print("fused scatter time: ", self.start_event.elapsed_time(self.end_event))
+        
+        # self.start_event.record(stream=self.stream)
         x = self.fused_expert(x)
-        self.end_event.record(stream=self.stream)
-        self.stream.synchronize()
-        print("fused expert time: ", self.start_event.elapsed_time(self.end_event))
+        # self.end_event.record(stream=self.stream)
+        # self.stream.synchronize()
+        # print("fused expert time: ", self.start_event.elapsed_time(self.end_event))
 
-        self.start_event.record(stream=self.stream)
+        # self.start_event.record(stream=self.stream)
         inter_states = self.gather_router(x)
-        self.end_event.record(stream=self.stream)
-        self.stream.synchronize()
-        print("gather router time: ", self.start_event.elapsed_time(self.end_event))
+        # self.end_event.record(stream=self.stream)
+        # self.stream.synchronize()
+        # print("gather router time: ", self.start_event.elapsed_time(self.end_event))
+        
         # T x H -> B x T x H
-        self.start_event.record(stream=self.stream)
+        # self.start_event.record(stream=self.stream)
         inter_states = inter_states.view(
             hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
         )
         x = self.layer_norm(inter_states + hidden_states)
-        self.end_event.record(stream=self.stream)
-        self.stream.synchronize()
-        print("layer norm time: ", self.start_event.elapsed_time(self.end_event))
+        # self.end_event.record(stream=self.stream)
+        # self.stream.synchronize()
+        # print("layer norm time: ", self.start_event.elapsed_time(self.end_event))
+        
         return x
 
 
