@@ -18,9 +18,9 @@ __all__ = [
 
 
 def make_jit_kernel(
-    modules, sample_inputs, method="forward", opt_level="none"
+    modules, sample_inputs, method="forward", opt_level=None
 ) -> Callable[..., None]:
-    if opt_level == "none":
+    if opt_level is None:
         kernel = ModuleKernelFactory.make_kernel(modules, method, sample_inputs)
 
     elif opt_level == "hetero_fuse":
