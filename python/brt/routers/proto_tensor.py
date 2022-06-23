@@ -12,6 +12,8 @@ __all__ = [
     "deinit_proto_tensor",
     "to_proto_tensor",
     "to_torch_tensor",
+    "collect_proto_attr_stack",
+    "pack_proto_attr_stack",
 ]
 
 logger = log.get_logger(__file__)

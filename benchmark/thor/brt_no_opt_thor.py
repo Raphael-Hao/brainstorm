@@ -3,9 +3,10 @@
 
 # %%
 import torch
+from brt.routers import reset_proto_tensor_cls
 
 from thor_config import ThorConfig
-from thor_moe import FusedThorMoE
+from thor_moe import ThorMoE
 
 config = ThorConfig()
 config.token_num = 64
@@ -15,15 +16,14 @@ config.num_attention_heads = 8
 config.num_hidden_layers = 1
 config.expert_num = 2
 
-fused_thor_moe = FusedThorMoE(config)
+thor_moe = ThorMoE(config).eval()
 
 
-fused_thor_moe.cuda()
+thor_moe.cuda()
 
 x = torch.randn(1, 4, 512).cuda()
-x = fused_thor_moe(x)
+x = thor_moe(x)
 
-print(x)
 
 # %%
 x = torch.zeros(1, 64, 512).cuda()
@@ -33,10 +33,9 @@ start_event = torch.cuda.Event(enable_timing=True)
 end_event = torch.cuda.Event(enable_timing=True)
 start_event.record(stream)
 for i in range(10):
-    y = fused_thor_moe(x)
+    y = thor_moe(x)
 end_event.record(stream)
 stream.synchronize()
 print("elapsed time: {:.3f}".format(start_event.elapsed_time(end_event) / 10))
 
-print(y)
-# %%
+
