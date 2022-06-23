@@ -3,7 +3,6 @@
 
 
 #%%
-
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
 from brt.jit.kernel import ModuleKernel
@@ -72,7 +71,7 @@ def main():
                     print(f"tuning {module_name} with: {parameters}")
                     tvm_tuner.tune_netlet()
                 else:
-                    print(f"ignored {module_name} with: {parameters}")
+                    print(f"tuning ignored for {module_name} with: {parameters}")
                 tvm_tuner.export_netlet_template()
                 tvm_tuner.insert_netlet_to_storage()
                 module_function = ModuleKernel(
