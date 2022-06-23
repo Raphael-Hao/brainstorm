@@ -51,7 +51,7 @@ class HomoFusedScatterRouter(ScatterRouter):
             self.supported_capacities = supported_capacities
         else:
             self.supported_capacities = torch.tensor(
-                supported_capacities, dtype=torch.int64
+                supported_capacities, dtype=torch.int32
             )
 
     def dispatch(
@@ -60,7 +60,7 @@ class HomoFusedScatterRouter(ScatterRouter):
         in_flow_tag_stack: List[torch.Tensor],
         in_flow_load_stack: List[int],
         extra_attr_stack: Dict[str, List[Any]],
-        route_indices: torch.Tensor,
+        route_mask: torch.Tensor,
         gates: torch.Tensor,
     ) -> ProtoTensor:
         # currently we assume that the ProtoTensor is dense one
@@ -75,7 +75,7 @@ class HomoFusedScatterRouter(ScatterRouter):
             )
         self.start_timer()
         local_indices, loads = generate_local_indices(
-            route_indices, self.supported_capacities
+            route_mask.to(torch.int32), self.supported_capacities
         )
         self.end_timer("generate_local_indices")
 

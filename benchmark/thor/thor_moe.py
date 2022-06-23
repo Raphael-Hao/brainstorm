@@ -8,7 +8,8 @@
 import torch
 import torch.nn as nn
 from brt.common import BRT_KERNEL_TEMPLATE_PATH
-from brt.jit import CUDACompiler, HomoFusedKernelFactory
+from brt.jit import make_jit_kernel
+from brt.routers import collect_proto_attr_stack, init_proto_tensor
 from brt.routers.app.rand import (
     RandGatherRouter,
     RandHomoFusedGatherRouter,
@@ -67,64 +68,44 @@ class FusedThorExpert(nn.Module):
         super().__init__()
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
-        dense1s = [
-            nn.Linear(config.hidden_size, config.intermediate_size)
-            for _ in range(config.expert_num)
-        ]
+        dense1s = nn.ModuleList(
+            [
+                nn.Linear(config.hidden_size, config.intermediate_size)
+                for _ in range(config.expert_num)
+            ]
+        )
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
             self.intermediate_act_fn = config.hidden_act
-        dense2s = [
-            nn.Linear(config.intermediate_size, config.hidden_size)
-            for _ in range(config.expert_num)
-        ]
-        self.expert1_func = HomoFusedKernel(
-            "Linear",
-            config.expert_num,
-            capacities=[1, 2, 4],  # 8, 16, 32, 64, 128, 256, 512, 1024],
-            shared_arg_indices=[0, 2],
-            shared_arg_grans=[2048, 4096],
-            input_infos={"input_0": [1, config.hidden_size]},
-            output_infos={"output_0": [1, config.intermediate_size]},
-            parameters={
-                "in_features": config.hidden_size,
-                "out_features": config.intermediate_size,
-            },
+        dense2s = nn.ModuleList(
+            [
+                nn.Linear(config.intermediate_size, config.hidden_size)
+                for _ in range(config.expert_num)
+            ]
         )
-        self.expert2_func = HomoFusedKernel(
-            "Linear",
-            config.expert_num,
-            capacities=[1, 2, 4],  # 8, 16, 32, 64, 128, 256, 512, 1024],
-            shared_arg_indices=[0, 2],
-            shared_arg_grans=[4096, 2048],
-            input_infos={"input_0": [1, config.intermediate_size]},
-            output_infos={"output_0": [1, config.hidden_size]},
-            parameters={
-                "in_features": config.intermediate_size,
-                "out_features": config.hidden_size,
-            },
-        )
-        expert1_code = self.expert1_func.get_code()[0]
-        expert1_code_fpath = BRT_KERNEL_TEMPLATE_PATH / "thor_expert1.cu"
-        expert1_code_fpath.write_text(expert1_code)
-        expert2_code = self.expert2_func.get_code()[0]
-        expert2_code_fpath = BRT_KERNEL_TEMPLATE_PATH / "thor_expert2.cu"
-        expert2_code_fpath.write_text(expert2_code)
+        capacities = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+        sample_inputs = [torch.ones(i, config.hidden_size) for i in capacities]
 
-        self.expert1_kernel = CUDACompiler.generate_kernel(
-            None, self.expert1_func.get_code()[0]
+        self.expert1_kernel = make_jit_kernel(
+            dense1s, sample_inputs, opt_level="homo_fuse"
         )
-        self.expert2_kernel = CUDACompiler.generate_kernel(
-            None, self.expert2_func.get_code()[0]
+
+        sample_inputs = [torch.ones(i, config.intermediate_size) for i in capacities]
+
+        self.expert2_kernel = make_jit_kernel(
+            dense2s, sample_inputs, opt_level="homo_fuse"
         )
-        self.expert1_standalone_inputs = [linear.weight for linear in dense1s]
-        self.expert1_standalone_inputs.extend([linear.bias for linear in dense1s])
+
+        self.expert1_standalone_inputs = []
+        for linear in dense1s:
+            self.expert1_standalone_inputs.extend([linear.weight, linear.bias])
         self.expert1_standalone_inputs = nn.ParameterList(
             self.expert1_standalone_inputs
         )
-        self.expert2_standalone_inputs = [linear.weight for linear in dense2s]
-        self.expert2_standalone_inputs.extend([linear.bias for linear in dense2s])
+        self.expert2_standalone_inputs = []
+        for linear in dense2s:
+            self.expert2_standalone_inputs.extend([linear.weight, linear.bias])
         self.expert2_standalone_inputs = nn.ParameterList(
             self.expert2_standalone_inputs
         )
@@ -133,15 +114,15 @@ class FusedThorExpert(nn.Module):
         self,
         inter_state: torch.Tensor,
     ) -> torch.Tensor:
+        capacities = inter_state.load.tolist()
+        tag_stack, load_stack, extra_stack = collect_proto_attr_stack(inter_state)
         expert1_out = torch.zeros(
             inter_state.shape[0], self.intermediate_size, device=inter_state.device
         )
-        print(inter_state)
-        print(expert1_out.shape)
         self.expert1_kernel(
             shared_inputs=[inter_state, expert1_out],
             standalone_inputs=self.expert1_standalone_inputs,
-            capacities=inter_state.load.tolist(),
+            capacities=capacities,
         )
         x = self.intermediate_act_fn(expert1_out)
         expert2_out = torch.zeros(
@@ -150,15 +131,18 @@ class FusedThorExpert(nn.Module):
         self.expert2_kernel(
             shared_inputs=[x, expert2_out],
             standalone_inputs=self.expert2_standalone_inputs,
-            capacities=inter_state.load.tolist(),
+            capacities=capacities,
         )
+        expert2_out = init_proto_tensor(expert2_out, tag_stack, load_stack, extra_stack)
         return expert2_out
 
 
 class ThorMoE(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
-        self.experts = [ThorExpert(config) for _ in range(config.expert_num)]
+        self.experts = nn.ModuleList(
+            [ThorExpert(config) for _ in range(config.expert_num)]
+        )
         self.scatter_router = RandScatterRouter(dst_num=config.expert_num)
         self.gather_router = RandGatherRouter(dst_num=config.expert_num)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -333,8 +317,6 @@ class MaskFusionThorMoE(nn.Module):
         inter_states = torch.stack(tmp_inter_states, dim=0)
         inter_states = inter_states.sum(dim=0, keepdim=True)
 
-        # print(inter_states.size())
-        # inter_states = inter_states.sum(dim=1)
         inter_states = self.dropout(inter_states)
         inter_states = self.LayerNorm(inter_states + hidden_states)
         return inter_states
@@ -385,10 +367,8 @@ class SparseSerialThorMoE(nn.Module):
     def forward(self, hidden_states):
         # hidden_states: B x T x C
         inter_states = hidden_states.view(self.token_num, hidden_states.size(-1))
-        # print(inter_states.size())
         if self.runtime:
             self.generate_mask(inter_states)
-        # print(inter_states.size())
         inter_states = inter_states[self.random_mask].contiguous()
         inter_states = inter_states.view(
             self.expert_num,
