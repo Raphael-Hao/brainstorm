@@ -128,7 +128,9 @@ class ProtoTensorTest(unittest.TestCase):
             init_proto_tensor(torch.Tensor([1, 2, 3])),
             init_proto_tensor(torch.Tensor([1, 2, 3])),
         ]
-        proto_tensor_list = pack_proto_attr_stack(proto_tensor_list, tag_stack, load_stack)
+        proto_tensor_list = pack_proto_attr_stack(
+            proto_tensor_list, tag_stack, load_stack
+        )
         for i in range(2):
             self.assertEqual(proto_tensor_list[i].stack_size, 2)
             self.assertEqual(proto_tensor_list[i].load, 4)
@@ -143,7 +145,9 @@ class ProtoTensorTest(unittest.TestCase):
                 init_proto_tensor(torch.Tensor([1, 2, 3])),
             ],
         ]
-        proto_tensor_mix_list = pack_proto_attr_stack(proto_tensor_mix_list, tag_stack, load_stack)
+        proto_tensor_mix_list = pack_proto_attr_stack(
+            proto_tensor_mix_list, tag_stack, load_stack
+        )
         self.assertEqual(proto_tensor_mix_list[0].stack_size, 2)
         self.assertEqual(proto_tensor_mix_list[0].load, 4)
         self.assertTrue(
@@ -205,7 +209,9 @@ class ProtoTensorTest(unittest.TestCase):
                 init_proto_tensor(torch.Tensor([1, 2, 3])),
             ],
         ]
-        proto_tensor_mix_list = pack_proto_attr_stack(proto_tensor_mix_list, tag_stack, load_stack)
+        proto_tensor_mix_list = pack_proto_attr_stack(
+            proto_tensor_mix_list, tag_stack, load_stack
+        )
         (
             collected_tag_stack,
             collected_load_stack,
@@ -236,6 +242,7 @@ class ProtoTensorTest(unittest.TestCase):
         self.assertEqual(collected_tag_stack, tag_stack)
         self.assertEqual(collected_load_stack, load_stack)
         self.assertEqual(collected_extra_attr_stack_dict, {})
+
 
 if __name__ == "__main__":
     unittest.main()
