@@ -60,12 +60,11 @@ def make_inputs(
 def make_fname(
     op_type: str,
     method: str,
-    device_name: str,
     input_infos: Dict[str, List[int]],
     output_infos: Dict[str, List[int]],
     parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
 ) -> str:
-    fname = "_".join([op_type, method, device_name])
+    fname = "_".join([op_type, method])
     fname += "_"
     fname += "-".join(
         f"{name}_" + "_".join(str(dim) for dim in shape)
