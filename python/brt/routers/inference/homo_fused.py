@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Tuple, Union
 
 import torch
-from brt.cpp.router import (
+from brt._C.router import (
     generate_local_indices,
     route_back_with_local_indices,
     route_with_local_indices,
