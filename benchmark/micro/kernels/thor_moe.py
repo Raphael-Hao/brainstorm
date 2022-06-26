@@ -71,10 +71,10 @@ def tvm_tune(model, input_shape, K, N):
 
 def main():
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    # in_features = 1024
-    # out_features = 512
-    in_features = 512
-    out_features = 1024
+    in_features = 1024
+    out_features = 512
+    # in_features = 512
+    # out_features = 1024
     tvm_tuner = TVMTuner()
     for bs in input_bs:
         input_infos = {"input_0": (bs, in_features)}
@@ -96,30 +96,21 @@ def main():
         )
         tvm_tuner.export_netlet_template()
         tvm_tuner.insert_netlet_to_storage()
-        module_function = ModuleKernel(
-            "LinearBias",
-            "forward",
-            None,
-            "CUDA_GPU",
-            input_infos,
-            output_infos,
-            parameters,
-        )
-        module_function.load_from_db()
-        file_name = make_fname(
-            "LinearBias", "forward", input_infos, output_infos, parameters
-        )
-        template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
-        template_file_loaded.write_text(module_function.get_code()[0])
-    # input_shapes = [[bs, 512] for bs in input_bs]
-    # for input_shape in input_shapes:
-    #     tvm_tune(Expert1(), input_shape, 512, 1024)
-    #     # tvm_export(Expert1(), input_shape, 512, 1024)
-    # input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    # input_shapes = [[bs, 1024] for bs in input_bs]
-    # for input_shape in input_shapes:
-    #     tvm_tune(Expert2(), input_shape, 1024, 512)
-    #     # tvm_export(Expert2(), input_shape, 1024, 512)
+        # module_function = ModuleKernel(
+        #     "LinearBias",
+        #     "forward",
+        #     None,
+        #     "CUDA_GPU",
+        #     input_infos,
+        #     output_infos,
+        #     parameters,
+        # )
+        # module_function.load_from_db()
+        # file_name = make_fname(
+        #     "LinearBias", "forward", input_infos, output_infos, parameters
+        # )
+        # template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
+        # template_file_loaded.write_text(module_function.get_code()[0])
 
 
 if __name__ == "__main__":

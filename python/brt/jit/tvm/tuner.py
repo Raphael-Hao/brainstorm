@@ -148,6 +148,7 @@ class TVMTuner:
     def get_best_template(self):
         if not self.tune_log_file.exists() and self.old_tune_log_file.exists():
             contents = self.old_tune_log_file.read_text()
+            self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
             self.tune_log_file.write_text(contents)
         try:
             tvm_sch, tvm_args = self.tvm_task.apply_best(str(self.tune_log_file))
@@ -177,7 +178,9 @@ class TVMTuner:
             logger.warn(f"{self.template_file_origin} already exists.")
         if self.template_file_generated.exists():
             logger.warn(f"{self.template_file_generated} already exists.")
+        self.template_file_origin.parent.mkdir(parents=True, exist_ok=True)
         self.template_file_origin.write_text(kernel_source)
+        self.template_file_generated.parent.mkdir(parents=True, exist_ok=True)
         self.template_file_generated.write_text(module_function.get_code()[0])
 
     def insert_netlet_to_storage(self):

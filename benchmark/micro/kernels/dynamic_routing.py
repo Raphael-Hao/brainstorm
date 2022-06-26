@@ -17,6 +17,8 @@ from torch.nn.modules.utils import _pair
 
 logger = log.get_logger()
 logger.setLevel("INFO")
+
+
 def parse_conv2d_bn_act_params(json_params):
     module_name = "Conv2d"
     out_channels = json_params["out_channels"]
@@ -185,9 +187,9 @@ def main():
                 input_infos,
                 output_infos,
                 parameters,
-                make_log_fname(
-                    module_name, "forward", input_infos, output_infos, parameters
-                ),
+                # make_log_fname(
+                #     module_name, "forward", input_infos, output_infos, parameters
+                # ),
             )
             logger.info(f"tuning {module_name} with: {parameters}")
             # tvm_tuner.tune_netlet()
@@ -201,7 +203,6 @@ def main():
                 input_infos,
                 output_infos,
                 parameters,
-                
             )
             module_function.load_from_db()
             file_name = make_fname(
