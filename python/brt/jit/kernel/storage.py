@@ -3,9 +3,10 @@
 
 import sqlite3
 
-from brt.common import BRT_KERNEL_DB_FNAME, BRT_KERNEL_TEMPLATE_PATH
+from brt.common import BRT_KERNEL_DB_FNAME
 
 __all__ = ["kernel_storager"]
+
 
 class KernelStorager:
     QUERY_KERNEL_CMD = r"SELECT Key, Identifier, OpType, Attributes, Source, DeviceType, Function, Tags, Miscs FROM KernelCache WHERE (Identifier = ?) AND (DeviceType = ?);"
