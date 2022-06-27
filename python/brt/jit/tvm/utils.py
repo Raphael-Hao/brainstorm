@@ -64,7 +64,7 @@ def make_fname(
     output_infos: Dict[str, List[int]],
     parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
 ) -> str:
-    fname = op_type + "_" + method
+    fname = "_".join([op_type, method])
     fname += "_"
     fname += "-".join(
         f"{name}_" + "_".join(str(dim) for dim in shape)

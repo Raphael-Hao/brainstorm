@@ -37,7 +37,7 @@ def install():
         packages=find_packages("python"),
         ext_modules=[
             CUDAExtension(
-                name="brt.cpp.jit",
+                name="brt._C.jit",
                 sources=[
                     "./src/backend/torch/jit.cc",
                     "./src/jit/compiler.cu",
@@ -51,7 +51,7 @@ def install():
                 extra_compile_args=ext_args,
             ),
             CUDAExtension(
-                name="brt.cpp.router",
+                name="brt._C.router",
                 sources=[
                     "./src/backend/torch/router.cc",
                     "./src/router/location.cu",
