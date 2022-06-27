@@ -21,3 +21,4 @@ tornado==6.1
 tqdm
 json_tricks
 graphviz
+ipykernel
