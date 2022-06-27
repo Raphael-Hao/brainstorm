@@ -6,6 +6,7 @@ from typing import Dict, List, Union
 
 import torch
 from brt.common import log
+from brt.jit.utils import get_device_name
 
 from .cuda import CUDATypeSizeInByte, GlobalKernel
 from .storage import kernel_storager
@@ -171,9 +172,13 @@ class ModuleKernel(GlobalKernel):
         self.raw_body = remove_empty_lines(self.raw_body)
 
     def make_identifier(self):
+        if self.platform == "CUDA_GPU":
+            assert torch.cuda.is_available()
+        self.device_name = get_device_name(self.platform)
         return make_identifier(
             self.module_name,
             self.method,
+            self.device_name,
             self.input_infos,
             self.output_infos,
             self.parameters,

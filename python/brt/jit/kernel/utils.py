@@ -6,7 +6,6 @@ import re
 from typing import Dict, List, Union
 
 __all__ = [
-    "to_list",
     "remove_empty_lines",
     "remove_comments",
     "check_if_pointer",
@@ -14,12 +13,6 @@ __all__ = [
     "make_identifier",
     "make_fused_identifier",
 ]
-
-
-def to_list(x):
-    if isinstance(x, list):
-        return x
-    return [x]
 
 
 def remove_empty_lines(code: str) -> str:
@@ -66,6 +59,7 @@ def make_func_name(
 def make_identifier(
     op_type,
     method: str,
+    device_name: str,
     input_infos: Dict[str, List[int]],
     output_infos: Dict[str, List[int]],
     parameters: Dict[str, Union[Union[int, float], List[Union[int, float]]]],
@@ -73,6 +67,7 @@ def make_identifier(
     identifier_dict = {}
     identifier_dict["op_type"] = op_type
     identifier_dict["method"] = method
+    identifier_dict["device_name"] = device_name
     identifier_dict["input_infos"] = input_infos
     identifier_dict["output_infos"] = output_infos
     identifier_dict["parameters"] = parameters

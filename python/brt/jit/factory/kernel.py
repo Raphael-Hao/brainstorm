@@ -18,9 +18,9 @@ __all__ = [
 
 
 def make_jit_kernel(
-    modules, sample_inputs, method="forward", opt_level="none"
+    modules, sample_inputs, method="forward", opt_level=None
 ) -> Callable[..., None]:
-    if opt_level == "none":
+    if opt_level is None:
         kernel = ModuleKernelFactory.make_kernel(modules, method, sample_inputs)
 
     elif opt_level == "hetero_fuse":
@@ -32,11 +32,11 @@ def make_jit_kernel(
         raise ValueError(f"Not supported optimize level: {opt_level}")
     kernel_code, _, _, _ = kernel.get_code()
 
-    processed_template_fname = str(
-        BRT_KERNEL_TEMPLATE_PATH / ("processed_" + kernel.func_name + ".cu")
-    )
-    with open(processed_template_fname, "w") as f:
-        f.write(kernel_code)
+    # processed_template_fname = str(
+    #     BRT_KERNEL_TEMPLATE_PATH / ("processed_" + kernel.func_name + ".cu")
+    # )
+    # with open(processed_template_fname, "w") as f:
+    #     f.write(kernel_code)
 
     jit_kernel = CUDACompiler.generate_kernel(None, kernel_code)
     return jit_kernel

@@ -47,6 +47,10 @@ class ModuleInfo:
         raise NotImplementedError()
 
     @classmethod
+    def extract_parameters(cls, module) -> List[torch.nn.Parameter]:
+        raise NotImplementedError()
+
+    @classmethod
     def get_output_init_func(cls, module: torch.nn.Module, method: str):
         raise NotImplementedError()
 

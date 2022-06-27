@@ -3,7 +3,10 @@
 # Licensed under the MIT license.
 
 cd "$HOME" || exit
+
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.12.0-Linux-x86_64.sh
+wget https://github.com/Kitware/CMake/releases/download/v3.23.2/cmake-3.23.2-linux-x86_64.sh
+
 chmod +x Miniconda3-py38_4.12.0-Linux-x86_64.sh
 ./Miniconda3-py38_4.12.0-Linux-x86_64.sh -b -p "$HOME"/miniconda3
 conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch

@@ -12,6 +12,7 @@ from brt.common import (
     log,
 )
 from brt.jit.kernel import ModuleKernel
+from brt.jit.utils import get_device_name
 
 import tvm
 from tvm import auto_scheduler, relay
@@ -104,16 +105,21 @@ class TVMTuner:
         filename = make_fname(
             module_name, method, self.input_infos, self.output_infos, self.parameters
         )
-        self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{filename}.json"
+        device_name = get_device_name(self.platform)
+        self.tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / device_name / f"{filename}.json"
         old_filename = old_make_fname(
             module_name, self.input_infos, self.output_infos, self.parameters
         )
         if log_fname is not None:
-            old_filename = log_fname    
-        self.old_tune_log_file = BRT_KERNEL_TUNE_LOG_PATH / f"{old_filename}.json"
-        self.template_file_origin = BRT_KERNEL_TEMPLATE_PATH / f"{filename}_origin.cu"
+            old_filename = log_fname
+        self.old_tune_log_file = (
+            BRT_KERNEL_TUNE_LOG_PATH / device_name / f"{old_filename}.json"
+        )
+        self.template_file_origin = (
+            BRT_KERNEL_TEMPLATE_PATH / device_name / f"{filename}_origin.cu"
+        )
         self.template_file_generated = (
-            BRT_KERNEL_TEMPLATE_PATH / f"{filename}_generated.cu"
+            BRT_KERNEL_TEMPLATE_PATH / device_name / f"{filename}_generated.cu"
         )
         tvm_tasks, tvm_task_weights = auto_scheduler.extract_tasks(
             tvm_module["main"], tvm_params, self.target
@@ -142,6 +148,7 @@ class TVMTuner:
     def get_best_template(self):
         if not self.tune_log_file.exists() and self.old_tune_log_file.exists():
             contents = self.old_tune_log_file.read_text()
+            self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
             self.tune_log_file.write_text(contents)
         try:
             tvm_sch, tvm_args = self.tvm_task.apply_best(str(self.tune_log_file))
@@ -171,7 +178,9 @@ class TVMTuner:
             logger.warn(f"{self.template_file_origin} already exists.")
         if self.template_file_generated.exists():
             logger.warn(f"{self.template_file_generated} already exists.")
+        self.template_file_origin.parent.mkdir(parents=True, exist_ok=True)
         self.template_file_origin.write_text(kernel_source)
+        self.template_file_generated.parent.mkdir(parents=True, exist_ok=True)
         self.template_file_generated.write_text(module_function.get_code()[0])
 
     def insert_netlet_to_storage(self):

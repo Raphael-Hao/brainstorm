@@ -4,7 +4,7 @@
 #%%
 import torch
 from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
-from brt.jit import CUDACompiler, make_jit_kernel
+from brt.jit import make_jit_kernel
 
 log.set_level("jit", "DEBUG")
 

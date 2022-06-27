@@ -11,14 +11,14 @@ from .registry import ModuleInfo
 
 __all__ = ["make_jit_function"]
 
-def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level="none"):
+def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
     if mode == "eval":
 
         assert sample_inputs is not None, "sample_inputs must be provided in eval mode"
 
         jit_kernel = make_jit_kernel(modules, sample_inputs, "forward", opt_level)
 
-        if opt_level == "none":
+        if opt_level is None:
             assert len(modules) == 1, "only one module is supported for none opt mode"
             for subclass in ModuleInfo.__subclasses__():
                 if subclass.ismodule(modules):
