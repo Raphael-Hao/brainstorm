@@ -101,10 +101,9 @@ class ScatterRouter(BaseRouter):
     def __init__(
         self,
         dst_num,
-        route_func,
         route_method: str = "topk",
         residual_dst: int = -1,
-        transform=True,
+        routing_gates: bool = False,
         **kwargs,
     ):
         """base scatter router
@@ -117,10 +116,10 @@ class ScatterRouter(BaseRouter):
             dispatcher_cls (type): dispatcher class
         """
         super().__init__(dst_num=dst_num)
-        self.route_func = route_func
         self.route_method = route_method.lower()
         self.residual_dst = residual_dst
-        self.transform = transform
+        self.routing_gates = routing_gates
+        # self.transform = transform
         if self.route_method == "topk":
             self.k = kwargs.get("k")
             if self.k == None:
@@ -138,7 +137,9 @@ class ScatterRouter(BaseRouter):
         else:
             raise ValueError(f"route_method {route_method} is not supported")
 
-    def route(self, in_flow: Union[torch.Tensor, ProtoTensor]) -> List[ProtoTensor]:
+    def route(
+        self, in_flow: Union[torch.Tensor, ProtoTensor], gates: torch.Tensor,
+    ) -> Union[List[ProtoTensor], Tuple[List[ProtoTensor], List[ProtoTensor]]]:
         in_flow = self.pack_invalid_flow(in_flow)
         (
             in_flow_data,
@@ -146,7 +147,8 @@ class ScatterRouter(BaseRouter):
             in_flow_load_stack,
             extra_attr_stack_dict,
         ) = to_torch_tensor(in_flow, copy_stack=True)
-        route_mask, gates = self.gen_gates_and_mask(in_flow_data)
+        assert gates.size(0) == in_flow_data.size(0)
+        route_mask = self.gen_mask(gates)
         out_flows = self.dispatch(
             in_flow_data,
             in_flow_tag_stack,
@@ -158,48 +160,42 @@ class ScatterRouter(BaseRouter):
         out_flows = self.remove_needless_pack(out_flows)
         return out_flows
 
-    def gen_gates_and_mask(
-        self, in_flow_data: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def gen_mask(self, gates: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """generate gates with indices
 
         Args:
             inputs (torch.Tensor): input tensor
         """
-        gates = self.route_func(in_flow_data)  # sample x dst_num
-        assert gates.size(0) == in_flow_data.size(0) and gates.size(1) == self.dst_num
+        assert gates.size(1) == self.dst_num
         if self.route_method == "topk":
 
             route_hot_mask = torch.topk(gates, self.k, dim=1).indices  # sample x k
             route_hot_mask = torch.zeros(
-                gates.size(0),
-                self.dst_num,
-                dtype=torch.int64,
-                device=in_flow_data.device,
+                gates.size(0), self.dst_num, dtype=torch.int64, device=gates.device,
             ).scatter_(
                 1, route_hot_mask, 1
             )  # sample x dst_num
 
         elif self.route_method == "threshold":
             route_hot_mask = (
-                (gates > self.threshold).long().to(in_flow_data.device)
+                (gates > self.threshold).long().to(gates.device)
             )  # [bs x dst_num]
             if self.residual_dst >= 0:
                 residual_indices = (
                     (route_hot_mask.sum(dim=1, keepdim=True) == 0)
                     .long()
-                    .to(in_flow_data.device)
+                    .to(gates.device)
                 )  # [bs x 1]
                 residual_index = torch.full(
                     (residual_indices.shape),
                     self.residual_dst,
                     dtype=torch.int64,
-                    device=in_flow_data.device,
+                    device=gates.device,
                 )
                 route_hot_mask = torch.scatter_add(
                     route_hot_mask, 1, residual_index, residual_indices
                 )
-        return route_hot_mask, gates
+        return route_hot_mask
 
     def dispatch(
         self,
@@ -209,11 +205,14 @@ class ScatterRouter(BaseRouter):
         extra_attr_stack_dict: Dict[str, List[Any]],
         route_mask: torch.Tensor,
         gates: torch.Tensor,
-    ) -> List[ProtoTensor]:  # {dst}
+    ) -> Union[List[ProtoTensor], Tuple[List[ProtoTensor], List[ProtoTensor]]]:  # {dst}
         """
         Dispatch the inputs into the the list of torch.Tensor with indices
-        """
 
+        Returns:
+            If set routing_gates = True, return a tuple of the routed in_flow and routed gates, 
+            otherwise only routes in_flow
+        """
         in_flow_tag = in_flow_tags.pop()
         in_flow_load = in_flow_loads.pop()
 
@@ -223,22 +222,25 @@ class ScatterRouter(BaseRouter):
         route_mask_T = route_mask.t()  # [dst_num x sample]
 
         out_flows = []
+        if self.routing_gates:
+            out_gates = []
         for i in range(self.dst_num):
             tag_indices = torch.nonzero(
                 route_mask_T[i].view(-1)
             )  # TODO torch.nonzero will cause hostside synchronization, we need a async one
             if tag_indices.numel() > 0:
                 out_flow_tag = torch.gather(in_flow_tag, 0, tag_indices)
-                data_indices = tag_indices.repeat(1, route_size).view(-1, *route_shape)
-                if self.transform:
-                    gate = gates_T[i].reshape(
-                        (in_flow_data.size(0),) + (1,) * len(route_shape)
-                    )
-                    out_flow_data = torch.gather(in_flow_data * gate, 0, data_indices)
-                else:
-                    out_flow_data = torch.gather(in_flow_data, 0, data_indices)
+                data_indices = tag_indices.repeat(1, route_size)
+                data_indices = data_indices.view(-1, *route_shape)
+                out_flow_data = torch.gather(in_flow_data, 0, data_indices)
                 out_flow = init_proto_tensor(out_flow_data, in_flow_tags, in_flow_loads)
                 out_flow.pack(out_flow_tag, in_flow_load)
+                if self.routing_gates:
+                    out_gates_data = gates_T[i].index_select(0, tag_indices.view(-1)).view(-1, 1)
+                    out_gate = init_proto_tensor(
+                        out_gates_data, in_flow_tags, in_flow_loads
+                    )
+                    out_gate.pack(out_flow_tag, in_flow_load)
             else:
                 out_flow = init_proto_tensor(
                     torch.zeros(
@@ -254,8 +256,25 @@ class ScatterRouter(BaseRouter):
                     torch.zeros(0, 1, dtype=torch.int64, device=in_flow_data.device),
                     in_flow_load,
                 )
+                if self.routing_gates:
+                    out_gate = init_proto_tensor(
+                        torch.zeros(
+                            0, 1, dtype=gates.dtype, device=gates.device,
+                        ),
+                        in_flow_tags,
+                        in_flow_loads,
+                    )
+                    out_gate.pack(
+                        torch.zeros(0, 1, dtype=torch.int64, device=gates.device),
+                        in_flow_load,
+                    )
             out_flows.append(out_flow)
-        return out_flows
+            if self.routing_gates:
+                out_gates.append(out_gate)
+        if self.routing_gates:
+            return out_flows, out_gates
+        else:
+            return out_flows
 
     def symbolic_route(self, inputs: torch.Tensor) -> List[torch.Tensor]:
         return symbolic_scatter_route(inputs, self.dst_num)
@@ -332,8 +351,5 @@ class GatherRouter(BaseRouter):
         out_flow_loads = in_flows_loads + [in_flows_load]
         return init_proto_tensor(out_flow_data, out_flow_tags, out_flow_loads)
 
-    def symbolic_route(
-        self,
-        inputs: List[torch.Tensor],
-    ) -> torch.Tensor:
+    def symbolic_route(self, inputs: List[torch.Tensor],) -> torch.Tensor:
         return symbolic_gather_route(inputs, self.dst_num)
