@@ -71,10 +71,10 @@ def tvm_tune(model, input_shape, K, N):
 
 def main():
     input_bs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-    # in_features = 1024
-    # out_features = 512
-    in_features = 512
-    out_features = 1024
+    in_features = 1024
+    out_features = 512
+    # in_features = 512
+    # out_features = 1024
     tvm_tuner = TVMTuner()
     for bs in input_bs:
         input_infos = {"input_0": (bs, in_features)}
