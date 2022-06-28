@@ -236,6 +236,7 @@ class ScatterRouter(BaseRouter):
         gates_T = gates.t()
 
         out_flows = []
+        out_gates = []
         for i in range(self.dst_num):
             tag_indices = route_indices[i]
             if tag_indices.numel() > 0:
