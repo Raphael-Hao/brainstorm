@@ -20,10 +20,33 @@ std::vector<::torch::Tensor> ScatterRoute(const ::torch::Tensor& inputs, const l
   return results;
 }
 
+std::vector<std::vector<::torch::Tensor>> JointScatterRoute(
+    const std::vector<::torch::Tensor>& inputs, const long& dst_num) {
+  std::vector<std::vector<::torch::Tensor>> outputs;
+  for (auto& input : inputs) {
+    std::vector<::torch::Tensor> output(dst_num, ::torch::empty_like(input));
+    outputs.emplace_back(output);
+  }
+  return outputs;
+}
+
+std::vector<::torch::Tensor> JointGatherRoute(
+    const std::vector<std::vector<::torch::Tensor>>& inputs, const long& dst_num) {
+  std::vector<::torch::Tensor> outputs;
+  for (auto& input : inputs) {
+    assert(static_cast<int>(input.size()) == dst_num);
+    auto result = ::at::cat(input, 0);
+    outputs.emplace_back(result);
+  }
+  return outputs;
+}
+
 }  // namespace torchscript
 }  // namespace brt
 
 TORCH_LIBRARY(brt, m) {
   m.def("symbolic_scatter_route", brt::torchscript::ScatterRoute)
-      .def("symbolic_gather_route", brt::torchscript::GatherRoute);
+      .def("symbolic_gather_route", brt::torchscript::GatherRoute)
+      .def("symbolic_joint_scatter_route", brt::torchscript::JointScatterRoute)
+      .def("symbolic_joint_gather_route", brt::torchscript::JointGatherRoute);
 }
