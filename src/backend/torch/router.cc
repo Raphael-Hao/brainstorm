@@ -160,9 +160,11 @@ std::vector<::torch::Tensor> generate_local_indices(
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("generate_global_indices", &brt::backend::torch::generate_global_indices,
-        "Get global indices with each dst's load mapped to supported capacity");
+        "Generate global indices with each dst's load mapped to supported capacity");
+  m.def("generate_dst_indices", &brt::backend::torch::generate_dst_indices,
+        "Generate tensors of indices for each destination");
   m.def("generate_local_indices", &brt::backend::torch::generate_local_indices,
-        "Get local indices with each dst's load mapped to supported capacity",
+        "Generate a tensor for all local indices with each dst's load mapped to supported capacity",
         pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none());
   m.def("route_with_local_indices", &brt::backend::torch::route_with_local_indices,
         "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("route_indices"),
