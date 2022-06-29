@@ -10,6 +10,9 @@ def generate_global_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
+def generate_dst_indices(
+    hot_mask: torch.Tensor,
+) -> List[torch.Tensor]: ...
 def generate_local_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
