@@ -45,7 +45,7 @@ class HomoFusedScatterRouter(ScatterRouter):
         **kwargs,
     ):
         super().__init__(
-            dst_num, route_func, route_method, residual_dst, transform, **kwargs
+            dst_num, route_method, residual_dst, transform, **kwargs
         )
         if supported_capacities is None:
             self.supported_capacities = supported_capacities

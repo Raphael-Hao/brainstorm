@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
+from brt._C.router import generate_local_indices
 from brt.common import log
 from brt.frontend.primitive import router
 
@@ -107,23 +108,29 @@ class ScatterRouter(BaseRouter):
         self,
         dst_num,
         route_method: str = "topk",
+        route_logic: str = "1D",
         residual_dst: int = -1,
-        routing_gates: bool = False,
+        transform: bool = False,
         **kwargs,
     ):
         """base scatter router
 
         Args:
             dst_num (int): routing number
-            route_method = "topk", "threshold"
+            route_method (string): "topk", "threshold"
                 topk: select the topk of gate results as the route destinations
                 threshold: select the gate results that are larger than threshold as the route destinations
-            dispatcher_cls (type): dispatcher class
+            route_logic (string): "1D", "2D"
+                1D: route along the 1st dimension, selecting data from a tensor with shape (batch_size, ...)
+                2D: route along the first 2 dimensions, selecting data from a tensor with shape (batch_size, dst_num, ...)
+            residual_dst (int): residual destination, if set, the data not selected by gates will all routed to the residual destination.
+
         """
         super().__init__(dst_num=dst_num)
         self.route_method = route_method.lower()
+        self.route_logic = route_logic.lower()
         self.residual_dst = residual_dst
-        self.routing_gates = routing_gates
+        self.transform = transform
         if self.route_method == "topk":
             self.k = kwargs.get("k")
             if self.k == None:
@@ -267,6 +274,7 @@ class ScatterRouter(BaseRouter):
                     ),
                     in_flow_tags,
                     in_flow_loads,
+                    extra_attr_stack_dict,
                 )
                 out_flow.pack(
                     torch.zeros(0, 1, dtype=torch.int64, device=in_flow_data.device),
@@ -282,6 +290,7 @@ class ScatterRouter(BaseRouter):
                         ),
                         in_flow_tags,
                         in_flow_loads,
+                        extra_attr_stack_dict,
                     )
                     out_gate.pack(
                         torch.zeros(0, 1, dtype=torch.int64, device=gates.device),
