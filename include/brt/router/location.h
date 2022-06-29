@@ -10,18 +10,20 @@
 namespace brt {
 namespace router {
 void GenerateGlobalIndices(int* hot_mask /*[sample_num x dst_num]*/,
-                                int* route_indices /*[sample_num x dst_num]*/,
-                                int* dst_loads /*[dst_num]*/, int* dst_start_indices /*[dst_num]*/,
-                                int* supported_capacities /*[supported_capacity_num]*/,
-                                int sample_num, int dst_num, int supported_capacity_num,
-                                cudaStream_t stream);
+                           int* route_indices /*[sample_num x dst_num]*/,
+                           int* dst_loads /*[dst_num]*/, int* dst_start_indices /*[dst_num]*/,
+                           int* supported_capacities /*[supported_capacity_num]*/, int sample_num,
+                           int dst_num, int supported_capacity_num, cudaStream_t stream);
+
+void GenerateDstIndices(int* hot_mask /*[sample_num x dst_num]*/,
+                        int* dst_indices /*[sample_num x dst_num]*/, int* dst_loads /*[dst_num]*/,
+                        int sample_num, int dst_num, cudaStream_t stream);
 
 void GenerateLocalIndices(int* hot_mask /*[sample_num x dst_num]*/,
-                               int* route_indices /*[sample_num x dst_num]*/,
-                               int* dst_loads /*[dst_num]*/,
-                               int* supported_capacities /*[supported_capacity_num]*/,
-                               int sample_num, int dst_num, int supported_capacity_num,
-                               cudaStream_t stream);
+                          int* route_indices /*[sample_num x dst_num]*/,
+                          int* dst_loads /*[dst_num]*/,
+                          int* supported_capacities /*[supported_capacity_num]*/, int sample_num,
+                          int dst_num, int supported_capacity_num, cudaStream_t stream);
 
 }  // namespace router
 }  // namespace brt
