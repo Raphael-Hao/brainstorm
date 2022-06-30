@@ -51,16 +51,16 @@ std::vector<::torch::Tensor> generate_dst_indices(
   auto sample_num = hot_mask.size(0);
   auto dst_num = hot_mask.size(1);
 
-  ::torch::Tensor route_indices = ::at::zeros_like(hot_mask, hot_mask.options());
+  ::torch::Tensor route_indices = ::at::zeros({dst_num, sample_num}, hot_mask.options());
   ::torch::Tensor dst_loads = ::at::zeros({dst_num}, hot_mask.options());
   router::GenerateDstIndices(hot_mask.data_ptr<int>(), route_indices.data_ptr<int>(),
                              dst_loads.data_ptr<int>(), sample_num, dst_num,
                              at::cuda::getDefaultCUDAStream().stream());
-  auto route_indices_T = route_indices.t();
+  // auto route_indices_T = route_indices.t().contiguous();
   std::vector<::torch::Tensor> ret;
   for (int i = 0; i < dst_num; i++) {
     ret.push_back(
-        route_indices_T.index({i, ::torch::indexing::Slice(0, dst_loads[i].item().to<int>())}));
+        route_indices.index({i, ::torch::indexing::Slice(0, dst_loads[i].item().to<int>())}));
   }
   return ret;
 }
