@@ -44,9 +44,7 @@ class HomoFusedScatterRouter(ScatterRouter):
         supported_capacities: List[int] = None,
         **kwargs,
     ):
-        super().__init__(
-            dst_num, route_method, residual_dst, transform, **kwargs
-        )
+        super().__init__(dst_num, route_method, residual_dst, transform, **kwargs)
         if supported_capacities is None:
             self.supported_capacities = supported_capacities
         else:
@@ -63,7 +61,7 @@ class HomoFusedScatterRouter(ScatterRouter):
         route_mask: torch.Tensor,
         gates: torch.Tensor,
     ) -> ProtoTensor:
-        # currently we assume that the ProtoTensor is dense one
+        # currently we assume that the ProtoTensor is dense one for homofuse
         _in_flow_tag = in_flow_tag_stack.pop()
         _in_flow_load = in_flow_load_stack.pop()
 
@@ -73,7 +71,7 @@ class HomoFusedScatterRouter(ScatterRouter):
             self.supported_capacities = self.supported_capacities.to(
                 in_flow_data.device
             )
-            
+
         # self.start_timer()
         local_indices, loads = generate_local_indices(
             route_mask.to(torch.int32), self.supported_capacities
