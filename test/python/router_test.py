@@ -61,6 +61,7 @@ class RouterTest(unittest.TestCase):
             route_func=route_func,
             route_method="threshold",
         )
+        
         results = model(inputs)
         self.assertTrue(torch.allclose(results[dst].data, inputs))
         self.assertTrue(results[1 - dst].data.numel() == 0)
