@@ -77,7 +77,7 @@ class MoEInferenceScatterRouter(ScatterRouter):
             raise ValueError("gating_func must be a nn.Module or a string")
         assert route_func is not None
         super().__init__(
-            dst_num=global_expert_num,
+            path_num=global_expert_num,
             route_func=route_func,
             route_method="topk",
             transform=post_score,

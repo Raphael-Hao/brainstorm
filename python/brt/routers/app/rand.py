@@ -4,7 +4,7 @@ from functools import partial
 from typing import List, Tuple, Union
 
 import torch
-from brt.frontend import router
+from brt.frontend import nn, router
 from brt.routers import GatherRouter, ScatterRouter, reset_proto_tensor_cls
 from brt.routers.inference import (
     HomoFusedGatherRouter,
@@ -22,9 +22,13 @@ __all__ = [
 ]
 
 
-def _rand_route_func(inputs_data, dst_num):
-    gates = torch.randn((inputs_data.size(0), dst_num), device=inputs_data.device)
-    return gates
+class RandomGate(nn.Module):
+    def __init__(self, dst_num: int) -> None:
+        super().__init__()
+        self.dst_num = dst_num
+
+    def forward(self, x):
+        return torch.randn((x.size(0), self.dst_num), device=x.device)
 
 
 def init_rand_router():
@@ -35,8 +39,7 @@ def init_rand_homo_fused_router():
     make_homo_proto_tensor_cls()
 
 
-@router
-class RandScatterRouter(ScatterRouter):
+class RandScatterRouter(nn.Module):
     def __init__(
         self,
         dst_num: int,
@@ -47,13 +50,14 @@ class RandScatterRouter(ScatterRouter):
             dst_num (int): routing number
         """
 
-        super().__init__(
-            dst_num=dst_num,
-            route_func=partial(_rand_route_func, dst_num=dst_num),
-            route_method="topk",
-            transform=False,
-            k=1,
-        )
+        super().__init__()
+        self.rand_gate = RandomGate(dst_num=dst_num)
+        self.scatter_router = ScatterRouter(dst_num, gate_method="topk", k=1)
+
+    def forward(self, inputs):
+        score = self.score_func(inputs)
+        route_results = self.scatter_router(inputs, score)
+        return route_results
 
 
 @router
@@ -68,14 +72,10 @@ class RandGatherRouter(GatherRouter):
             dst_num (int): routing number
         """
 
-        super().__init__(
-            dst_num=dst_num,
-            transform=False,
-        )
+        super().__init__(path_num=dst_num)
 
 
-@router
-class RandHomoFusedScatterRouter(HomoFusedScatterRouter):
+class RandHomoFusedScatterRouter(nn.Module):
     def __init__(self, dst_num: int, supported_capacities):
         """random scatter router
 

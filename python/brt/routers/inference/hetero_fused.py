@@ -72,13 +72,13 @@ class HeteroFusedScatterRouter(ScatterRouter):
         all_out_flows_data = F.linear(active_branch, in_flow_data.view(1, -1))
         if self.transform:
             all_out_flows_data = all_out_flows_data * gates_transform
-        all_out_flows_data = all_out_flows_data.view(self.dst_num, *route_shape)
+        all_out_flows_data = all_out_flows_data.view(self.path_num, *route_shape)
 
         out_flow_load = 1
         active_branch = active_branch.view(-1)
 
         out_flows: List[ProtoTensor] = []
-        for i in range(self.dst_num):
+        for i in range(self.path_num):
             if active_branch[i] == 0:
                 out_flows.append(
                     init_proto_tensor(
@@ -117,12 +117,12 @@ class HeteroFusedScatterRouter(ScatterRouter):
 @router
 class HeteroFusedGatherRouter(GatherRouter):
     def __init__(self, dst_num: int, reduction: str = "add", sparse=True):
-        super().__init__(dst_num=dst_num)
+        super().__init__(path_num=dst_num)
         self.sparse = sparse
         self.reduction = reduction
 
     def combine(self, in_flows: List[ProtoTensor]) -> Union[ProtoTensor, torch.Tensor]:
-        assert len(in_flows) == self.dst_num
+        assert len(in_flows) == self.path_num
         in_flows_data = []
         in_flows_load = []
 
