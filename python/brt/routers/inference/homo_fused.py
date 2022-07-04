@@ -37,20 +37,34 @@ class HomoFusedScatterRouter(ScatterRouter):
     def __init__(
         self,
         dst_num: int,
-        route_func,
-        route_method: str = "topk",
+        gate_method: str = "topk",
+        route_logic: str = "1d",
         residual_dst: int = -1,
-        transform: bool = True,
+        transform: bool = False,
         supported_capacities: List[int] = None,
         **kwargs,
     ):
-        super().__init__(dst_num, route_method, residual_dst, transform, **kwargs)
+        super().__init__(
+            dst_num, gate_method, route_logic, residual_dst, transform, **kwargs
+        )
         if supported_capacities is None:
             self.supported_capacities = supported_capacities
         else:
             self.supported_capacities = torch.tensor(
                 supported_capacities, dtype=torch.int32
-            )
+            )    
+    
+    def gen_indices(self, hot_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self.supported_capacities is not None:
+            self.supported_capacities = self.supported_capacities.to(hot_mask.device)
+
+        # self.start_timer()
+        local_indices, loads = generate_local_indices(
+            hot_mask.to(torch.int32), self.supported_capacities
+        )
+        # self.end_timer("generate_local_indices")
+
+        return local_indices, loads
 
     def dispatch(
         self,
@@ -58,8 +72,10 @@ class HomoFusedScatterRouter(ScatterRouter):
         in_flow_tag_stack: List[torch.Tensor],
         in_flow_load_stack: List[int],
         extra_attr_stack: Dict[str, List[Any]],
-        route_mask: torch.Tensor,
-        gates: torch.Tensor,
+        route_indices: torch.Tensor,
+        score: torch.Tensor,
+        route_logic: str = "1d",
+        transform: bool = True,
     ) -> ProtoTensor:
         # currently we assume that the ProtoTensor is dense one for homofuse
         _in_flow_tag = in_flow_tag_stack.pop()
@@ -67,16 +83,6 @@ class HomoFusedScatterRouter(ScatterRouter):
 
         for key in extra_attr_stack.keys():
             extra_attr_stack[key].pop()
-        if self.supported_capacities is not None:
-            self.supported_capacities = self.supported_capacities.to(
-                in_flow_data.device
-            )
-
-        # self.start_timer()
-        local_indices, loads = generate_local_indices(
-            route_mask.to(torch.int32), self.supported_capacities
-        )
-        # self.end_timer("generate_local_indices")
 
         # self.start_timer()
         if self.transform:
@@ -110,7 +116,7 @@ class HomoFusedGatherRouter(GatherRouter):
         self, dst_num: int, reduction: str = "add", sparse=True, transform=False
     ):
         super().__init__(
-            dst_num=dst_num, reduction=reduction, sparse=sparse, transform=transform
+            path_num=dst_num, reduction=reduction, sparse=sparse, transform=transform
         )
         self.sparse = sparse
         self.reduction = reduction
