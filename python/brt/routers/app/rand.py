@@ -6,7 +6,7 @@ from typing import List, Tuple, Union
 import torch
 from brt.frontend import nn, router
 from brt.routers import GatherRouter, ScatterRouter, reset_proto_tensor_cls
-from brt.routers.inference import (
+from brt.routers.fabric import (
     HomoFusedGatherRouter,
     HomoFusedScatterRouter,
     make_homo_proto_tensor_cls,
