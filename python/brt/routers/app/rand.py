@@ -5,12 +5,7 @@ from typing import List, Tuple, Union
 
 import torch
 from brt.frontend import nn, router
-from brt.routers import GatherRouter, ScatterRouter, reset_proto_tensor_cls
-from brt.routers.fabric import (
-    HomoFusedGatherRouter,
-    HomoFusedScatterRouter,
-    make_homo_proto_tensor_cls,
-)
+from brt.routers import GatherRouter, ScatterRouter
 
 __all__ = [
     "init_rand_router",
@@ -31,14 +26,6 @@ class RandomGate(nn.Module):
         return torch.randn((x.size(0), self.dst_num), device=x.device)
 
 
-def init_rand_router():
-    reset_proto_tensor_cls()
-
-
-def init_rand_homo_fused_router():
-    make_homo_proto_tensor_cls()
-
-
 class RandScatterRouter(nn.Module):
     def __init__(
         self,
@@ -51,8 +38,10 @@ class RandScatterRouter(nn.Module):
         """
 
         super().__init__()
-        self.rand_gate = RandomGate(dst_num=dst_num)
-        self.scatter_router = ScatterRouter(dst_num, gate_method="topk", k=1)
+        self.score_func = RandomGate(dst_num=dst_num)
+        self.scatter_router = ScatterRouter(
+            dst_num, protocol_type="topk", fabric_type="dispatch", k=1
+        )
 
     def forward(self, inputs):
         score = self.score_func(inputs)

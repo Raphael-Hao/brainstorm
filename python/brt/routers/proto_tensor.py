@@ -279,7 +279,9 @@ def reset_proto_tensor_cls():
     return ProtoTensor
 
 
-def make_proto_tensor_cls(extra_attrs: List[str], default_values: List[Any], mode="add"):
+def make_proto_tensor_cls(
+    extra_attrs: List[str], default_values: List[Any], mode="add"
+):
 
     global ProtoTensor
     if mode == "new":
@@ -341,8 +343,8 @@ def make_proto_tensor_cls(extra_attrs: List[str], default_values: List[Any], mod
 
 def init_proto_tensor(
     _torch_tensor: torch.Tensor,
-    tag_stack: List[torch.Tensor] = [],
-    load_stack: List[int] = [],
+    tag_stack: List[torch.Tensor] = [None],
+    load_stack: List[int] = [None],
     extra_attrs_stack_dict: Dict[str, List[Any]] = {},
 ) -> ProtoTensor:
     _flow_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
