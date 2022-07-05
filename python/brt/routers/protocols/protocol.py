@@ -7,18 +7,7 @@ from brt.common import log
 
 logger = log.get_logger(__file__)
 
-
-def make_protocol(protocol_type, **kwargs):
-    for key, value in kwargs.items():
-        logger.debug(f"{key}: {value}")
-
-    if protocol_type == "topk":
-        protocol = TopKProtocol(**kwargs)
-    elif protocol_type == "threshold":
-        protocol = ThresholdProtocol(**kwargs)
-    else:
-        raise ValueError("Unknown protocol type: {}".format(protocol_type))
-    return protocol
+__all__ = ["Protocol", "TopKProtocol", "ThresholdProtocol"]
 
 
 class Protocol(nn.Module):

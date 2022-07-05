@@ -11,7 +11,7 @@ from brt.frontend import router
 
 from .fabrics import make_fabric
 from .proto_tensor import ProtoTensor
-from .protocol import make_protocol
+from .protocols import make_protocol
 from .symbolic import symbolic_gather_route, symbolic_scatter_route
 
 __all__ = [
