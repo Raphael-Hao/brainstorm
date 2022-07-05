@@ -95,7 +95,6 @@ class DispatchSF(SwitchFabric):
         self.transforms = transforms
         self.indices_gen_opt = kwargs.get("indices_gen_opt", True)
 
-    @torch.jit.ignore
     def forward(
         self,
         in_flow: Union[ProtoTensor, List[ProtoTensor]],
@@ -211,7 +210,6 @@ class CombineSF(SwitchFabric):
         self.sparse = kwargs.get("sparse", False)
         self.reduction = kwargs.get("reduction", "add")
 
-    @torch.jit.ignore
     def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
         in_flows = self.pack_invalid_flow(in_flows)
         assert len(in_flows) == self.path_num

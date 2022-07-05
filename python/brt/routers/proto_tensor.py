@@ -343,28 +343,28 @@ def make_proto_tensor_cls(
 
 def init_proto_tensor(
     _torch_tensor: torch.Tensor,
-    tag_stack: List[torch.Tensor] = [None],
-    load_stack: List[int] = [None],
+    tag_stack: List[torch.Tensor] = [],
+    load_stack: List[int] = [],
     extra_attrs_stack_dict: Dict[str, List[Any]] = {},
 ) -> ProtoTensor:
-    _flow_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
+    _proto_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
     if tag_stack and load_stack:
-        _flow_tensor.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
+        _proto_tensor.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
     else:
-        _flow_tensor.init_proto()
-    return _flow_tensor
+        _proto_tensor.init_proto()
+    return _proto_tensor
 
 
 def deinit_proto_tensor(
-    _flow_tensor: ProtoTensor,
+    _proto_tensor: ProtoTensor,
 ) -> Tuple[torch.Tensor, List[torch.Tensor], List[int]]:
     (
-        _flow_tensor,
+        _proto_tensor,
         tag_stack,
         load_stack,
         extra_attrs_stack_dict,
-    ) = _flow_tensor.deep_unpack()
-    _torch_tensor = _flow_tensor.as_subclass(torch.Tensor)
+    ) = _proto_tensor.deep_unpack()
+    _torch_tensor = _proto_tensor.as_subclass(torch.Tensor)
     return _torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
 
 
@@ -372,24 +372,24 @@ def to_proto_tensor(_torch_tensor: torch.Tensor):
     """
     restore a torch.Tensor to a ProtoTensor without any pack operation
     """
-    _flow_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
-    assert _flow_tensor.proto_initilized
-    return _flow_tensor
+    _proto_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
+    assert _proto_tensor.proto_initilized
+    return _proto_tensor
 
 
-def to_torch_tensor(_flow_tensor: ProtoTensor, copy_stack=False):
+def to_torch_tensor(_proto_tensor: ProtoTensor, copy_stack=False):
     """
     we avoid broadcasting stack information by restore a ProtoTensor to
     torch.Tensor when we do not need it, e.g., inside the routers
     """
     if copy_stack:
         (
-            _flow_tensor,
+            _proto_tensor,
             tag_stack,
             load_stack,
             extra_attrs_stack_dict,
-        ) = _flow_tensor.copy_stacks()
-    _torch_tensor = _flow_tensor.as_subclass(torch.Tensor)
+        ) = _proto_tensor.copy_stacks()
+    _torch_tensor = _proto_tensor.as_subclass(torch.Tensor)
     if copy_stack:
         return _torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
     else:
