@@ -1,13 +1,20 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Any
+from typing import Any, List, Tuple
 
 import numpy as np
 import torch
+from brt._C.router import (
+    generate_dst_indices,
+    generate_local_indices,
+    route_back_with_local_indices,
+    route_with_local_indices,
+)
 from brt.common import log
+from brt.frontend import nn
 from torch.autograd import Function
 
-from .proto_tensor import (
+from ..proto_tensor import (
     ProtoTensor,
     deinit_proto_tensor,
     init_proto_tensor,
@@ -17,17 +24,31 @@ from .proto_tensor import (
 logger = log.get_logger(__file__)
 
 
-def factory_fabric():
-    pass
+def factory_fabric(router, fabric_type, **kwargs):
+    if fabric_type == "dispatch":
+        fabric = DispatchSF(router, **kwargs)
+    elif fabric_type == "combine":
+        fabric = CombineSF(router, **kwargs)
+    return fabric
 
 
-class Fabric(Function):
-    pass
+class SwitchFabric(nn.Module):
+    def __init__(self, path_num) -> None:
+        super().__init__()
+        self.path_num = path_num
 
 
-class Dispatch(Fabric):
-    @staticmethod
-    def forward(ctx: Any, in_flow, score, route_indices, router) -> Any:
+class DispatchSF(SwitchFabric):
+    def __init__(self, router, **kwargs):
+        super().__init__(router.path_num)
+        self.route_logic = router.route_logic
+        self.transform = router.transform
+
+    def forward(
+        self, in_flow: ProtoTensor, hot_mask: torch.Tensor, score: torch.Tensor
+    ) -> List[ProtoTensor]:
+
+        route_indices = self.gen_indices(hot_mask)
         (
             in_flow_data,
             in_flow_tag_stack,
@@ -41,26 +62,26 @@ class Dispatch(Fabric):
         for attr_stack in extra_attr_stack_dict.values():
             attr_stack.pop()
 
-        if router.route_logic == "1d":
+        if self.route_logic == "1d":
             route_shape = list(in_flow_data.shape[1:])
             route_size = np.prod(route_shape)
-        elif router.route_logic == "2d":
+        elif self.route_logic == "2d":
             in_flow_data = in_flow_data.transpose(0, 1).contiguous()
             route_shape = list(in_flow_data.shape[2:])
             route_size = np.prod(route_shape)
 
         out_flows = []
 
-        for i in range(router.path_num):
+        for i in range(self.path_num):
             tag_indices = route_indices[i]
             if tag_indices.numel() > 0:
                 out_flow_tag = torch.gather(in_flow_tag, 0, tag_indices)
                 data_indices = tag_indices.repeat(1, route_size).view(-1, *route_shape)
-                if router.route_logic == "1d":
+                if self.route_logic == "1d":
                     dispatched_data = in_flow_data
-                elif router.route_logic == "2d":
+                elif self.route_logic == "2d":
                     dispatched_data = in_flow_data[i]
-                if router.transform:
+                if self.transform:
                     dispatched_data = dispatched_data * score[:, i].view(
                         (-1,) + (1,) * len(route_shape)
                     )
@@ -91,15 +112,30 @@ class Dispatch(Fabric):
             out_flows.append(out_flow)
         return out_flows
 
-    @staticmethod
-    def backward(ctx: Any, *grad_outputs: Any) -> Any:
-        raise NotImplementedError()
+    def gen_indices(self, hot_mask: torch.Tensor) -> List[torch.Tensor]:
+        """generate indices according to hot_mask
+
+        Args:
+            hot_mask (torch.Tensor): a multi-hot mask for representing the routing destinations of each sample
+        """
+        if hot_mask.is_cuda:
+            route_indices = generate_dst_indices(hot_mask)
+        else:
+            route_indices = []
+            hot_mask_t = hot_mask.t().contiguous()
+            for i in range(self.path_num):
+                route_indices.append(torch.nonzero(hot_mask_t[i].view(-1)))
+        return route_indices
 
 
-class Combine(Fabric):
-    @staticmethod
-    def forward(ctx: Any, in_flows, router) -> Any:
-        assert len(in_flows) == router.path_num
+class CombineSF(SwitchFabric):
+    def __init__(self, router, **kwargs):
+        super().__init__(router.path_num)
+        self.sparse = router.sparse
+        self.reduction = router.reduction
+
+    def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
+        assert len(in_flows) == self.path_num
         in_flows_data = []
         in_flows_tag = []
         in_flows_load = []
@@ -131,7 +167,7 @@ class Combine(Fabric):
             )
             out_flow_tag = in_flows_tag
         else:
-            if router.sparse:
+            if self.sparse:
                 out_flow_tag, inverse = torch.unique(
                     in_flows_tag, sorted=True, return_inverse=True
                 )
@@ -151,7 +187,7 @@ class Combine(Fabric):
                 *route_shape,
                 dtype=in_flows_data.dtype,
                 device=in_flows_data.device,
-            ).scatter_(0, route_indices, in_flows_data, reduce=router.reduction)
+            ).scatter_(0, route_indices, in_flows_data, reduce=self.reduction)
         out_flow = init_proto_tensor(
             out_flow_data,
             in_flows_tag_stack,
@@ -162,13 +198,64 @@ class Combine(Fabric):
         return out_flow
 
 
-class HomoFusedDispatch(Fabric):
-    @staticmethod
-    def forward(ctx: Any, *args: Any, **kwargs: Any) -> Any:
-        return super().forward(ctx, *args, **kwargs)
+class HomoFusedDispatchSF(DispatchSF):
+    def __init__(self, router, **kwargs):
+        super().__init__(router, **kwargs)
+        supported_capacities = kwargs.get("supported_capacities", None)
+        if supported_capacities is None:
+            self.supported_capacities = supported_capacities
+        else:
+            self.supported_capacities = torch.tensor(
+                supported_capacities, dtype=torch.int32
+            )
+
+    def forward(
+        self, in_flow: ProtoTensor, hot_mask: torch.Tensor, score: torch.Tensor
+    ) -> ProtoTensor:
+        local_indices, loads = self.gen_indices(hot_mask)
+        (
+            in_flow_data,
+            in_flow_tag_stack,
+            in_flow_load_stack,
+            extra_attr_stack_dict,
+        ) = to_torch_tensor(in_flow, copy_stack=True)
+
+        in_flow_tag = in_flow_tag_stack.pop()
+        in_flow_load = in_flow_load_stack.pop()
+
+        for attr_stack in extra_attr_stack_dict.values():
+            attr_stack.pop()
+
+        if self.transform:
+            out_flow_data = route_with_local_indices(
+                in_flow_data, local_indices, loads, gates
+            )
+            gates = None
+        else:
+            out_flow_data = route_with_local_indices(
+                in_flow_data, local_indices, loads, None
+            )
+        out_flow = init_proto_tensor(
+            out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack_dict
+        )
+        out_flow.pack(local_indices, loads, gates=gates)
+
+        return out_flow
+
+    def gen_indices(self, hot_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self.supported_capacities is not None:
+            self.supported_capacities = self.supported_capacities.to(hot_mask.device)
+
+        # self.start_timer()
+        local_indices, loads = generate_local_indices(
+            hot_mask.to(torch.int32), self.supported_capacities
+        )
+        # self.end_timer("generate_local_indices")
+
+        return local_indices, loads
 
 
-class HomoFusedCombine(Fabric):
+class HomoFusedCombineSF(SwitchFabric):
     @staticmethod
     def forward(ctx: Any, *args: Any, **kwargs: Any) -> Any:
         return super().forward(ctx, *args, **kwargs)
