@@ -1,6 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, Type
 
 import torch
 from brt.common import log
@@ -11,7 +11,7 @@ from ..proto_tensor import deinit_proto_tensor, init_proto_tensor
 logger = log.get_logger(__file__)
 
 
-class SwitchFabric(nn.Module):
+class FabricBase(nn.Module):
     def __init__(self, path_num: int) -> None:
         super().__init__()
         self.path_num = path_num
@@ -70,13 +70,15 @@ class SwitchFabric(nn.Module):
 
 
 class FabricFactory:
-    registry: Dict[str, SwitchFabric] = {}
+    registry: Dict[str, FabricBase] = {}
 
     @classmethod
     def register(cls, name: str) -> Callable:
-        def register_func(fabric_cls: SwitchFabric):
+        def register_func(fabric_cls) -> Type[FabricBase]:
             if name in cls.registry:
                 logger.warning(f"Fabric: {name} is already registered, overwrite it")
+            if not issubclass(fabric_cls, FabricBase):
+                raise ValueError(f"Fabric: {name} is not a subclass of FabricBase")
             fabric_cls.forward = torch.jit.ignore(fabric_cls.forward)
             cls.registry[name] = fabric_cls
             return fabric_cls
@@ -84,14 +86,13 @@ class FabricFactory:
         return register_func
 
     @classmethod
-    def make_fabric(cls, fabric_type, **kwargs) -> SwitchFabric:
+    def make_fabric(cls, fabric_type, **kwargs) -> FabricBase:
         for key, value in kwargs.items():
             logger.debug(f"{key}: {value}")
 
         if fabric_type not in cls.registry:
-            logger.error(f"Fabric: {fabric_type} is not registered")
-            return None
+            raise ValueError(f"Fabric: {fabric_type} is not registered")
         fabric_cls = cls.registry[fabric_type]
-        fab = fabric_cls(**kwargs)
+        fabric_inst = fabric_cls(**kwargs)
 
-        return fab
+        return fabric_inst

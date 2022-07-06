@@ -9,13 +9,13 @@ from brt._C.router import generate_dst_indices
 from brt.common import log
 
 from ..proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
-from .fabric import FabricFactory, SwitchFabric
+from .fabric import FabricFactory, FabricBase
 
 logger = log.get_logger(__file__)
 
 
 @FabricFactory.register("dispatch")
-class DispatchSF(SwitchFabric):
+class DispatchSF(FabricBase):
     def __init__(self, path_num, **kwargs):
         super().__init__(path_num)
         route_logics = kwargs.get("route_logic", ["1d"])
@@ -144,7 +144,7 @@ class DispatchSF(SwitchFabric):
 
 
 @FabricFactory.register("combine")
-class CombineSF(SwitchFabric):
+class CombineSF(FabricBase):
     def __init__(self, path_num, **kwargs):
 
         super().__init__(path_num)

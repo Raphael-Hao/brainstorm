@@ -14,9 +14,9 @@ from brt.routers import GatherRouter, ScatterRouter
 
 
 class RouterModel(nn.Module):
-    def __init__(self, score_func, protocol_type, route_logic, **kwargs):
+    def __init__(self, gate, protocol_type, route_logic, **kwargs):
         super().__init__()
-        self.score_func = score_func
+        self.gate = gate
         self.scatter_router = ScatterRouter(
             path_num=2, protocol_type=protocol_type, route_logic=route_logic, **kwargs
         )
@@ -25,7 +25,7 @@ class RouterModel(nn.Module):
         self.gather_router = GatherRouter(path_num=2, sparse=False)
 
     def forward(self, x):
-        score = self.score_func(x)
+        score = self.gate(x)
         route_results = self.scatter_router(x, score)
         x_0 = self.expert1(route_results[0])
         x_1 = self.expert2(route_results[1])
@@ -34,9 +34,9 @@ class RouterModel(nn.Module):
 
 
 class SparseRouterModel(nn.Module):
-    def __init__(self, score_func, protocol_type, route_logic, **kwargs):
+    def __init__(self, gate, protocol_type, route_logic, **kwargs):
         super().__init__()
-        self.score_func = score_func
+        self.gate = gate
         self.scatter_router = ScatterRouter(
             path_num=2, protocol_type=protocol_type, route_logic=route_logic, **kwargs
         )
@@ -45,7 +45,7 @@ class SparseRouterModel(nn.Module):
         self.gather_router = GatherRouter(path_num=2, sparse=True)
 
     def forward(self, x):
-        score = self.score_func(x)
+        score = self.gate(x)
         route_results = self.scatter_router(x, score)
         x_0 = self.expert1(route_results[0])
         x_1 = self.expert2(route_results[1])
@@ -55,16 +55,14 @@ class SparseRouterModel(nn.Module):
 
 class RouterTest(unittest.TestCase):
     def all_to_single(self, Model, inputs, dst):
-        def score_func(inputs):
+        def gate(inputs):
             gates = torch.zeros(
                 inputs.shape[0], 2, dtype=torch.int64, device=inputs.device
             )
             gates[:, dst] = 1
             return gates
 
-        model = Model(
-            score_func=score_func, protocol_type="threshold", route_logic="1d"
-        )
+        model = Model(gate=gate, protocol_type="threshold", route_logic="1d")
 
         results = model(inputs)
         self.assertTrue(torch.allclose(results[dst].data, inputs))
@@ -72,7 +70,7 @@ class RouterTest(unittest.TestCase):
         self.assertTrue(torch.allclose(results[2].data, inputs))
 
     def drop_half_single(self, Model, inputs, dst, which_half, sparse=False):
-        def score_func(inputs):
+        def gate(inputs):
             gates = torch.zeros(
                 inputs.shape[0], 2, dtype=torch.int64, device=inputs.device
             )
@@ -82,9 +80,7 @@ class RouterTest(unittest.TestCase):
                 gates[: inputs.shape[0] // 2, dst] = 1
             return gates
 
-        model = Model(
-            score_func=score_func, protocol_type="threshold", route_logic="1d"
-        )
+        model = Model(gate=gate, protocol_type="threshold", route_logic="1d")
         results = model(inputs)
         self.assertTrue(results[1 - dst].data.numel() == 0)
         if which_half == "upper":
@@ -147,13 +143,11 @@ class RouterTest(unittest.TestCase):
             self.drop_half_single(SparseRouterModel, x, i, "lower", True)
 
     def test_script(self):
-        score_func = nn.Sequential(nn.Linear(10, 2), nn.Softmax(dim=1))
+        gate = nn.Sequential(nn.Linear(10, 2), nn.Softmax(dim=1))
         protocol_type = "topk"
 
         def jit_script(Model):
-            model = Model(
-                score_func=score_func, protocol_type=protocol_type, route_logic="1d"
-            )
+            model = Model(gate=gate, protocol_type=protocol_type, route_logic="1d")
             try:
                 script_simple_net = torch.jit.script(symbolize(model))
                 print(script_simple_net.graph)
