@@ -1,21 +1,18 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Any, Dict, List, Tuple, Union
+from typing import List, Union
 
-import numpy as np
 import torch
 import torch.nn as nn
-from brt._C.router import generate_dst_indices
 from brt.common import log
 from brt.frontend import router
-
-from .fabrics import make_fabric
-from .proto_tensor import ProtoTensor
-from .protocols import make_protocol
-from .symbolic import symbolic_gather_route, symbolic_scatter_route
+from brt.routers.fabrics import make_fabric
+from brt.routers.proto_tensor import ProtoTensor
+from brt.routers.protocols import make_protocol
+from brt.routers.symbolic import symbolic_gather_route, symbolic_scatter_route
 
 __all__ = [
-    "BaseRouter",
+    "RouterBase",
     "ScatterRouter",
     "GatherRouter",
 ]
@@ -24,7 +21,7 @@ logger = log.get_logger(__file__)
 
 
 @router
-class BaseRouter(nn.Module):
+class RouterBase(nn.Module):
     def __init__(self, path_num: int):
         """_summary_
 
@@ -43,7 +40,7 @@ class BaseRouter(nn.Module):
 
 
 @router
-class ScatterRouter(BaseRouter):
+class ScatterRouter(RouterBase):
     def __init__(
         self,
         path_num: int,
@@ -97,7 +94,7 @@ class ScatterRouter(BaseRouter):
 
 
 @router
-class GatherRouter(BaseRouter):
+class GatherRouter(RouterBase):
     def __init__(
         self,
         path_num: int,

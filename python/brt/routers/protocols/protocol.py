@@ -1,5 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import Callable, Dict, Type
 
 import torch
 import torch.nn as nn
@@ -7,10 +8,10 @@ from brt.common import log
 
 logger = log.get_logger(__file__)
 
-__all__ = ["Protocol", "TopKProtocol", "ThresholdProtocol"]
+__all__ = ["ProtocolBase", "ProtocolFactory", "TopKProtocol", "ThresholdProtocol"]
 
 
-class Protocol(nn.Module):
+class ProtocolBase(nn.Module):
     def __init__(self, path_num: int):
         super().__init__()
         self.path_num = path_num
@@ -22,7 +23,37 @@ class Protocol(nn.Module):
         raise NotImplementedError()
 
 
-class TopKProtocol(Protocol):
+class ProtocolFactory:
+    registry: Dict[str, ProtocolBase] = {}
+
+    @classmethod
+    def register(cls, name: str) -> Callable:
+        def register_func(protocol_cls) -> Type[ProtocolBase]:
+            if name in cls.registry:
+                logger.warning(f"Protocol: {name} is already registered, overwrite it")
+            if not issubclass(protocol_cls, ProtocolBase):
+                raise ValueError(f"Protocol: {name} is not a subclass of ProtocolBase")
+            protocol_cls.forward = torch.jit.ignore(protocol_cls.forward)
+            cls.registry[name] = protocol_cls
+            return protocol_cls
+
+        return register_func
+
+    @classmethod
+    def make_protocol(cls, protocol_type, **kwargs) -> ProtocolBase:
+        for key, value in kwargs.items():
+            logger.debug(f"{key}: {value}")
+
+        if protocol_type not in cls.registry:
+            raise ValueError(f"Protocol: {protocol_type} is not registered")
+        protocol_cls = cls.registry[protocol_type]
+        protocol_inst = protocol_cls(**kwargs)
+
+        return protocol_inst
+
+
+@ProtocolFactory.register("topk")
+class TopKProtocol(ProtocolBase):
     def __init__(self, path_num, **kwargs):
         super().__init__(path_num)
         self.k = kwargs.get("k")
@@ -49,7 +80,8 @@ class TopKProtocol(Protocol):
         return hot_mask
 
 
-class ThresholdProtocol(Protocol):
+@ProtocolFactory.register("threshold")
+class ThresholdProtocol(ProtocolBase):
     def __init__(self, path_num, **kwargs):
         super().__init__(path_num)
         self.threshold = kwargs.get("threshold")

@@ -9,9 +9,6 @@ from brt.routers import GatherRouter, ScatterRouter
 
 __all__ = [
     "RandScatterRouter",
-    "RandGatherRouter",
-    "RandHomoFusedScatterRouter",
-    "RandHomoFusedGatherRouter",
 ]
 
 
@@ -25,75 +22,24 @@ class RandomGate(nn.Module):
 
 
 class RandScatterRouter(nn.Module):
-    def __init__(
-        self,
-        path_num: int,
-    ):
+    def __init__(self, path_num: int, fabric_type: str = "dispatch", **kwargs):
         """random scatter router
 
         Args:
-            path_num (int): routing number
+            path_num (int): number of paths for routing destinations
+            fabric_type (str, optional): fabric type. Defaults to "dispatch".
+                dispatch: dispatch the results to each path, independently.
+                homo_fused_dispatch: dispatch the results to all paths in the form of a fused tensor
+                    supported_capacities: (List[int]): required for homo_fused_dispatch
         """
 
         super().__init__()
-        self.score_func = RandomGate(path_num=path_num)
+        self.gate = RandomGate(path_num=path_num)
         self.scatter_router = ScatterRouter(
-            path_num, protocol_type="topk", fabric_type="dispatch", k=1
+            path_num, protocol_type="topk", fabric_type=fabric_type, k=1, **kwargs
         )
 
     def forward(self, inputs):
-        score = self.score_func(inputs)
+        score = self.gate(inputs)
         route_results = self.scatter_router(inputs, score)
         return route_results
-
-
-@router
-class RandGatherRouter(GatherRouter):
-    def __init__(
-        self,
-        path_num: int,
-    ):
-        """random scatter router
-
-        Args:
-            path_num (int): routing number
-        """
-
-        super().__init__(path_num=path_num)
-
-
-class RandHomoFusedScatterRouter(nn.Module):
-    def __init__(self, path_num: int, supported_capacities):
-        """random scatter router
-
-        Args:
-            path_num (int): routing number
-        """
-
-        super().__init__()
-        self.score_func = RandomGate(path_num=path_num)
-        self.scatter_router = ScatterRouter(
-            path_num=path_num,
-            protocol_type="topk",
-            fabric_type="homo_dispatch",
-            transform=True,
-            supported_capacities=supported_capacities,
-        )
-
-
-@router
-class RandHomoFusedGatherRouter(GatherRouter):
-    def __init__(
-        self,
-        path_num: int,
-    ):
-        """random scatter router
-
-        Args:
-            path_num (int): routing number
-        """
-
-        super().__init__(
-            path_num=path_num,
-            transform=False,
-        )

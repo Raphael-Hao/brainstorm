@@ -7,15 +7,14 @@ from brt._C.router import (
     route_with_local_indices,
 )
 from brt.common import log
-
-from ..proto_tensor import (
+from brt.routers.fabrics.fabric import FabricFactory
+from brt.routers.fabrics.generic import CombineSF, DispatchSF
+from brt.routers.proto_tensor import (
     ProtoTensor,
     init_proto_tensor,
     make_proto_tensor_cls,
     to_torch_tensor,
 )
-from .fabric import FabricFactory
-from .generic import CombineSF, DispatchSF
 
 logger = log.get_logger(__file__)
 
@@ -119,6 +118,7 @@ class HomoFusedDispatchSF(DispatchSF):
 
     def remove_needless_pack(self, out_flow):
         return out_flow
+
 
 @FabricFactory.register("homo_fused_combine")
 class HomoFusedCombineSF(CombineSF):
