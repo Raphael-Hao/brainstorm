@@ -49,8 +49,8 @@ __device__ __forceinline__ void blockwise_mask_dst_indice(int* mask, int* output
       int location = partial_dst_mask[threadIdx.x + 1] + prefix;
       int index = location * dst_mask;
       if (index != 0) {
-        // output_sum[(index - 1) * parallel_num + blockIdx.x] = S + threadIdx.x;
-        output_sum[(index - 1) + blockIdx.x * cumsum_num] = S + threadIdx.x;
+        output_sum[(index - 1) * parallel_num + blockIdx.x] = S + threadIdx.x;
+        // output_sum[(index - 1) + blockIdx.x * cumsum_num] = S + threadIdx.x;
       }
     }
     __syncthreads();

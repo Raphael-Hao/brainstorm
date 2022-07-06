@@ -5,11 +5,9 @@ from typing import List, Union
 
 import numpy as np
 import torch
-from brt._C.router import generate_dst_indices
 from brt.common import log
-
-from ..proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
-from .fabric import FabricFactory, FabricBase
+from brt.routers.fabrics.fabric import FabricBase, FabricFactory
+from brt.routers.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
 
