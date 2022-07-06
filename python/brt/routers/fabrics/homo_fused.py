@@ -14,7 +14,8 @@ from ..proto_tensor import (
     make_proto_tensor_cls,
     to_torch_tensor,
 )
-from .fabric import CombineSF, DispatchSF
+from .fabric import FabricFactory
+from .generic import CombineSF, DispatchSF
 
 logger = log.get_logger(__file__)
 
@@ -42,6 +43,7 @@ def once_make_homo_proto_tensor_cls():
     check_homo_proto_tensor_clos()
 
 
+@FabricFactory.register("homo_fused_dispatch")
 class HomoFusedDispatchSF(DispatchSF):
     def __init__(self, path_num, **kwargs):
         super().__init__(path_num, **kwargs)
@@ -118,7 +120,7 @@ class HomoFusedDispatchSF(DispatchSF):
     def remove_needless_pack(self, out_flow):
         return out_flow
 
-
+@FabricFactory.register("homo_fused_combine")
 class HomoFusedCombineSF(CombineSF):
     def __init__(self, path_num, **kwargs) -> None:
         super().__init__(path_num, **kwargs)
