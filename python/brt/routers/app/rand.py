@@ -8,39 +8,37 @@ from brt.frontend import nn, router
 from brt.routers import GatherRouter, ScatterRouter
 
 __all__ = [
-    "init_rand_router",
     "RandScatterRouter",
     "RandGatherRouter",
-    "init_rand_homo_fused_router",
     "RandHomoFusedScatterRouter",
     "RandHomoFusedGatherRouter",
 ]
 
 
 class RandomGate(nn.Module):
-    def __init__(self, dst_num: int) -> None:
+    def __init__(self, path_num: int) -> None:
         super().__init__()
-        self.dst_num = dst_num
+        self.path_num = path_num
 
     def forward(self, x):
-        return torch.randn((x.size(0), self.dst_num), device=x.device)
+        return torch.randn((x.size(0), self.path_num), device=x.device)
 
 
 class RandScatterRouter(nn.Module):
     def __init__(
         self,
-        dst_num: int,
+        path_num: int,
     ):
         """random scatter router
 
         Args:
-            dst_num (int): routing number
+            path_num (int): routing number
         """
 
         super().__init__()
-        self.score_func = RandomGate(dst_num=dst_num)
+        self.score_func = RandomGate(path_num=path_num)
         self.scatter_router = ScatterRouter(
-            dst_num, protocol_type="topk", fabric_type="dispatch", k=1
+            path_num, protocol_type="topk", fabric_type="dispatch", k=1
         )
 
     def forward(self, inputs):
@@ -53,48 +51,49 @@ class RandScatterRouter(nn.Module):
 class RandGatherRouter(GatherRouter):
     def __init__(
         self,
-        dst_num: int,
+        path_num: int,
     ):
         """random scatter router
 
         Args:
-            dst_num (int): routing number
+            path_num (int): routing number
         """
 
-        super().__init__(path_num=dst_num)
+        super().__init__(path_num=path_num)
 
 
 class RandHomoFusedScatterRouter(nn.Module):
-    def __init__(self, dst_num: int, supported_capacities):
+    def __init__(self, path_num: int, supported_capacities):
         """random scatter router
 
         Args:
-            dst_num (int): routing number
+            path_num (int): routing number
         """
 
-        super().__init__(
-            dst_num=dst_num,
-            route_func=partial(_rand_route_func, dst_num=dst_num),
-            route_method="topk",
-            transform=False,
+        super().__init__()
+        self.score_func = RandomGate(path_num=path_num)
+        self.scatter_router = ScatterRouter(
+            path_num=path_num,
+            protocol_type="topk",
+            fabric_type="homo_dispatch",
+            transform=True,
             supported_capacities=supported_capacities,
-            k=1,
         )
 
 
 @router
-class RandHomoFusedGatherRouter(HomoFusedGatherRouter):
+class RandHomoFusedGatherRouter(GatherRouter):
     def __init__(
         self,
-        dst_num: int,
+        path_num: int,
     ):
         """random scatter router
 
         Args:
-            dst_num (int): routing number
+            path_num (int): routing number
         """
 
         super().__init__(
-            dst_num=dst_num,
+            path_num=path_num,
             transform=False,
         )

@@ -10,9 +10,6 @@ from . import protocol
 
 
 def make_protocol(protocol_type, **kwargs):
-    for key, value in kwargs.items():
-        logger.debug(f"{key}: {value}")
-
     if protocol_type == "topk":
         protocol_cls = protocol.TopKProtocol
     elif protocol_type == "threshold":
