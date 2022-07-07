@@ -12,14 +12,14 @@ __all__ = ["ProtocolBase", "ProtocolFactory"]
 
 
 class ProtocolBase(nn.Module):
-    def __init__(self, path_num: int):
+    def __init__(self, path_num: int, ):
         super().__init__()
         self.path_num = path_num
     
     @torch.jit.ignore
     def forward(self, score: torch.Tensor):
         decisions = self.make_route_decision(score)
-        self.check_decision(decisions, score)
+        # self.check_decision(decisions, score)
         return decisions
 
     def make_route_decision(self, score):

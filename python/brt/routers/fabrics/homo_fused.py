@@ -61,9 +61,12 @@ class HomoFusedDispatchSF(DispatchSF):
             )
 
     def forward(
-        self, in_flow: ProtoTensor, hot_mask: torch.Tensor, score: torch.Tensor
+        self,
+        in_flow: ProtoTensor,
+        local_indices: torch.Tensor,
+        loads: torch.Tensor,
+        score: torch.Tensor,
     ) -> ProtoTensor:
-        local_indices, loads = self.gen_indices(hot_mask)
         in_flow = self.pack_invalid_flow(in_flow)
         (
             in_flow_data,
