@@ -4,6 +4,7 @@ from functools import partial
 from typing import List, Tuple, Union
 
 import torch
+import torch.fx
 from brt.frontend import nn, router
 from brt.routers import GatherRouter, ScatterRouter
 
@@ -12,13 +13,9 @@ __all__ = [
 ]
 
 
-class RandomGate(nn.Module):
-    def __init__(self, path_num: int) -> None:
-        super().__init__()
-        self.path_num = path_num
-
-    def forward(self, x):
-        return torch.randn((x.size(0), self.path_num), device=x.device)
+@torch.fx.wrap
+def rand_gate(x: torch.Tensor, path_num: int):
+    return torch.randn((x.size(0), path_num), device=x.device)
 
 
 class RandScatterRouter(nn.Module):
@@ -34,12 +31,12 @@ class RandScatterRouter(nn.Module):
         """
 
         super().__init__()
-        self.gate = RandomGate(path_num=path_num)
+        self.path_num = path_num
         self.scatter_router = ScatterRouter(
             path_num, protocol_type="topk", fabric_type=fabric_type, k=1, **kwargs
         )
 
     def forward(self, inputs):
-        score = self.gate(inputs)
+        score = rand_gate(inputs, self.path_num)
         route_results = self.scatter_router(inputs, score)
         return route_results

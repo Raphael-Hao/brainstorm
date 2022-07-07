@@ -3,8 +3,8 @@
 from typing import Callable, Dict, List, Tuple, Type
 
 import torch
+import torch.nn as nn
 from brt.common import log
-from brt.frontend import nn
 
 from ..proto_tensor import deinit_proto_tensor, init_proto_tensor
 
@@ -15,8 +15,8 @@ class FabricBase(nn.Module):
     def __init__(self, path_num: int) -> None:
         super().__init__()
         self.path_num = path_num
-        self.start_event = torch.jit.unused(torch.cuda.Event(enable_timing=True))
-        self.end_event = torch.jit.unused(torch.cuda.Event(enable_timing=True))
+        self.start_event = torch.cuda.Event(enable_timing=True)
+        self.end_event = torch.cuda.Event(enable_timing=True)
 
     def start_timer(self):
         self.start_event.record(torch.cuda.current_stream())
@@ -67,6 +67,18 @@ class FabricBase(nn.Module):
             out_flow = type(out_flow)([self.remove_needless_pack(f) for f in out_flow])
 
         return out_flow
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        print(state)
+        del state["start_event"]
+        del state["end_event"]
+        return state
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        self.start_event = torch.cuda.Event(enable_timing=True)
+        self.end_event = torch.cuda.Event(enable_timing=True)
 
 
 class FabricFactory:
