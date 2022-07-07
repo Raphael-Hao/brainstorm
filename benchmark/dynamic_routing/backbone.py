@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import csv
 
-import brt.frontend.nn as nn
+import torch.nn as nn
 import numpy as np
 import torch
 
@@ -10,6 +10,7 @@ __all__ = ["Backbone"]
 from cell import Cell
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 
+from brt.routers import GatherRouter
 
 class Backbone(nn.Module):
     """
@@ -64,6 +65,7 @@ class Backbone(nn.Module):
         """deprecated"""
         return {f: self._out_feature_channels[f] for f in self._out_features}
 
+
 class DynamicStem(nn.Module):
     def __init__(
         self,
@@ -94,7 +96,7 @@ class DynamicStem(nn.Module):
             norm=nn.SyncBatchNorm(mid_channels),
             activation=nn.ReLU(),
         )
-        
+
         # stem 2
         input_res = input_res // 2
         if not sept_stem:
@@ -108,7 +110,7 @@ class DynamicStem(nn.Module):
                 norm=nn.SyncBatchNorm(mid_channels),
                 activation=nn.ReLU(),
             )
-            
+
         else:
             self.stem_2 = nn.Sequential(
                 Conv2dNormAct(
@@ -165,7 +167,7 @@ class DynamicStem(nn.Module):
                     activation=nn.ReLU(),
                 ),
             )
-            
+
         self.out_res = input_res // 2
         self.out_cha = out_channels
         # using Kaiming init
@@ -245,7 +247,6 @@ class DynamicNetwork(Backbone):
             norm=norm,
             affine=self.affine,
         )
-        self.stem_flops = self.stem.flops
         self._out_feature_strides = {"stem": self.stem.stride}
         self._out_feature_channels = {"stem": self.stem.out_channels}
         self._out_feature_resolution = {"stem": self.stem.out_resolution}
@@ -308,6 +309,12 @@ class DynamicNetwork(Backbone):
                 )
                 # allow dim change in each aggregation
                 dim_up, dim_down, dim_keep = False, False, True
+                # gather router
+                self.gather_routers = [
+                    GatherRouter(1),
+                    GatherRouter(2),
+                    GatherRouter(3),
+                ]
                 # dim up and resolution down by 2
                 if cell_index > 0:
                     dim_up = True
@@ -383,110 +390,51 @@ class DynamicNetwork(Backbone):
         # the initial layer
         if not predict_mode:
             self.init_layer.to(self.device)
-        h_l1_list, h_beta_list, trans_flops, trans_flops_real = self.init_layer(
-            h_l1=h_l1
-        )
+        h_l1_list, h_beta_list = self.init_layer(h_l1=h_l1)
         prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
-        prev_trans_flops, prev_trans_flops_real = [trans_flops], [trans_flops_real]
         # build forward outputs
-        cell_flops_list, cell_flops_real_list, gate_history_list = (
-            [],
-            [],
-            [gate_w[0] if gate_w else 0 for gate_w in h_beta_list],
-        )
+        gate_history_list = [gate_w[0] if gate_w else 0 for gate_w in h_beta_list]
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
-            layer_trans_flops, layer_trans_flops_real = [], []
-            flops_in_expt_list, flops_in_real_list = [], []
             layer_rate = (layer_index + 1) / float(len(self.cell_num_list))
             # aggregate cell input
             for cell_index in range(len(self.all_cell_type_list[layer_index])):
-                cell_input, trans_flops_input, trans_flops_real_input = [], [], []
+                cell_input = []
                 if self.all_cell_type_list[layer_index][cell_index][0]:
                     cell_input.append(prev_out_list[cell_index - 1][2][0])
-                    trans_flops_input.append(prev_trans_flops[cell_index - 1][2][0])
-                    trans_flops_real_input.append(
-                        prev_trans_flops_real[cell_index - 1][2][0]
-                    )
                 if self.all_cell_type_list[layer_index][cell_index][1]:
                     cell_input.append(prev_out_list[cell_index][1][0])
-                    trans_flops_input.append(prev_trans_flops[cell_index][1][0])
-                    trans_flops_real_input.append(
-                        prev_trans_flops_real[cell_index][1][0]
-                    )
                 if self.all_cell_type_list[layer_index][cell_index][2]:
                     cell_input.append(prev_out_list[cell_index + 1][0][0])
-                    trans_flops_input.append(prev_trans_flops[cell_index + 1][0][0])
-                    trans_flops_real_input.append(
-                        prev_trans_flops_real[cell_index + 1][0][0]
-                    )
-                h_l1 = sum(cell_input)
-                h_l1_input = h_l1 if isinstance(h_l1, float) else h_l1.shape
-                # if isinstance(h_l1_input, float):
-                # print(
-                #     f"layer index: {layer_index}, cell index: {cell_index}, collected input: {len(cell_input)}, cell input: {h_l1_input}"
-                # )
+                h_l1 = self.gather_routers[len(cell_input)-1](cell_input)
+                # h_l1 = sum(cell_input)
                 # calculate input for gate
                 layer_input.append(h_l1)
-                # calculate FLOPs input
-                flops_in_expt = sum(_flops for _flops in trans_flops_input)
-                flop_in_real = sum(_flops for _flops in trans_flops_real_input)
-                flops_in_expt_list.append(flops_in_expt)
-                flops_in_real_list.append(flop_in_real)
 
             # calculate each cell
             for _cell_index in range(len(self.all_cell_type_list[layer_index])):
                 if not predict_mode:
                     # print(f"layer index: {layer_index}, cell index: {_cell_index} to device: {self.device}")
                     self.all_cell_list[layer_index][_cell_index].to(self.device)
-                if self.cal_flops:
-                    (
-                        cell_output,
-                        gate_weights_beta,
-                        cell_flops,
-                        cell_flops_real,
-                        trans_flops,
-                        trans_flops_real,
-                    ) = self.all_cell_list[layer_index][_cell_index](
-                        h_l1=layer_input[_cell_index],
-                        flops_in_expt=flops_in_expt_list[_cell_index],
-                        flops_in_real=flops_in_real_list[_cell_index],
-                        is_drop_path=self.drop_path,
-                        drop_prob=self.drop_prob,
-                        layer_rate=layer_rate,
-                        step_rate=step_rate,
-                    )
-                    # calculate real flops
-                    cell_flops_list.append(cell_flops)
-                    cell_flops_real_list.append(cell_flops_real)
-                else:
-                    (
-                        cell_output,
-                        gate_weights_beta,
-                        trans_flops,
-                        trans_flops_real,
-                    ) = self.all_cell_list[layer_index][_cell_index](
-                        h_l1=layer_input[_cell_index],
-                        flops_in_expt=flops_in_expt_list[_cell_index],
-                        flops_in_real=flops_in_real_list[_cell_index],
-                        is_drop_path=self.drop_path,
-                        drop_prob=self.drop_prob,
-                        layer_rate=layer_rate,
-                        step_rate=step_rate,
-                    )
+                (
+                    cell_output,
+                    gate_weights_beta,
+                ) = self.all_cell_list[layer_index][_cell_index](
+                    h_l1=layer_input[_cell_index],
+                    is_drop_path=self.drop_path,
+                    drop_prob=self.drop_prob,
+                    layer_rate=layer_rate,
+                    step_rate=step_rate,
+                )
 
                 layer_output.append(cell_output)
-                # update trans flops output
-                layer_trans_flops.append(trans_flops)
-                layer_trans_flops_real.append(trans_flops_real)
                 gate_history = [
                     gate_w[0] if gate_w else 0 for gate_w in gate_weights_beta
                 ]
                 gate_history_list.extend(gate_history)
             # update layer output
             prev_out_list = layer_output
-            prev_trans_flops = layer_trans_flops
-            prev_trans_flops_real = layer_trans_flops_real
+        final_gate_history = []
         final_gate_history = np.array(
             [
                 gate_w.squeeze().cpu().detach().numpy()
@@ -500,12 +448,7 @@ class DynamicNetwork(Backbone):
         # print(gate_history_list)
         final_out_list = [prev_out_list[_i][1][0] for _i in range(len(prev_out_list))]
         final_out_dict = dict(zip(self._out_features, final_out_list))
-        if self.cal_flops:
-            all_cell_flops = torch.mean(sum(cell_flops_list))
-            all_flops_real = torch.mean(sum(cell_flops_real_list)) + self.stem_flops
-        else:
-            all_cell_flops, all_flops_real = None, None
-        return final_out_dict, all_cell_flops, all_flops_real
+        return final_out_dict
 
     def output_shape(self):
         return {

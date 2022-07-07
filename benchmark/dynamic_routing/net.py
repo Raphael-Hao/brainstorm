@@ -1,6 +1,5 @@
 import logging
 
-
 from seg import DynamicNet4Seg, SemSegDecoderHead
 from backbone import Backbone, build_dynamic_backbone
 from ops import ShapeSpec
@@ -19,6 +18,7 @@ def build_backbone(cfg, input_shape=None):
             height=cfg.INPUT.FIX_SIZE_FOR_FLOPS[0],
             width=cfg.INPUT.FIX_SIZE_FOR_FLOPS[1],
         )
+        print(input_shape)
 
     backbone = build_dynamic_backbone(cfg, input_shape)
     assert isinstance(backbone, Backbone)
@@ -34,5 +34,5 @@ def build_model(cfg):
     cfg.build_sem_seg_head = build_sem_seg_head
     model = DynamicNet4Seg(cfg)
     logger = logging.getLogger(__name__)
-    logger.info("Model:\n{}".format(model))
+    # logger.info("Model:\n{}".format(model))
     return model
