@@ -3,11 +3,13 @@
 # @author: yanwei.li
 from typing import Dict
 
-import brt.frontend.nn as nn
+import torch.nn as nn
 import numpy as np
 import torch
 import torch.nn.functional as F
-from brt.frontend.nn import BatchNorm2d
+# TODO: differece?
+# from brt.frontend.nn import BatchNorm2d
+from torch.nn import BatchNorm2d
 
 from image_list import ImageList
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
