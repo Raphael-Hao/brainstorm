@@ -81,9 +81,9 @@ class ScatterRouter(RouterBase):
         self, in_flow: Union[torch.Tensor, ProtoTensor], score: torch.Tensor
     ) -> List[ProtoTensor]:
 
-        hot_mask = self.protocol(score)
+        decisions = self.protocol(score)
 
-        out_flows = self.fabric(in_flow, hot_mask, score)
+        out_flows = self.fabric(in_flow, decisions, score)
 
         return out_flows
 

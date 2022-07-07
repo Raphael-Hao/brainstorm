@@ -44,7 +44,7 @@ std::vector<::torch::Tensor> generate_global_indices(
   return {route_indices, dst_loads};
 }
 
-std::vector<::torch::Tensor> generate_dst_indices(
+std::vector<::torch::Tensor> generate_path_indices(
     const ::torch::Tensor& hot_mask /*[sample_num x sample_dim]*/) {
   CHECK_ON_CUDA(hot_mask);
 
@@ -161,8 +161,8 @@ std::vector<::torch::Tensor> generate_local_indices(
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("generate_global_indices", &brt::backend::torch::generate_global_indices,
         "Generate global indices with each dst's load mapped to supported capacity");
-  m.def("generate_dst_indices", &brt::backend::torch::generate_dst_indices,
-        "Generate tensors of indices for each destination");
+  m.def("generate_path_indices", &brt::backend::torch::generate_path_indices,
+        "Generate tensors of indices for all paths");
   m.def("generate_local_indices", &brt::backend::torch::generate_local_indices,
         "Generate a tensor for all local indices with each dst's load mapped to supported capacity",
         pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none());

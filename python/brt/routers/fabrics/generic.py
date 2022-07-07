@@ -36,11 +36,9 @@ class DispatchSF(FabricBase):
     def forward(
         self,
         in_flow: Union[ProtoTensor, List[ProtoTensor]],
-        hot_mask: torch.Tensor,
+        route_indices: torch.Tensor,
         score: torch.Tensor,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
-
-        route_indices = self.gen_indices(hot_mask)
 
         in_flow = self.pack_invalid_flow(in_flow)
 
@@ -124,21 +122,6 @@ class DispatchSF(FabricBase):
             all_out_flows.append(out_flows)
 
         return self.remove_needless_pack(all_out_flows)
-
-    def gen_indices(self, hot_mask: torch.Tensor) -> List[torch.Tensor]:
-        """generate indices according to hot_mask
-
-        Args:
-            hot_mask (torch.Tensor): a multi-hot mask for representing the routing destinations of each sample
-        """
-        if hot_mask.is_cuda and self.indices_gen_opt:
-            route_indices = generate_dst_indices(hot_mask)
-        else:
-            route_indices = []
-            hot_mask_t = hot_mask.t().contiguous()
-            for i in range(self.path_num):
-                route_indices.append(torch.nonzero(hot_mask_t[i].view(-1)))
-        return route_indices
 
 
 @FabricFactory.register("combine")

@@ -1,5 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import List
 
 import torch
 from brt._C.router import generate_dst_indices
@@ -32,8 +33,22 @@ class TopKProtocol(ProtocolBase):
         ).scatter_(
             1, hot_mask, 1
         )  # sample x dst_num
+        return self.gen_indices(hot_mask)
 
-        return hot_mask
+    def gen_indices(self, hot_mask: torch.Tensor) -> List[torch.Tensor]:
+        """generate indices according to hot_mask
+
+        Args:
+            hot_mask (torch.Tensor): a multi-hot mask for representing the routing destinations of each sample
+        """
+        if hot_mask.is_cuda and self.indices_gen_opt:
+            route_indices = generate_dst_indices(hot_mask)
+        else:
+            route_indices = []
+            hot_mask_t = hot_mask.t().contiguous()
+            for i in range(self.path_num):
+                route_indices.append(torch.nonzero(hot_mask_t[i].view(-1)))
+        return route_indices
 
 
 @ProtocolFactory.register("threshold")
@@ -53,10 +68,7 @@ class ThresholdProtocol(ProtocolBase):
                 "residual_path is not specified for Threshold route method, use default residual_path=-1"
             )
 
-    def forward(self, score):
-        return self.gen_hot_mask(score)
-
-    def gen_hot_mask(self, score):
+    def make_route_decision(self, score):
         hot_mask = (score > self.threshold).long().to(score.device)
 
         if self.residual_path >= 0:
@@ -70,5 +82,19 @@ class ThresholdProtocol(ProtocolBase):
                 device=score.device,
             )
             hot_mask = torch.scatter_add(hot_mask, 1, residual_index, residual_indices)
+        return self.gen_indices(hot_mask)
 
-        return hot_mask
+    def gen_indices(self, hot_mask: torch.Tensor) -> List[torch.Tensor]:
+        """generate indices according to hot_mask
+
+        Args:
+            hot_mask (torch.Tensor): a multi-hot mask for representing the routing destinations of each sample
+        """
+        if hot_mask.is_cuda and self.indices_gen_opt:
+            route_indices = generate_dst_indices(hot_mask)
+        else:
+            route_indices = []
+            hot_mask_t = hot_mask.t().contiguous()
+            for i in range(self.path_num):
+                route_indices.append(torch.nonzero(hot_mask_t[i].view(-1)))
+        return route_indices
