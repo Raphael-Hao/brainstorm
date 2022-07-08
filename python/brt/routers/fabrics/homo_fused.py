@@ -7,7 +7,7 @@ from brt._C.router import (
     route_with_local_indices,
 )
 from brt.common import log
-from brt.routers.fabrics.fabric import FabricFactory
+from brt.routers.fabrics.fabric import register_fabric
 from brt.routers.fabrics.generic import CombineSF, DispatchSF
 from brt.routers.proto_tensor import (
     ProtoTensor,
@@ -42,7 +42,7 @@ def once_make_homo_proto_tensor_cls():
     check_homo_proto_tensor_clos()
 
 
-@FabricFactory.register("homo_fused_dispatch")
+@register_fabric("homo_fused_dispatch")
 class HomoFusedDispatchSF(DispatchSF):
     def __init__(self, path_num, **kwargs):
         super().__init__(path_num, **kwargs)
@@ -123,7 +123,7 @@ class HomoFusedDispatchSF(DispatchSF):
         return out_flow
 
 
-@FabricFactory.register("homo_fused_combine")
+@register_fabric("homo_fused_combine")
 class HomoFusedCombineSF(CombineSF):
     def __init__(self, path_num, **kwargs) -> None:
         super().__init__(path_num, **kwargs)

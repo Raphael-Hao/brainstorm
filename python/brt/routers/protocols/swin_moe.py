@@ -3,11 +3,11 @@
 
 import torch
 from brt.common import log
-from brt.routers.protocols.protocol import ProtocolBase, ProtocolFactory
+from brt.routers.protocols.protocol import ProtocolBase, register_protocol
 
 logger = log.get_logger(__file__)
 
-
+@register_protocol("swin_moe")
 class SwinMoEProtocol(ProtocolBase):
     def __init__(self, path_num, **kwargs):
         super().__init__(path_num)

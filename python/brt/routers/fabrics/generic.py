@@ -6,13 +6,13 @@ from typing import List, Union
 import numpy as np
 import torch
 from brt.common import log
-from brt.routers.fabrics.fabric import FabricBase, FabricFactory
+from brt.routers.fabrics.fabric import FabricBase, register_fabric
 from brt.routers.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
 
 
-@FabricFactory.register("dispatch")
+@register_fabric("dispatch")
 class DispatchSF(FabricBase):
     def __init__(self, path_num, **kwargs):
         super().__init__(path_num)
@@ -124,7 +124,7 @@ class DispatchSF(FabricBase):
         return self.remove_needless_pack(all_out_flows)
 
 
-@FabricFactory.register("combine")
+@register_fabric("combine")
 class CombineSF(FabricBase):
     def __init__(self, path_num, **kwargs):
 

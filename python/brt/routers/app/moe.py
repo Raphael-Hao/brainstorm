@@ -44,7 +44,6 @@ class CosineRouteFunc(nn.Module):
         scores = F.softmax(logits_w_noise, dim=1)
 
 
-@router
 class MoEInferenceScatterRouter(ScatterRouter):
     def __init__(
         self,
@@ -90,7 +89,6 @@ class MoEInferenceScatterRouter(ScatterRouter):
         )
 
 
-@router
 class MoeInferenceGatherRouter(GatherRouter):
     def __init__(self, dst_num: int, reduction: str = "add", sparse=True):
         super().__init__(dst_num, reduction, sparse)

@@ -5,8 +5,8 @@ from typing import List, Tuple, Union
 
 import torch
 import torch.fx
-from brt.frontend import nn, router
-from brt.routers import GatherRouter, ScatterRouter
+import torch.nn as nn
+from brt.routers import ScatterRouter
 
 __all__ = [
     "RandScatterRouter",
