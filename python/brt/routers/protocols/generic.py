@@ -5,25 +5,25 @@ from typing import List
 import torch
 from brt._C.router import generate_dst_indices
 from brt.common import log
-from brt.routers.protocols.protocol import ProtocolBase, ProtocolFactory
+from brt.routers.protocols.protocol import ProtocolBase, register_protocol
 
 logger = log.get_logger(__file__)
 __all__ = ["TopKProtocol", "ThresholdProtocol"]
 
 
-@ProtocolFactory.register("topk")
+@register_protocol("topk")
 class TopKProtocol(ProtocolBase):
     def __init__(self, path_num, **kwargs):
-        super().__init__(path_num)
+        super().__init__(path_num, indices_format="src_indices")
         self.k = kwargs.get("k")
         self.residual_path = kwargs.get("residual_path")
         if self.k == None:
             self.k = 1
-            logger.warning("k is not specified for Top-K route method, use default k=1")
+            logger.warning("k is not specified for Top-K protocol, use default k=1")
         if self.residual_path == None:
             self.residual_path = -1
             logger.warning(
-                "residual_path is not specified for Threshold route method, use default residual_path=-1"
+                "residual_path is not specified for Top-K protocol, use default residual_path=-1, no effect"
             )
 
     def make_route_decision(self, score):
@@ -51,10 +51,10 @@ class TopKProtocol(ProtocolBase):
         return route_indices
 
 
-@ProtocolFactory.register("threshold")
+@register_protocol("threshold")
 class ThresholdProtocol(ProtocolBase):
     def __init__(self, path_num, **kwargs):
-        super().__init__(path_num)
+        super().__init__(path_num, indices_format="src_indices")
         self.threshold = kwargs.get("threshold")
         self.residual_path = kwargs.get("residual_path")
         if self.threshold == None:

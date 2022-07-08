@@ -5,6 +5,7 @@ from typing import Callable, Dict, List, Tuple, Type
 import torch
 import torch.nn as nn
 from brt.common import log
+from brt.runtime.registry import Registry
 
 from ..proto_tensor import deinit_proto_tensor, init_proto_tensor
 
@@ -70,7 +71,6 @@ class FabricBase(nn.Module):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        print(state)
         del state["start_event"]
         del state["end_event"]
         return state
@@ -81,30 +81,10 @@ class FabricBase(nn.Module):
         self.end_event = torch.cuda.Event(enable_timing=True)
 
 
-class FabricFactory:
-    registry: Dict[str, FabricBase] = {}
+def register_fabric(fabric_type: str) -> Callable:
+    return Registry.register_cls(fabric_type, FabricBase)
 
-    @classmethod
-    def register(cls, name: str) -> Callable:
-        def register_func(fabric_cls) -> Type[FabricBase]:
-            if name in cls.registry:
-                logger.warning(f"Fabric: {name} is already registered, overwrite it")
-            if not issubclass(fabric_cls, FabricBase):
-                raise ValueError(f"Fabric: {name} is not a subclass of FabricBase")
-            fabric_cls.forward = torch.jit.ignore(fabric_cls.forward)
-            cls.registry[name] = fabric_cls
-            return fabric_cls
 
-        return register_func
-
-    @classmethod
-    def make_fabric(cls, fabric_type, **kwargs) -> FabricBase:
-        for key, value in kwargs.items():
-            logger.debug(f"{key}: {value}")
-
-        if fabric_type not in cls.registry:
-            raise ValueError(f"Fabric: {fabric_type} is not registered")
-        fabric_cls = cls.registry[fabric_type]
-        fabric_inst = fabric_cls(**kwargs)
-
-        return fabric_inst
+def make_fabric(fabric_type: str, **kwargs) -> FabricBase:
+    fabric_cls = Registry.get_cls(fabric_type, FabricBase)
+    return fabric_cls(**kwargs)
