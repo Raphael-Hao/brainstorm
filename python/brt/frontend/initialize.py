@@ -4,6 +4,7 @@
 import inspect
 from typing import TypeVar
 
+from nni.retiarii.serializer
 import torch
 
 from .serialize import is_wrapped_with_trace, torchscript_patch, trace
@@ -11,6 +12,24 @@ from .serialize import is_wrapped_with_trace, torchscript_patch, trace
 __all__ = ["netlet", "router", "symbolize", "de_symbolize"]
 
 T = TypeVar("T")
+
+
+def trace_init(cls, traced_type="router"):
+    """
+    Decorator for annotating an nn.Module as a Netlet.
+    """
+    assert traced_type in ["netlet", "router"]
+    if check_wrapped(cls, "netlet") or check_wrapped(cls, "router"):
+        return cls
+
+    cls = trace(cls)
+
+    tag = "brt_" + traced_type
+
+    setattr(cls, tag, True)
+
+    torchscript_patch(cls)
+    return cls
 
 
 def is_router(cls_or_instance) -> bool:
@@ -81,28 +100,6 @@ def router(cls: T, router_tag: bool = True) -> T:
 
     cls = trace(cls)
     cls._brt_router = router_tag
-    cls.forward = cls.route
-    cls._brt_symbolic = False
     torchscript_patch(cls)
 
     return cls
-
-
-def _switch_symbolic(m, symbolic=True):
-    for child in m.children():
-        _switch_symbolic(child, symbolic)
-    if is_router(m):
-        m._brt_symbolic = symbolic
-        if m._brt_symbolic:
-            m.forward = m.symbolic_route
-        else:
-            m.forward = m.route
-    return m
-
-
-def symbolize(m):
-    return _switch_symbolic(m)
-
-
-def de_symbolize(m):
-    return _switch_symbolic(m, False)

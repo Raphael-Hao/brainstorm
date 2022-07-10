@@ -1,12 +1,10 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from functools import partial
-from typing import List, Tuple, Union
 
 import torch
 import torch.fx
 import torch.nn as nn
-from brt.routers import ScatterRouter
+from brt.routers.generic import ScatterRouter
 
 __all__ = [
     "RandScatterRouter",

@@ -25,3 +25,19 @@ class RouterBase(nn.Module):
 
 def register_router(router_type: str) -> Callable:
     return Registry.register_cls(router_type, RouterBase)
+
+
+def make_router(router_type: str, **kwargs) -> RouterBase:
+    router_cls = Registry.get_cls(router_type, RouterBase)
+    if router_cls is None:
+        raise ValueError(f"Router type: {router_type} is not registered.")
+    return router_cls(**kwargs)
+
+
+def is_router(cls_or_instance) -> bool:
+    if isinstance(cls_or_instance, nn.Module):
+        router_cls = cls_or_instance.__class__
+    else:
+        router_cls = cls_or_instance
+    return Registry.cls_exists(router_cls, RouterBase)
+

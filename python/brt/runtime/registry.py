@@ -36,8 +36,17 @@ class Registry:
             raise ValueError(f"{base_cls} is not registered")
 
         if sub_cls_type not in cls.cls_registries[base_cls]:
-            raise ValueError(f"{sub_cls_type} is not registered in {base_cls}")
+            return None
 
         sub_cls = cls.cls_registries[base_cls][sub_cls_type]
 
         return sub_cls
+
+    @classmethod
+    def cls_exists(cls, sub_cls, base_cls) -> bool:
+        if (
+            issubclass(sub_cls, base_cls)
+            and sub_cls in cls.cls_registries[base_cls].values()
+        ):
+            return True
+        return False
