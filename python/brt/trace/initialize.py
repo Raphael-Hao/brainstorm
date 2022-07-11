@@ -4,15 +4,13 @@
 import inspect
 from typing import TypeVar
 
-from nni.retiarii.serializer
-import torch
-
-from .serialize import is_wrapped_with_trace, torchscript_patch, trace
+from nni.common.serializer import is_wrapped_with_trace, trace
 
 __all__ = ["netlet", "router", "symbolize", "de_symbolize"]
 
 T = TypeVar("T")
 
+def get_init(traced)
 
 def trace_init(cls, traced_type="router"):
     """
@@ -24,27 +22,28 @@ def trace_init(cls, traced_type="router"):
 
     cls = trace(cls)
 
-    tag = "brt_" + traced_type
+    tag = "_brt_" + traced_type
 
     setattr(cls, tag, True)
 
-    torchscript_patch(cls)
+    _torchscript_patch(cls)
     return cls
 
 
-def is_router(cls_or_instance) -> bool:
+def is_wrapped_router(cls_or_instance) -> bool:
     """check if the class is a router for brainstorm."""
     if not inspect.isclass(cls_or_instance):
         cls_or_instance = cls_or_instance.__class__
+
     import torch
 
     assert issubclass(
         cls_or_instance, torch.nn.Module
-    ), "Only nn.Module is supported for router."
+    ), "Only nn.Module is supported currently."
     return getattr(cls_or_instance, "_brt_router", False)
 
 
-def is_netlet(cls_or_instance) -> bool:
+def is_wrapped_netlet(cls_or_instance) -> bool:
     """
     Check if the class is a netlet for brainstorm.
     """
@@ -61,9 +60,9 @@ def is_netlet(cls_or_instance) -> bool:
 
 def check_wrapped(cls: T, rewrap: str) -> bool:
     wrapped = None
-    if is_netlet(cls):
+    if is_wrapped_netlet(cls):
         wrapped = "netlet"
-    elif is_router(cls):
+    elif is_wrapped_netlet(cls):
         wrapped = "router"
     elif is_wrapped_with_trace(cls):
         wrapped = "trace"
@@ -76,30 +75,26 @@ def check_wrapped(cls: T, rewrap: str) -> bool:
     return False
 
 
-def netlet(cls: T, netlet_tag: bool = True) -> T:
-    """
-    Decorator for annotating an nn.Module as a Netlet.
-    """
-    if check_wrapped(cls, "netlet"):
-        return cls
+def _torchscript_patch(cls) -> None:
+    # HACK: for torch script
+    # https://github.com/pytorch/pytorch/pull/45261
+    # https://github.com/pytorch/pytorch/issues/54688
+    # I'm not sure whether there will be potential issues
+    import torch
 
-    cls = trace(cls)
-
-    cls._brt_netlet = netlet_tag
-    torchscript_patch(cls)
-    return cls
-
-
-def router(cls: T, router_tag: bool = True) -> T:
-    """Decorator for annotating the class as a router for brainstorm."""
-
-    assert issubclass(cls, torch.nn.Module), "Only nn.Module is supported."
-
-    if check_wrapped(cls, "router"):
-        return cls
-
-    cls = trace(cls)
-    cls._brt_router = router_tag
-    torchscript_patch(cls)
-
-    return cls
+    if hasattr(cls, "_get_brt_attr"):  # could not exist on non-linux
+        cls._get_brt_attr = torch.jit.ignore(cls._get_brt_attr)
+    if hasattr(cls, "trace_symbol"):
+        # these must all exist or all non-exist
+        try:
+            cls.trace_symbol = torch.jit.unused(cls.trace_symbol)
+            cls.trace_args = torch.jit.unused(cls.trace_args)
+            cls.trace_kwargs = torch.jit.unused(cls.trace_kwargs)
+            cls.trace_copy = torch.jit.ignore(cls.trace_copy)
+        except AttributeError as e:
+            if "property" in str(e):
+                raise RuntimeError(
+                    "Trace on PyTorch module failed. Your PyTorch version might be outdated. "
+                    "Please try to upgrade PyTorch."
+                )
+            raise
