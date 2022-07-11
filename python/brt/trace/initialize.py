@@ -2,15 +2,24 @@
 # Licensed under the MIT license.
 
 import inspect
-from typing import TypeVar
+from typing import Any, TypeVar
 
-from nni.common.serializer import is_wrapped_with_trace, trace
+from nni.common.serializer import is_traceable, is_wrapped_with_trace, trace
 
-__all__ = ["netlet", "router", "symbolize", "de_symbolize"]
+__all__ = ["netlet", "router"]
 
 T = TypeVar("T")
 
-def get_init(traced)
+
+def get_init_arguments(obj: Any):
+    if is_traceable(obj):
+        return obj.trace_kwargs
+    raise ValueError(
+        f"Object {obj} needs to be serializable but `trace_kwargs` is not available. "
+        "If it is a built-in module (like Conv2d) or nn.Module composed of torch's built-in modules, "
+        "please decorate it with brt.netlet."
+    )
+
 
 def trace_init(cls, traced_type="router"):
     """
