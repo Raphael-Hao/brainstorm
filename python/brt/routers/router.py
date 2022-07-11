@@ -1,10 +1,12 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+import inspect
 from typing import Callable, Dict, List, Type, Union
 
 import torch.nn as nn
 from brt.common import log
 from brt.runtime import Registry
+from brt.trace.initialize import trace_init
 
 __all__ = ["RouterBase"]
 
@@ -24,7 +26,13 @@ class RouterBase(nn.Module):
 
 
 def register_router(router_type: str) -> Callable:
-    return Registry.register_cls(router_type, RouterBase)
+    global_register_func = Registry.register_cls(router_type, RouterBase)
+
+    def local_register_func(router_cls):
+        router_cls = trace_init(router_cls)
+        return global_register_func(router_cls)
+
+    return local_register_func
 
 
 def make_router(router_type: str, **kwargs) -> RouterBase:
@@ -35,9 +43,8 @@ def make_router(router_type: str, **kwargs) -> RouterBase:
 
 
 def is_router(cls_or_instance) -> bool:
-    if isinstance(cls_or_instance, nn.Module):
+    if not inspect.isclass(cls_or_instance):
         router_cls = cls_or_instance.__class__
     else:
         router_cls = cls_or_instance
     return Registry.cls_exists(router_cls, RouterBase)
-

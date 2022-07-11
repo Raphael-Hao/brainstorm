@@ -7,7 +7,7 @@ import torch.fx as fx
 from brt.routers import is_router
 
 
-class Tracer(fx.Tracer):
+class GraphTracer(fx.Tracer):
     def is_leaf_module(self, m: torch.nn.Module, module_qualified_name: str) -> bool:
         if is_router(m):
             return True
