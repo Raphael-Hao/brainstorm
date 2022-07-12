@@ -31,7 +31,6 @@ class DispatchSF(FabricBase):
         assert len(route_logics) == len(transforms)
         self.route_logics = route_logics
         self.transforms = transforms
-        self.indices_gen_opt = kwargs.get("indices_gen_opt", True)
 
     def forward(
         self,

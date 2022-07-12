@@ -3,8 +3,8 @@
 from typing import List
 
 import torch
-from brt._C.router import generate_dst_indices
 from brt.common import log
+from brt.routers.functions import generate_src_indices
 from brt.routers.protocols.protocol import ProtocolBase, register_protocol
 
 logger = log.get_logger(__file__)
@@ -27,27 +27,10 @@ class TopKProtocol(ProtocolBase):
         ).scatter_(
             1, hot_mask, 1
         )  # sample x dst_num
-        return self.gen_indices(hot_mask)
 
-    def gen_indices(self, hot_mask: torch.Tensor) -> List[torch.Tensor]:
-        """generate indices according to hot_mask
+        route_indices, loads = generate_src_indices(hot_mask)
 
-        Args:
-            hot_mask (torch.Tensor): a multi-hot mask for representing the routing destinations of each sample
-        """
-        if hot_mask.is_cuda and self.indices_gen_opt:
-            route_indices, loads = generate_dst_indices(hot_mask)
-        else:
-            route_indices = torch.zeros_like(hot_mask)
-            loads = torch.zeros(
-                (self.path_num,), dtype=torch.int64, device=hot_mask.device
-            )
-            hot_mask_t = hot_mask.t().contiguous()
-            for i in range(self.path_num):
-                src_indices = hot_mask_t[i].view(-1).nonzero()
-                loads[i] = src_indices.numel()
-                route_indices[i, : src_indices.numel()] = src_indices
-        return route_indices
+        return route_indices, loads, loads
 
 
 @register_protocol("threshold")
@@ -81,19 +64,6 @@ class ThresholdProtocol(ProtocolBase):
                 device=score.device,
             )
             hot_mask = torch.scatter_add(hot_mask, 1, residual_index, residual_indices)
-        return self.gen_indices(hot_mask)
 
-    def gen_indices(self, hot_mask: torch.Tensor) -> List[torch.Tensor]:
-        """generate indices according to hot_mask
-
-        Args:
-            hot_mask (torch.Tensor): a multi-hot mask for representing the routing destinations of each sample
-        """
-        if hot_mask.is_cuda and self.indices_gen_opt:
-            route_indices = generate_dst_indices(hot_mask)
-        else:
-            route_indices = []
-            hot_mask_t = hot_mask.t().contiguous()
-            for i in range(self.path_num):
-                route_indices.append(torch.nonzero(hot_mask_t[i].view(-1)))
-        return route_indices
+        route_indices, loads = generate_src_indices(hot_mask)
+        return route_indices, loads, loads
