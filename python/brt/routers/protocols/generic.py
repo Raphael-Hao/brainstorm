@@ -14,17 +14,11 @@ __all__ = ["TopKProtocol", "ThresholdProtocol"]
 @register_protocol("topk")
 class TopKProtocol(ProtocolBase):
     def __init__(self, path_num, **kwargs):
-        super().__init__(path_num, indices_format="src_indices")
+        super().__init__(path_num, indices_format="src_index")
         self.k = kwargs.get("k")
-        self.residual_path = kwargs.get("residual_path")
         if self.k == None:
             self.k = 1
             logger.warning("k is not specified for Top-K protocol, use default k=1")
-        if self.residual_path == None:
-            self.residual_path = -1
-            logger.warning(
-                "residual_path is not specified for Top-K protocol, use default residual_path=-1, no effect"
-            )
 
     def make_route_decision(self, score):
         hot_mask = torch.topk(score, self.k, dim=1).indices  # sample x k
@@ -42,19 +36,24 @@ class TopKProtocol(ProtocolBase):
             hot_mask (torch.Tensor): a multi-hot mask for representing the routing destinations of each sample
         """
         if hot_mask.is_cuda and self.indices_gen_opt:
-            route_indices = generate_dst_indices(hot_mask)
+            route_indices, loads = generate_dst_indices(hot_mask)
         else:
-            route_indices = []
+            route_indices = torch.zeros_like(hot_mask)
+            loads = torch.zeros(
+                (self.path_num,), dtype=torch.int64, device=hot_mask.device
+            )
             hot_mask_t = hot_mask.t().contiguous()
             for i in range(self.path_num):
-                route_indices.append(torch.nonzero(hot_mask_t[i].view(-1)))
+                src_indices = hot_mask_t[i].view(-1).nonzero()
+                loads[i] = src_indices.numel()
+                route_indices[i, : src_indices.numel()] = src_indices
         return route_indices
 
 
 @register_protocol("threshold")
 class ThresholdProtocol(ProtocolBase):
     def __init__(self, path_num, **kwargs):
-        super().__init__(path_num, indices_format="src_indices")
+        super().__init__(path_num, indices_format="src_index")
         self.threshold = kwargs.get("threshold")
         self.residual_path = kwargs.get("residual_path")
         if self.threshold == None:
