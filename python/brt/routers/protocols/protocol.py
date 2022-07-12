@@ -13,10 +13,24 @@ __all__ = ["ProtocolBase", "ProtocolFactory"]
 
 
 class ProtocolBase(nn.Module):
-    def __init__(self, path_num: int, indices_format: str):
+    def __init__(self, path_num: int, index_format: str):
+        """Base class for all protocols.
+
+        Args:
+            path_num (int): number of paths for routing source or destinations
+            index_format (str): format of indices. should be "dst_index" or "src_index"
+                src_index: the index of source for collecting data from input tensor, the index number start from zero
+                dst_index: the index of destination for collected data from input tensor, the index number start from one,
+                           zero is reserved for representing the corresponding data in the input tensor is dropped. 
+        """
         super().__init__()
         self.path_num = path_num
-        self.indices_format = indices_format
+        self.index_format = index_format
+        assert self.path_num >= 1, f"path_num should be at least 1, but got {path_num}"
+        assert self.index_format in [
+            "dst_index",
+            "src_index",
+        ], f"index_format should be dst_index or src_index, but got {index_format}"
 
     def forward(self, score: torch.Tensor):
         decisions = self.make_route_decision(score)

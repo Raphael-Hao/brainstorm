@@ -6,14 +6,15 @@ from typing import List, Tuple
 import torch
 
 
-def generate_global_indices(
+def generate_global_dst_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
 def generate_dst_indices(
     hot_mask: torch.Tensor,
-) -> List[torch.Tensor]: ...
-def generate_local_indices(
+    supported_capacities: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]: ...
+def generate_src_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...

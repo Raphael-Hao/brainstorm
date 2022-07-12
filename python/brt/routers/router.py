@@ -29,7 +29,9 @@ def register_router(router_type: str) -> Callable:
     global_register_func = Registry.register_cls(router_type, RouterBase)
 
     def local_register_func(router_cls):
+        
         router_cls = trace_init(router_cls)
+        
         return global_register_func(router_cls)
 
     return local_register_func

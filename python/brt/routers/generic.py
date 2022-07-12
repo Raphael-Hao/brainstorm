@@ -16,6 +16,7 @@ __all__ = [
 
 logger = log.get_logger(__file__)
 
+
 @register_router("scatter")
 class ScatterRouter(RouterBase):
     def __init__(
@@ -64,6 +65,7 @@ class ScatterRouter(RouterBase):
 
         return out_flows
 
+
 @register_router("gather")
 class GatherRouter(RouterBase):
     def __init__(
@@ -85,4 +87,24 @@ class GatherRouter(RouterBase):
 
     def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
         out_flow = self.fabric(in_flows)
+        return out_flow
+
+
+@register_router("loop")
+class LoopRouter(RouterBase):
+    def __init__(self, netlet, protocol_type: str = "topk", **kwargs):
+        super().__init__(path_num=2)
+        self.protocol_type = protocol_type
+        self.protocol = make_protocol(self.protocol_type, path_num=2, **kwargs)
+        self.dispatch_fabric = make_fabric("dispatch", path_num=2, **kwargs)
+        self.combine_fabric = make_fabric("combine", path_num=2, **kwargs)
+        self.netlet = netlet
+
+    def forward(self, in_flow: ProtoTensor) -> ProtoTensor:
+        target = in_flow
+        while (target.numel() > 0):
+            decisions = self.protocol(target)
+            out_flows = self.dispatch_fabric(target, decisions, target)
+            target = self.combine_fabric(out_flows)
+
         return out_flow
