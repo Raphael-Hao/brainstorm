@@ -16,26 +16,22 @@ __all__ = ["ProtocolBase", "ProtocolFactory"]
 class ProtocolBase(nn.Module):
     def __init__(
         self,
-        path_num: int,
         index_format: str,
         index_gen_opt: bool = True,
     ):
         """Base class for all protocols.
 
         Args:
-            path_num (int): number of paths for routing source or destinations
             index_format (str): format of indices. should be "dst_index" or "src_index"
                 src_index: the index of source for collecting data from input tensor, the index number start from zero
                 dst_index: the index of destination for collected data from input tensor, the index number start from one,
                            zero is reserved for representing the corresponding data in the input tensor is dropped.
         """
         super().__init__()
-        
-        self.path_num = path_num
+
         self.index_format = index_format
         self.index_gen_opt = index_gen_opt
         self.debug = os.environ.get("BRT_DEBUG", "False").lower() in ["true", "1"]
-        assert self.path_num >= 1, f"path_num should be at least 1, but got {path_num}"
         assert self.index_format in [
             "dst_index",
             "src_index",
@@ -57,15 +53,15 @@ class ProtocolBase(nn.Module):
         assert indices.size(0) == scores.size(
             0
         ), "indices and scores should have the same size in the first dimension"
-        assert (
-            loads.numel() == self.path_num
-        ), "loads should have the same elements as path_num"
+        assert loads.numel() == indices.size(
+            0
+        ), "loads should have the same elements as indices in the first dimension"
         if isinstance(capacities, int):
             assert capacities >= 0, "capacities should be non-negative"
         elif isinstance(capacities, torch.Tensor):
             assert (
-                capacities.numel() == self.path_num
-            ), "capacities should have the same elements as path_num"
+                capacities.size() == loads.size()
+            ), "capacities should have the same elements as loads"
         else:
             raise ValueError("capacities should be int or torch.Tensor")
 

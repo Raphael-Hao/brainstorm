@@ -13,13 +13,9 @@ __all__ = ["TopKProtocol", "ThresholdProtocol"]
 
 @register_protocol("topk")
 class TopKProtocol(ProtocolBase):
-    def __init__(
-        self, path_num, index_format="src_index", index_gen_opt=True, **kwargs
-    ):
+    def __init__(self, index_format="src_index", index_gen_opt=True, **kwargs):
 
-        super().__init__(
-            path_num, index_format=index_format, index_gen_opt=index_gen_opt
-        )
+        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.supported_capacities = kwargs.get("supported_capacities")
         self.k = kwargs.get("k")
         if self.k == None:
@@ -28,11 +24,9 @@ class TopKProtocol(ProtocolBase):
 
     def make_route_decision(self, score):
         hot_mask = torch.topk(score, self.k, dim=1).indices  # sample x k
-        hot_mask = torch.zeros(
-            score.size(0), self.path_num, dtype=torch.int64, device=score.device
-        ).scatter_(
-            1, hot_mask, 1
-        )  # sample x dst_num
+        hot_mask = torch.zeros_like(
+            score, dtype=torch.int64, device=score.device
+        ).scatter_(1, hot_mask, 1)
 
         if self.index_format == "src_index":
             route_indices, loads = generate_src_indices(
@@ -51,12 +45,8 @@ class TopKProtocol(ProtocolBase):
 
 @register_protocol("threshold")
 class ThresholdProtocol(ProtocolBase):
-    def __init__(
-        self, path_num, index_format="src_index", index_gen_opt=True, **kwargs
-    ):
-        super().__init__(
-            path_num, index_format=index_format, index_gen_opt=index_gen_opt
-        )
+    def __init__(self, index_format="src_index", index_gen_opt=True, **kwargs):
+        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.supported_capacities = kwargs.get("supported_capacities")
         self.threshold = kwargs.get("threshold")
         self.residual_path = kwargs.get("residual_path")

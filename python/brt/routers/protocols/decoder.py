@@ -14,7 +14,7 @@ class DecoderProtocol(ProtocolBase):
         eos_token_id: int,
         skip_eos_check: bool = False,
     ):
-        super().__init__(path_num=2, index_format=index_format)
+        super().__init__(index_format=index_format)
         self.eos_token_id = eos_token_id
         self.pad_token_id = pad_token_id
         self.skip_eos_check = skip_eos_check

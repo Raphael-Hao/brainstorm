@@ -78,6 +78,8 @@ class DispatchFabric(FabricBase):
         score: torch.Tensor,
     ):
         all_out_flows = []
+        path_num = route_indices.size(1)
+        
         for flow_idx, flow in enumerate(in_flows):
             (
                 flow_data,
@@ -103,7 +105,6 @@ class DispatchFabric(FabricBase):
                 raise ValueError("route_logic must be 1d or 2d")
 
             out_flows = []
-            path_num = route_indices.size(1)
             for i in range(path_num):
                 tag_indices = route_indices[: real_loads[i], i]
                 if tag_indices.numel() > 0:
@@ -217,6 +218,5 @@ class CombineFabric(FabricBase):
             in_flows_extra_stack_dict,
         )
         out_flow = out_flow.pack(out_flow_tag, out_flow_load)
-        
-    
+
         return self.remove_needless_pack(out_flow)

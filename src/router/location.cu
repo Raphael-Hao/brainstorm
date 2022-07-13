@@ -235,6 +235,45 @@ __global__ void generate_dst_indices_base(int* __restrict__ loads /* [path_num] 
   blockwise_cum_sum(loads, dst_indices_base, path_num, prefix);
 }
 
+__global__ void convert_dst_to_src_indices(
+    int* __restrict__ dst_indices /* [sample_num, path_num] */,
+    int* __restrict__ src_indices /* [sample_num, path_num] */, int sample_num, int path_num) {
+  // [thread_extent] blockIdx.x = path_num
+  // [thread_extent] threadIdx.x = 1024
+  constexpr int thread_num = 1024;
+  for (int s_id = 0; s_id < sample_num; s_id += thread_num) {
+    if (s_id + threadIdx.x < sample_num) {
+      int sample_id = s_id + threadIdx.x;
+      int dst_index_id = sample_id * path_num + blockIdx.x;
+      int dst_index = dst_indices[dst_index_id];
+      if (dst_index != 0) {
+        int src_index_id = (dst_index - 1) * path_num + blockIdx.x;
+        src_indices[src_index_id] = sample_id;
+      }
+    }
+  }
+}
+
+__global__ void convert_src_to_dst_indices(
+    int* __restrict__ src_indices /* [sample_num, path_num] */,
+    int* __restrict__ dst_indices /* [sample_num, path_num] */, int* loads /* [path_num] */,
+    int sample_num, int path_num) {
+  // [thread_extent] blockIdx.x = path_num
+  // [thread_extent] threadIdx.x = 1024
+  constexpr int thread_num = 1024;
+  __shared__ int load;
+  load = loads[blockIdx.x];
+  for (int s_id = 0; s_id < load; s_id += thread_num) {
+    if (s_id + threadIdx.x < load) {
+      int sample_id = s_id + threadIdx.x;
+      int src_index_id = sample_id * path_num + blockIdx.x;
+      int src_index = src_indices[src_index_id];
+      int dst_index_id = src_index * path_num + blockIdx.x;
+      dst_indices[dst_index_id] = sample_id + 1;
+    }
+  }
+}
+
 __global__ void accumulate_base_to_dst_indices(
     int* global_dst_indices /* [sample_num, path_num]  */, int* indices, int* dst_indices_base,
     int sample_num, int path_num) {
@@ -273,6 +312,19 @@ void GenerateGlobalDSTIndices(int* hot_mask /*[sample_num x path_num]*/,
     const dim3 grid_size = (sample_num + 127) / 128;
     accumulate_base_to_dst_indices<<<grid_size, block_size, 0, stream>>>(
         global_dst_indices, hot_mask, dst_indices_base, sample_num, path_num);
+  }
+}
+
+void CoordinateIndexFormat(int* origin_indices, int* new_indices, int* loads, int sample_num,
+                          int path_num, int target_index_fmt_id, cudaStream_t stream) {
+  constexpr dim3 block_size = 1024;
+  const dim3 grid_size = path_num;
+  if (target_index_fmt_id == 0) {  // src_indices -> dst_indices
+    convert_dst_to_src_indices<<<grid_size, block_size, 0, stream>>>(origin_indices, new_indices,
+                                                                     sample_num, path_num);
+  } else if (target_index_fmt_id == 1) {  // dst_indices -> src_indices
+    convert_src_to_dst_indices<<<grid_size, block_size, 0, stream>>>(origin_indices, new_indices,
+                                                                     loads, sample_num, path_num);
   }
 }
 
