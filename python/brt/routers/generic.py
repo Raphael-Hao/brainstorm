@@ -65,6 +65,9 @@ class ScatterRouter(RouterBase):
 
         return out_flows
 
+    def update_protocol(self, **kwargs):
+        self.protocol.update(**kwargs)
+
 
 @register_router("gather")
 class GatherRouter(RouterBase):
@@ -96,15 +99,21 @@ class LoopRouter(RouterBase):
         super().__init__(path_num=2)
         self.protocol_type = protocol_type
         self.protocol = make_protocol(self.protocol_type, path_num=2, **kwargs)
-        self.dispatch_fabric = make_fabric("dispatch", path_num=2, **kwargs)
-        self.combine_fabric = make_fabric("combine", path_num=2, **kwargs)
+        self.dispatch_fabric = make_fabric("dispatch", **kwargs)
+        self.combine_fabric = make_fabric("combine", **kwargs)
         self.netlet = netlet
 
     def forward(self, in_flow: ProtoTensor) -> ProtoTensor:
         target = in_flow
-        while (target.numel() > 0):
-            decisions = self.protocol(target)
-            out_flows = self.dispatch_fabric(target, decisions, target)
-            target = self.combine_fabric(out_flows)
+        pending_combine_flows = []
+        while target.numel() > 0:
+            target, score = self.netlet(target)
+            decisions = self.protocol(score)
+            dispatched_flows = self.dispatch_fabric(target, decisions)
+            target = dispatched_flows[0]
+            pending_combine_flows.append(dispatched_flows[1])
+        out_flows = self.combine_fabric(pending_combine_flows)
+        return out_flows
 
-        return out_flow
+    def update_protocol(self, **kwargs):
+        self.protocol.update(**kwargs)

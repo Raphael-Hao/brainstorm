@@ -18,7 +18,7 @@ class ProtocolBase(nn.Module):
         self,
         path_num: int,
         index_format: str,
-        indices_gen_opt: bool = True,
+        index_gen_opt: bool = True,
     ):
         """Base class for all protocols.
 
@@ -30,9 +30,10 @@ class ProtocolBase(nn.Module):
                            zero is reserved for representing the corresponding data in the input tensor is dropped.
         """
         super().__init__()
+        
         self.path_num = path_num
         self.index_format = index_format
-        self.indices_gen_opt = indices_gen_opt
+        self.index_gen_opt = index_gen_opt
         self.debug = os.environ.get("BRT_DEBUG", "False").lower() in ["true", "1"]
         assert self.path_num >= 1, f"path_num should be at least 1, but got {path_num}"
         assert self.index_format in [
