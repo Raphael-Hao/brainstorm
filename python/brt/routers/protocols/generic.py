@@ -4,7 +4,7 @@ from typing import List
 
 import torch
 from brt.common import log
-from brt.routers.functions import generate_src_indices
+from brt.routers.functions import generate_dst_indices, generate_src_indices
 from brt.routers.protocols.protocol import ProtocolBase, register_protocol
 
 logger = log.get_logger(__file__)
@@ -13,8 +13,14 @@ __all__ = ["TopKProtocol", "ThresholdProtocol"]
 
 @register_protocol("topk")
 class TopKProtocol(ProtocolBase):
-    def __init__(self, path_num, **kwargs):
-        super().__init__(path_num, indices_format="src_index")
+    def __init__(
+        self, path_num, index_format="src_index", index_gen_opt=True, **kwargs
+    ):
+
+        super().__init__(
+            path_num, index_format=index_format, index_gen_opt=index_gen_opt
+        )
+        self.supported_capacities = kwargs.get("supported_capacities")
         self.k = kwargs.get("k")
         if self.k == None:
             self.k = 1
@@ -28,15 +34,30 @@ class TopKProtocol(ProtocolBase):
             1, hot_mask, 1
         )  # sample x dst_num
 
-        route_indices, loads = generate_src_indices(hot_mask)
+        if self.index_format == "src_index":
+            route_indices, loads = generate_src_indices(
+                hot_mask, self.supported_capacities, self.index_gen_opt
+            )
+        elif self.index_format == "dst_index":
+            route_indices, loads = generate_dst_indices(
+                hot_mask, self.supported_capacities, self.index_gen_opt
+            )
 
         return route_indices, loads, loads
+
+    def update(self, supported_capacities):
+        self.supported_capacities = supported_capacities
 
 
 @register_protocol("threshold")
 class ThresholdProtocol(ProtocolBase):
-    def __init__(self, path_num, **kwargs):
-        super().__init__(path_num, indices_format="src_index")
+    def __init__(
+        self, path_num, index_format="src_index", index_gen_opt=True, **kwargs
+    ):
+        super().__init__(
+            path_num, index_format=index_format, index_gen_opt=index_gen_opt
+        )
+        self.supported_capacities = kwargs.get("supported_capacities")
         self.threshold = kwargs.get("threshold")
         self.residual_path = kwargs.get("residual_path")
         if self.threshold == None:
@@ -65,5 +86,16 @@ class ThresholdProtocol(ProtocolBase):
             )
             hot_mask = torch.scatter_add(hot_mask, 1, residual_index, residual_indices)
 
-        route_indices, loads = generate_src_indices(hot_mask)
+        if self.index_format == "src_index":
+            route_indices, loads = generate_src_indices(
+                hot_mask, self.supported_capacities, self.index_gen_opt
+            )
+        elif self.index_format == "dst_index":
+            route_indices, loads = generate_dst_indices(
+                hot_mask, self.supported_capacities, self.index_gen_opt
+            )
+
         return route_indices, loads, loads
+
+    def update(self, supported_capacities):
+        self.supported_capacities = supported_capacities
