@@ -18,6 +18,8 @@ class DecoderProtocol(ProtocolBase):
         self.eos_token_id = eos_token_id
         self.pad_token_id = pad_token_id
         self.skip_eos_check = skip_eos_check
+        if self.skip_eos_check:
+            self.default_path = 0
         self.sorted_sequence_lengths = None
         self.iteration = 0
 
@@ -48,7 +50,7 @@ class DecoderGreedySearchProtocol(DecoderProtocol):
                 route_indices = torch.zeros(
                     score.size(0), 2, dtype=torch.int64, device=score.device
                 )
-                route_indices[:, 0] = torch.arange(
+                route_indices[:, self.default_path] = torch.arange(
                     0, score.size(0), dtype=torch.int64, device=score.device
                 )
                 loads = torch.tensor(
