@@ -8,7 +8,7 @@ from brt._C.router import (
 )
 from brt.common import log
 from brt.routers.fabrics.fabric import register_fabric
-from brt.routers.fabrics.generic import CombineSF, DispatchSF
+from brt.routers.fabrics.generic import CombineFabric, DispatchFabric
 from brt.routers.proto_tensor import (
     ProtoTensor,
     init_proto_tensor,
@@ -43,7 +43,7 @@ def once_make_homo_proto_tensor_cls():
 
 
 @register_fabric("homo_fused_dispatch")
-class HomoFusedDispatchSF(DispatchSF):
+class HomoFusedDispatchFabric(DispatchFabric):
     def __init__(self, path_num, **kwargs):
         super().__init__(path_num, **kwargs)
         once_make_homo_proto_tensor_cls()
@@ -124,7 +124,7 @@ class HomoFusedDispatchSF(DispatchSF):
 
 
 @register_fabric("homo_fused_combine")
-class HomoFusedCombineSF(CombineSF):
+class HomoFusedCombineFabric(CombineFabric):
     def __init__(self, path_num, **kwargs) -> None:
         super().__init__(path_num, **kwargs)
         check_homo_proto_tensor_clos()
