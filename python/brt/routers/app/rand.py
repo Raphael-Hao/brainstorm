@@ -31,7 +31,7 @@ class RandScatterRouter(nn.Module):
         super().__init__()
         self.path_num = path_num
         self.scatter_router = ScatterRouter(
-            path_num, protocol_type="topk", fabric_type=fabric_type, k=1, **kwargs
+            protocol_type="topk", fabric_type=fabric_type, k=1, **kwargs
         )
 
     def forward(self, inputs):

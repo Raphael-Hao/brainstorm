@@ -21,7 +21,6 @@ logger = log.get_logger(__file__)
 class ScatterRouter(RouterBase):
     def __init__(
         self,
-        path_num: int,
         protocol_type: str = "topk",
         fabric_type: str = "dispatch",
         **kwargs,
@@ -29,8 +28,6 @@ class ScatterRouter(RouterBase):
         """base scatter router
 
         Args:
-            path_num (int): number of paths for routing destinations
-
             protocol_type (str, optional): protocol type. Defaults to "topk".
                 topk: select the topk of gate results as the route destinations
                 threshold: select the gate results that are larger than threshold as the route destinations
@@ -49,11 +46,11 @@ class ScatterRouter(RouterBase):
                     transform (bool, optional): whether to transform the route result to the original shape. Defaults to False.
 
         """
-        super().__init__(path_num=path_num)
+        super().__init__()
         self.protocol_type = protocol_type
         self.fabric_type = fabric_type
-        self.protocol = make_protocol(protocol_type, path_num=path_num, **kwargs)
-        self.fabric = make_fabric(fabric_type, path_num=path_num, **kwargs)
+        self.protocol = make_protocol(protocol_type, **kwargs)
+        self.fabric = make_fabric(fabric_type, **kwargs)
 
     def forward(
         self, in_flow: Union[torch.Tensor, ProtoTensor], score: torch.Tensor
@@ -73,20 +70,20 @@ class ScatterRouter(RouterBase):
 class GatherRouter(RouterBase):
     def __init__(
         self,
-        path_num: int,
         fabric_type: str = "combine",
         **kwargs,
     ):
         """gather router
 
         Args:
-            path_num (int): number of paths for routing sources
-            reduction (str, optional): reduction method. Defaults to "add".
-            sparse (bool, optional): whether restore with zero paddings. Defaults to True.
+            fabric_type (str, optional): fabric type. Defaults to "combine".
+            supported keyword args for fabric:
+                reduction (str, optional): reduction method. Defaults to "add".
+                sparse (bool, optional): whether restore with zero paddings. Defaults to True.
         """
-        super().__init__(path_num=path_num)
+        super().__init__()
         self.fabric_type = fabric_type
-        self.fabric = make_fabric(fabric_type, path_num=path_num, **kwargs)
+        self.fabric = make_fabric(fabric_type, **kwargs)
 
     def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
         out_flow = self.fabric(in_flows)
@@ -96,9 +93,9 @@ class GatherRouter(RouterBase):
 @register_router("loop")
 class LoopRouter(RouterBase):
     def __init__(self, netlet, protocol_type: str = "topk", **kwargs):
-        super().__init__(path_num=2)
+        super().__init__()
         self.protocol_type = protocol_type
-        self.protocol = make_protocol(self.protocol_type, path_num=2, **kwargs)
+        self.protocol = make_protocol(self.protocol_type, **kwargs)
         self.dispatch_fabric = make_fabric("dispatch", **kwargs)
         self.combine_fabric = make_fabric("combine", **kwargs)
         self.netlet = netlet

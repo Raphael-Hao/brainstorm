@@ -45,6 +45,7 @@ class SkipCheckDispatchFabric(DispatchFabric):
 
         all_out_flows = []
 
+        path_num = route_indices.size(1)
         if route_indices[-1, self.default_path] == score.size(0) - 1:
             for flow_idx, flow in enumerate(in_flows):
                 (
@@ -70,7 +71,7 @@ class SkipCheckDispatchFabric(DispatchFabric):
 
                 out_flows = []
 
-                for i in range(self.path_num):
+                for i in range(path_num):
                     if i == self.default_path:
                         out_flow_tag = flow_tag
                         if self.route_logics[flow_idx] == "1d":
@@ -110,7 +111,7 @@ class SkipCheckDispatchFabric(DispatchFabric):
                     out_flows.append(out_flow)
                 all_out_flows.append(out_flows)
         else:
-            all_out_flows = super().dispatch(in_flows, route_indices, real_loads, score)
+            all_out_flows = self.dispatch(in_flows, route_indices, real_loads, score)
 
         if isinstance(in_flow, ProtoTensor):
             return self.remove_needless_pack(all_out_flows[0])

@@ -5,6 +5,7 @@ from typing import Callable, Dict, List, Type, Union
 
 import torch.nn as nn
 from brt.common import log
+from brt.routers.functions import generate_dst_indices, generate_src_indices
 from brt.runtime import Registry
 from brt.trace.initialize import trace_init
 
@@ -14,24 +15,26 @@ logger = log.get_logger(__file__)
 
 
 class RouterBase(nn.Module):
-    def __init__(self, path_num: int):
-        """_summary_
-
-        Args:
-            path_num (int): number of paths for routing source or destinations
-            gran_dim (_type_, optional): routing granularity. should be a int or a list of int.
-        """
+    def __init__(self):
         super().__init__()
-        self.path_num = path_num
-
+    
+    def cordinate_index_format(self, route_indices, origin_index_format, new_index_format):
+        """
+        Convert the route indices to the cordinate index format.
+        """
+        if origin_index_format == new_index_format:
+            return route_indices
+        elif new_index_format == "src_index":
+            pass
+            
 
 def register_router(router_type: str) -> Callable:
     global_register_func = Registry.register_cls(router_type, RouterBase)
 
     def local_register_func(router_cls):
-        
+
         router_cls = trace_init(router_cls)
-        
+
         return global_register_func(router_cls)
 
     return local_register_func

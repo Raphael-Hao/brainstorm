@@ -9,8 +9,8 @@ logger = log.get_logger(__file__)
 
 @register_protocol("swin_moe")
 class SwinMoEProtocol(ProtocolBase):
-    def __init__(self, path_num, **kwargs):
-        super().__init__(path_num)
+    def __init__(self, **kwargs):
+        super().__init__()
         self.k = kwargs.get("k")
         self.residual_path = kwargs.get("residual_path")
         if self.k == None:

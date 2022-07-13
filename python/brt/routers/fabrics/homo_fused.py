@@ -44,8 +44,8 @@ def once_make_homo_proto_tensor_cls():
 
 @register_fabric("homo_fused_dispatch")
 class HomoFusedDispatchFabric(DispatchFabric):
-    def __init__(self, path_num, **kwargs):
-        super().__init__(path_num, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         once_make_homo_proto_tensor_cls()
         supported_capacities = kwargs.get("supported_capacities", None)
         if supported_capacities is None:
@@ -125,8 +125,8 @@ class HomoFusedDispatchFabric(DispatchFabric):
 
 @register_fabric("homo_fused_combine")
 class HomoFusedCombineFabric(CombineFabric):
-    def __init__(self, path_num, **kwargs) -> None:
-        super().__init__(path_num, **kwargs)
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
         check_homo_proto_tensor_clos()
         supported_capacities = kwargs.get("supported_capacities", None)
         if supported_capacities is None:

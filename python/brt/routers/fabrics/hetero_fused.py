@@ -7,16 +7,13 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
-from brt.frontend import router
-from brt.routers import (
-    GatherRouter,
+from brt.routers.generic import GatherRouter, ScatterRouter
+from brt.routers.proto_tensor import (
     ProtoTensor,
-    ScatterRouter,
     init_proto_tensor,
     make_proto_tensor_cls,
     to_torch_tensor,
 )
-from brt.routers.symbolic import symbolic_gather_route, symbolic_scatter_route
 
 __all__ = [
     "make_hetero_proto_tensor_cls",
@@ -29,11 +26,9 @@ def make_hetero_proto_tensor_cls():
     make_proto_tensor_cls(["active_branch"], [torch.zeros(0, dtype=torch.int64)])
 
 
-@router
 class HeteroFusedScatterRouter(ScatterRouter):
     def __init__(
         self,
-        dst_num: int,
         route_func,
         route_method: str = "topk",
         residual_dst: int = -1,
@@ -41,7 +36,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
         **kwargs,
     ):
         super().__init__(
-            dst_num, route_func, route_method, residual_dst, transform, **kwargs
+            route_func, route_method, residual_dst, transform, **kwargs
         )
 
     def dispatch(
@@ -65,7 +60,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
         route_shape = list(in_flow_data.shape[1:])
         route_size = np.prod(route_shape)
 
-        # gates, route_indices: [1 x dst_num]
+        # gates, route_indices: [1 x path_num]
         active_branch = route_indices.view(-1, 1)
         gates_transform = gates.view(-1, 1)
 
@@ -114,10 +109,9 @@ class HeteroFusedScatterRouter(ScatterRouter):
         return out_flow
 
 
-@router
 class HeteroFusedGatherRouter(GatherRouter):
-    def __init__(self, dst_num: int, reduction: str = "add", sparse=True):
-        super().__init__(path_num=dst_num)
+    def __init__(self, path_num: int, reduction: str = "add", sparse=True):
+        super().__init__(path_num=path_num)
         self.sparse = sparse
         self.reduction = reduction
 

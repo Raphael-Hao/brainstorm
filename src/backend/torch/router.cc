@@ -72,7 +72,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_src_indices(
 }
 
 std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
-    const ::torch::Tensor& hot_mask /*[sample_num x sample_dim]*/,
+    const ::torch::Tensor& hot_mask /*[sample_num x path_num]*/,
     const ::c10::optional<::torch::Tensor>& supported_capacities =
         {} /*[supported_capacity_num]*/) {
   CHECK_ON_CUDA(hot_mask);
@@ -95,6 +95,20 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
                              path_num, supported_capacity_num,
                              at::cuda::getDefaultCUDAStream().stream());
   return {dst_indices, loads};
+}
+
+::torch::Tensor coordinate_index_format(
+    const ::torch::Tensor& origin_indices /*[sample_num x path_num]*/,
+    const ::torch::Tensor& loads /*[path_num]*/, const int target_index_fmt_id) {
+  CHECK_ON_CUDA(origin_indices);
+  CHECK_ON_CUDA(loads);
+  ::torch::Tensor new_indices = ::at::zeros_like(origin_indices, origin_indices.options());
+  auto sample_num = origin_indices.size(0);
+  auto path_num = origin_indices.size(1);
+  router::CoordinateIndexFormat(origin_indices.data_ptr<int>(), new_indices.data_ptr<int>(),
+                                loads.data_ptr<int>(), sample_num, path_num, target_index_fmt_id,
+                                at::cuda::getDefaultCUDAStream().stream());
+  return new_indices;
 }
 
 ::torch::Tensor route_with_dst_indices(
@@ -173,6 +187,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("generate_dst_indices", &brt::backend::torch::generate_dst_indices,
         "Generate a tensor for all dst indices with each path's load mapped to supported capacity",
         pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none());
+  m.def("coordinate_index_format", &brt::backend::torch::coordinate_index_format,
+        "convert indices to coordinate index format");
   m.def("route_with_dst_indices", &brt::backend::torch::route_with_dst_indices,
         "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("dst_indices"),
         pybind11::arg("dst_loads"), pybind11::arg("gates") = pybind11::none());
