@@ -1,23 +1,26 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Callable, Dict, List, Tuple, Type
+from typing import Callable, Dict, List, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 from brt.common import log
+from brt.routers.proto_tensor import ProtoTensor, deinit_proto_tensor, init_proto_tensor
 from brt.runtime.registry import Registry
-
-from ..proto_tensor import deinit_proto_tensor, init_proto_tensor
 
 logger = log.get_logger(__file__)
 
 
 class FabricBase(nn.Module):
-    def __init__(self, path_num: int) -> None:
+    def __init__(self, index_format: str) -> None:
         super().__init__()
-        self.path_num = path_num
+        self.index_format = index_format
         self.start_event = torch.cuda.Event(enable_timing=True)
         self.end_event = torch.cuda.Event(enable_timing=True)
+        assert self.index_format in [
+            "dst_index",
+            "src_index",
+        ], f"index_format should be dst_index or src_index, but got {index_format}"
 
     def start_timer(self):
         self.start_event.record(torch.cuda.current_stream())
@@ -31,8 +34,20 @@ class FabricBase(nn.Module):
             )
         )
 
+    def forward(
+        self,
+        in_flow: Union[ProtoTensor, List[ProtoTensor]],
+        route_indices: torch.Tensor,
+        loads: torch.Tensor,
+        capacities: torch.Tensor,
+        score: torch.Tensor,
+    ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
+        raise NotImplementedError("FabricBase is an abstract class for Fabric")
+
     def pack_invalid_flow(self, in_flow):
-        from ..proto_tensor import ProtoTensor  # we need to keep ProtoTensor updated
+        from brt.routers.proto_tensor import (
+            ProtoTensor,  # we need to keep ProtoTensor updated
+        )
 
         if isinstance(in_flow, ProtoTensor):
             if in_flow.size(0) != in_flow.tag.numel():
@@ -54,7 +69,9 @@ class FabricBase(nn.Module):
         return in_flow
 
     def remove_needless_pack(self, out_flow):
-        from ..proto_tensor import ProtoTensor  # we need to keep ProtoTensor updated
+        from brt.routers.proto_tensor import (
+            ProtoTensor,  # we need to keep ProtoTensor updated
+        )
 
         if isinstance(out_flow, ProtoTensor):
             if out_flow.proto_empty():

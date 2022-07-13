@@ -40,8 +40,8 @@ class ProtocolBase(nn.Module):
             "src_index",
         ], f"index_format should be dst_index or src_index, but got {index_format}"
 
-    def forward(self, score: torch.Tensor):
-        decisions = self.make_route_decision(score)
+    def forward(self, score: torch.Tensor, **kwargs):
+        decisions = self.make_route_decision(score, **kwargs)
         if self.debug:
             self.check_decision(decisions, score)
         return decisions
@@ -67,6 +67,12 @@ class ProtocolBase(nn.Module):
             ), "capacities should have the same elements as path_num"
         else:
             raise ValueError("capacities should be int or torch.Tensor")
+
+    def update(self, **kwargs):
+        """Update the protocol.
+        Some protocols may need to update their internal states.
+        """
+        raise NotImplementedError("Update has to be implemented by user")
 
 
 def register_protocol(protocol_type: str) -> Callable:

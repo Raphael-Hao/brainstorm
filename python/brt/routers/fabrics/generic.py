@@ -13,14 +13,24 @@ logger = log.get_logger(__file__)
 
 
 @register_fabric("dispatch")
-class DispatchSF(FabricBase):
-    def __init__(self, path_num, **kwargs):
-        super().__init__(path_num)
+class DispatchFabric(FabricBase):
+    def __init__(self, **kwargs):
+        """dispatch fabric
+
+        Args:
+            kwargs (dict):
+                route_logic (str): 1d or 2d, default is 1d, can be list of 1d or 2d
+                transform (bool): whether to transform input with the score, default is False, can be list of bool
+        """
+        super().__init__(indices_format="src_index")
+        self.throttling = kwargs.get("throttling", False)
+
         route_logics = kwargs.get("route_logic", ["1d"])
         if isinstance(route_logics, str):
+            assert route_logics in ["1d", "2d"]
             route_logics = [route_logics]
         assert isinstance(route_logics, list) and all(
-            isinstance(x, str) for x in route_logics
+            isinstance(x, str) and x in ["1d", "2d"] for x in route_logics
         )
         transforms = kwargs.get("transform", [False])
         if isinstance(transforms, bool):
@@ -29,6 +39,7 @@ class DispatchSF(FabricBase):
             isinstance(x, bool) for x in transforms
         )
         assert len(route_logics) == len(transforms)
+
         self.route_logics = route_logics
         self.transforms = transforms
 
@@ -36,6 +47,8 @@ class DispatchSF(FabricBase):
         self,
         in_flow: Union[ProtoTensor, List[ProtoTensor]],
         route_indices: torch.Tensor,
+        loads: torch.Tensor,
+        capacities: torch.Tensor,
         score: torch.Tensor,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
 
@@ -48,8 +61,23 @@ class DispatchSF(FabricBase):
         else:
             raise ValueError("in_flow must be ProtoTensor or list of ProtoTensor")
 
-        all_out_flows = []
+        if self.throttling:
+            real_loads = torch.minimum(loads, capacities)
+        else:
+            real_loads = loads
+        all_out_flows = self.dispatch(in_flows, route_indices, real_loads, score)
+        if isinstance(in_flow, ProtoTensor):
+            return self.remove_needless_pack(all_out_flows[0])
+        return self.remove_needless_pack(all_out_flows)
 
+    def dispatch(
+        self,
+        in_flows: List[ProtoTensor],
+        route_indices: torch.Tensor,
+        real_loads: torch.Tensor,
+        score: torch.Tensor,
+    ):
+        all_out_flows = []
         for flow_idx, flow in enumerate(in_flows):
             (
                 flow_data,
@@ -75,9 +103,9 @@ class DispatchSF(FabricBase):
                 raise ValueError("route_logic must be 1d or 2d")
 
             out_flows = []
-
-            for i in range(self.path_num):
-                tag_indices = route_indices[i]
+            path_num = route_indices.size(1)
+            for i in range(path_num):
+                tag_indices = route_indices[: real_loads[i], i]
                 if tag_indices.numel() > 0:
                     out_flow_tag = torch.gather(flow_tag, 0, tag_indices)
                     data_indices = tag_indices.repeat(1, route_size).view(
@@ -116,24 +144,20 @@ class DispatchSF(FabricBase):
                         flow_load,
                     )
                 out_flows.append(out_flow)
-            if isinstance(in_flow, ProtoTensor):
-                return self.remove_needless_pack(out_flows)
             all_out_flows.append(out_flows)
-
-        return self.remove_needless_pack(all_out_flows)
+        return all_out_flows
 
 
 @register_fabric("combine")
-class CombineSF(FabricBase):
-    def __init__(self, path_num, **kwargs):
+class CombineFabric(FabricBase):
+    def __init__(self, **kwargs):
 
-        super().__init__(path_num)
+        super().__init__(indices_format="src_index")
         self.sparse = kwargs.get("sparse", False)
         self.reduction = kwargs.get("reduction", "add")
 
     def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
         in_flows = self.pack_invalid_flow(in_flows)
-        assert len(in_flows) == self.path_num
         in_flows_data = []
         in_flows_tag = []
         in_flows_load = []
@@ -193,4 +217,6 @@ class CombineSF(FabricBase):
             in_flows_extra_stack_dict,
         )
         out_flow = out_flow.pack(out_flow_tag, out_flow_load)
+        
+    
         return self.remove_needless_pack(out_flow)
