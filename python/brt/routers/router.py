@@ -3,9 +3,10 @@
 import inspect
 from typing import Callable, Dict, List, Type, Union
 
+import torch
 import torch.nn as nn
 from brt.common import log
-from brt.routers.functions import generate_dst_indices, generate_src_indices
+from brt.routers.functions import convert_index_format
 from brt.runtime import Registry
 from brt.trace.initialize import trace_init
 
@@ -17,16 +18,21 @@ logger = log.get_logger(__file__)
 class RouterBase(nn.Module):
     def __init__(self):
         super().__init__()
-    
-    def cordinate_index_format(self, route_indices, origin_index_format, new_index_format):
+
+    def cordinate_index_format(
+        self,
+        route_indices: torch.Tensor,
+        loads: torch.Tensor,
+        origin_index_fmt: str,
+        new_index_fmt: str,
+    ):
         """
         Convert the route indices to the cordinate index format.
         """
-        if origin_index_format == new_index_format:
-            return route_indices
-        elif new_index_format == "src_index":
-            pass
-            
+        return convert_index_format(
+            route_indices, loads, origin_index_fmt, new_index_fmt
+        )
+
 
 def register_router(router_type: str) -> Callable:
     global_register_func = Registry.register_cls(router_type, RouterBase)

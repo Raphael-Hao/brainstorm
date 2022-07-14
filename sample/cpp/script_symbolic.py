@@ -1,6 +1,6 @@
 #%%
 import torch
-from brt.routers.symbolic import (
+from backup.symbolic import (
     symbolic_joint_gather_route,
     symbolic_joint_scatter_route,
 )
