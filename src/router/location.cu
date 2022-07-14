@@ -164,7 +164,7 @@ __device__ __forceinline__ void blockwise_cum_sum(int* input, int* output_sum,
 __global__ void generate_src_indices_and_load(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ src_indices /* [sample_num, path_num] */,
-    int* __restrict__ loads /* [path_num] */, int sample_num, int path_num) {
+    int* __restrict__ loads /* [path_num] */, const int& sample_num, const int& path_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -178,7 +178,7 @@ __global__ void generate_src_indices_and_load_map(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ src_indices /* [sample_num, path_num] */,
     int* __restrict__ loads /* [path_num] */, int* __restrict__ supported_capacities,
-    int sample_num, int path_num, int supported_capacity_num) {
+    const int& sample_num, const int& path_num, const int& supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -197,7 +197,7 @@ __global__ void generate_src_indices_and_load_map(
 __global__ void generate_dst_indices_and_load(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* __restrict__ loads /* [path_num] */, int sample_num, int path_num) {
+    int* __restrict__ loads /* [path_num] */, const int& sample_num, const int& path_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -211,7 +211,7 @@ __global__ void generate_dst_indices_and_load_map(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
     int* __restrict__ loads /* [path_num] */, int* __restrict__ supported_capacities,
-    int sample_num, int path_num, int supported_capacity_num) {
+    const int& sample_num, const int& path_num, const int& supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -229,7 +229,7 @@ __global__ void generate_dst_indices_and_load_map(
 
 __global__ void generate_dst_indices_base(int* __restrict__ loads /* [path_num] */,
                                           int* __restrict__ dst_indices_base /* [path_num] */,
-                                          int path_num) {
+                                          const int& path_num) {
   int prefix = 0;
   dst_indices_base = dst_indices_base + 1;
   blockwise_cum_sum(loads, dst_indices_base, path_num, prefix);
@@ -237,7 +237,7 @@ __global__ void generate_dst_indices_base(int* __restrict__ loads /* [path_num] 
 
 __global__ void convert_dst_to_src_indices(
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* __restrict__ src_indices /* [sample_num, path_num] */, int sample_num, int path_num) {
+    int* __restrict__ src_indices /* [sample_num, path_num] */, const int& sample_num, const int& path_num) {
   // [thread_extent] blockIdx.x = path_num
   // [thread_extent] threadIdx.x = 1024
   constexpr int thread_num = 1024;
@@ -257,7 +257,7 @@ __global__ void convert_dst_to_src_indices(
 __global__ void convert_src_to_dst_indices(
     int* __restrict__ src_indices /* [sample_num, path_num] */,
     int* __restrict__ dst_indices /* [sample_num, path_num] */, int* loads /* [path_num] */,
-    int sample_num, int path_num) {
+    const int& sample_num, const int& path_num) {
   // [thread_extent] blockIdx.x = path_num
   // [thread_extent] threadIdx.x = 1024
   constexpr int thread_num = 1024;
@@ -276,7 +276,7 @@ __global__ void convert_src_to_dst_indices(
 
 __global__ void accumulate_base_to_dst_indices(
     int* global_dst_indices /* [sample_num, path_num]  */, int* indices, int* dst_indices_base,
-    int sample_num, int path_num) {
+    const int& sample_num, const int& path_num) {
   int sample_id = blockIdx.x * blockDim.x + threadIdx.x;
   int index = 0;
   if (sample_id < sample_num) {
@@ -288,11 +288,11 @@ __global__ void accumulate_base_to_dst_indices(
   global_dst_indices[sample_id] = index;
 }
 
-void GenerateGlobalDSTIndices(int* hot_mask /*[sample_num x path_num]*/,
+void GenerateGlobalDstIndices(int* hot_mask /*[sample_num x path_num]*/,
                               int* global_dst_indices /*[sample_num x path_num]*/,
                               int* loads /*[path_num]*/, int* dst_indices_base /*[path_num]*/,
                               int* supported_capacities /*[supported_capacity_num]*/,
-                              int sample_num, int path_num, int supported_capacity_num,
+                              const int &sample_num, const int& path_num, const int& supported_capacity_num,
                               cudaStream_t stream) {
   {
     const dim3 block_size = 1024;
@@ -315,23 +315,23 @@ void GenerateGlobalDSTIndices(int* hot_mask /*[sample_num x path_num]*/,
   }
 }
 
-void CoordinateIndexFormat(int* origin_indices, int* new_indices, int* loads, int sample_num,
-                          int path_num, int target_index_fmt_id, cudaStream_t stream) {
+void ConvertIndexFormat(int* origin_indices, int* new_indices, int* loads, const int& sample_num,
+                        const int& path_num, const int& target_index_fmt_id, cudaStream_t stream) {
   constexpr dim3 block_size = 1024;
   const dim3 grid_size = path_num;
-  if (target_index_fmt_id == 0) {  // src_indices -> dst_indices
+  if (target_index_fmt_id == 0) {  // dst_indices -> src_indices
     convert_dst_to_src_indices<<<grid_size, block_size, 0, stream>>>(origin_indices, new_indices,
                                                                      sample_num, path_num);
-  } else if (target_index_fmt_id == 1) {  // dst_indices -> src_indices
+  } else if (target_index_fmt_id == 1) {  // src_indices -> dst_indices
     convert_src_to_dst_indices<<<grid_size, block_size, 0, stream>>>(origin_indices, new_indices,
                                                                      loads, sample_num, path_num);
   }
 }
 
-void GenerateSRCIndices(int* hot_mask /*[sample_num x path_num]*/,
+void GenerateSrcIndices(int* hot_mask /*[sample_num x path_num]*/,
                         int* src_indices /*[sample_num x path_num]*/, int* loads /*[path_num]*/,
-                        int* supported_capacities /*[supported_capacity_num]*/, int sample_num,
-                        int path_num, int supported_capacity_num, cudaStream_t stream) {
+                        int* supported_capacities /*[supported_capacity_num]*/, const int& sample_num,
+                        const int& path_num, const int& supported_capacity_num, cudaStream_t stream) {
   const dim3 block_size = 1024;
   const dim3 grid_size = path_num;
   if (supported_capacity_num == 0) {
@@ -344,10 +344,10 @@ void GenerateSRCIndices(int* hot_mask /*[sample_num x path_num]*/,
   }
 }
 
-void GenerateDSTIndices(int* hot_mask /*[sample_num x path_num]*/,
+void GenerateDstIndices(int* hot_mask /*[sample_num x path_num]*/,
                         int* dst_indices /*[sample_num x path_num]*/, int* loads /*[path_num]*/,
-                        int* supported_capacities /*[supported_capacity_num]*/, int sample_num,
-                        int path_num, int supported_capacity_num, cudaStream_t stream) {
+                        int* supported_capacities /*[supported_capacity_num]*/, const int& sample_num,
+                        const int& path_num, const int& supported_capacity_num, cudaStream_t stream) {
   const dim3 block_size = 1024;
   const dim3 grid_size = path_num;
   if (supported_capacity_num == 0) {

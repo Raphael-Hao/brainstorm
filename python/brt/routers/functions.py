@@ -72,3 +72,22 @@ def generate_dst_indices(
                         loads[i] = real_load
                         break
     return dst_indices, loads
+
+
+def convert_index_format(
+    origin_indices: torch.Tensor,
+    loads: torch.Tensor,
+    origin_index_fmt: str,
+    new_index_fmt: str,
+):
+    """
+    Convert the route indices to the new index format.
+    """
+    if origin_index_fmt == new_index_fmt:
+        return origin_indices
+    elif new_index_fmt == "src_index":
+        return _C.convert_index_format(origin_indices, loads, 0)
+    elif new_index_fmt == "dst_index":
+        return _C.convert_index_format(origin_indices, loads, 1)
+    else:
+        raise ValueError(f"Unknown index format: {new_index_fmt}")
