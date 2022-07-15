@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 import torch
-from brt.routers.functions import generate_src_indices
+from brt.routers.utils import generate_src_indices
 from brt.routers.protocols.protocol import ProtocolBase, register_protocol
 
 

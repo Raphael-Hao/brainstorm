@@ -6,7 +6,7 @@ from typing import Callable, Dict, List, Type, Union
 import torch
 import torch.nn as nn
 from brt.common import log
-from brt.routers.functions import convert_index_format
+from brt.routers.utils import convert_index_format
 from brt.runtime import Registry
 from brt.trace.initialize import trace_init
 
@@ -23,15 +23,16 @@ class RouterBase(nn.Module):
         self,
         route_indices: torch.Tensor,
         loads: torch.Tensor,
-        origin_index_fmt: str,
-        new_index_fmt: str,
+        protocol_index_fmt: str,
+        fabric_index_fmt: str,
     ):
         """
         Convert the route indices to the cordinate index format.
         """
-        return convert_index_format(
-            route_indices, loads, origin_index_fmt, new_index_fmt
+        new_route_indices = convert_index_format(
+            route_indices, loads, protocol_index_fmt, fabric_index_fmt
         )
+        return new_route_indices, loads
 
 
 def register_router(router_type: str) -> Callable:

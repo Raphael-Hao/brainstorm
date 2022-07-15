@@ -6,9 +6,7 @@ import torch.fx
 import torch.nn as nn
 from brt.routers.generic import ScatterRouter
 
-__all__ = [
-    "RandScatterRouter",
-]
+__all__ = ["RandScatter"]
 
 
 @torch.fx.wrap
@@ -16,7 +14,7 @@ def rand_gate(x: torch.Tensor, path_num: int):
     return torch.randn((x.size(0), path_num), device=x.device)
 
 
-class RandScatterRouter(nn.Module):
+class RandScatter(nn.Module):
     def __init__(self, path_num: int, fabric_type: str = "dispatch", **kwargs):
         """random scatter router
 

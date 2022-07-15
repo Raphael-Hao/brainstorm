@@ -4,7 +4,7 @@ from typing import List
 
 import torch
 from brt.common import log
-from brt.routers.functions import generate_dst_indices, generate_src_indices
+from brt.routers.utils import generate_dst_indices, generate_src_indices
 from brt.routers.protocols.protocol import ProtocolBase, register_protocol
 
 logger = log.get_logger(__file__)
