@@ -77,28 +77,6 @@ class TVMTuner:
         )
         module.train(training)
 
-    def import_onnx_netlet(
-        self, onnx_model: Union[onnx.ModelProto, str], model_name: str = None
-    ):
-        assert (
-            isinstance(onnx_model, str) or model_name is not None
-        ), "model_name is required for already loaded onnx model"
-        if isinstance(onnx_model, str):
-            onnx_model_path = BRT_ONNX_CKPT_PATH / (onnx_model + ".onnx")
-            if not onnx_model_path.exists():
-                logger.error(f"ONNX model {onnx_model_path} not found.")
-            onnx_model_proto = onnx.load(onnx_model_path)
-            self.module_name = onnx_model
-        elif isinstance(onnx_model, onnx.ModelProto):
-            onnx_model_proto = onnx_model
-            self.module_name = model_name
-        self.tvm_module, self.tvm_params = relay.frontend.from_onnx(
-            onnx_model_proto, opset=11
-        )
-        self._update_scheduler(
-            self.module_name, "forward", self.tvm_module, self.tvm_params
-        )
-
     def _update_scheduler(
         self, module_name, method, tvm_module, tvm_params, log_fname: str = None
     ):

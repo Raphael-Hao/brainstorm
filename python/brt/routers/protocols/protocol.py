@@ -50,6 +50,9 @@ class ProtocolBase(nn.Module):
         indices = decisions[0]
         loads = decisions[1]
         capacities = decisions[2]
+        assert isinstance(indices, torch.Tensor) and isinstance(
+            loads, torch.Tensor
+        ), "indices and loads should be torch.Tensor"
         assert indices.size(0) == scores.size(
             0
         ), "indices and scores should have the same size in the first dimension"
