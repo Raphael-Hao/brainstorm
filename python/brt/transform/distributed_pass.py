@@ -3,12 +3,12 @@
 
 
 import brt
-from brt.transform.base import PassBase
+from brt.transform.base import PassBase, register_pass
 
-
+@register_pass("pipline")
 class PipelinePass(PassBase):
     pass
 
-
-class ShardPass(PassBase):
+@register_pass("sharded")
+class ShardedPass(PassBase):
     pass
