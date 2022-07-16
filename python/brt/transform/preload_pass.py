@@ -3,7 +3,6 @@
 
 from brt.transform.base import PassBase, register_pass
 
-
-@register_pass("bound_check")
-class BoundCheckPass(PassBase):
+@register_pass("weight_preload")
+class WeightPreloadPass(PassBase):
     pass
