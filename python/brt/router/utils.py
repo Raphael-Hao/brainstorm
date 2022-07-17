@@ -111,7 +111,9 @@ def pad_to_max_one(tensors: List[torch.Tensor], pad_value=0):
     pads = [(0, max_length - l) for l in lengths]
 
     tensors = [
-        torch.nn.functional.pad(t, pad=p).view(t.size(0), *padded_shape)
+        torch.nn.functional.pad(t, pad=p, mode="constant", value=pad_value).view(
+            t.size(0), *padded_shape
+        )
         for t, p in zip(tensors, pads)
     ]
 
