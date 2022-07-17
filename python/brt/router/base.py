@@ -6,8 +6,8 @@ from typing import Callable, Dict, List, Type, Union
 import torch
 import torch.nn as nn
 from brt.common import log
-from brt.router.utils import convert_index_format
 from brt.runtime import Registry
+from brt.router.utils import convert_index_format
 from brt.trace.initialize import trace_init
 
 __all__ = ["RouterBase"]
@@ -19,7 +19,7 @@ class RouterBase(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def cordinate_index_format(
+    def coordinate_index_format(
         self,
         route_indices: torch.Tensor,
         loads: torch.Tensor,
@@ -27,12 +27,12 @@ class RouterBase(nn.Module):
         fabric_index_fmt: str,
     ):
         """
-        Convert the route indices to the cordinate index format.
+        Coordinate the route index format between protocol and fabric.
         """
         new_route_indices = convert_index_format(
             route_indices, loads, protocol_index_fmt, fabric_index_fmt
         )
-        return new_route_indices, loads
+        return new_route_indices
 
 
 def register_router(router_type: str) -> Callable:
@@ -58,10 +58,10 @@ def make_router(router_type: str, **kwargs) -> RouterBase:
 
 
 def is_router(cls_or_instance) -> bool:
-    
+
     if not inspect.isclass(cls_or_instance):
         router_cls = cls_or_instance.__class__
     else:
         router_cls = cls_or_instance
-    
+
     return Registry.sub_cls_exists_and_registered(router_cls, RouterBase)

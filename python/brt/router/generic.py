@@ -5,10 +5,10 @@ from typing import List, Union
 
 import torch
 from brt.common import log
-from brt.router.fabric import make_fabric
-from brt.router.proto_tensor import ProtoTensor
-from brt.router.protocol import make_protocol
 from brt.router.base import RouterBase, register_router
+from brt.router.fabric import make_fabric
+from brt.router.protocol import make_protocol
+from brt.router.proto_tensor import ProtoTensor
 
 __all__ = [
     "ScatterRouter",
@@ -53,13 +53,13 @@ class ScatterRouter(RouterBase):
         self.protocol = make_protocol(protocol_type, **kwargs)
         self.fabric = make_fabric(fabric_type, **kwargs)
 
-    def forward(
-        self, in_flow: Union[torch.Tensor, ProtoTensor], score: torch.Tensor
-    ) -> List[ProtoTensor]:
+    def forward(self, in_flow: ProtoTensor, score: torch.Tensor) -> List[ProtoTensor]:
 
-        decisions = self.protocol(score)
-
-        out_flows = self.fabric(in_flow, decisions, score)
+        route_indices, loads, capacities = self.protocol(score)
+        route_indices = self.coordinate_index_format(
+            route_indices, loads, self.protocol.index_format, self.fabric.index_format
+        )
+        out_flows = self.fabric(in_flow, route_indices, loads, capacities, score)
 
         return out_flows
 
@@ -102,14 +102,22 @@ class LoopRouter(RouterBase):
         self.netlet = netlet
 
     def forward(self, in_flow: ProtoTensor) -> ProtoTensor:
-        target = in_flow
+        target_flow = in_flow
         pending_combine_flows = []
-        while target.numel() > 0:
-            target, score = self.netlet(target)
-            decisions = self.protocol(score)
-            dispatched_flows = self.dispatch_fabric(target, decisions)
-            target = dispatched_flows[0]
-            pending_combine_flows.append(dispatched_flows[1])
+        while target_flow.numel() > 0:
+            target_flow, score = self.netlet(target_flow)
+            route_indices, loads, capacities = self.protocol(score)
+            route_indices = self.coordinate_index_format(
+                route_indices,
+                loads,
+                self.protocol.index_format,
+                self.dispatch_fabric.index_format,
+            )
+            dispatched_flows = self.dispatch_fabric(
+                target_flow, route_indices, loads, capacities, score
+            )
+            target_flow, completed_flow = dispatched_flows
+            pending_combine_flows.append(completed_flow)
         out_flows = self.combine_fabric(pending_combine_flows)
         return out_flows
 

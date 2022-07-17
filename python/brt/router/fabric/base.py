@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, Tuple, Type, Union
 import torch
 import torch.nn as nn
 from brt.common import log
-from brt.router.proto_tensor import ProtoTensor, deinit_proto_tensor, init_proto_tensor
+from brt.router.proto_tensor import deinit_proto_tensor, init_proto_tensor
 from brt.runtime.registry import Registry
 
 logger = log.get_logger(__file__)
@@ -36,12 +36,12 @@ class FabricBase(nn.Module):
 
     def forward(
         self,
-        in_flow: Union[ProtoTensor, List[ProtoTensor]],
+        in_flow,
         route_indices: torch.Tensor,
         loads: torch.Tensor,
         capacities: torch.Tensor,
         score: torch.Tensor,
-    ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
+    ):
         raise NotImplementedError("FabricBase is an abstract class for Fabric")
 
     def pack_invalid_flow(self, in_flow):
