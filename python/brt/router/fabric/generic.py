@@ -79,7 +79,7 @@ class DispatchFabric(FabricBase):
     ):
         all_out_flows = []
         path_num = route_indices.size(1)
-        
+
         for flow_idx, flow in enumerate(in_flows):
             (
                 flow_data,
@@ -109,9 +109,9 @@ class DispatchFabric(FabricBase):
                 tag_indices = route_indices[: real_loads[i], i]
                 if tag_indices.numel() > 0:
                     out_flow_tag = torch.gather(flow_tag, 0, tag_indices)
-                    data_indices = tag_indices.repeat(1, route_size).view(
-                        -1, *route_shape
-                    )
+                    # data_indices = tag_indices.repeat(1, route_size).view(
+                    #     -1, *route_shape
+                    # )
                     if self.route_logics[flow_idx] == "1d":
                         dispatched_data = flow_data
                     elif self.route_logics[flow_idx] == "2d":
@@ -120,7 +120,8 @@ class DispatchFabric(FabricBase):
                         dispatched_data = dispatched_data * score[:, i].view(
                             (-1,) + (1,) * len(route_shape)
                         )
-                    out_flow_data = torch.gather(dispatched_data, 0, data_indices)
+                    out_flow_data = torch.index_select(dispatched_data, 0, tag_indices)
+                    # out_flow_data = torch.gather(dispatched_data, 0, data_indices)
                     out_flow = init_proto_tensor(
                         out_flow_data,
                         flow_tag_stack,
@@ -156,6 +157,7 @@ class CombineFabric(FabricBase):
         super().__init__(indices_format="src_index")
         self.sparse = kwargs.get("sparse", False)
         self.reduction = kwargs.get("reduction", "add")
+        self.auto_padding = kwargs.get("auto_padding", True)
 
     def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
         in_flows = self.pack_invalid_flow(in_flows)
@@ -220,3 +222,9 @@ class CombineFabric(FabricBase):
         out_flow = out_flow.pack(out_flow_tag, out_flow_load)
 
         return self.remove_needless_pack(out_flow)
+
+    def auto_pad(self, inflows):
+        if self.auto_padding:
+            pass
+        else:
+            return inflows

@@ -1,9 +1,10 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Tuple
+from typing import Tuple, List
 
-import brt._C as _C
 import torch
+import numpy
+import brt._C as _C
 
 __all__ = ["generate_src_indices", "generate_dst_indices"]
 
@@ -91,3 +92,27 @@ def convert_index_format(
         return _C.convert_index_format(origin_indices, loads, 1)
     else:
         raise ValueError(f"Unknown index format: {new_index_fmt}")
+
+
+def pad_to_max_one(tensors: List[torch.Tensor], pad_value=0):
+    """
+    Pad all the tensors to the max shape.
+    """
+    lengths = [t.numel() // t.size(0) for t in tensors]
+
+    max_id = numpy.argmax(lengths)
+
+    max_length = lengths[max_id]
+
+    padded_shape = tensors[max_id].shape[1:]
+
+    tensors = [t.view(t.size(0), -1) for t in tensors]
+
+    pads = [(0, max_length - l) for l in lengths]
+
+    tensors = [
+        torch.nn.functional.pad(t, pad=p).view(t.size(0), *padded_shape)
+        for t, p in zip(tensors, pads)
+    ]
+
+    return tensors
