@@ -1,29 +1,38 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-
+import os
 import torch
 from brt.common import log
 from brt.router.protocol.base import ProtocolBase, register_protocol
 
 logger = log.get_logger(__file__)
 
+
 @register_protocol("swin_moe")
 class SwinMoEProtocol(ProtocolBase):
     def __init__(self, **kwargs):
         super().__init__()
-        self.k = kwargs.get("k")
-        self.residual_path = kwargs.get("residual_path")
-        if self.k == None:
-            self.k = 1
-            logger.warning("k is not specified for Top-K route method, use default k=1")
-        if self.residual_path == None:
-            self.residual_path = -1
+        top_k = kwargs.get("top_k")
+        capacity_factor = kwargs.get("capacity_factor")
+        num_global_experts = kwargs.get("num_global_experts")
+        self.top_k = min(top_k, num_global_experts)
+        self.capacity_factor = float(os.environ.get("CAP_FACTOR", capacity_factor))
+        self.normalize_gate = kwargs.get("normalize_gate")
+        self.vitmoe_loss = kwargs.get("vitmoe_loss")
+        self.use_noise = kwargs.get("use_noise")
+        if self.vitmoe_loss:
             logger.warning(
-                "residual_path is not specified for Threshold route method, use default residual_path=-1"
+                "change use_noise in TopKGate to True because vitmoe_loss is set to True"
             )
+            self.use_noise = True
+        self.batch_prioritized_routing = kwargs.get("batch_prioritized_routing")
+        if int(os.environ.get("BATCH_PRIO", 0)) != 0:
+            self.batch_prioritized_routing = True
+        self.use_global_loss = kwargs.get("use_global_loss")
+        self.is_postscore = kwargs.get("is_postscore")
 
-    def forward(self, score):
-        return self.gen_hot_mask(score)
+    def forward(self, score, gates):
+        hot_mask = self.gen_hot_mask(score)
 
     def gen_hot_mask(self, score):
         hot_mask = torch.topk(score, self.k, dim=1).indices  # sample x k
