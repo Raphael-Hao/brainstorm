@@ -4,4 +4,4 @@
 
 from .generic import GatherRouter, ScatterRouter
 from .proto_tensor import *
-from .router import RouterBase, is_router, make_router, register_router
+from .base import RouterBase, is_router, make_router, register_router

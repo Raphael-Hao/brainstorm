@@ -6,7 +6,7 @@ from typing import Callable, Dict, List, Type, Union
 import torch
 import torch.nn as nn
 from brt.common import log
-from brt.routers.utils import convert_index_format
+from brt.router.utils import convert_index_format
 from brt.runtime import Registry
 from brt.trace.initialize import trace_init
 

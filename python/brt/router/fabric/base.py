@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, Tuple, Type, Union
 import torch
 import torch.nn as nn
 from brt.common import log
-from brt.routers.proto_tensor import ProtoTensor, deinit_proto_tensor, init_proto_tensor
+from brt.router.proto_tensor import ProtoTensor, deinit_proto_tensor, init_proto_tensor
 from brt.runtime.registry import Registry
 
 logger = log.get_logger(__file__)
@@ -45,7 +45,7 @@ class FabricBase(nn.Module):
         raise NotImplementedError("FabricBase is an abstract class for Fabric")
 
     def pack_invalid_flow(self, in_flow):
-        from brt.routers.proto_tensor import (
+        from brt.router.proto_tensor import (
             ProtoTensor,  # we need to keep ProtoTensor updated
         )
 
@@ -69,7 +69,7 @@ class FabricBase(nn.Module):
         return in_flow
 
     def remove_needless_pack(self, out_flow):
-        from brt.routers.proto_tensor import (
+        from brt.router.proto_tensor import (
             ProtoTensor,  # we need to keep ProtoTensor updated
         )
 

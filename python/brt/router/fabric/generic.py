@@ -6,8 +6,8 @@ from typing import List, Union
 import numpy as np
 import torch
 from brt.common import log
-from brt.routers.fabrics.fabric import FabricBase, register_fabric
-from brt.routers.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
+from brt.router.fabric.base import FabricBase, register_fabric
+from brt.router.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
 

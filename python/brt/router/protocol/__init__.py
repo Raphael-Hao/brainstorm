@@ -1,8 +1,8 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from brt.routers.protocols import generic, swin_moe
-from brt.routers.protocols.protocol import (
+from brt.router.protocol import generic, swin_moe
+from brt.router.protocol.base import (
     ProtocolBase,
     make_protocol,
     register_protocol,

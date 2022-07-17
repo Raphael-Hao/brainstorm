@@ -4,7 +4,7 @@
 from typing import Dict, List, Union
 
 import torch
-from brt.routers.proto_tensor import collect_proto_attr_stack, init_proto_tensor
+from brt.router.proto_tensor import collect_proto_attr_stack, init_proto_tensor
 
 from .kernel import make_jit_kernel
 from .registry import ModuleInfo

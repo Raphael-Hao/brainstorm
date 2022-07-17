@@ -2,8 +2,8 @@
 # Licensed under the MIT license.
 
 import torch
-from brt.routers.utils import generate_src_indices
-from brt.routers.protocols.protocol import ProtocolBase, register_protocol
+from brt.router.utils import generate_src_indices
+from brt.router.protocol.base import ProtocolBase, register_protocol
 
 
 class DecoderProtocol(ProtocolBase):

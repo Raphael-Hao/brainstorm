@@ -7,9 +7,9 @@ from brt._C.router import (
     route_with_local_indices,
 )
 from brt.common import log
-from brt.routers.fabrics.fabric import register_fabric
-from brt.routers.fabrics.generic import CombineFabric, DispatchFabric
-from brt.routers.proto_tensor import (
+from brt.router.fabric.base import register_fabric
+from brt.router.fabric.generic import CombineFabric, DispatchFabric
+from brt.router.proto_tensor import (
     ProtoTensor,
     init_proto_tensor,
     make_proto_tensor_cls,
@@ -28,7 +28,7 @@ _homo_proto_tensor_created = False
 
 
 def check_homo_proto_tensor_clos():
-    from brt.routers import ProtoTensor
+    from brt.router import ProtoTensor
 
     assert hasattr(ProtoTensor, "score")
     assert hasattr(ProtoTensor, "score_stack")

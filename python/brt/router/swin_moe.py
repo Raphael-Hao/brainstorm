@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from brt.routers.router import RouterBase
+from brt.router.base import RouterBase
 
 
 class SwinMoEScatterRouter(RouterBase):

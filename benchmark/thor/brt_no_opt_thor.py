@@ -3,7 +3,7 @@
 
 # %%
 import torch
-from brt.routers import reset_proto_tensor_cls
+from brt.router import reset_proto_tensor_cls
 
 from thor_config import ThorConfig
 from thor_model import ThorEncoder
