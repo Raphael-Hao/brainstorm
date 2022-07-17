@@ -17,6 +17,7 @@ class SwinMoEProtocol(ProtocolBase):
         num_global_experts = kwargs.get("num_global_experts")
         self.top_k = min(top_k, num_global_experts)
         self.capacity_factor = float(os.environ.get("CAP_FACTOR", capacity_factor))
+        self.num_global_experts = num_global_experts
         self.normalize_gate = kwargs.get("normalize_gate")
         self.vitmoe_loss = kwargs.get("vitmoe_loss")
         self.use_noise = kwargs.get("use_noise")
@@ -31,11 +32,17 @@ class SwinMoEProtocol(ProtocolBase):
         self.use_global_loss = kwargs.get("use_global_loss")
         self.is_postscore = kwargs.get("is_postscore")
 
-    def forward(self, score, gates):
-        hot_mask = self.gen_hot_mask(score)
+    def make_route_decision(self, score, gates):
+        hot_mask = self.generate_hot_mask(score)
 
-    def gen_hot_mask(self, score):
-        hot_mask = torch.topk(score, self.k, dim=1).indices  # sample x k
+    def generate_hot_mask(self, score):
+
+        score_wo_noise = score
+        if self.training and self.use_noise:
+            score = score + torch.rand_like(score) / self.num_global_experts
+
+        topk_score, topk_indices = torch.topk(score, self.k, dim=1)
+
         hot_mask = torch.zeros(
             score.size(0), self.path_num, dtype=torch.int64, device=score.device
         ).scatter_(
@@ -43,5 +50,5 @@ class SwinMoEProtocol(ProtocolBase):
         )  # sample x dst_num
         return hot_mask
 
-    def gen_aux(self, x):
+    def generate_auxiliary(self, score, gates):
         pass

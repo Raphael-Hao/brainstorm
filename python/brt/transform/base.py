@@ -19,4 +19,4 @@ class PassBase:
         pass
 
 def register_pass(pass_class: type) -> None:
-    return Registry.register_cls(pass_class, PassBase)
+    return Registry.register_sub_cls(pass_class, PassBase)

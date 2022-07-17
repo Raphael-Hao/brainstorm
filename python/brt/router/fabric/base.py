@@ -99,9 +99,9 @@ class FabricBase(nn.Module):
 
 
 def register_fabric(fabric_type: str) -> Callable:
-    return Registry.register_cls(fabric_type, FabricBase)
+    return Registry.register_sub_cls(fabric_type, FabricBase)
 
 
 def make_fabric(fabric_type: str, **kwargs) -> FabricBase:
-    fabric_cls = Registry.get_cls(fabric_type, FabricBase)
+    fabric_cls = Registry.get_sub_cls(fabric_type, FabricBase)
     return fabric_cls(**kwargs)
