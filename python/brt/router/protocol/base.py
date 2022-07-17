@@ -76,9 +76,9 @@ class ProtocolBase(nn.Module):
 
 
 def register_protocol(protocol_type: str) -> Callable:
-    return Registry.register_cls(protocol_type, ProtocolBase)
+    return Registry.register_sub_cls(protocol_type, ProtocolBase)
 
 
 def make_protocol(protocol_type: str, **kwargs) -> ProtocolBase:
-    protocol_cls = Registry.get_cls(protocol_type, ProtocolBase)
+    protocol_cls = Registry.get_sub_cls(protocol_type, ProtocolBase)
     return protocol_cls(**kwargs)

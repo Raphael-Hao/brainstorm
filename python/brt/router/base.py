@@ -36,9 +36,12 @@ class RouterBase(nn.Module):
 
 
 def register_router(router_type: str) -> Callable:
-    global_register_func = Registry.register_cls(router_type, RouterBase)
+    global_register_func = Registry.register_sub_cls(router_type, RouterBase)
 
     def local_register_func(router_cls):
+
+        if not issubclass(router_cls, RouterBase):
+            raise ValueError(f"{router_cls} is not a subclass of RouterBase")
 
         router_cls = trace_init(router_cls)
 
@@ -48,15 +51,17 @@ def register_router(router_type: str) -> Callable:
 
 
 def make_router(router_type: str, **kwargs) -> RouterBase:
-    router_cls = Registry.get_cls(router_type, RouterBase)
+    router_cls = Registry.get_sub_cls(router_type, RouterBase)
     if router_cls is None:
         raise ValueError(f"Router type: {router_type} is not registered.")
     return router_cls(**kwargs)
 
 
 def is_router(cls_or_instance) -> bool:
+    
     if not inspect.isclass(cls_or_instance):
         router_cls = cls_or_instance.__class__
     else:
         router_cls = cls_or_instance
-    return Registry.cls_exists(router_cls, RouterBase)
+    
+    return Registry.sub_cls_exists_and_registered(router_cls, RouterBase)
