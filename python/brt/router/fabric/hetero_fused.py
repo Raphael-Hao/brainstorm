@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
-from brt.routers.generic import GatherRouter, ScatterRouter
-from brt.routers.proto_tensor import (
+from brt.router.generic import GatherRouter, ScatterRouter
+from brt.router.proto_tensor import (
     ProtoTensor,
     init_proto_tensor,
     make_proto_tensor_cls,

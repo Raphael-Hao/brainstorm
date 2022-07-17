@@ -4,12 +4,12 @@ from typing import List
 
 import torch
 from brt.common import log
-from brt.routers.utils import generate_dst_indices, generate_src_indices
-from brt.routers.protocols.protocol import ProtocolBase, register_protocol
+from brt.router.utils import generate_dst_indices, generate_src_indices
+from brt.router.protocol.base import ProtocolBase, register_protocol
 
-logger = log.get_logger(__file__)
 __all__ = ["TopKProtocol", "ThresholdProtocol"]
 
+logger = log.get_logger(__file__)
 
 @register_protocol("topk")
 class TopKProtocol(ProtocolBase):

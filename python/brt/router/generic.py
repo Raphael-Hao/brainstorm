@@ -5,10 +5,10 @@ from typing import List, Union
 
 import torch
 from brt.common import log
-from brt.routers.fabrics import make_fabric
-from brt.routers.proto_tensor import ProtoTensor
-from brt.routers.protocols import make_protocol
-from brt.routers.router import RouterBase, register_router
+from brt.router.fabric import make_fabric
+from brt.router.proto_tensor import ProtoTensor
+from brt.router.protocol import make_protocol
+from brt.router.base import RouterBase, register_router
 
 __all__ = [
     "ScatterRouter",

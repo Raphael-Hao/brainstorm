@@ -4,7 +4,7 @@
 import torch
 import torch.fx
 import torch.nn as nn
-from brt.routers.generic import ScatterRouter
+from brt.router.generic import ScatterRouter
 
 __all__ = ["RandScatter"]
 

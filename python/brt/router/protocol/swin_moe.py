@@ -3,7 +3,7 @@
 
 import torch
 from brt.common import log
-from brt.routers.protocols.protocol import ProtocolBase, register_protocol
+from brt.router.protocol.base import ProtocolBase, register_protocol
 
 logger = log.get_logger(__file__)
 

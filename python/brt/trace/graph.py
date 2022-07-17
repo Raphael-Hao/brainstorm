@@ -1,10 +1,9 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-import brt
 import torch
 import torch.fx as fx
-from brt.routers import is_router
+from brt.router import is_router
 
 
 class GraphTracer(fx.Tracer):

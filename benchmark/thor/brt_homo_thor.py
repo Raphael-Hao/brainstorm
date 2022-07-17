@@ -3,8 +3,8 @@
 
 # %%
 import torch
-from brt.routers import reset_proto_tensor_cls
-from brt.routers.app import init_rand_homo_fused_router
+from brt.router import reset_proto_tensor_cls
+from brt.app import init_rand_homo_fused_router
 
 from thor_config import ThorConfig
 from thor_model import ThorEncoder
@@ -31,7 +31,7 @@ x = fused_thor_moe(x)
 
 
 # %%
-x = torch.zeros(1, 64,512).cuda()
+x = torch.zeros(1, 64, 512).cuda()
 torch.cuda.synchronize()
 stream = torch.cuda.default_stream()
 start_event = torch.cuda.Event(enable_timing=True)
@@ -42,5 +42,3 @@ for i in range(10):
 end_event.record(stream)
 stream.synchronize()
 print("elapsed time: {:.3f}".format(start_event.elapsed_time(end_event) / 10))
-
-
