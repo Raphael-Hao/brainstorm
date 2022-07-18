@@ -7,7 +7,16 @@ import sys
 
 from .pkg_info import BRT_LOG_FNAME, BRT_PKG_PATH
 
-_BRT_MODULES = ["user", "common", "jit", "routers", "runtime", "transform", "tx"]
+_BRT_MODULES = [
+    "user",
+    "app",
+    "common",
+    "jit",
+    "router",
+    "runtime",
+    "transform",
+    "trace",
+]
 
 
 __all__ = [
