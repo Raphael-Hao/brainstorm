@@ -47,16 +47,16 @@ class ProtocolBase(nn.Module):
         raise NotImplementedError("make_route_decision has to be implemented by user")
 
     def check_decision(self, decisions, scores: torch.Tensor) -> bool:
-        indices = decisions[0]
+        route_indices = decisions[0]
         loads = decisions[1]
         capacities = decisions[2]
-        assert isinstance(indices, torch.Tensor) and isinstance(
+        assert isinstance(route_indices, torch.Tensor) and isinstance(
             loads, torch.Tensor
         ), "indices and loads should be torch.Tensor"
-        assert indices.size(0) == scores.size(
+        assert route_indices.size(0) == scores.size(
             0
         ), "indices and scores should have the same size in the first dimension"
-        assert loads.numel() == indices.size(
+        assert loads.numel() == route_indices.size(
             0
         ), "loads should have the same elements as indices in the first dimension"
         if isinstance(capacities, int):
