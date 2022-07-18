@@ -73,7 +73,7 @@ class SwinMoEProtocol(ProtocolBase):
 
         locations_1, loads_1 = self.compute_location(masks_se[0])
 
-        locations_s = locations_1.to(torch.int32)
+        route_indices = locations_1.to(torch.int32)
 
         new_score = score
         if self.top_k > 1:
@@ -85,8 +85,8 @@ class SwinMoEProtocol(ProtocolBase):
                     else acc_base + loads_2.unsqueeze(0)
                 )
                 locations_2, loads_2 = self.compute_location(masks_se[k])
-                locations_2 += acc_base
-                locations_s += locations_2 * masks_se[k].to(torch.int32)
+                locations_2 = ((locations_2 + acc_base) * masks_se[k]).to(torch.int32)
+                route_indices += locations_2
 
             acc_base += loads_2.unsqueeze(0)
 
@@ -109,7 +109,7 @@ class SwinMoEProtocol(ProtocolBase):
         if self.capacity_factor > 0:
             capacity = self.top_k * int(self.capacity_factor * samples_per_expert)
         else:
-            capacity = torch.max(locations_s)
+            capacity = torch.max(route_indices)
             capacity = int(
                 communicate.simple_all_reduce(
                     capacity, group=self.group, op=torch.distributed.ReduceOp.MAX
@@ -131,11 +131,7 @@ class SwinMoEProtocol(ProtocolBase):
         remainder = capacity % self.alignment
         if remainder > 0:
             capacity = capacity + self.alignment - remainder
-        return locations_s, acc_base.view(-1), capacity, new_score, loss
-
-    def generate_hot_mask(self, score):
-
-        pass
+        return route_indices, acc_base.view(-1), capacity, new_score, loss
 
     def generate_auxiliary(self, score, logits_wo_noise, logits, topk_ids):
         if self.is_gshard_loss:

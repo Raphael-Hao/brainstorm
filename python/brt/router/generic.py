@@ -1,6 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+from turtle import forward
 from typing import List, Union
 
 import torch
