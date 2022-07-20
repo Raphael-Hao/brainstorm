@@ -11,19 +11,18 @@ __all__ = ["TopKProtocol", "ThresholdProtocol"]
 
 logger = log.get_logger(__file__)
 
+
 @register_protocol("topk")
 class TopKProtocol(ProtocolBase):
-    def __init__(self, index_format="src_index", index_gen_opt=True, **kwargs):
-
+    def __init__(self, top_k=1, supported_capacities=None, **kwargs):
+        index_format = kwargs.get("index_format", "dst_index")
+        index_gen_opt = kwargs.get("index_gen_opt", True)
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
-        self.supported_capacities = kwargs.get("supported_capacities")
-        self.k = kwargs.get("k")
-        if self.k == None:
-            self.k = 1
-            logger.warning("k is not specified for Top-K protocol, use default k=1")
+        self.supported_capacities = supported_capacities
+        self.top_k = top_k
 
     def make_route_decision(self, score):
-        hot_mask = torch.topk(score, self.k, dim=1).indices  # sample x k
+        hot_mask = torch.topk(score, self.top_k, dim=1).indices  # sample x k
         hot_mask = torch.zeros_like(
             score, dtype=torch.int64, device=score.device
         ).scatter_(1, hot_mask, 1)
@@ -45,21 +44,15 @@ class TopKProtocol(ProtocolBase):
 
 @register_protocol("threshold")
 class ThresholdProtocol(ProtocolBase):
-    def __init__(self, index_format="src_index", index_gen_opt=True, **kwargs):
+    def __init__(
+        self, threshold=0.0, residual_path=-1, supported_capacities=None, **kwargs
+    ):
+        index_format = kwargs.get("index_format", "dst_index")
+        index_gen_opt = kwargs.get("index_gen_opt", True)
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
-        self.supported_capacities = kwargs.get("supported_capacities")
-        self.threshold = kwargs.get("threshold")
-        self.residual_path = kwargs.get("residual_path")
-        if self.threshold == None:
-            self.threshold = 0.0
-            logger.warning(
-                "threshold is not specified for Threshold route method, use default threshold=0.0"
-            )
-        if self.residual_path == None:
-            self.residual_path = -1
-            logger.warning(
-                "residual_path is not specified for Threshold route method, use default residual_path=-1"
-            )
+        self.threshold = threshold
+        self.residual_path = residual_path
+        self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score):
         hot_mask = (score > self.threshold).long().to(score.device)

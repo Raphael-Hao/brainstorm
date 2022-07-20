@@ -8,7 +8,6 @@ from torch.distributions.normal import Normal
 from tutel.jit_kernels.gating import fast_cumsum_sub_one
 from tutel.impls import losses, communicate
 
-
 from brt.common import log
 from brt.router.protocol.base import ProtocolBase, register_protocol
 from brt.router.utils import generate_dst_indices
@@ -36,31 +35,43 @@ def get_compute_location_func(sorted=False, score=None):
 
 @register_protocol("swin_moe")
 class SwinMoEProtocol(ProtocolBase):
-    def __init__(self, **kwargs):
-        super().__init__(index_format="dst_index")
-        top_k = kwargs.get("top_k")
-        self.capacity_factor = kwargs.get(
-            "capacity_factor", float(os.environ.get("CAP_FACTOR", 0))
-        )
-        self.gate_noise = kwargs.get("gate_noise", 0)
-        self.num_global_experts = kwargs.get("num_global_experts")
-        self.top_k = min(top_k, self.num_global_experts)
-        self.normalize_gate = kwargs.get("normalize_gate", True)
-        self.batch_prioritized_routing = kwargs.get("batch_prioritized_routing", False)
-        self.is_postscore = kwargs.get("is_postscore", True)
-        self.group = kwargs.get("group", None)
-        self.alignment = kwargs.get("alignment", 1)
+    def __init__(
+        self,
+        top_k=2,
+        capacity_factor=0,
+        gate_noise=0.0,
+        group=None,
+        is_postscore=True,
+        batch_prioritized_routing=False,
+        normalize_gate=True,
+        is_gshard_loss=True,
+        alignment=1,
+        **kwargs
+    ):
+        index_format = kwargs.get("index_format", "dst_index")
+        index_gen_opt = kwargs.get("index_gen_opt", True)
+        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
+        self.top_k = top_k
+        self.capacity_factor = capacity_factor
+        self.gate_noise = gate_noise
+        self.normalize_gate = normalize_gate
+        self.batch_prioritized_routing = batch_prioritized_routing
+        self.is_postscore = is_postscore
+        self.group = group
+        self.is_gshard_loss = is_gshard_loss
+        self.alignment = alignment
 
-    def make_route_decision(self, score, logits_wo_noise, logits):
+    def make_route_decision(
+        self, score: torch.Tensor, logits_wo_noise: torch.Tensor, logits: torch.Tensor
+    ):
+        num_global_experts = score.size(1)
 
         topk_indices = torch.topk(score, self.top_k, dim=1).indices
 
         indices_s = [x.view(-1) for x in topk_indices.chunk(self.top_k, dim=1)]
 
         masks_se = [
-            losses._one_hot_with_dtype(
-                x, num_classes=self.num_global_experts, dtype=x.dtype
-            )
+            losses._one_hot_with_dtype(x, num_classes=num_global_experts, dtype=x.dtype)
             for x in indices_s
         ]
         gates_s = [(score * x).sum(dim=1) for x in masks_se]
@@ -104,8 +115,8 @@ class SwinMoEProtocol(ProtocolBase):
                     new_score.scatter_(1, indices.unsqueeze(-1), gates.unsqueeze(-1))
 
         samples_per_expert = (
-            int(score.size(0)) + self.num_global_experts - 1
-        ) // self.num_global_experts
+            int(score.size(0)) + num_global_experts - 1
+        ) // num_global_experts
         if self.capacity_factor > 0:
             capacity = self.top_k * int(self.capacity_factor * samples_per_expert)
         else:
@@ -122,8 +133,8 @@ class SwinMoEProtocol(ProtocolBase):
                     * int(
                         -self.capacity_factor
                         * (
-                            (int(score.size(0)) + self.num_global_experts - 1)
-                            // self.num_global_experts
+                            (int(score.size(0)) + num_global_experts - 1)
+                            // num_global_experts
                         )
                     ),
                 )
@@ -137,10 +148,11 @@ class SwinMoEProtocol(ProtocolBase):
         if self.is_gshard_loss:
             loss = losses.gshard_loss(score, topk_ids)
         else:
+            num_global_experts = score.size(1)
             loss = losses.load_importance_loss(
                 F.softmax(logits, dim=1),
                 logits_wo_noise.gather(index=topk_ids, dim=1),
-                self.num_global_experts,
+                num_global_experts,
                 self.gate_noise,
             )
         return loss
