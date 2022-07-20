@@ -3,8 +3,10 @@
 import inspect
 from typing import Callable, Dict, List, Type, Union
 
+import os
 import torch
 import torch.nn as nn
+
 from brt.common import log
 from brt.runtime import Registry
 from brt.router.utils import convert_index_format
@@ -16,8 +18,16 @@ logger = log.get_logger(__file__)
 
 
 class RouterBase(nn.Module):
-    def __init__(self):
+    def __init__(self, capaturing=False):
         super().__init__()
+        env_capaturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in (
+            "true"
+        )
+        if env_capaturing or capaturing:
+            self.capaturing = True
+        self.history_len = 0
+        self.register_parameter("load_history", None)
+        self.register_parameter("capacity_history", None)
 
     def coordinate_index_format(
         self,
@@ -33,6 +43,31 @@ class RouterBase(nn.Module):
             route_indices, loads, protocol_index_fmt, fabric_index_fmt
         )
         return new_route_indices
+
+    def capature_flow_stats(
+        self, loads: torch.Tensor, capacities: torch.Tensor
+    ) -> None:
+        """
+        Capture the flow.
+        """
+        if not self.capaturing:
+            return
+
+        with torch.no_grad():
+            if self.history_len == 0:
+                self.load_history = torch.zeros_like(loads)
+                self.capacity_history = torch.zeros_like(capacities)
+            self.load_history = (self.load_history * self.history_len + loads) / (
+                self.history_len + 1
+            )
+            self.capacity_history = (
+                self.capacity_history * self.history_len + capacities
+            ) / (self.history_len + 1)
+
+    def reset_flow_stats(self):
+        self.history_len = 0
+        self.load_history = None
+        self.capacity_history = None
 
 
 def register_router(router_type: str) -> Callable:

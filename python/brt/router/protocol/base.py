@@ -43,7 +43,7 @@ class ProtocolBase(nn.Module):
             self.check_decision(decisions, score)
         return decisions
 
-    def make_route_decision(self, score):
+    def make_route_decision(self, score, **kwargs):
         raise NotImplementedError("make_route_decision has to be implemented by user")
 
     def check_decision(self, decisions, scores: torch.Tensor) -> bool:

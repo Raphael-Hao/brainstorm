@@ -1,11 +1,8 @@
 from typing import List, Tuple
 
 import torch
-from brt._C.router import (
-    generate_local_indices,
-    route_back_with_local_indices,
-    route_with_local_indices,
-)
+from brt.router.utils import generate_dst_indices
+from brt._C.router import route_back_with_dst_indices, route_with_dst_indices
 from brt.common import log
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import CombineFabric, DispatchFabric
@@ -76,11 +73,11 @@ class HomoFusedDispatchFabric(DispatchFabric):
         ) = to_torch_tensor(in_flow, copy_stack=True)
 
         if self.transform:
-            out_flow_data = route_with_local_indices(
+            out_flow_data = route_with_dst_indices(
                 in_flow_data, local_indices, loads, score
             )
         else:
-            out_flow_data = route_with_local_indices(
+            out_flow_data = route_with_dst_indices(
                 in_flow_data, local_indices, loads, None
             )
         out_flow = init_proto_tensor(
@@ -97,7 +94,7 @@ class HomoFusedDispatchFabric(DispatchFabric):
         if self.supported_capacities is not None:
             self.supported_capacities = self.supported_capacities.to(hot_mask.device)
 
-        local_indices, loads = generate_local_indices(
+        local_indices, loads = generate_dst_indices(
             hot_mask.to(torch.int32), self.supported_capacities
         )
         # self.end_timer("generate_local_indices")
@@ -155,11 +152,11 @@ class HomoFusedCombineFabric(CombineFabric):
 
         # self.start_timer()
         if self.transform:
-            out_flow_data = route_back_with_local_indices(
+            out_flow_data = route_back_with_dst_indices(
                 in_flow_data, local_indices, loads, score
             )
         else:
-            out_flow_data = route_back_with_local_indices(
+            out_flow_data = route_back_with_dst_indices(
                 in_flow_data, local_indices, loads, None
             )
 

@@ -58,6 +58,7 @@ class ScatterRouter(RouterBase):
     def forward(self, in_flow: ProtoTensor, score: torch.Tensor) -> List[ProtoTensor]:
 
         route_indices, loads, capacities = self.protocol(score)
+        self.capature_flow_stats(loads, capacities)
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
@@ -115,6 +116,7 @@ class LoopRouter(RouterBase):
                 self.protocol.index_format,
                 self.dispatch_fabric.index_format,
             )
+            self.capature_flow_stats(loads, capacities)
             dispatched_flows = self.dispatch_fabric(
                 target_flow, route_indices, loads, capacities, score
             )
