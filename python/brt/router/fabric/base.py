@@ -1,10 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Callable, Dict, List, Tuple, Type, Union
+from typing import Callable, Dict, List, Tuple, Any
 
 import torch
 import torch.nn as nn
 from brt.common import log
+from brt.router.utils import make_kwargs
 from brt.router.proto_tensor import deinit_proto_tensor, init_proto_tensor
 from brt.runtime.registry import Registry
 
@@ -102,6 +103,7 @@ def register_fabric(fabric_type: str) -> Callable:
     return Registry.register_sub_cls(fabric_type, FabricBase)
 
 
-def make_fabric(fabric_type: str, **kwargs) -> FabricBase:
+def make_fabric(fabric_type: str, kwargs: Dict[str, Any]) -> FabricBase:
     fabric_cls = Registry.get_sub_cls(fabric_type, FabricBase)
-    return fabric_cls(**kwargs)
+    formulated_kwargs = make_kwargs(kwargs)
+    return fabric_cls(**formulated_kwargs)

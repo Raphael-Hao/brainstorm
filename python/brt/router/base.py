@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import inspect
-from typing import Callable, Dict, List, Type, Union
+from typing import Callable, Dict, List, Type, Union, Any
 
 import os
 import torch
@@ -9,7 +9,7 @@ import torch.nn as nn
 
 from brt.common import log
 from brt.runtime import Registry
-from brt.router.utils import convert_index_format
+from brt.router.utils import convert_index_format, make_kwargs
 from brt.trace.initialize import trace_init
 
 __all__ = ["RouterBase"]
@@ -28,6 +28,10 @@ class RouterBase(nn.Module):
         self.history_len = 0
         self.register_parameter("load_history", None)
         self.register_parameter("capacity_history", None)
+        self.schedule_functions: List[Callable] = []
+
+    def forward(self):
+        self.run_schedule()
 
     def coordinate_index_format(
         self,
@@ -45,7 +49,7 @@ class RouterBase(nn.Module):
         return new_route_indices
 
     def capature_flow_stats(
-        self, loads: torch.Tensor, capacities: torch.Tensor
+        self, loads: torch.Tensor, capacities: torch.Tensor = None
     ) -> None:
         """
         Capture the flow.
@@ -56,18 +60,28 @@ class RouterBase(nn.Module):
         with torch.no_grad():
             if self.history_len == 0:
                 self.load_history = torch.zeros_like(loads)
-                self.capacity_history = torch.zeros_like(capacities)
+                self.capacity_history = (
+                    torch.zeros_like(capacities) if capacities is not None else None
+                )
             self.load_history = (self.load_history * self.history_len + loads) / (
                 self.history_len + 1
             )
-            self.capacity_history = (
-                self.capacity_history * self.history_len + capacities
-            ) / (self.history_len + 1)
+            if capacities is not None:
+                self.capacity_history = (
+                    self.capacity_history * self.history_len + capacities
+                ) / (self.history_len + 1)
 
     def reset_flow_stats(self):
         self.history_len = 0
         self.load_history = None
         self.capacity_history = None
+
+    def inject_schedule(self, schedule_function):
+        self.schedule_functions.append(schedule_function)
+
+    def run_schedule(self):
+        for func in self.schedule_functions:
+            func()
 
 
 def register_router(router_type: str) -> Callable:
@@ -85,11 +99,12 @@ def register_router(router_type: str) -> Callable:
     return local_register_func
 
 
-def make_router(router_type: str, **kwargs) -> RouterBase:
+def make_router(router_type: str, kwargs: Dict[str, Any]) -> RouterBase:
     router_cls = Registry.get_sub_cls(router_type, RouterBase)
     if router_cls is None:
         raise ValueError(f"Router type: {router_type} is not registered.")
-    return router_cls(**kwargs)
+    formulated_kwargs = make_kwargs(kwargs)
+    return router_cls(**formulated_kwargs)
 
 
 def is_router(cls_or_instance) -> bool:

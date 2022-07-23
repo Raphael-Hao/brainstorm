@@ -4,8 +4,6 @@ import os
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
-from torch.distributions.normal import Normal
-from tutel.jit_kernels.gating import fast_cumsum_sub_one
 from tutel.impls import losses, communicate
 
 from brt.common import log
@@ -40,7 +38,7 @@ class SwinMoEProtocol(ProtocolBase):
         top_k=2,
         capacity_factor=0,
         gate_noise=0.0,
-        group=None,
+        group: dist.group = None,
         is_postscore=True,
         batch_prioritized_routing=False,
         normalize_gate=True,
