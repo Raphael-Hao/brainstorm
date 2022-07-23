@@ -1,12 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import os
-from typing import Callable, Dict, Type
+from typing import Callable, Dict, Type, Any
 
 import torch
 import torch.nn as nn
 from brt.common import log
 from brt.runtime import Registry
+from brt.router.utils import make_kwargs
 
 logger = log.get_logger(__file__)
 
@@ -79,6 +80,7 @@ def register_protocol(protocol_type: str) -> Callable:
     return Registry.register_sub_cls(protocol_type, ProtocolBase)
 
 
-def make_protocol(protocol_type: str, **kwargs) -> ProtocolBase:
+def make_protocol(protocol_type: str, kwargs: Dict[str, Any]) -> ProtocolBase:
     protocol_cls = Registry.get_sub_cls(protocol_type, ProtocolBase)
-    return protocol_cls(**kwargs)
+    formulated_kwargs = make_kwargs(kwargs)
+    return protocol_cls(**formulated_kwargs)

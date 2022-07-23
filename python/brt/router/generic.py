@@ -1,8 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from turtle import forward
-from typing import List, Union
+from typing import List, Union, Dict, Any
 
 import torch
 from brt.common import log
@@ -26,7 +25,9 @@ class ScatterRouter(RouterBase):
         self,
         protocol_type: str = "topk",
         fabric_type: str = "dispatch",
-        **kwargs,
+        protocol_kwargs: Dict[str, Any] = None,
+        fabric_kwargs: Dict[str, Any] = None,
+        capaturing=True,
     ):
         """base scatter router
 
@@ -49,11 +50,13 @@ class ScatterRouter(RouterBase):
                     transform (bool, optional): whether to transform the route result to the original shape. Defaults to False.
 
         """
-        super().__init__()
+        super().__init__(capaturing=capaturing)
         self.protocol_type = protocol_type
         self.fabric_type = fabric_type
-        self.protocol = make_protocol(protocol_type, **kwargs)
-        self.fabric = make_fabric(fabric_type, **kwargs)
+        self.protocol_kwargs = protocol_kwargs
+        self.fabric_kwargs = fabric_kwargs
+        self.protocol = make_protocol(protocol_type, **self.protocol_kwargs)
+        self.fabric = make_fabric(fabric_type, **self.fabric_kwargs)
 
     def forward(self, in_flow: ProtoTensor, score: torch.Tensor) -> List[ProtoTensor]:
 
@@ -75,7 +78,8 @@ class GatherRouter(RouterBase):
     def __init__(
         self,
         fabric_type: str = "combine",
-        **kwargs,
+        fabric_kwargs: Dict[str, Any] = None,
+        capaturing=True,
     ):
         """gather router
 
@@ -85,9 +89,10 @@ class GatherRouter(RouterBase):
                 reduction (str, optional): reduction method. Defaults to "add".
                 sparse (bool, optional): whether restore with zero paddings. Defaults to True.
         """
-        super().__init__()
+        super().__init__(capaturing=capaturing)
         self.fabric_type = fabric_type
-        self.fabric = make_fabric(fabric_type, **kwargs)
+        self.fabric_kwargs = fabric_kwargs
+        self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
         out_flow = self.fabric(in_flows)
@@ -96,12 +101,26 @@ class GatherRouter(RouterBase):
 
 @register_router("loop")
 class LoopRouter(RouterBase):
-    def __init__(self, netlet, protocol_type: str = "topk", **kwargs):
+    def __init__(
+        self,
+        netlet,
+        protocol_type: str = "topk",
+        dispatch_fabric_type: str = "dispatch",
+        combine_fabric_type: str = "combine",
+        protocol_kwargs: Dict[str, Any] = None,
+        dispatch_fabric_kwargs: Dict[str, Any] = None,
+        combine_fabric_kwargs: Dict[str, Any] = None,
+    ):
         super().__init__()
         self.protocol_type = protocol_type
-        self.protocol = make_protocol(self.protocol_type, **kwargs)
-        self.dispatch_fabric = make_fabric("dispatch", **kwargs)
-        self.combine_fabric = make_fabric("combine", **kwargs)
+        self.dispatch_fabric_type = dispatch_fabric_type
+        self.combine_fabric_type = combine_fabric_type
+        self.protocol_kwargs = protocol_kwargs
+        self.dispatch_fabric_kwargs = dispatch_fabric_kwargs
+        self.combine_fabric_kwargs = combine_fabric_kwargs
+        self.protocol = make_protocol(self.protocol_type, self.protocol_kwargs)
+        self.dispatch_fabric = make_fabric("dispatch", self.dispatch_fabric_kwargs)
+        self.combine_fabric = make_fabric("combine", self.dispatch_fabric)
         self.netlet = netlet
 
     def forward(self, in_flow: ProtoTensor) -> ProtoTensor:
@@ -117,6 +136,21 @@ class LoopRouter(RouterBase):
                 self.dispatch_fabric.index_format,
             )
             self.capature_flow_stats(loads, capacities)
+            dispatched_flows = self.dispatch_fabric(
+                target_flow, route_indices, loads, capacities, score
+            )
+            target_flow, completed_flow = dispatched_flows
+            pending_combine_flows.append(completed_flow)
+        pending_combine_flows = pad_to_max_one(pending_combine_flows)
+        out_flows = self.combine_fabric(pending_combine_flows)
+        return out_flows
+
+    def forward(self, in_flow: ProtoTensor) -> ProtoTensor:
+        target_flow = in_flow
+        pending_combine_flows = []
+        while target_flow.numel() > 0:
+            target_flow, score = self.netlet(target_flow)
+            route_indices, loads, capacities = self.protocol(score)
             dispatched_flows = self.dispatch_fabric(
                 target_flow, route_indices, loads, capacities, score
             )

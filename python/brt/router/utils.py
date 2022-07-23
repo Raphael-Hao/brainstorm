@@ -1,6 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Any
 
 import torch
 import numpy
@@ -118,3 +118,14 @@ def pad_to_max_one(tensors: List[torch.Tensor], pad_value=0):
     ]
 
     return tensors
+
+
+def make_kwargs(kwargs):
+    if kwargs is None:
+        return {}
+    if isinstance(kwargs, dict) and all(isinstance(k, str) for k in kwargs):
+        return kwargs
+    else:
+        raise ValueError(
+            "kwargs should be a dict of str to Any, but got {}".format(kwargs)
+        )
