@@ -3,6 +3,9 @@
  * Licensed under the MIT license.
  */
 
+#ifndef BRT_NETLET_PTR_ARITH_CUH_
+#define BRT_NETLET_PTR_ARITH_CUH_
+
 namespace brt {
 namespace netlet {
 
@@ -33,3 +36,6 @@ void DevicePtr2PtrArray(T** dst, T* src, int index[], int array_size, int granul
 
 }  // namespace netlet
 }  // namespace brt
+
+
+#endif  // BRT_NETLET_PTR_ARITH_CUH_

@@ -7,27 +7,23 @@
 #define BRT_RUNTIME_CUDA_UTILS_H_
 
 #include <string>
-// cuda
-#if defined(USE_CUDA)
 
+#ifdef USE_CUDA
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <nvrtc.h>
 #endif
 
-// cublas
-#if defined(USE_CUBLAS)
+#ifdef USE_CUBLAS
 #include <cublas_v2.h>
 #endif
 
-// cudnn
-#if defined(USE_CUDNN)
+#ifdef USE_CUDNN
 #include <cudnn.h>
 #endif
 
-// nccl
-#if defined(USE_NCCL)
+#ifdef USE_NCCL
 #include <nccl.h>
 #endif
 
