@@ -3,7 +3,9 @@
  * Licensed under the MIT license.
  */
 
-#pragma once
+#ifndef BRT_ROUTER_ROUTE_H_
+#define BRT_ROUTER_ROUTE_H_
+
 #include <brt/runtime/cuda_utils.h>
 
 namespace brt {
@@ -24,3 +26,5 @@ void RouteBackWithLocalIndices(float* in_data /*[?load*dst_num x sample_dim]*/,
                                int dst_num, cudaStream_t stream);
 }  // namespace router
 }  // namespace brt
+
+#endif  // BRT_ROUTER_ROUTE_H_

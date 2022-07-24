@@ -3,7 +3,9 @@
  * Licensed under the MIT license.
  */
 
-#pragma once
+#ifndef BRT_RUNTIME_CUDA_UTILS_H_
+#define BRT_RUNTIME_CUDA_UTILS_H_
+
 #include <string>
 // cuda
 #if defined(USE_CUDA)
@@ -130,3 +132,4 @@ inline void __CUBLAS_CHECK(cublasStatus_t x, const char* file, int line) {
 #endif
 
 }  // namespace brt
+#endif  // BRT_RUNTIME_CUDA_UTILS_H_
