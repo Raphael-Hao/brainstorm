@@ -8,9 +8,9 @@ from typing import Dict, List, Union
 
 from brt.runtime import log
 
-from brt.jit.kernel.horiz_fused import HorizFusedKernel
-from brt.jit.kernel.module import ModuleKernel
-from brt.jit.kernel.utils import check_if_pointer
+from brt.jit.codegen.horiz_fused import HorizFusedKernel
+from brt.jit.codegen.module import ModuleKernel
+from brt.jit.codegen.utils import check_if_pointer
 
 logger = log.get_logger(__file__)
 

@@ -1,15 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Dict, List, Union
-
 import torch
-from brt.router.proto_tensor import collect_proto_attr_stack, init_proto_tensor
 
-from .kernel import make_jit_kernel
-from .registry import ModuleInfo
+from brt.jit.modules import ModuleInfo
+from brt.jit.kernel_factory import make_jit_kernel
 
 __all__ = ["make_jit_function"]
+
 
 def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
     if mode == "eval":

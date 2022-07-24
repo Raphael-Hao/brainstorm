@@ -5,7 +5,7 @@
 import torch.nn as nn
 
 from brt.runtime import log, BRT_KERNEL_TEMPLATE_PATH
-from brt.jit.kernel import ModuleKernel
+from brt.jit.codegen import ModuleKernel
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname
 

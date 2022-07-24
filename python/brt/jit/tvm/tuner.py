@@ -5,25 +5,21 @@ from typing import Dict, List, Union
 
 import onnx
 import torch
-from brt.runtime import (
-    BRT_KERNEL_TEMPLATE_PATH,
-    BRT_KERNEL_TUNE_LOG_PATH,
-    BRT_ONNX_CKPT_PATH,
-)
-from brt.jit.kernel import ModuleKernel
-from brt.jit.utils import get_device_name
-from brt.runtime import log
-
 import tvm
 from tvm import auto_scheduler, relay
 
-from .utils import (
+from brt.runtime import log, BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
+from brt.jit.codegen import ModuleKernel
+from brt.jit.utils import get_device_name
+from brt.jit.tvm.utils import (
     make_culaunch_config_str,
     make_fname,
     make_inputs,
     old_make_fname,
     parse_culaunch_config,
 )
+
+__all__ = ["TVMTuner"]
 
 logger = log.get_logger(__file__)
 

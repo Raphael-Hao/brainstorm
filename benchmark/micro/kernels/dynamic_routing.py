@@ -10,7 +10,6 @@ from typing import Dict, List, Union
 import torch.nn as nn
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
 
-# from brt.jit.kernel import ModuleKernel
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname
 from torch.nn.modules.utils import _pair

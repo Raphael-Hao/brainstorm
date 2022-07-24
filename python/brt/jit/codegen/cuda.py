@@ -4,7 +4,7 @@
 from brt.runtime import log
 from brt.jit import CUDACompiler
 
-from brt.jit.kernel.kernel import Kernel
+from brt.jit.codegen.kernel import Kernel
 
 logger = log.get_logger(__file__)
 

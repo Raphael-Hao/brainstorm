@@ -3,9 +3,9 @@
 
 from typing import Dict, List, Union
 
-from .cuda import GlobalKernel
-from .horiz_fused import HorizFusedKernel
-from .module import ModuleKernel
+from brt.jit.codegen.cuda import GlobalKernel
+from brt.jit.codegen.horiz_fused import HorizFusedKernel
+from brt.jit.codegen.module import ModuleKernel
 
 __all__ = ["HeteroFusedKernel"]
 
