@@ -132,4 +132,5 @@ inline void __CUBLAS_CHECK(cublasStatus_t x, const char* file, int line) {
 #endif
 
 }  // namespace brt
+
 #endif  // BRT_RUNTIME_CUDA_UTILS_H_
