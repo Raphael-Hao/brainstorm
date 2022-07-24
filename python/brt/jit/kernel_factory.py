@@ -1,20 +1,16 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Callable, Dict, List, Tuple, Union
+
+from typing import Callable, List
 
 import torch
-import torch.nn.functional as F
+
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
-
+from brt.jit.modules import ModuleInfo
 from brt.jit.compiler import CUDACompiler
-from brt.jit.kernel.hetero_fused import HeteroFusedKernel
-from brt.jit.kernel.homo_fused import HomoFusedKernel
-from brt.jit.kernel.module import ModuleKernel
-from brt.jit.factory.registry import ModuleInfo
+from brt.jit.codegen import ModuleKernel, HeteroFusedKernel, HomoFusedKernel
 
-__all__ = [
-    "make_jit_kernel",
-]
+__all__ = ["make_jit_kernel"]
 
 
 def make_jit_kernel(

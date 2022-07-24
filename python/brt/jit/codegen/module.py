@@ -8,9 +8,9 @@ import torch
 
 from brt.runtime import log
 from brt.jit.utils import get_device_name
-from brt.jit.kernel.cuda import CUDATypeSizeInByte, GlobalKernel
-from brt.jit.kernel.storage import kernel_storager
-from brt.jit.kernel.utils import (
+from brt.jit.codegen.cuda import CUDATypeSizeInByte, GlobalKernel
+from brt.jit.codegen.storage import kernel_storager
+from brt.jit.codegen.utils import (
     make_func_name,
     make_identifier,
     remove_comments,

@@ -10,7 +10,7 @@ import tvm
 import tvm.auto_scheduler as auto_scheduler
 import tvm.relay as relay
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
-from brt.jit.kernel import ModuleKernel
+from brt.jit.codegen import ModuleKernel
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import (
     make_culaunch_config_str,

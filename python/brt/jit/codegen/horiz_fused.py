@@ -6,9 +6,9 @@ from typing import Dict, List, Union
 
 from brt.runtime import log
 
-from brt.jit.kernel.cuda import GlobalKernel
-from brt.jit.kernel.module import ModuleKernel
-from brt.jit.kernel.utils import make_fused_identifier, make_identifier
+from brt.jit.codegen.cuda import GlobalKernel
+from brt.jit.codegen.module import ModuleKernel
+from brt.jit.codegen.utils import make_fused_identifier, make_identifier
 
 logger = log.get_logger(__file__)
 
