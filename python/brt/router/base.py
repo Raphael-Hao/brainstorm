@@ -7,7 +7,7 @@ import os
 import torch
 import torch.nn as nn
 
-from brt.common import log
+from brt.runtime import log
 from brt.runtime import Registry
 from brt.router.utils import convert_index_format, make_kwargs
 from brt.trace.initialize import trace_init

@@ -5,7 +5,7 @@ from typing import List, Union
 
 import numpy as np
 import torch
-from brt.common import log
+from brt.runtime import log
 from brt.router.fabric.base import FabricBase, register_fabric
 from brt.router.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
 

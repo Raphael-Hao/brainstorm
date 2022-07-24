@@ -5,14 +5,14 @@ from typing import Dict, List, Union
 
 import onnx
 import torch
-from brt.common import (
+from brt.runtime import (
     BRT_KERNEL_TEMPLATE_PATH,
     BRT_KERNEL_TUNE_LOG_PATH,
     BRT_ONNX_CKPT_PATH,
-    log,
 )
 from brt.jit.kernel import ModuleKernel
 from brt.jit.utils import get_device_name
+from brt.runtime import log
 
 import tvm
 from tvm import auto_scheduler, relay

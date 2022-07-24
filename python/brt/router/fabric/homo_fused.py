@@ -3,7 +3,7 @@ from typing import List, Tuple
 import torch
 from brt.router.utils import generate_dst_indices
 from brt._C.router import route_back_with_dst_indices, route_with_dst_indices
-from brt.common import log
+from brt.runtime import log
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import CombineFabric, DispatchFabric
 from brt.router.proto_tensor import (

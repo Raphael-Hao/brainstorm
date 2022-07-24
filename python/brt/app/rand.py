@@ -19,7 +19,7 @@ class RandScatter(nn.Module):
         """random scatter router
 
         Args:
-            path_num (int): number of paths for routing destinations
+            rand_path_num (int): number of paths for random routing destinations.
             fabric_type (str, optional): fabric type. Defaults to "dispatch".
                 dispatch: dispatch the results to each path, independently.
                 homo_fused_dispatch: dispatch the results to all paths in the form of a fused tensor

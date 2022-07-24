@@ -4,7 +4,7 @@
 from typing import List, Union, Dict, Any
 
 import torch
-from brt.common import log
+from brt.runtime import log
 from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol

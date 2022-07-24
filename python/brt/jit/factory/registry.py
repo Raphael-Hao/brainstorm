@@ -4,9 +4,9 @@
 from typing import Dict, List, Tuple, Union
 
 import torch
-from brt.common import log
+from brt.runtime import log
 
-from ..kernel.module import ModuleDTypeSizeInByte, ModuleKernel
+from brt.jit.kernel.module import ModuleDTypeSizeInByte, ModuleKernel
 
 logger = log.get_logger(__file__)
 

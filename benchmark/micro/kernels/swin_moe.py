@@ -2,9 +2,9 @@
 # Licensed under the MIT license.
 
 
-#%%
 import torch.nn as nn
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
+
+from brt.runtime import log, BRT_KERNEL_TEMPLATE_PATH
 from brt.jit.kernel import ModuleKernel
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname

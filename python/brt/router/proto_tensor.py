@@ -2,7 +2,7 @@ import copy
 from typing import Any, Dict, List, Tuple
 
 import torch
-from brt.common import log
+from brt.runtime import log
 
 __all__ = [
     "ProtoTensor",

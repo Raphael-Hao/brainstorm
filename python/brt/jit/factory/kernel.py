@@ -4,13 +4,13 @@ from typing import Callable, Dict, List, Tuple, Union
 
 import torch
 import torch.nn.functional as F
-from brt.common import BRT_KERNEL_TEMPLATE_PATH
+from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
 
-from ..compiler import CUDACompiler
-from ..kernel.hetero_fused import HeteroFusedKernel
-from ..kernel.homo_fused import HomoFusedKernel
-from ..kernel.module import ModuleKernel
-from .registry import ModuleInfo
+from brt.jit.compiler import CUDACompiler
+from brt.jit.kernel.hetero_fused import HeteroFusedKernel
+from brt.jit.kernel.homo_fused import HomoFusedKernel
+from brt.jit.kernel.module import ModuleKernel
+from brt.jit.factory.registry import ModuleInfo
 
 __all__ = [
     "make_jit_kernel",

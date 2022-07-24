@@ -3,7 +3,7 @@
 
 import sqlite3
 
-from brt.common import BRT_KERNEL_DB_FNAME
+from brt.runtime import BRT_KERNEL_DB_FNAME
 
 __all__ = ["kernel_storager"]
 

@@ -5,12 +5,17 @@ import re
 from typing import Dict, List, Union
 
 import torch
-from brt.common import log
-from brt.jit.utils import get_device_name
 
-from .cuda import CUDATypeSizeInByte, GlobalKernel
-from .storage import kernel_storager
-from .utils import make_func_name, make_identifier, remove_comments, remove_empty_lines
+from brt.runtime import log
+from brt.jit.utils import get_device_name
+from brt.jit.kernel.cuda import CUDATypeSizeInByte, GlobalKernel
+from brt.jit.kernel.storage import kernel_storager
+from brt.jit.kernel.utils import (
+    make_func_name,
+    make_identifier,
+    remove_comments,
+    remove_empty_lines,
+)
 
 logger = log.get_logger(__file__)
 

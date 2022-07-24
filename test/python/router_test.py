@@ -6,10 +6,10 @@ import unittest
 import torch
 import torch.nn as nn
 
-# from brt.common import log
+# from brt.runtime import log
 from brt.router import GatherRouter, ScatterRouter
 
-# log.set_level("routers", "DEBUG")
+# log.set_level("router", "DEBUG")
 
 
 class RouterModel(nn.Module):

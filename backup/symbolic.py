@@ -3,7 +3,7 @@
 from typing import Callable
 
 import torch
-from brt.common import find_lib_path
+from brt.runtime import find_lib_path
 
 torch.ops.load_library(find_lib_path("libbrt_torchscript.so")[0])
 

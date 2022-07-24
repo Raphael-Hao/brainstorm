@@ -5,7 +5,7 @@ from typing import List
 
 import torch
 import torch.nn as nn
-from brt.common import log
+from brt.runtime import log
 from brt.jit import make_jit_kernel
 
 log.set_level("jit", "DEBUG")

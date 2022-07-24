@@ -6,11 +6,11 @@
 
 from typing import Dict, List, Union
 
-from brt.common import log
+from brt.runtime import log
 
-from .horiz_fused import HorizFusedKernel
-from .module import ModuleKernel
-from .utils import check_if_pointer
+from brt.jit.kernel.horiz_fused import HorizFusedKernel
+from brt.jit.kernel.module import ModuleKernel
+from brt.jit.kernel.utils import check_if_pointer
 
 logger = log.get_logger(__file__)
 

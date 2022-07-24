@@ -5,7 +5,7 @@ from typing import Callable, Dict, Type, Any
 
 import torch
 import torch.nn as nn
-from brt.common import log
+from brt.runtime import log
 from brt.runtime import Registry
 from brt.router.utils import make_kwargs
 
