@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 from tutel.impls import losses, communicate
 
-from brt.common import log
+from brt.runtime import log
 from brt.router.protocol.base import ProtocolBase, register_protocol
 from brt.router.utils import generate_dst_indices
 

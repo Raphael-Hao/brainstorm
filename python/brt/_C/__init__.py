@@ -2,5 +2,3 @@
 # Licensed under the MIT license.
 
 import torch
-
-from .router import *

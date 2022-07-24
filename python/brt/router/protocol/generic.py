@@ -3,7 +3,7 @@
 from typing import List
 
 import torch
-from brt.common import log
+from brt.runtime import log
 from brt.router.utils import generate_dst_indices, generate_src_indices
 from brt.router.protocol.base import ProtocolBase, register_protocol
 

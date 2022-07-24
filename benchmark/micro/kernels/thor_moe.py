@@ -9,7 +9,7 @@ import torch.nn as nn
 import tvm
 import tvm.auto_scheduler as auto_scheduler
 import tvm.relay as relay
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
+from brt.runtime import BRT_KERNEL_TEMPLATE_PATH, BRT_KERNEL_TUNE_LOG_PATH
 from brt.jit.kernel import ModuleKernel
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import (

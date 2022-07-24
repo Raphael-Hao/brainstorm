@@ -5,17 +5,16 @@ import logging
 import pathlib
 import sys
 
-from .pkg_info import BRT_LOG_FNAME, BRT_PKG_PATH
+from brt.runtime.pkg_info import BRT_LOG_FNAME, BRT_PKG_PATH
 
 _BRT_MODULES = [
     "user",
     "app",
-    "common",
     "jit",
     "router",
     "runtime",
-    "transform",
     "trace",
+    "transform",
 ]
 
 

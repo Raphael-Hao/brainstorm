@@ -1,6 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from brt.common import log
+from brt.runtime import log
 
 logger = log.get_logger(__file__)
 

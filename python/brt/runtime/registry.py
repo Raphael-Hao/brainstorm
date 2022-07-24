@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 from typing import Callable, Dict, Type, TypeVar, List
 
-from brt.common import log
+from brt.runtime import log
 
 logger = log.get_logger(__file__)
 

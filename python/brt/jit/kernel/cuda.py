@@ -1,10 +1,10 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from brt.common import log
+from brt.runtime import log
 from brt.jit import CUDACompiler
 
-from .kernel import Kernel
+from brt.jit.kernel.kernel import Kernel
 
 logger = log.get_logger(__file__)
 

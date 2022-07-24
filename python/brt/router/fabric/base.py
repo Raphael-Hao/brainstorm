@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Tuple, Any
 
 import torch
 import torch.nn as nn
-from brt.common import log
+from brt.runtime import log
 from brt.router.utils import make_kwargs
 from brt.router.proto_tensor import deinit_proto_tensor, init_proto_tensor
 from brt.runtime.registry import Registry
