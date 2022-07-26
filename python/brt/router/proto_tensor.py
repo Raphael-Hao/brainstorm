@@ -45,6 +45,7 @@ def collect_proto_attr_stack(
     """collect all attr stack from args
         We have a big assumption here that the args of ProtoTensor type will shared the same attr stack.
         Common nn.Module only transmit them the attr stack of ProtoTensor without modification.
+        Therefore, we only pass reference of the attr stack instead of a deep copy.
     Args:
         args (_type_): args of a torch function handled by __torch_function__
 
@@ -81,10 +82,11 @@ def pack_proto_attr_stack(
     ret,
     tag_stack: List[torch.Tensor],
     load_stack: List[int],
-    extra_attrs_stack_dict: Dict[str, List[Any]] = {},
+    extra_attrs_stack_dict: Dict[str, List[Any]] = None,
 ):
 
     if isinstance(ret, ProtoTensor):
+        extra_attrs_stack_dict = extra_attrs_stack_dict or {}
         ret = ret.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
 
     if isinstance(ret, (Tuple, List)):
@@ -97,6 +99,7 @@ def pack_proto_attr_stack(
 
 
 class ProtoTensor(torch.Tensor):
+    SHALLOW_TRANSPORT = False
     CHECK_TAGS = False
     EXTRA_ATTRS = []
     EXTRA_ATTRS_STACK = []
@@ -117,7 +120,10 @@ class ProtoTensor(torch.Tensor):
         """We need at least a shadow copy here because the attr_stack can be shared with other ProtoTensor.
         otherwise, modifying other ProtoTensor will modify the attr_stack of this ProtoTensor.
         """
-        self.__dict__["proto_" + attr_stack] = copy.copy(value)
+        if ProtoTensor.SHALLOW_TRANSPORT:
+            self.__dict__["proto_" + attr_stack] = value
+        else:
+            self.__dict__["proto_" + attr_stack] = copy.copy(value)
 
     def _get_proto_attr(self, attr):
         assert (
@@ -233,14 +239,22 @@ class ProtoTensor(torch.Tensor):
 
     def copy_stacks(self):
         assert self.proto_initilized
+        if ProtoTensor.SHALLOW_TRANSPORT:
+            tag_stack = self.tag_stack
+            load_stack = self.load_stack
+            extra_attrs_stack_dict = {}
 
-        tag_stack = copy.copy(self.tag_stack)
-        load_stack = copy.copy(self.load_stack)
-        extra_attrs_stack_dict = {}
+            for attr_stack in ProtoTensor.EXTRA_ATTRS_STACK:
+                value = self._get_proto_attr_stack(attr_stack)
+                extra_attrs_stack_dict[attr_stack] = value
+        else:
+            tag_stack = copy.copy(self.tag_stack)
+            load_stack = copy.copy(self.load_stack)
+            extra_attrs_stack_dict = {}
 
-        for attr_stack in ProtoTensor.EXTRA_ATTRS_STACK:
-            value = self._get_proto_attr_stack(attr_stack)
-            extra_attrs_stack_dict[attr_stack] = copy.copy(value)
+            for attr_stack in ProtoTensor.EXTRA_ATTRS_STACK:
+                value = self._get_proto_attr_stack(attr_stack)
+                extra_attrs_stack_dict[attr_stack] = copy.copy(value)
 
         return self, tag_stack, load_stack, extra_attrs_stack_dict
 
@@ -342,55 +356,56 @@ def make_proto_tensor_cls(
 
 
 def init_proto_tensor(
-    _torch_tensor: torch.Tensor,
+    torch_tensor: torch.Tensor,
     tag_stack: List[torch.Tensor] = [],
     load_stack: List[int] = [],
-    extra_attrs_stack_dict: Dict[str, List[Any]] = {},
+    extra_attrs_stack_dict: Dict[str, List[Any]] = None,
 ) -> ProtoTensor:
-    _proto_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
+    proto_tensor: ProtoTensor = torch_tensor.as_subclass(ProtoTensor)
+    extra_attrs_stack_dict = extra_attrs_stack_dict or {}
     if tag_stack and load_stack:
-        _proto_tensor.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
+        proto_tensor.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
     else:
-        _proto_tensor.init_proto()
-    return _proto_tensor
+        proto_tensor.init_proto()
+    return proto_tensor
 
 
 def deinit_proto_tensor(
-    _proto_tensor: ProtoTensor,
+    proto_tensor: ProtoTensor,
 ) -> Tuple[torch.Tensor, List[torch.Tensor], List[int]]:
     (
-        _proto_tensor,
+        proto_tensor,
         tag_stack,
         load_stack,
         extra_attrs_stack_dict,
-    ) = _proto_tensor.deep_unpack()
-    _torch_tensor = _proto_tensor.as_subclass(torch.Tensor)
-    return _torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
+    ) = proto_tensor.deep_unpack()
+    torch_tensor = proto_tensor.as_subclass(torch.Tensor)
+    return torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
 
 
 def to_proto_tensor(_torch_tensor: torch.Tensor):
     """
     restore a torch.Tensor to a ProtoTensor without any pack operation
     """
-    _proto_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
-    assert _proto_tensor.proto_initilized
-    return _proto_tensor
+    proto_tensor: ProtoTensor = _torch_tensor.as_subclass(ProtoTensor)
+    assert proto_tensor.proto_initilized
+    return proto_tensor
 
 
-def to_torch_tensor(_proto_tensor: ProtoTensor, copy_stack=False):
+def to_torch_tensor(proto_tensor: ProtoTensor, return_stack=False):
     """
     we avoid broadcasting stack information by restore a ProtoTensor to
     torch.Tensor when we do not need it, e.g., inside the routers
     """
-    if copy_stack:
+    if return_stack:
         (
-            _proto_tensor,
+            proto_tensor,
             tag_stack,
             load_stack,
             extra_attrs_stack_dict,
-        ) = _proto_tensor.copy_stacks()
-    _torch_tensor = _proto_tensor.as_subclass(torch.Tensor)
-    if copy_stack:
-        return _torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
+        ) = proto_tensor.copy_stacks()
+    torch_tensor = proto_tensor.as_subclass(torch.Tensor)
+    if return_stack:
+        return torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
     else:
-        return _torch_tensor
+        return torch_tensor

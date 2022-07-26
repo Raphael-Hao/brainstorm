@@ -53,7 +53,7 @@ class SkipCheckDispatchFabric(DispatchFabric):
                     flow_tag_stack,
                     flow_load_stack,
                     extra_attr_stack_dict,
-                ) = to_torch_tensor(flow, copy_stack=True)
+                ) = to_torch_tensor(flow, copy_stack=True, shallow=True)
 
                 flow_tag = flow_tag_stack.pop()
                 flow_load = flow_load_stack.pop()

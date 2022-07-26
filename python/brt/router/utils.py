@@ -48,19 +48,19 @@ def generate_src_indices(
 def generate_dst_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor = None,
-    indices_gen_opt=True,
+    index_gen_opt=True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """generate destination indices according to hot_mask
 
     Args:
         hot_mask (torch.Tensor): hot mask for representing the routing decisions
         supported_capacities (torch.Tensor, optional): sorted supported capacities. Defaults to None.
-        indices_gen_opt (bool, optional): if use brt optimized indices generation GPU kernels. Defaults to True.
+        index_gen_opt (bool, optional): if use brt optimized indices generation GPU kernels. Defaults to True.
 
     Returns:
         Tuple[torch.Tensor, torch.Tensor]: destination indices and loads
     """
-    if hot_mask.is_cuda and indices_gen_opt:
+    if hot_mask.is_cuda and index_gen_opt:
         dst_indices, loads = _C.generate_dst_indices(hot_mask, supported_capacities)
     else:
         dst_indices = torch.cumsum(hot_mask, dim=0) * hot_mask
@@ -73,6 +73,23 @@ def generate_dst_indices(
                         loads[i] = real_load
                         break
     return dst_indices, loads
+
+
+def generate_indices(
+    hot_mask: torch.Tensor,
+    supported_capacities: torch.Tensor = None,
+    index_format: str = "src_index",
+    index_gen_opt=True,
+):
+    if index_format == "src_index":
+        indices, loads = generate_src_indices(
+            hot_mask, supported_capacities, index_gen_opt
+        )
+    elif index_format == "dst_index":
+        indices, loads = generate_dst_indices(
+            hot_mask, supported_capacities, index_gen_opt
+        )
+    return indices, loads
 
 
 def convert_index_format(
@@ -94,7 +111,7 @@ def convert_index_format(
         raise ValueError(f"Unknown index format: {new_index_fmt}")
 
 
-def pad_to_max_one(tensors: List[torch.Tensor], pad_value=0):
+def pad_to_max(tensors: List[torch.Tensor], pad_value=0):
     """
     Pad all the tensors to the max shape.
     """

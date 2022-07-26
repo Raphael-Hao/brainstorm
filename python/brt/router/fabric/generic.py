@@ -6,6 +6,7 @@ from typing import List, Union
 import numpy as np
 import torch
 from brt.runtime import log
+from brt.router.utils import pad_to_max
 from brt.router.fabric.base import FabricBase, register_fabric
 from brt.router.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
 
@@ -14,7 +15,12 @@ logger = log.get_logger(__file__)
 
 @register_fabric("dispatch")
 class DispatchFabric(FabricBase):
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        throttling=False,
+        route_logic: Union[str, List[str]] = "1d",
+        transform: Union[bool, List[bool]] = False,
+    ):
         """dispatch fabric
 
         Args:
@@ -22,17 +28,17 @@ class DispatchFabric(FabricBase):
                 route_logic (str): 1d or 2d, default is 1d, can be list of 1d or 2d
                 transform (bool): whether to transform input with the score, default is False, can be list of bool
         """
-        super().__init__(indices_format="src_index")
-        self.throttling = kwargs.get("throttling", False)
+        super().__init__(index_format="src_index")
+        self.throttling = throttling
 
-        route_logics = kwargs.get("route_logic", ["1d"])
+        route_logics = route_logic
         if isinstance(route_logics, str):
             assert route_logics in ["1d", "2d"]
             route_logics = [route_logics]
         assert isinstance(route_logics, list) and all(
             isinstance(x, str) and x in ["1d", "2d"] for x in route_logics
         )
-        transforms = kwargs.get("transform", [False])
+        transforms = transform
         if isinstance(transforms, bool):
             transforms = [transforms]
         assert isinstance(transforms, list) and all(
@@ -48,8 +54,8 @@ class DispatchFabric(FabricBase):
         in_flow: Union[ProtoTensor, List[ProtoTensor]],
         route_indices: torch.Tensor,
         loads: torch.Tensor,
-        capacities: torch.Tensor,
-        score: torch.Tensor,
+        capacities: torch.Tensor = None,
+        score: torch.Tensor = None,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
 
         in_flow = self.pack_invalid_flow(in_flow)
@@ -86,7 +92,7 @@ class DispatchFabric(FabricBase):
                 flow_tag_stack,
                 flow_load_stack,
                 extra_attr_stack_dict,
-            ) = to_torch_tensor(flow, copy_stack=True)
+            ) = to_torch_tensor(flow, copy_stack=True, shallow=True)
 
             flow_tag = flow_tag_stack.pop()
             flow_load = flow_load_stack.pop()
@@ -152,14 +158,15 @@ class DispatchFabric(FabricBase):
 
 @register_fabric("combine")
 class CombineFabric(FabricBase):
-    def __init__(self, **kwargs):
+    def __init__(self, sparse=False, reduction="add", auto_padding=False):
 
-        super().__init__(indices_format="src_index")
-        self.sparse = kwargs.get("sparse", False)
-        self.reduction = kwargs.get("reduction", "add")
-        self.auto_padding = kwargs.get("auto_padding", True)
+        super().__init__(index_format="src_index")
+        self.sparse = sparse
+        self.reduction = reduction
+        self.auto_padding = auto_padding
 
     def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:
+        in_flows = self.auto_pad(in_flows)
         in_flows = self.pack_invalid_flow(in_flows)
         in_flows_data = []
         in_flows_tag = []
@@ -223,8 +230,7 @@ class CombineFabric(FabricBase):
 
         return self.remove_needless_pack(out_flow)
 
-    def auto_pad(self, inflows):
+    def auto_pad(self, in_flows):
         if self.auto_padding:
-            pass
-        else:
-            return inflows
+            in_flows = pad_to_max(in_flows, 0)
+        return in_flows
