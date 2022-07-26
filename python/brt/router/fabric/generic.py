@@ -111,6 +111,7 @@ class DispatchFabric(FabricBase):
                 raise ValueError("route_logic must be 1d or 2d")
 
             out_flows = []
+            print(route_indices)
             for i in range(path_num):
                 tag_indices = route_indices[: real_loads[i], i : i + 1]
                 if tag_indices.numel() > 0:

@@ -164,7 +164,7 @@ __device__ __forceinline__ void blockwise_cum_sum(int* input, int* output_sum,
 __global__ void generate_src_indices_and_load(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ src_indices /* [sample_num, path_num] */,
-    int* __restrict__ loads /* [path_num] */, const int& sample_num, const int& path_num) {
+    int* __restrict__ loads /* [path_num] */, const int& sample_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -178,7 +178,7 @@ __global__ void generate_src_indices_and_load_map(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ src_indices /* [sample_num, path_num] */,
     int* __restrict__ loads /* [path_num] */, int* __restrict__ supported_capacities,
-    const int& sample_num, const int& path_num, const int& supported_capacity_num) {
+    const int& sample_num, const int& supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -197,7 +197,7 @@ __global__ void generate_src_indices_and_load_map(
 __global__ void generate_dst_indices_and_load(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* __restrict__ loads /* [path_num] */, const int& sample_num, const int& path_num) {
+    int* __restrict__ loads /* [path_num] */, const int& sample_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -210,8 +210,9 @@ __global__ void generate_dst_indices_and_load(
 __global__ void generate_dst_indices_and_load_map(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* __restrict__ loads /* [path_num] */, int* __restrict__ supported_capacities,
-    const int& sample_num, const int& path_num, const int& supported_capacity_num) {
+    int* __restrict__ loads /* [path_num] */,
+    int* __restrict__ supported_capacities /* [supported_capacity_num]*/, const int& sample_num,
+    const int& supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -237,7 +238,8 @@ __global__ void generate_dst_indices_base(int* __restrict__ loads /* [path_num] 
 
 __global__ void convert_dst_to_src_indices(
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* __restrict__ src_indices /* [sample_num, path_num] */, const int& sample_num, const int& path_num) {
+    int* __restrict__ src_indices /* [sample_num, path_num] */, const int& sample_num,
+    const int& path_num) {
   // [thread_extent] blockIdx.x = path_num
   // [thread_extent] threadIdx.x = 1024
   constexpr int thread_num = 1024;
@@ -292,14 +294,13 @@ void GenerateGlobalDstIndices(int* hot_mask /*[sample_num x path_num]*/,
                               int* global_dst_indices /*[sample_num x path_num]*/,
                               int* loads /*[path_num]*/, int* dst_indices_base /*[path_num]*/,
                               int* supported_capacities /*[supported_capacity_num]*/,
-                              const int &sample_num, const int& path_num, const int& supported_capacity_num,
-                              cudaStream_t stream) {
+                              const int& sample_num, const int& path_num,
+                              const int& supported_capacity_num, cudaStream_t stream) {
   {
     const dim3 block_size = 1024;
     const dim3 grid_size = path_num;
     generate_dst_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
-        hot_mask, hot_mask, loads, supported_capacities, sample_num, path_num,
-        supported_capacity_num);
+        hot_mask, hot_mask, loads, supported_capacities, sample_num, supported_capacity_num);
   }
   {
     constexpr dim3 block_size = 1024;
@@ -330,34 +331,39 @@ void ConvertIndexFormat(int* origin_indices, int* new_indices, int* loads, const
 
 void GenerateSrcIndices(int* hot_mask /*[sample_num x path_num]*/,
                         int* src_indices /*[sample_num x path_num]*/, int* loads /*[path_num]*/,
-                        int* supported_capacities /*[supported_capacity_num]*/, const int& sample_num,
-                        const int& path_num, const int& supported_capacity_num, cudaStream_t stream) {
+                        int* supported_capacities /*[supported_capacity_num]*/,
+                        const int& sample_num, const int& path_num,
+                        const int& supported_capacity_num, cudaStream_t stream) {
   const dim3 block_size = 1024;
   const dim3 grid_size = path_num;
   if (supported_capacity_num == 0) {
-    generate_src_indices_and_load<<<grid_size, block_size, 0, stream>>>(
-        hot_mask, src_indices, loads, sample_num, path_num);
+    generate_src_indices_and_load<<<grid_size, block_size, 0, stream>>>(hot_mask, src_indices,
+                                                                        loads, sample_num);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
   } else {
     generate_src_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
-        hot_mask, src_indices, loads, supported_capacities, sample_num, path_num,
-        supported_capacity_num);
+        hot_mask, src_indices, loads, supported_capacities, sample_num, supported_capacity_num);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
   }
 }
 
 void GenerateDstIndices(int* hot_mask /*[sample_num x path_num]*/,
                         int* dst_indices /*[sample_num x path_num]*/, int* loads /*[path_num]*/,
-                        int* supported_capacities /*[supported_capacity_num]*/, const int& sample_num,
-                        const int& path_num, const int& supported_capacity_num, cudaStream_t stream) {
+                        int* supported_capacities /*[supported_capacity_num]*/,
+                        const int& sample_num, const int& path_num,
+                        const int& supported_capacity_num, cudaStream_t stream) {
   const dim3 block_size = 1024;
   const dim3 grid_size = path_num;
+  printf("GenerateDstIndices: %d %d\n", sample_num, path_num);
   if (supported_capacity_num == 0) {
-    generate_dst_indices_and_load<<<grid_size, block_size, 0, stream>>>(
-        hot_mask, dst_indices, loads, sample_num, path_num);
+    generate_dst_indices_and_load<<<grid_size, block_size, 0, stream>>>(hot_mask, dst_indices,
+                                                                        loads, sample_num);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
   } else {
     CHECK_GE(supported_capacity_num, 1);
     generate_dst_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
-        hot_mask, dst_indices, loads, supported_capacities, sample_num, path_num,
-        supported_capacity_num);
+        hot_mask, dst_indices, loads, supported_capacities, sample_num, supported_capacity_num);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
   }
 }
 

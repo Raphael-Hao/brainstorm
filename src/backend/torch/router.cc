@@ -50,6 +50,8 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_src_indices(
         {} /*[supported_capacity_num]*/) {
   CHECK_ON_CUDA(hot_mask);
 
+  // hot_mask.to(at::kInt, true);
+
   auto sample_num = hot_mask.size(0);
   auto path_num = hot_mask.size(1);
 
@@ -106,8 +108,8 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   auto sample_num = origin_indices.size(0);
   auto path_num = origin_indices.size(1);
   router::ConvertIndexFormat(origin_indices.data_ptr<int>(), new_indices.data_ptr<int>(),
-                                loads.data_ptr<int>(), sample_num, path_num, target_index_fmt_id,
-                                at::cuda::getDefaultCUDAStream().stream());
+                             loads.data_ptr<int>(), sample_num, path_num, target_index_fmt_id,
+                             at::cuda::getDefaultCUDAStream().stream());
   return new_indices;
 }
 
