@@ -48,15 +48,15 @@ class ScatterRouter(RouterBase):
                         1d: route along the 1st dimension, selecting data from a tensor with shape (batch_size, ...)
                         2d: route along the first 2 dimensions, selecting data from a tensor with shape (batch_size, dst_num, ...)
                     transform (bool, optional): whether to transform the route result to the original shape. Defaults to False.
-
+            Capturing (bool, optional): whether to capture the flow stats. Defaults to True.
         """
         super().__init__(capaturing=capaturing)
         self.protocol_type = protocol_type
         self.fabric_type = fabric_type
         self.protocol_kwargs = protocol_kwargs
         self.fabric_kwargs = fabric_kwargs
-        self.protocol = make_protocol(protocol_type, **self.protocol_kwargs)
-        self.fabric = make_fabric(fabric_type, **self.fabric_kwargs)
+        self.protocol = make_protocol(protocol_type, self.protocol_kwargs)
+        self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flow: ProtoTensor, score: torch.Tensor) -> List[ProtoTensor]:
 
@@ -87,7 +87,8 @@ class GatherRouter(RouterBase):
             fabric_type (str, optional): fabric type. Defaults to "combine".
             supported keyword args for fabric:
                 reduction (str, optional): reduction method. Defaults to "add".
-                sparse (bool, optional): whether restore with zero paddings. Defaults to True.
+                sparse (bool, optional): whether restore with zero paddings. Defaults to False.
+                auto_padding (bool, optional): whether to pad the tensor to the max shape. Defaults to False.
         """
         super().__init__(capaturing=capaturing)
         self.fabric_type = fabric_type

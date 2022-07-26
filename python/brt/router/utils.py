@@ -26,7 +26,9 @@ def generate_src_indices(
     """
 
     if hot_mask.is_cuda and index_gen_opt:
-        src_indices, loads = _C.generate_src_indices(hot_mask, supported_capacities)
+        src_indices, loads = _C.router.generate_src_indices(
+            hot_mask, supported_capacities
+        )
     else:
         src_indices = torch.zeros_like(hot_mask)
         loads = torch.zeros(
@@ -36,7 +38,9 @@ def generate_src_indices(
         for i in range(hot_mask.size(1)):
             src_indices_per_path = hot_mask_t[i].view(-1).nonzero()
             loads[i] = src_indices_per_path.numel()
-            src_indices[i, : src_indices_per_path.numel()] = src_indices_per_path
+            src_indices[
+                : src_indices_per_path.numel(), i : i + 1
+            ] = src_indices_per_path
             if supported_capacities is not None:
                 for capacity in supported_capacities:
                     if loads[i] <= capacity:

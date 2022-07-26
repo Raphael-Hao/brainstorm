@@ -18,7 +18,7 @@ class TopKProtocol(ProtocolBase):
         self,
         top_k=1,
         supported_capacities: torch.Tensor = None,
-        index_format="dst_index",
+        index_format="src_index",
         index_gen_opt=True,
     ):
         """Top-K protocol
@@ -26,7 +26,7 @@ class TopKProtocol(ProtocolBase):
         Args:
             top_k (int, optional): k for top selecting. Defaults to 1.
             supported_capacities (optional): _description_. Defaults to None.
-            index_format (str, optional): index tensors according to destination or source. Defaults to "dst_index".
+            index_format (str, optional): index tensors according to destination or source. Defaults to "src_index".
             index_gen_opt (bool, optional): whether use optimized GPU kernel. Defaults to True.
         """
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
@@ -54,7 +54,7 @@ class ThresholdProtocol(ProtocolBase):
         threshold=0.0,
         residual_path=-1,
         supported_capacities=None,
-        index_format="dst_index",
+        index_format="src_index",
         index_gen_opt=True,
     ):
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)

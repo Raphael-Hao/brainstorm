@@ -25,9 +25,10 @@ class RouterBase(nn.Module):
         )
         if env_capaturing or capaturing:
             self.capaturing = True
-        self.history_len = 0
-        self.register_parameter("load_history", None)
-        self.register_parameter("capacity_history", None)
+        if self.capaturing:
+            self.history_len = 0
+            self.register_buffer("load_history", None)
+            self.register_buffer("capacity_history", None)
         self.schedule_functions: List[Callable] = []
 
     def forward(self):

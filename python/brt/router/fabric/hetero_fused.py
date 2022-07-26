@@ -125,7 +125,7 @@ class HeteroFusedGatherRouter(GatherRouter):
 
         for flow in in_flows:
             data, flow_tags, flow_loads, extra_attr_stack = to_torch_tensor(
-                flow, copy_stack=True, shallow=True
+                flow, return_stack=True
             )
             in_flows_data.append(data)
             in_flows_load.append(flow_loads.pop())
