@@ -46,7 +46,7 @@ class HomoFusedDispatchFabric(DispatchFabric):
             in_flow_tag_stack,
             in_flow_load_stack,
             extra_attr_stack_dict,
-        ) = to_torch_tensor(in_flow, copy_stack=True, shallow=True)
+        ) = to_torch_tensor(in_flow, return_stack=True)
 
         if self.transform:
             out_flow_data = route_with_dst_indices(
@@ -98,7 +98,6 @@ class HomoFusedDispatchFabric(DispatchFabric):
 class HomoFusedCombineFabric(CombineFabric):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        check_homo_proto_tensor_clos()
         supported_capacities = kwargs.get("supported_capacities", None)
         if supported_capacities is None:
             self.supported_capacities = supported_capacities
@@ -114,7 +113,7 @@ class HomoFusedCombineFabric(CombineFabric):
             in_flow_tag_stack,
             in_flow_load_stack,
             extra_attr_stack,
-        ) = to_torch_tensor(in_flow, copy_stack=True, shallow=True)
+        ) = to_torch_tensor(in_flow, return_stack=True)
 
         local_indices = in_flow_tag_stack.pop()
         loads = in_flow_load_stack.pop()
