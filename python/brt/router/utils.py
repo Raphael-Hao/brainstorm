@@ -4,7 +4,7 @@ from typing import Tuple, List, Dict, Any
 
 import torch
 import numpy
-import brt._C as _C
+import brt._C.router as C_router
 
 __all__ = ["generate_src_indices", "generate_dst_indices"]
 
@@ -26,9 +26,11 @@ def generate_src_indices(
     """
 
     if hot_mask.is_cuda and index_gen_opt:
-        src_indices, loads = _C.router.generate_src_indices(
-            hot_mask, supported_capacities
+        src_indices, loads = C_router.generate_src_indices(
+            hot_mask.to(torch.int32), supported_capacities
         )
+        print(src_indices)
+        print(loads)
     else:
         src_indices = torch.zeros_like(hot_mask)
         loads = torch.zeros(
@@ -65,7 +67,9 @@ def generate_dst_indices(
         Tuple[torch.Tensor, torch.Tensor]: destination indices and loads
     """
     if hot_mask.is_cuda and index_gen_opt:
-        dst_indices, loads = _C.generate_dst_indices(hot_mask, supported_capacities)
+        dst_indices, loads = C_router.generate_dst_indices(
+            hot_mask.to(torch.int32), supported_capacities
+        )
     else:
         dst_indices = torch.cumsum(hot_mask, dim=0) * hot_mask
         loads = torch.sum(hot_mask, dim=0)
@@ -108,9 +112,9 @@ def convert_index_format(
     if origin_index_fmt == new_index_fmt:
         return origin_indices
     elif new_index_fmt == "src_index":
-        return _C.convert_index_format(origin_indices, loads, 0)
+        return C_router.convert_index_format(origin_indices, loads, 0)
     elif new_index_fmt == "dst_index":
-        return _C.convert_index_format(origin_indices, loads, 1)
+        return C_router.convert_index_format(origin_indices, loads, 1)
     else:
         raise ValueError(f"Unknown index format: {new_index_fmt}")
 
