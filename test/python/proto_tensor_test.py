@@ -1,7 +1,10 @@
 import unittest
 
 import numpy as np
+
 import torch
+import torch.nn as nn
+import brt
 from brt.router.proto_tensor import (
     collect_proto_attr_stack,
     deinit_proto_tensor,
@@ -243,6 +246,29 @@ class ProtoTensorTest(unittest.TestCase):
         self.assertEqual(collected_load_stack, load_stack)
         self.assertEqual(collected_extra_attr_stack_dict, {})
 
+    def test_torch_function(self):
+        class Model(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.linear = nn.Linear(1, 1)
+
+            def forward(self, x):
+                return self.linear(x)
+        model = Model()
+        brt.initialize(shallow_transport=False)
+        input_x = init_proto_tensor(torch.Tensor([1]), tag_stack=[torch.Tensor([0])], load_stack=[3])
+        output_x = model(input_x)
+        self.assertEqual(input_x.tag_stack, output_x.tag_stack)
+        self.assertEqual(input_x.load_stack, output_x.load_stack)
+        self.assertNotEqual(id(input_x.tag_stack), id(output_x.tag_stack))
+        self.assertNotEqual(id(input_x.load_stack), id(output_x.load_stack))
+        brt.initialize(shallow_transport=True)
+        input_x = init_proto_tensor(torch.Tensor([1]), tag_stack=[torch.Tensor([0])], load_stack=[3])
+        output_x = model(input_x)
+        self.assertEqual(input_x.tag_stack, output_x.tag_stack)
+        self.assertEqual(input_x.load_stack, output_x.load_stack)
+        self.assertEqual(id(input_x.tag_stack), id(output_x.tag_stack))
+        self.assertEqual(id(input_x.load_stack), id(output_x.load_stack))
 
 if __name__ == "__main__":
     unittest.main()

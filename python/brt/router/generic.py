@@ -9,7 +9,7 @@ from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
 from brt.router.proto_tensor import ProtoTensor
-from brt.router.utils import pad_to_max_one
+from brt.router.utils import pad_to_max
 
 __all__ = [
     "ScatterRouter",
@@ -141,22 +141,6 @@ class LoopRouter(RouterBase):
             )
             target_flow, completed_flow = dispatched_flows
             pending_combine_flows.append(completed_flow)
-        pending_combine_flows = pad_to_max_one(pending_combine_flows)
-        out_flows = self.combine_fabric(pending_combine_flows)
-        return out_flows
-
-    def forward(self, in_flow: ProtoTensor) -> ProtoTensor:
-        target_flow = in_flow
-        pending_combine_flows = []
-        while target_flow.numel() > 0:
-            target_flow, score = self.netlet(target_flow)
-            route_indices, loads, capacities = self.protocol(score)
-            dispatched_flows = self.dispatch_fabric(
-                target_flow, route_indices, loads, capacities, score
-            )
-            target_flow, completed_flow = dispatched_flows
-            pending_combine_flows.append(completed_flow)
-        pending_combine_flows = pad_to_max_one(pending_combine_flows)
         out_flows = self.combine_fabric(pending_combine_flows)
         return out_flows
 

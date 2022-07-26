@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import torch
 from brt.router.utils import generate_dst_indices
@@ -16,46 +16,22 @@ from brt.router.proto_tensor import (
 logger = log.get_logger(__file__)
 
 __all__ = [
-    "HomoFusedDispatchSF",
-    "HomoFusedCombineSF",
+    "HomoFusedDispatchFabric",
+    "HomoFusedCombineFabric",
 ]
-
-
-_homo_proto_tensor_created = False
-
-
-def check_homo_proto_tensor_clos():
-    from brt.router import ProtoTensor
-
-    assert hasattr(ProtoTensor, "score")
-    assert hasattr(ProtoTensor, "score_stack")
-
-
-def once_make_homo_proto_tensor_cls():
-    global _homo_proto_tensor_created
-    if _homo_proto_tensor_created is False:
-        make_proto_tensor_cls(["score"], [None])
-        _homo_proto_tensor_created = True
-    check_homo_proto_tensor_clos()
 
 
 @register_fabric("homo_fused_dispatch")
 class HomoFusedDispatchFabric(DispatchFabric):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        once_make_homo_proto_tensor_cls()
-        supported_capacities = kwargs.get("supported_capacities", None)
-        if supported_capacities is None:
-            self.supported_capacities = supported_capacities
-        else:
-            self.supported_capacities = torch.tensor(
-                supported_capacities, dtype=torch.int32
-            )
-        self.post_transform = kwargs.get("post_transform", False)
-        if self.post_transform and self.transform:
-            logger.warning(
-                "Post_transform and transform are both True, double transform with same score!"
-            )
+    def __init__(
+        self,
+        throttling=False,
+        route_logic: Union[str, List[str]] = "1d",
+        transform: Union[bool, List[bool]] = False,
+    ):
+        super().__init__(
+            throttling=throttling, route_logic=route_logic, transform=transform
+        )
 
     def forward(
         self,
@@ -70,7 +46,7 @@ class HomoFusedDispatchFabric(DispatchFabric):
             in_flow_tag_stack,
             in_flow_load_stack,
             extra_attr_stack_dict,
-        ) = to_torch_tensor(in_flow, copy_stack=True)
+        ) = to_torch_tensor(in_flow, copy_stack=True, shallow=True)
 
         if self.transform:
             out_flow_data = route_with_dst_indices(
@@ -83,10 +59,8 @@ class HomoFusedDispatchFabric(DispatchFabric):
         out_flow = init_proto_tensor(
             out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack_dict
         )
-        if self.post_transform:
-            out_flow.pack(local_indices, loads, score=score)
-        else:
-            out_flow.pack(local_indices, loads)
+
+        out_flow.pack(local_indices, loads)
 
         return out_flow
 
@@ -140,7 +114,7 @@ class HomoFusedCombineFabric(CombineFabric):
             in_flow_tag_stack,
             in_flow_load_stack,
             extra_attr_stack,
-        ) = to_torch_tensor(in_flow, copy_stack=True)
+        ) = to_torch_tensor(in_flow, copy_stack=True, shallow=True)
 
         local_indices = in_flow_tag_stack.pop()
         loads = in_flow_load_stack.pop()
