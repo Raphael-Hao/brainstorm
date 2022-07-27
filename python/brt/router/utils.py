@@ -29,8 +29,6 @@ def generate_src_indices(
         src_indices, loads = C_router.generate_src_indices(
             hot_mask.to(torch.int32), supported_capacities
         )
-        print(src_indices)
-        print(loads)
     else:
         src_indices = torch.zeros_like(hot_mask)
         loads = torch.zeros(
@@ -62,7 +60,6 @@ def generate_dst_indices(
         hot_mask (torch.Tensor): hot mask for representing the routing decisions
         supported_capacities (torch.Tensor, optional): sorted supported capacities. Defaults to None.
         index_gen_opt (bool, optional): if use brt optimized indices generation GPU kernels. Defaults to True.
-
     Returns:
         Tuple[torch.Tensor, torch.Tensor]: destination indices and loads
     """

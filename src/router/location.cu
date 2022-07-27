@@ -336,19 +336,12 @@ void GenerateSrcIndices(int* hot_mask /*[sample_num x path_num]*/,
                         const int& supported_capacity_num, cudaStream_t stream) {
   const dim3 block_size = 1024;
   const dim3 grid_size = path_num;
-  printf("GenerateSrcIndices: %d %d\n", sample_num, path_num);
-  printf("hot_mask: %p\n", hot_mask);
-  printf("src_indices: %p\n", src_indices);
-  printf("loads: %p\n", loads);
-  printf("supported_capacities: %p\n", supported_capacities);
   if (supported_capacity_num == 0) {
     generate_src_indices_and_load<<<grid_size, block_size, 0, stream>>>(hot_mask, src_indices,
                                                                         loads, sample_num);
-    CUDA_CHECK(cudaStreamSynchronize(stream));
   } else {
     generate_src_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
         hot_mask, src_indices, loads, supported_capacities, sample_num, supported_capacity_num);
-    CUDA_CHECK(cudaStreamSynchronize(stream));
   }
 }
 
@@ -359,20 +352,13 @@ void GenerateDstIndices(int* hot_mask /*[sample_num x path_num]*/,
                         const int& supported_capacity_num, cudaStream_t stream) {
   const dim3 block_size = 1024;
   const dim3 grid_size = path_num;
-  printf("GenerateDstIndices: %d %d\n", sample_num, path_num);
-  printf("hot_mask: %p\n", hot_mask);
-  printf("dst_indices: %p\n", dst_indices);
-  printf("loads: %p\n", loads);
-  printf("supported_capacities: %p\n", supported_capacities);
   if (supported_capacity_num == 0) {
     generate_dst_indices_and_load<<<grid_size, block_size, 0, stream>>>(hot_mask, dst_indices,
                                                                         loads, sample_num);
-    CUDA_CHECK(cudaStreamSynchronize(stream));
   } else {
     CHECK_GE(supported_capacity_num, 1);
     generate_dst_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
         hot_mask, dst_indices, loads, supported_capacities, sample_num, supported_capacity_num);
-    CUDA_CHECK(cudaStreamSynchronize(stream));
   }
 }
 

@@ -1,5 +1,4 @@
 BasedOnStyle: Google
-AllowAllParametersOfDeclarationOnNextLine: false
 DerivePointerAlignment: false
 ColumnLimit:     100
 PointerAlignment: Left

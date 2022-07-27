@@ -139,9 +139,9 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   CHECK_ON_CUDA(out_data);
 
   router::DispatchWithDstIndices1D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
-                                 gates_data_ptr, route_indices.data_ptr<int>(),
-                                 loads.data_ptr<int>(), sample_num, sample_dim, path_num,
-                                 at::cuda::getDefaultCUDAStream().stream());
+                                   gates_data_ptr, route_indices.data_ptr<int>(),
+                                   loads.data_ptr<int>(), sample_num, sample_dim, path_num,
+                                   at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
@@ -163,10 +163,9 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   auto out_data = ::at::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
-  router::DispatchWithDstIndices1D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
-                                 gates_data_ptr, route_indices.data_ptr<int>(),
-                                 loads.data_ptr<int>(), sample_num, sample_dim, path_num,
-                                 at::cuda::getDefaultCUDAStream().stream());
+  router::DispatchWithDstIndices2D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
+                                   route_indices.data_ptr<int>(), loads.data_ptr<int>(), sample_num,
+                                   sample_dim, path_num, at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
@@ -217,9 +216,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("convert_index_format", &brt::backend::torch::convert_index_format,
         "convert indices to the new index format");
   m.def("dispatch_with_dst_indices_1d", &brt::backend::torch::dispatch_with_dst_indices_1d,
-        "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("dst_indices"),
-        pybind11::arg("dst_loads"), pybind11::arg("gates") = pybind11::none());
-  m.def("combine_with_src_indices", &brt::backend::torch::combine_with_src_indices,
-        "Route data back with dst indices", pybind11::arg("in_data"), pybind11::arg("dst_indices"),
+        "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("route_indices"),
         pybind11::arg("loads"), pybind11::arg("gates") = pybind11::none());
+  m.def("dispatch_with_dst_indices_2d", &brt::backend::torch::dispatch_with_dst_indices_2d,
+        "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("route_indices"),
+        pybind11::arg("loads"));
+  m.def("combine_with_src_indices", &brt::backend::torch::combine_with_src_indices,
+        "Route data back with dst indices", pybind11::arg("in_data"),
+        pybind11::arg("route_indices"), pybind11::arg("loads"),
+        pybind11::arg("gates") = pybind11::none());
 }

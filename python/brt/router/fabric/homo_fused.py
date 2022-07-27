@@ -2,14 +2,17 @@ from typing import List, Tuple, Union
 
 import torch
 from brt.router.utils import generate_dst_indices
-from brt._C.router import dispatch_with_dst_indices, combine_with_src_indices
+from brt._C.router import (
+    dispatch_with_dst_indices_1d,
+    dispatch_with_dst_indices_2d,
+    combine_with_src_indices,
+)
 from brt.runtime import log
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import CombineFabric, DispatchFabric
 from brt.router.proto_tensor import (
     ProtoTensor,
     init_proto_tensor,
-    make_proto_tensor_cls,
     to_torch_tensor,
 )
 
@@ -41,7 +44,6 @@ class HomoFusedDispatchFabric(DispatchFabric):
         score: torch.Tensor,
     ) -> ProtoTensor:
         all_out_flows = []
-        path_num = route_indices.size(1)
 
         for flow_idx, flow in enumerate(in_flows):
             (
@@ -53,11 +55,11 @@ class HomoFusedDispatchFabric(DispatchFabric):
 
             if self.route_logics[flow_idx] == "1d":
                 if self.transforms[flow_idx]:
-                    out_flow_data = dispatch_with_dst_indices(
+                    out_flow_data = dispatch_with_dst_indices_1d(
                         in_flow_data, route_indices, loads, score
                     )
                 else:
-                    out_flow_data = dispatch_with_dst_indices(
+                    out_flow_data = dispatch_with_dst_indices_1d(
                         in_flow_data, route_indices, loads, None
                     )
                 out_flow = init_proto_tensor(
@@ -69,11 +71,21 @@ class HomoFusedDispatchFabric(DispatchFabric):
                 out_flow.pack(route_indices, loads)
             elif self.route_logics[flow_idx] == "2d":
                 in_flow_data = in_flow_data.transpose(0, 1).contiguous()
-
+                out_flow_data = dispatch_with_dst_indices_2d(
+                    in_flow_data, route_indices, loads
+                )
+                out_flow = init_proto_tensor(
+                    out_flow_data,
+                    in_flow_tag_stack,
+                    in_flow_load_stack,
+                    extra_attr_stack_dict,
+                )
+                out_flow.pack(route_indices, loads)
             else:
                 raise ValueError("route_logic must be 1d or 2d")
+            all_out_flows.append(out_flow)
 
-        return out_flow
+        return all_out_flows
 
     def pack_invalid_flow(self, in_flow):
 
