@@ -103,8 +103,9 @@ class DispatchFabric(FabricBase):
                 route_shape = list(flow_data.shape[1:])
                 # route_size = np.prod(route_shape)
             elif self.route_logics[flow_idx] == "2d":
-                flow_data = flow_data.transpose(0, 1).contiguous()
-                route_shape = list(flow_data.shape[2:])
+                # flow_data = flow_data.transpose(0, 1).contiguous()
+                route_shape = list(flow_data.shape[1:])
+                route_shape[0] = 1
                 # route_size = np.prod(route_shape)
             else:
                 raise ValueError("route_logic must be 1d or 2d")
@@ -116,13 +117,10 @@ class DispatchFabric(FabricBase):
                 )
                 if tag_indices.numel() > 0:
                     out_flow_tag = torch.gather(flow_tag, 0, tag_indices)
-                    # data_indices = tag_indices.repeat(1, route_size).view(
-                    #     -1, *route_shape
-                    # )
                     if self.route_logics[flow_idx] == "1d":
                         dispatched_data = flow_data
                     elif self.route_logics[flow_idx] == "2d":
-                        dispatched_data = flow_data[i]
+                        dispatched_data = flow_data[:, i : i + 1].contiguous()
                     if self.transforms[flow_idx]:
                         dispatched_data = dispatched_data * score[:, i].view(
                             (-1,) + (1,) * len(route_shape)
@@ -130,7 +128,6 @@ class DispatchFabric(FabricBase):
                     out_flow_data = torch.index_select(
                         dispatched_data, 0, tag_indices.view(-1)
                     )
-                    # out_flow_data = torch.gather(dispatched_data, 0, data_indices)
                     out_flow = init_proto_tensor(
                         out_flow_data,
                         flow_tag_stack,

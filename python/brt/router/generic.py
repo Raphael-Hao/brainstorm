@@ -55,37 +55,38 @@ class ScatterRouter(RouterBase):
         self.dispatch_score = dispatch_score
 
         self.protocol_type = protocol_type
-        if protocol_kwargs is None:
-            if self.protocol_type == "topk":
-                self.protocol_kwargs = {
-                    "top_k": 1,
-                    "supported_capacities": None,
-                }
-            elif self.protocol_type == "threshold":
-                self.protocol_kwargs = {
-                    "threshold": 0.0,
-                    "residual_path": 0,
-                    "supported_capacities": None,
-                }
-            common_kwargs = {"index_format": "src_index", "index_gen_opt": True}
-            self.protocol_kwargs.update(common_kwargs)
-        else:
-            self.protocol_kwargs = protocol_kwargs
+
+        if self.protocol_type == "topk":
+            self.protocol_kwargs = {
+                "top_k": 1,
+                "supported_capacities": None,
+            }
+        elif self.protocol_type == "threshold":
+            self.protocol_kwargs = {
+                "threshold": 0.0,
+                "residual_path": 0,
+                "supported_capacities": None,
+            }
+        common_kwargs = {"index_format": "src_index", "index_gen_opt": True}
+        self.protocol_kwargs.update(common_kwargs)
+        if protocol_kwargs is not None:
+            self.protocol_kwargs.update(protocol_kwargs)
         self.protocol = make_protocol(protocol_type, self.protocol_kwargs)
 
         self.fabric_type = fabric_type
-        if fabric_kwargs is None:
-            if self.fabric_type == "dispatch":
-                self.fabric_kwargs = {
-                    "throttling": False,
-                    "route_logic": "1d",
-                    "transform": False,
-                }
-                if self.dispatch_score:
-                    self.fabric_kwargs["route_logic"] = ["1d", "2d"]
-                    self.fabric_kwargs["transform"] = [False, False]
-        else:
-            self.fabric_kwargs = fabric_kwargs
+
+        if self.fabric_type == "dispatch":
+            self.fabric_kwargs = {
+                "throttling": False,
+                "route_logic": "1d",
+                "transform": False,
+            }
+            if self.dispatch_score:
+                self.fabric_kwargs["route_logic"] = ["1d", "2d"]
+                self.fabric_kwargs["transform"] = [False, False]
+        if fabric_kwargs is not None:
+            self.fabric_kwargs.update(fabric_kwargs)
+
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flow: ProtoTensor, score: torch.Tensor) -> List[ProtoTensor]:

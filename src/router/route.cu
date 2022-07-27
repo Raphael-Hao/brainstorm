@@ -25,6 +25,28 @@ __global__ void __launch_bounds__(1024) no_transform_dispatch_with_dst_indices(
   }
 }
 
+__global__ void __launch_bounds__(1024) dispatch_with_dst_indices_2d(
+    float* __restrict__ in_data /*[path_num x sample_num x sample_dim]*/,
+    float* __restrict__ out_data /*[?load*path_num x sample_dim]*/,
+    int* __restrict__ route_indices /*[sample_num x path_num]*/,
+    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim, int path_num) {
+  in_data += sample_num * sample_dim * blockIdx.x;
+  for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
+    int route_index = i * path_num + blockIdx.y;
+    int local_dst = route_indices[route_index];
+    if (local_dst == 0) {
+      continue;
+    }
+    int global_dst = local_dst - 1;
+    for (int j = 0; j < blockIdx.y; j++) {
+      global_dst += loads[j];
+    }
+    for (int j = threadIdx.x; j < sample_dim; j += 1024) {
+      out_data[global_dst * sample_dim + j] = in_data[i * sample_dim + j];
+    }
+  }
+}
+
 __global__ void __launch_bounds__(1024)
     dipatch_with_dst_indices(float* __restrict__ in_data /*[sample_num x sample_dim]*/,
                              float* __restrict__ out_data /*[?load*path_num x sample_dim]*/,
@@ -321,13 +343,23 @@ void DispatchWithDstIndices1D(float* src_data /*[sample_num x sample_dim]*/,
   }
 }
 
+void DispatchWithDstIndices2D(float* src_data /*[sample_num x sample_dim]*/,
+                              float* dst_data /*[?load*path_num x sample_dim]*/,
+                              int* route_indices /*[sample_num x path_num]*/,
+                              int* loads /*[path_num]*/, const int& sample_num,
+                              const int& sample_dim, const int& path_num, cudaStream_t stream) {
+  constexpr dim3 block_size(1024);
+  dim3 grid_size(512, path_num);
+  dispatch_with_dst_indices_2d<<<grid_size, block_size, 0, stream>>>(
+      src_data, dst_data, route_indices, loads, sample_num, sample_dim, path_num);
+}
+
 void CombineWithSrcIndices(float* src_data /*[?load*path_num x sample_dim]*/,
                            float* dst_data /*[sample_num x sample_dim]*/,
                            float* gates /*[sample_num x path_num]*/,
                            int* route_indices /*[sample_num x path_num]*/,
-                           int* loads /*[path_num]*/, int* capacities /*[path_num] */,
-                           const int& sample_num, const int& sample_dim, const int& path_num,
-                           cudaStream_t stream) {
+                           int* loads /*[path_num]*/, const int& sample_num, const int& sample_dim,
+                           const int& path_num, cudaStream_t stream) {
   constexpr dim3 block_size(1024);
   dim3 grid_size(512);
   if (gates == nullptr) {
