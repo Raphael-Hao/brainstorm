@@ -7,10 +7,10 @@
 
 import torch
 import torch.nn as nn
-from brt.common import BRT_KERNEL_TEMPLATE_PATH
+from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
 from brt.jit import make_jit_kernel
-from brt.routers import collect_proto_attr_stack, init_proto_tensor
-from brt.routers.app.rand import (
+from brt.router import collect_proto_attr_stack, init_proto_tensor
+from brt.app import (
     RandGatherRouter,
     RandHomoFusedGatherRouter,
     RandHomoFusedScatterRouter,

@@ -1,7 +1,5 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from . import utils
-
+from brt.jit.tvm.tuner import TVMTuner
 # from .task_scheduler import EfficientTaskScheduler
-from .tuner import TVMTuner

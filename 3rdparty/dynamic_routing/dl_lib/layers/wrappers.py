@@ -11,7 +11,7 @@ import json
 import math
 
 import torch
-from brt.common import BRT_LOG_PATH
+from brt.runtime import BRT_LOG_PATH
 from torch.nn.modules.utils import _ntuple
 
 CONV_PARAM_LOG_FNAME = BRT_LOG_PATH / "conv_params.json"

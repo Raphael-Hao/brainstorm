@@ -1,0 +1,41 @@
+DATA:
+  DATASET: imagenet22K
+  IMG_SIZE: 192
+MODEL:
+  TYPE: swinv2_moe
+  NAME: swinv2_moe_small_pre_nattn_cpb_patch4_window12_192_s2it2_s3b1_top1_vitmoeloss_GwoN_bpr_cap125_moedrop01_nobias_22k_32gpu_16exp
+  DROP_PATH_RATE: 0.2
+  SWIN_V2_MOE:
+    EMBED_DIM: 96
+    DEPTHS: [ 2, 2, 18, 2 ]
+    NUM_HEADS: [ 3, 6, 12, 24 ]
+    WINDOW_SIZE: 12
+
+    POSTNORM: False
+    RELATIVE_COORDS_TABLE_TYPE: norm8_log
+    ATTN_TYPE: normal
+    RPE_OUTPUT_TYPE: normal
+    INIT_VALUES: [ -1.0 ]
+    LN_TYPE: fp32
+    INIT_STD: 0.005
+    RM_K_BIAS: False
+
+    MOE_BLOCKS: [ [ -1 ], [ -1 ], [ 1, 3, 5, 7, 9, 11, 13, 15, 17 ], [ 1 ] ]
+    NUM_LOCAL_EXPERTS: -2
+    TOP_VALUE: 1
+    CAPACITY_FACTOR: 1.25
+    NORMALIZE_GATE: False
+    BATCH_PRIORITIZED_ROUTING: True
+    VITMOE_LOSS: True
+    MOE_DROP: 0.1
+    MLP_FC2_BIAS: False
+TRAIN:
+  EPOCHS: 90
+  WARMUP_EPOCHS: 10
+  WEIGHT_DECAY: 0.1
+  TOTAL_LR: 0.001 # 4096 batch-size
+  TOTAL_WARMUP_LR: 0.000001
+  TOTAL_MIN_LR: 0.00001
+  CLIP_GRAD: 3.0
+  MOE_LOSS_WEIGHT: 0.01
+  MOE_GRAD_SCALE: 32.0
