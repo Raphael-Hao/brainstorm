@@ -113,7 +113,9 @@ class DispatchFabric(FabricBase):
             out_flows = []
             print(route_indices)
             for i in range(path_num):
-                tag_indices = route_indices[: real_loads[i], i : i + 1]
+                tag_indices = route_indices[: real_loads[i], i : i + 1].to(
+                    torch.int64, non_blocking=True
+                )
                 if tag_indices.numel() > 0:
                     out_flow_tag = torch.gather(flow_tag, 0, tag_indices)
                     # data_indices = tag_indices.repeat(1, route_size).view(

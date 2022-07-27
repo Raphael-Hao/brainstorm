@@ -27,12 +27,13 @@ __device__ __forceinline__ void blockwise_generate_src_indices(int* mask, int* o
       }
       offset *= 2;
     }
-    // store the sum of temp[0:threadIdx.x] to temp[thread_num] and put temp[thread_num - 1] to 0
+    /* store the sum of temp[0:threadIdx.x] to temp[thread_num] and put temp[thread_num - 1] to 0 */
     if (threadIdx.x == 0) {
       partial_src_mask[thread_num] = partial_src_mask[thread_num - 1];
       partial_src_mask[thread_num - 1] = 0;
     }
-    // reverse dispatch the sum of temp[0:threadIdx.x] to temp[threadIdx.x+1]
+
+    /* reverse dispatch the sum of temp[0:threadIdx.x] to temp[threadIdx.x+1]*/
     for (int d = 1; d < thread_num; d *= 2) {
       offset >>= 1;
       __syncthreads();
@@ -164,7 +165,7 @@ __device__ __forceinline__ void blockwise_cum_sum(int* input, int* output_sum,
 __global__ void generate_src_indices_and_load(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ src_indices /* [sample_num, path_num] */,
-    int* __restrict__ loads /* [path_num] */, const int& sample_num) {
+    int* __restrict__ loads /* [path_num] */, int sample_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -178,7 +179,7 @@ __global__ void generate_src_indices_and_load_map(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ src_indices /* [sample_num, path_num] */,
     int* __restrict__ loads /* [path_num] */, int* __restrict__ supported_capacities,
-    const int& sample_num, const int& supported_capacity_num) {
+    int sample_num, int supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -197,7 +198,7 @@ __global__ void generate_src_indices_and_load_map(
 __global__ void generate_dst_indices_and_load(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* __restrict__ loads /* [path_num] */, const int& sample_num) {
+    int* __restrict__ loads /* [path_num] */, int sample_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -211,8 +212,8 @@ __global__ void generate_dst_indices_and_load_map(
     int* __restrict__ hot_mask /* [sample_num, path_num] */,
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
     int* __restrict__ loads /* [path_num] */,
-    int* __restrict__ supported_capacities /* [supported_capacity_num]*/, const int& sample_num,
-    const int& supported_capacity_num) {
+    int* __restrict__ supported_capacities /* [supported_capacity_num]*/, int sample_num,
+    int supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
@@ -230,7 +231,7 @@ __global__ void generate_dst_indices_and_load_map(
 
 __global__ void generate_dst_indices_base(int* __restrict__ loads /* [path_num] */,
                                           int* __restrict__ dst_indices_base /* [path_num] */,
-                                          const int& path_num) {
+                                          int path_num) {
   int prefix = 0;
   dst_indices_base = dst_indices_base + 1;
   blockwise_cum_sum(loads, dst_indices_base, path_num, prefix);
@@ -238,8 +239,7 @@ __global__ void generate_dst_indices_base(int* __restrict__ loads /* [path_num] 
 
 __global__ void convert_dst_to_src_indices(
     int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* __restrict__ src_indices /* [sample_num, path_num] */, const int& sample_num,
-    const int& path_num) {
+    int* __restrict__ src_indices /* [sample_num, path_num] */, int sample_num, int path_num) {
   // [thread_extent] blockIdx.x = path_num
   // [thread_extent] threadIdx.x = 1024
   constexpr int thread_num = 1024;
@@ -259,7 +259,7 @@ __global__ void convert_dst_to_src_indices(
 __global__ void convert_src_to_dst_indices(
     int* __restrict__ src_indices /* [sample_num, path_num] */,
     int* __restrict__ dst_indices /* [sample_num, path_num] */, int* loads /* [path_num] */,
-    const int& sample_num, const int& path_num) {
+    int sample_num, int path_num) {
   // [thread_extent] blockIdx.x = path_num
   // [thread_extent] threadIdx.x = 1024
   constexpr int thread_num = 1024;
@@ -278,7 +278,7 @@ __global__ void convert_src_to_dst_indices(
 
 __global__ void accumulate_base_to_dst_indices(
     int* global_dst_indices /* [sample_num, path_num]  */, int* indices, int* dst_indices_base,
-    const int& sample_num, const int& path_num) {
+    int sample_num, int path_num) {
   int sample_id = blockIdx.x * blockDim.x + threadIdx.x;
   int index = 0;
   if (sample_id < sample_num) {
@@ -336,6 +336,11 @@ void GenerateSrcIndices(int* hot_mask /*[sample_num x path_num]*/,
                         const int& supported_capacity_num, cudaStream_t stream) {
   const dim3 block_size = 1024;
   const dim3 grid_size = path_num;
+  printf("GenerateSrcIndices: %d %d\n", sample_num, path_num);
+  printf("hot_mask: %p\n", hot_mask);
+  printf("src_indices: %p\n", src_indices);
+  printf("loads: %p\n", loads);
+  printf("supported_capacities: %p\n", supported_capacities);
   if (supported_capacity_num == 0) {
     generate_src_indices_and_load<<<grid_size, block_size, 0, stream>>>(hot_mask, src_indices,
                                                                         loads, sample_num);
@@ -355,6 +360,10 @@ void GenerateDstIndices(int* hot_mask /*[sample_num x path_num]*/,
   const dim3 block_size = 1024;
   const dim3 grid_size = path_num;
   printf("GenerateDstIndices: %d %d\n", sample_num, path_num);
+  printf("hot_mask: %p\n", hot_mask);
+  printf("dst_indices: %p\n", dst_indices);
+  printf("loads: %p\n", loads);
+  printf("supported_capacities: %p\n", supported_capacities);
   if (supported_capacity_num == 0) {
     generate_dst_indices_and_load<<<grid_size, block_size, 0, stream>>>(hot_mask, dst_indices,
                                                                         loads, sample_num);
