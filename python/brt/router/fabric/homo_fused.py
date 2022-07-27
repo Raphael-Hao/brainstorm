@@ -2,7 +2,7 @@ from typing import List, Tuple, Union
 
 import torch
 from brt.router.utils import generate_dst_indices
-from brt._C.router import route_back_with_dst_indices, route_with_dst_indices
+from brt._C.router import dispatch_with_dst_indices, combine_with_src_indices
 from brt.runtime import log
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import CombineFabric, DispatchFabric
@@ -33,47 +33,47 @@ class HomoFusedDispatchFabric(DispatchFabric):
             throttling=throttling, route_logic=route_logic, transform=transform
         )
 
-    def forward(
+    def dispatch(
         self,
-        in_flow: ProtoTensor,
-        local_indices: torch.Tensor,
+        in_flows: List[ProtoTensor],
+        route_indices: torch.Tensor,
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> ProtoTensor:
-        in_flow = self.pack_invalid_flow(in_flow)
-        (
-            in_flow_data,
-            in_flow_tag_stack,
-            in_flow_load_stack,
-            extra_attr_stack_dict,
-        ) = to_torch_tensor(in_flow, return_stack=True)
+        all_out_flows = []
+        path_num = route_indices.size(1)
 
-        if self.transform:
-            out_flow_data = route_with_dst_indices(
-                in_flow_data, local_indices, loads, score
-            )
-        else:
-            out_flow_data = route_with_dst_indices(
-                in_flow_data, local_indices, loads, None
-            )
-        out_flow = init_proto_tensor(
-            out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack_dict
-        )
+        for flow_idx, flow in enumerate(in_flows):
+            (
+                in_flow_data,
+                in_flow_tag_stack,
+                in_flow_load_stack,
+                extra_attr_stack_dict,
+            ) = to_torch_tensor(flow, return_stack=True)
 
-        out_flow.pack(local_indices, loads)
+            if self.route_logics[flow_idx] == "1d":
+                if self.transforms[flow_idx]:
+                    out_flow_data = dispatch_with_dst_indices(
+                        in_flow_data, route_indices, loads, score
+                    )
+                else:
+                    out_flow_data = dispatch_with_dst_indices(
+                        in_flow_data, route_indices, loads, None
+                    )
+                out_flow = init_proto_tensor(
+                    out_flow_data,
+                    in_flow_tag_stack,
+                    in_flow_load_stack,
+                    extra_attr_stack_dict,
+                )
+                out_flow.pack(route_indices, loads)
+            elif self.route_logics[flow_idx] == "2d":
+                in_flow_data = in_flow_data.transpose(0, 1).contiguous()
+
+            else:
+                raise ValueError("route_logic must be 1d or 2d")
 
         return out_flow
-
-    def gen_indices(self, hot_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        if self.supported_capacities is not None:
-            self.supported_capacities = self.supported_capacities.to(hot_mask.device)
-
-        local_indices, loads = generate_dst_indices(
-            hot_mask.to(torch.int32), self.supported_capacities
-        )
-        # self.end_timer("generate_local_indices")
-
-        return local_indices, loads
 
     def pack_invalid_flow(self, in_flow):
 
@@ -125,11 +125,11 @@ class HomoFusedCombineFabric(CombineFabric):
 
         # self.start_timer()
         if self.transform:
-            out_flow_data = route_back_with_dst_indices(
+            out_flow_data = combine_with_src_indices(
                 in_flow_data, local_indices, loads, score
             )
         else:
-            out_flow_data = route_back_with_dst_indices(
+            out_flow_data = combine_with_src_indices(
                 in_flow_data, local_indices, loads, None
             )
 

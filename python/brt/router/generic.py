@@ -23,6 +23,7 @@ logger = log.get_logger(__file__)
 class ScatterRouter(RouterBase):
     def __init__(
         self,
+        dispatch_score=False,
         protocol_type: str = "topk",
         fabric_type: str = "dispatch",
         protocol_kwargs: Dict[str, Any] = None,
@@ -51,11 +52,40 @@ class ScatterRouter(RouterBase):
             Capturing (bool, optional): whether to capture the flow stats. Defaults to True.
         """
         super().__init__(capaturing=capaturing)
+        self.dispatch_score = dispatch_score
+
         self.protocol_type = protocol_type
-        self.fabric_type = fabric_type
-        self.protocol_kwargs = protocol_kwargs
-        self.fabric_kwargs = fabric_kwargs
+        if protocol_kwargs is None:
+            if self.protocol_type == "topk":
+                self.protocol_kwargs = {
+                    "top_k": 1,
+                    "supported_capacities": None,
+                }
+            elif self.protocol_type == "threshold":
+                self.protocol_kwargs = {
+                    "threshold": 0.0,
+                    "residual_path": 0,
+                    "supported_capacities": None,
+                }
+            common_kwargs = {"index_format": "src_index", "index_gen_opt": True}
+            self.protocol_kwargs.update(common_kwargs)
+        else:
+            self.protocol_kwargs = protocol_kwargs
         self.protocol = make_protocol(protocol_type, self.protocol_kwargs)
+
+        self.fabric_type = fabric_type
+        if fabric_kwargs is None:
+            if self.fabric_type == "dispatch":
+                self.fabric_kwargs = {
+                    "throttling": False,
+                    "route_logic": "1d",
+                    "transform": False,
+                }
+                if self.dispatch_score:
+                    self.fabric_kwargs["route_logic"] = ["1d", "2d"]
+                    self.fabric_kwargs["transform"] = [False, False]
+        else:
+            self.fabric_kwargs = fabric_kwargs
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flow: ProtoTensor, score: torch.Tensor) -> List[ProtoTensor]:
@@ -65,7 +95,8 @@ class ScatterRouter(RouterBase):
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
-        out_flows = self.fabric(in_flow, route_indices, loads, capacities, score)
+        in_flows = [in_flow, score] if self.dispatch_score else in_flow
+        out_flows = self.fabric(in_flows, route_indices, loads, capacities, score)
 
         return out_flows
 
@@ -92,7 +123,14 @@ class GatherRouter(RouterBase):
         """
         super().__init__(capaturing=capaturing)
         self.fabric_type = fabric_type
-        self.fabric_kwargs = fabric_kwargs
+        if fabric_kwargs is None:
+            self.fabric_kwargs = {
+                "reduction": "add",
+                "sparse": False,
+                "auto_padding": False,
+            }
+        else:
+            self.fabric_kwargs = fabric_kwargs
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flows: List[ProtoTensor]) -> ProtoTensor:

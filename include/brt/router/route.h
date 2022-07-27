@@ -11,19 +11,25 @@
 namespace brt {
 namespace router {
 
-void RouteWithLocalIndices(float* in_data /*[sample_num x sample_dim]*/,
-                           float* outdata /*[?load*dst_num x sample_dim]*/,
-                           float* gates /*[sample_num x dst_num]*/,
-                           int* route_indices /*[sample_num x dst_num]*/,
-                           int* dst_loads /*[dst_num]*/, int sample_num, int sample_dim,
-                           int dst_num, cudaStream_t stream);
+void DispatchWithDstIndices1D(float* src_data /*[sample_num x sample_dim]*/,
+                              float* dst_data /*[?load*dst_num x sample_dim]*/,
+                              float* gates /*[sample_num x dst_num]*/,
+                              int* route_indices /*[sample_num x dst_num]*/,
+                              int* loads /*[dst_num]*/, const int& sample_num,
+                              const int& sample_dim, const int& path_num, cudaStream_t stream);
 
-void RouteBackWithLocalIndices(float* in_data /*[?load*dst_num x sample_dim]*/,
-                               float* outdata /*[sample_num x sample_dim]*/,
-                               float* gates /*[sample_num x dst_num]*/,
-                               int* route_indices /*[sample_num x dst_num]*/,
-                               int* dst_loads /*[dst_num]*/, int sample_num, int sample_dim,
-                               int dst_num, cudaStream_t stream);
+void DispatchWithDstIndices2D(float* src_data /*[sample_num x sample_dim]*/,
+                              float* dst_data /*[?load*dst_num x sample_dim]*/,
+                              int* route_indices /*[sample_num x dst_num]*/,
+                              int* loads /*[dst_num]*/, const int& sample_num,
+                              const int& sample_dim, const int& path_num, cudaStream_t stream);
+
+void CombineWithSrcIndices(float* src_data /*[?load*dst_num x sample_dim]*/,
+                           float* dst_data /*[sample_num x sample_dim]*/,
+                           float* gates /*[sample_num x dst_num]*/,
+                           int* route_indices /*[sample_num x dst_num]*/, int* loads /*[dst_num]*/,
+                           const int& sample_num, const int& sample_dim, const int& path_num,
+                           cudaStream_t stream);
 }  // namespace router
 }  // namespace brt
 

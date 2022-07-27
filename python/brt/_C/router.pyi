@@ -5,7 +5,6 @@ from typing import List, Tuple
 
 import torch
 
-
 def generate_global_dst_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
@@ -23,15 +22,20 @@ def convert_index_format(
     loads: torch.Tensor,
     new_index_fmt_id: int,  # 0 for src_index or 1 for dst_index
 ) -> torch.Tensor: ...
-def route_with_dst_indices(
+def dispatch_with_dst_indices_1d(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
-    dst_loads: torch.Tensor,
+    loads: torch.Tensor,
     gates: torch.Tensor,
 ) -> torch.Tensor: ...
-def route_back_with_dst_indices(
+def dispatch_with_dst_indices_2d(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
-    dst_loads: torch.Tensor,
+    loads: torch.Tensor,
+) -> torch.Tensor: ...
+def combine_with_src_indices(
+    in_data: torch.Tensor,
+    route_indices: torch.Tensor,
+    loads: torch.Tensor,
     gates: torch.Tensor,
 ) -> torch.Tensor: ...
