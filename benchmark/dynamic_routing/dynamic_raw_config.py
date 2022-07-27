@@ -4,7 +4,7 @@ from segm_config import SemanticSegmentationConfig
 
 _config_dict = dict(
     MODEL=dict(
-        WEIGHTS="/home/ouyang/project/brainstorm/benchmark/dynamic_routing/pth/dynamic_raw_miou76_7.pth",
+        WEIGHTS="/home/ouyang/project/brainstorm/benchmark/dynamic_routing/dynamic_raw_miou76_7.pth",
         CAL_FLOPS=False,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],

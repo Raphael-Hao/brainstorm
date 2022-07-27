@@ -205,7 +205,7 @@ class ScatterRouter(BaseRouter):
         route_hot_mask_T = route_hot_mask.t()
         route_indices = []
         for i in range(self.dst_num):
-            route_indices.append(torch.nonzero(route_hot_mask_T[i].squeeze()))
+            route_indices.append(torch.nonzero(route_hot_mask_T[i].view(-1)))
         return route_indices
 
     def dispatch(

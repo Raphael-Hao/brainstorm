@@ -435,15 +435,15 @@ class DynamicNetwork(Backbone):
             # update layer output
             prev_out_list = layer_output
         final_gate_history = []
-        final_gate_history = np.array(
-            [
-                gate_w.squeeze().cpu().detach().numpy()
-                if isinstance(gate_w, torch.Tensor)
-                else gate_w
-                for gate_w in gate_history_list
-            ],
-            dtype=np.float32,
-        )
+        # final_gate_history = np.array(
+        #     [
+        #         gate_w.squeeze().cpu().detach().numpy()
+        #         if isinstance(gate_w, torch.Tensor)
+        #         else gate_w
+        #         for gate_w in gate_history_list
+        #     ],
+        #     dtype=np.float32,
+        # )
         self.write_gate_history(final_gate_history)
         # print(gate_history_list)
         final_out_list = [prev_out_list[_i][1][0] for _i in range(len(prev_out_list))]
