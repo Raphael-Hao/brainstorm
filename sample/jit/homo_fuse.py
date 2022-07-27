@@ -3,8 +3,9 @@
 
 #%%
 import torch
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
+from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
 from brt.jit import make_jit_kernel
+from brt.runtime import log
 
 log.set_level("jit", "DEBUG")
 

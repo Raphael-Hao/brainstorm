@@ -8,12 +8,13 @@ import json
 from typing import Dict, List, Union
 
 import torch.nn as nn
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH, log
-from brt.jit.kernel import ModuleKernel
-from brt.jit.kernel.storage import kernel_storager
+from brt.runtime import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
+
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname
 from torch.nn.modules.utils import _pair
+
+from brt.runtime import log
 
 logger = log.get_logger()
 logger.setLevel("INFO")
@@ -192,24 +193,24 @@ def main():
                 # ),
             )
             logger.info(f"tuning {module_name} with: {parameters}")
-            # tvm_tuner.tune_netlet()
+            tvm_tuner.tune_netlet()
             tvm_tuner.export_netlet_template()
             tvm_tuner.insert_netlet_to_storage()
-            module_function = ModuleKernel(
-                module_name,
-                "forward",
-                None,
-                "CUDA_GPU",
-                input_infos,
-                output_infos,
-                parameters,
-            )
-            module_function.load_from_db()
-            file_name = make_fname(
-                module_name, "forward", input_infos, output_infos, parameters
-            )
-            template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
-            template_file_loaded.write_text(module_function.get_code()[0])
+            # module_function = ModuleKernel(
+            #     module_name,
+            #     "forward",
+            #     None,
+            #     "CUDA_GPU",
+            #     input_infos,
+            #     output_infos,
+            #     parameters,
+            # )
+            # module_function.load_from_db()
+            # file_name = make_fname(
+            #     module_name, "forward", input_infos, output_infos, parameters
+            # )
+            # template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
+            # template_file_loaded.write_text(module_function.get_code()[0])
 
 
 if __name__ == "__main__":

@@ -2,10 +2,10 @@
 # Licensed under the MIT license.
 
 
-#%%
 import torch.nn as nn
-from brt.common import BRT_KERNEL_TEMPLATE_PATH, log
-from brt.jit.kernel import ModuleKernel
+
+from brt.runtime import log, BRT_KERNEL_TEMPLATE_PATH
+from brt.jit.codegen import ModuleKernel
 from brt.jit.tvm import TVMTuner
 from brt.jit.tvm.utils import make_fname
 
@@ -27,12 +27,14 @@ def main():
     in_features_s = [96, 192, 384, 768]  # 512
     out_features_s = [384, 768, 1536, 3072]  # 1024
 
-    all_ignored_features_s = [(96, 384), (192, 768), (384, 1536)]
+    all_ignored_features_s = []
+    # all_ignored_features_s = [(96, 384), (192, 768), (384, 1536)]
     ignored_set = set()
     for in_features, out_features in all_ignored_features_s:
         for bs in input_bs:
             ignored_set.add((bs, in_features, out_features))
-    partial_ignored_features_s = [(768, 3072)]
+    partial_ignored_features_s = []
+    # partial_ignored_features_s = [(768, 3072)]
     partial_ignored_input_bs = [
         1,
         2,
@@ -74,23 +76,23 @@ def main():
                     print(f"tuning ignored for {module_name} with: {parameters}")
                 tvm_tuner.export_netlet_template()
                 tvm_tuner.insert_netlet_to_storage()
-                module_function = ModuleKernel(
-                    module_name,
-                    "forward",
-                    None,
-                    "CUDA_GPU",
-                    input_infos,
-                    output_infos,
-                    parameters,
-                )
-                module_function.load_from_db()
-                file_name = make_fname(
-                    module_name, "forward", input_infos, output_infos, parameters
-                )
-                template_file_loaded = (
-                    BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
-                )
-                template_file_loaded.write_text(module_function.get_code()[0])
+                # module_function = ModuleKernel(
+                #     module_name,
+                #     "forward",
+                #     None,
+                #     "CUDA_GPU",
+                #     input_infos,
+                #     output_infos,
+                #     parameters,
+                # )
+                # module_function.load_from_db()
+                # file_name = make_fname(
+                #     module_name, "forward", input_infos, output_infos, parameters
+                # )
+                # template_file_loaded = (
+                #     BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
+                # )
+                # template_file_loaded.write_text(module_function.get_code()[0])
 
 
 if __name__ == "__main__":

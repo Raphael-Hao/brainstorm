@@ -3,7 +3,9 @@
  * Licensed under the MIT license.
  */
 
-#pragma once
+#ifndef BRT_RUNTIME_DISPATCH_H_
+#define BRT_RUNTIME_DISPATCH_H_
+
 #include <brt/runtime/cuda_utils.h>
 
 #include <memory>
@@ -39,3 +41,5 @@ class DispatcherFactory {
 };
 }  // namespace netlet
 }  // namespace brt
+
+#endif  // BRT_RUNTIME_DISPATCH_H_

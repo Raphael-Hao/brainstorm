@@ -3,29 +3,27 @@
  * Licensed under the MIT license.
  */
 
-#pragma once
-#include <string>
-// cuda
-#if defined(USE_CUDA)
+#ifndef BRT_RUNTIME_CUDA_UTILS_H_
+#define BRT_RUNTIME_CUDA_UTILS_H_
 
+#include <string>
+
+#ifdef USE_CUDA
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <nvrtc.h>
 #endif
 
-// cublas
-#if defined(USE_CUBLAS)
+#ifdef USE_CUBLAS
 #include <cublas_v2.h>
 #endif
 
-// cudnn
-#if defined(USE_CUDNN)
+#ifdef USE_CUDNN
 #include <cudnn.h>
 #endif
 
-// nccl
-#if defined(USE_NCCL)
+#ifdef USE_NCCL
 #include <nccl.h>
 #endif
 
@@ -130,3 +128,5 @@ inline void __CUBLAS_CHECK(cublasStatus_t x, const char* file, int line) {
 #endif
 
 }  // namespace brt
+
+#endif  // BRT_RUNTIME_CUDA_UTILS_H_
