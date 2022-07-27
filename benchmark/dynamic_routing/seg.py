@@ -3,16 +3,19 @@
 # @author: yanwei.li
 from typing import Dict
 
-import brt.frontend.nn as nn
+import torch.nn as nn
 import numpy as np
 import torch
 import torch.nn.functional as F
-from brt.frontend.nn import BatchNorm2d
+# TODO: differece?
+# from brt.frontend.nn import BatchNorm2d
+from torch.nn import BatchNorm2d
 
 from image_list import ImageList
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 from postprocessing import sem_seg_postprocess
 
+from brt.routers import GatherRouter
 
 class DynamicNet4Seg(nn.Module):
     """
@@ -55,7 +58,8 @@ class DynamicNet4Seg(nn.Module):
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [self.normalizer(x) for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
-        features, expt_flops, real_flops = self.backbone(
+        # features, expt_flops, real_flops = self.backbone(
+        features = self.backbone(
             images.tensor, step_rate, predict_mode
         )
 
@@ -160,6 +164,7 @@ class SemSegDecoderHead(nn.Module):
             stride=1,
             padding=1,
         )
+        self.gather_router_2 = GatherRouter(2)
 
         # using Kaiming init
         kaiming_init_module(self.predictor, mode="fan_in")
@@ -170,11 +175,13 @@ class SemSegDecoderHead(nn.Module):
             out_index = len(self.in_features) - _index - 1
             out_feat = features[self.in_features[out_index]]
 
-            if isinstance(out_feat, float):
-                continue
+            # if isinstance(out_feat, float): # TODO:
+            # if out_feat.numel() == 0:
+                # continue
 
             if out_index <= 2 and pred is not None:
-                out_feat = pred + out_feat
+                # out_feat = pred + out_feat # TODO: GatherRouter
+                out_feat = self.gather_router_2((pred, out_feat))
 
             pred = self.layer_decoder_list[out_index](out_feat)
             if out_index > 0:
