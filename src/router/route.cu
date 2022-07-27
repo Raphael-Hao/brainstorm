@@ -4,20 +4,20 @@
 namespace brt {
 namespace router {
 
-__global__ void __launch_bounds__(1024) no_transform_route_with_out_indices(
+__global__ void __launch_bounds__(1024) no_transform_dispatch_with_dst_indices(
     float* __restrict__ in_data /*[sample_num x sample_dim]*/,
-    float* __restrict__ out_data /*[?load*dst_num x sample_dim]*/,
-    int* __restrict__ route_indices /*[sample_num x dst_num]*/,
-    int* __restrict__ dst_loads /*[dst_num]*/, int sample_num, int sample_dim, int dst_num) {
+    float* __restrict__ out_data /*[?load*path_num x sample_dim]*/,
+    int* __restrict__ route_indices /*[sample_num x path_num]*/,
+    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim, int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
-    int route_index = i * dst_num + blockIdx.y;
+    int route_index = i * path_num + blockIdx.y;
     int local_dst = route_indices[route_index];
     if (local_dst == 0) {
       continue;
     }
     int global_dst = local_dst - 1;
     for (int j = 0; j < blockIdx.y; j++) {
-      global_dst += dst_loads[j];
+      global_dst += loads[j];
     }
     for (int j = threadIdx.x; j < sample_dim; j += 1024) {
       out_data[global_dst * sample_dim + j] = in_data[i * sample_dim + j];
@@ -26,14 +26,14 @@ __global__ void __launch_bounds__(1024) no_transform_route_with_out_indices(
 }
 
 __global__ void __launch_bounds__(1024)
-    route_with_out_indices(float* __restrict__ in_data /*[sample_num x sample_dim]*/,
-                           float* __restrict__ out_data /*[?load*dst_num x sample_dim]*/,
-                           float* __restrict__ gates /*[sample_num x dst_num]*/,
-                           int* __restrict__ route_indices /*[sample_num x dst_num]*/,
-                           int* __restrict__ dst_loads /*[dst_num]*/, int sample_num,
-                           int sample_dim, int dst_num) {
+    dipatch_with_dst_indices(float* __restrict__ in_data /*[sample_num x sample_dim]*/,
+                             float* __restrict__ out_data /*[?load*path_num x sample_dim]*/,
+                             float* __restrict__ gates /*[sample_num x path_num]*/,
+                             int* __restrict__ route_indices /*[sample_num x path_num]*/,
+                             int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim,
+                             int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
-    int route_index = i * dst_num + blockIdx.y;
+    int route_index = i * path_num + blockIdx.y;
 
     int local_dst = route_indices[route_index];
     if (local_dst == 0) {
@@ -41,7 +41,7 @@ __global__ void __launch_bounds__(1024)
     }
     int global_dst = local_dst - 1;
     for (int j = 0; j < blockIdx.y; j++) {
-      global_dst += dst_loads[j];
+      global_dst += loads[j];
     }
 
     for (int j = threadIdx.x; j < sample_dim; j += 1024) {
@@ -50,21 +50,21 @@ __global__ void __launch_bounds__(1024)
   }
 }
 
-__global__ void __launch_bounds__(1024) no_transform_route_back_with_in_indices(
-    float* __restrict__ in_data /*[?load*dst_num x sample_dim]*/,
+__global__ void __launch_bounds__(1024) no_transform_combine_with_src_indices(
+    float* __restrict__ in_data /*[?load*path_num x sample_dim]*/,
     float* __restrict__ out_data /*[sample_num x sample_dim]*/,
-    int* __restrict__ route_indices /*[sample_num x dst_num]*/,
-    int* __restrict__ dst_loads /*[dst_num]*/, int sample_num, int sample_dim, int dst_num) {
+    int* __restrict__ route_indices /*[sample_num x path_num]*/,
+    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim, int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
-    for (int j = 0; j < dst_num; j++) {
-      int route_index = i * dst_num + j;
+    for (int j = 0; j < path_num; j++) {
+      int route_index = i * path_num + j;
       int local_dst = route_indices[route_index];
       if (local_dst == 0) {
         continue;
       }
       int global_dst = local_dst - 1;
       for (int k = 0; k < j; k++) {
-        global_dst += dst_loads[k];
+        global_dst += loads[k];
       }
       for (int k = threadIdx.x; k < sample_dim; k += 1024) {
         out_data[i * sample_dim + k] += in_data[global_dst * sample_dim + k];
@@ -74,22 +74,22 @@ __global__ void __launch_bounds__(1024) no_transform_route_back_with_in_indices(
 }
 
 __global__ void __launch_bounds__(1024)
-    route_back_with_in_indices(float* __restrict__ in_data /*[?load*dst_num x sample_dim]*/,
-                               float* __restrict__ out_data /*[sample_num x sample_dim]*/,
-                               float* __restrict__ gates /*[sample_num x dst_num]*/,
-                               int* __restrict__ route_indices /*[sample_num x dst_num]*/,
-                               int* __restrict__ dst_loads /*[dst_num]*/, int sample_num,
-                               int sample_dim, int dst_num) {
+    combine_with_src_indices(float* __restrict__ in_data /*[?load*path_num x sample_dim]*/,
+                             float* __restrict__ out_data /*[sample_num x sample_dim]*/,
+                             float* __restrict__ gates /*[sample_num x path_num]*/,
+                             int* __restrict__ route_indices /*[sample_num x path_num]*/,
+                             int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim,
+                             int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
-    for (int j = 0; j < dst_num; j++) {
-      int route_index = i * dst_num + j;
+    for (int j = 0; j < path_num; j++) {
+      int route_index = i * path_num + j;
       int local_dst = route_indices[route_index];
       if (local_dst == 0) {
         continue;
       }
       int global_dst = local_dst - 1;
       for (int k = 0; k < j; k++) {
-        global_dst += dst_loads[k];
+        global_dst += loads[k];
       }
       for (int k = threadIdx.x; k < sample_dim; k += 1024) {
         out_data[i * sample_dim + k] += in_data[global_dst * sample_dim + k] * gates[route_index];
@@ -129,7 +129,7 @@ __global__ void __launch_bounds__(1024) no_transform_route_with_in_indices(
 __global__ void __launch_bounds__(1024)
     route_with_in_indices(float* __restrict__ in_data /*[sample_num x sample_dim]*/,
                           float* __restrict__ out_data /*[?load*path_num x sample_dim]*/,
-                          float* __restrict__ gates /*[sample_num x dst_num]*/,
+                          float* __restrict__ gates /*[sample_num x path_num]*/,
                           int* __restrict__ route_indices /*[sample_num x path_num]*/,
                           int* __restrict__ path_loads /*[path_num]*/,
                           int* __restrict__ capacities /*[path_num] */, int sample_dim,
@@ -215,7 +215,7 @@ __global__ void __launch_bounds__(1024) no_transform_route_back_with_out_indices
 __global__ void __launch_bounds__(1024) atomic_route_back_with_out_indices(
     float* __restrict__ in_data /*[?load*path_num x sample_dim]*/,
     float* __restrict__ out_data /*[sample_num x sample_dim]*/,
-    float* __restrict__ gates /*[sample_num x dst_num]*/,
+    float* __restrict__ gates /*[sample_num x path_num]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
     int* __restrict__ path_loads /*[path_num]*/, int* __restrict__ capacities /*[path_num] */,
     int sample_dim, int path_num) {
@@ -245,7 +245,7 @@ __global__ void __launch_bounds__(1024) atomic_route_back_with_out_indices(
 __global__ void __launch_bounds__(1024)
     route_back_with_out_indices(float* __restrict__ in_data /*[?load*path_num x sample_dim]*/,
                                 float* __restrict__ out_data /*[sample_num x sample_dim]*/,
-                                float* __restrict__ gates /*[sample_num x dst_num]*/,
+                                float* __restrict__ gates /*[sample_num x path_num]*/,
                                 int* __restrict__ route_indices /*[sample_num x path_num]*/,
                                 int* __restrict__ path_loads /*[path_num]*/,
                                 int* __restrict__ capacities /*[path_num] */, int sample_dim,
@@ -271,70 +271,71 @@ __global__ void __launch_bounds__(1024)
 }
 
 void RouteWithInDataIndices(float* in_data /*[sample_num x sample_dim]*/,
-                            float* outdata /*[?load*dst_num x sample_dim]*/,
-                            float* gates /*[sample_num x dst_num]*/,
-                            int* route_indices /*[sample_num x dst_num]*/,
-                            int* path_loads /*[dst_num]*/, int* capacities /*[dst_num]*/,
-                            int sample_dim, int dst_num, cudaStream_t stream) {
+                            float* outdata /*[?load*path_num x sample_dim]*/,
+                            float* gates /*[sample_num x path_num]*/,
+                            int* route_indices /*[sample_num x path_num]*/,
+                            int* path_loads /*[path_num]*/, int* capacities /*[path_num]*/,
+                            int sample_dim, int path_num, cudaStream_t stream) {
   constexpr dim3 block_size(1024);
   constexpr dim3 grid_size(128, 4);
   if (gates == nullptr) {
     no_transform_route_with_in_indices<<<grid_size, block_size, 0, stream>>>(
-        in_data, outdata, route_indices, path_loads, capacities, sample_dim, dst_num);
+        in_data, outdata, route_indices, path_loads, capacities, sample_dim, path_num);
   } else {
     route_with_in_indices<<<grid_size, block_size, 0, stream>>>(
-        in_data, outdata, gates, route_indices, path_loads, capacities, sample_dim, dst_num);
+        in_data, outdata, gates, route_indices, path_loads, capacities, sample_dim, path_num);
   }
 }
 
-void RouteBackWithOutDataIndices(float* in_data /*[?load*dst_num x sample_dim]*/,
+void RouteBackWithOutDataIndices(float* in_data /*[?load*path_num x sample_dim]*/,
                                  float* outdata /*[sample_num x sample_dim]*/,
-                                 float* gates /*[sample_num x dst_num]*/,
-                                 int* route_indices /*[sample_num x dst_num]*/,
-                                 int* dst_loads /*[dst_num]*/, int sample_num, int sample_dim,
-                                 int dst_num, cudaStream_t stream) {
+                                 float* gates /*[sample_num x path_num]*/,
+                                 int* route_indices /*[sample_num x path_num]*/,
+                                 int* loads /*[path_num]*/, int sample_num, int sample_dim,
+                                 int path_num, cudaStream_t stream) {
   constexpr dim3 block_size(1024);
   dim3 grid_size(512);
   if (gates == nullptr) {
-    no_transform_route_back_with_in_indices<<<grid_size, block_size, 0, stream>>>(
-        in_data, outdata, route_indices, dst_loads, sample_num, sample_dim, dst_num);
+    no_transform_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
+        in_data, outdata, route_indices, loads, sample_num, sample_dim, path_num);
   } else {
-    route_back_with_in_indices<<<grid_size, block_size, 0, stream>>>(
-        in_data, outdata, gates, route_indices, dst_loads, sample_num, sample_dim, dst_num);
+    combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
+        in_data, outdata, gates, route_indices, loads, sample_num, sample_dim, path_num);
   }
 }
 
-void RouteWithLocalIndices(float* in_data /*[sample_num x sample_dim]*/,
-                           float* outdata /*[?load*dst_num x sample_dim]*/,
-                           float* gates /*[sample_num x dst_num]*/,
-                           int* route_indices /*[sample_num x dst_num]*/,
-                           int* dst_loads /*[dst_num]*/, int sample_num, int sample_dim,
-                           int dst_num, cudaStream_t stream) {
+void DispatchWithDstIndices1D(float* src_data /*[sample_num x sample_dim]*/,
+                              float* dst_data /*[?load*path_num x sample_dim]*/,
+                              float* gates /*[sample_num x path_num]*/,
+                              int* route_indices /*[sample_num x path_num]*/,
+                              int* loads /*[path_num]*/, const int& sample_num,
+                              const int& sample_dim, const int& path_num, cudaStream_t stream) {
   constexpr dim3 block_size(1024);
-  dim3 grid_size(512, dst_num);
+  dim3 grid_size(512, path_num);
   if (gates == nullptr) {
-    no_transform_route_with_out_indices<<<grid_size, block_size, 0, stream>>>(
-        in_data, outdata, route_indices, dst_loads, sample_num, sample_dim, dst_num);
+    no_transform_dispatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
+        src_data, dst_data, route_indices, loads, sample_num, sample_dim, path_num);
   } else {
-    route_with_out_indices<<<grid_size, block_size, 0, stream>>>(
-        in_data, outdata, gates, route_indices, dst_loads, sample_num, sample_dim, dst_num);
+    dipatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
+        src_data, dst_data, gates, route_indices, loads, sample_num, sample_dim, path_num);
   }
 }
 
-void RouteBackWithLocalIndices(float* in_data /*[?load*dst_num x sample_dim]*/,
-                               float* outdata /*[sample_num x sample_dim]*/,
-                               float* gates /*[sample_num x dst_num]*/,
-                               int* route_indices /*[sample_num x dst_num]*/,
-                               int* dst_loads /*[dst_num]*/, int sample_num, int sample_dim,
-                               int dst_num, cudaStream_t stream) {
+void CombineWithSrcIndices(float* src_data /*[?load*path_num x sample_dim]*/,
+                           float* dst_data /*[sample_num x sample_dim]*/,
+                           float* gates /*[sample_num x path_num]*/,
+                           int* route_indices /*[sample_num x path_num]*/,
+                           int* loads /*[path_num]*/, int* capacities /*[path_num] */,
+                           const int& sample_num, const int& sample_dim, const int& path_num,
+                           cudaStream_t stream) {
   constexpr dim3 block_size(1024);
   dim3 grid_size(512);
   if (gates == nullptr) {
-    no_transform_route_back_with_in_indices<<<grid_size, block_size, 0, stream>>>(
-        in_data, outdata, route_indices, dst_loads, sample_num, sample_dim, dst_num);
+    no_transform_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
+        src_data, dst_data, route_indices, loads, sample_num, sample_dim, path_num);
   } else {
-    route_back_with_in_indices<<<grid_size, block_size, 0, stream>>>(
-        in_data, outdata, gates, route_indices, dst_loads, sample_num, sample_dim, dst_num);
+    combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
+        src_data, dst_data, gates, route_indices, loads, sample_num, sample_dim, path_num);
   }
 }
 

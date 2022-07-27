@@ -113,19 +113,19 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   return new_indices;
 }
 
-::torch::Tensor route_with_dst_indices(
+::torch::Tensor dispatch_with_dst_indices_1d(
     const ::torch::Tensor& in_data /*[sample_num x sample_dim]*/,
     const ::torch::Tensor& route_indices /*[sample_num x path_num]*/,
-    const ::torch::Tensor& dst_loads /*[path_num]*/,
+    const ::torch::Tensor& loads /*[path_num]*/,
     const ::c10::optional<::torch::Tensor>& gates = {} /*[sample_num x path_num]*/) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
-  CHECK_ON_CUDA(dst_loads);
+  CHECK_ON_CUDA(loads);
 
   int sample_num = in_data.size(0);
   int sample_dim = in_data.numel() / sample_num;
   int path_num = route_indices.size(1);
-  int total_load = dst_loads.sum().item<int>();
+  int total_load = loads.sum().item<int>();
 
   float* gates_data_ptr = nullptr;
   if (gates.has_value()) {
@@ -138,21 +138,46 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   auto out_data = ::at::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
-  router::RouteWithLocalIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
-                                gates_data_ptr, route_indices.data_ptr<int>(),
-                                dst_loads.data_ptr<int>(), sample_num, sample_dim, path_num,
-                                at::cuda::getDefaultCUDAStream().stream());
+  router::DispatchWithDstIndices1D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
+                                 gates_data_ptr, route_indices.data_ptr<int>(),
+                                 loads.data_ptr<int>(), sample_num, sample_dim, path_num,
+                                 at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
-::torch::Tensor route_back_with_dst_indices(
+::torch::Tensor dispatch_with_dst_indices_2d(
+    const ::torch::Tensor& in_data /*[sample_num x sample_dim]*/,
+    const ::torch::Tensor& route_indices /*[sample_num x path_num]*/,
+    const ::torch::Tensor& loads /*[path_num]*/) {
+  CHECK_ON_CUDA(in_data);
+  CHECK_ON_CUDA(route_indices);
+  CHECK_ON_CUDA(loads);
+
+  int sample_num = in_data.size(0);
+  int sample_dim = in_data.numel() / sample_num;
+  int path_num = route_indices.size(1);
+  int total_load = loads.sum().item<int>();
+
+  auto out_shape = in_data.sizes().vec();
+  out_shape[0] = total_load;
+  auto out_data = ::at::zeros(out_shape, in_data.options());
+  CHECK_ON_CUDA(out_data);
+
+  router::DispatchWithDstIndices1D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
+                                 gates_data_ptr, route_indices.data_ptr<int>(),
+                                 loads.data_ptr<int>(), sample_num, sample_dim, path_num,
+                                 at::cuda::getDefaultCUDAStream().stream());
+  return out_data;
+}
+
+::torch::Tensor combine_with_src_indices(
     const ::torch::Tensor& in_data /*[?load*path_num x sample_dim]*/,
     const ::torch::Tensor& route_indices /*[sample_num x path_num]*/,
-    const ::torch::Tensor& dst_loads /*[path_num]*/,
+    const ::torch::Tensor& loads /*[path_num]*/,
     const ::c10::optional<::torch::Tensor>& gates = {} /*[sample_num x path_num]*/) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
-  CHECK_ON_CUDA(dst_loads);
+  CHECK_ON_CUDA(loads);
 
   int sample_num = route_indices.size(0);
   int sample_dim = in_data.numel() / in_data.size(0);
@@ -169,10 +194,10 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   ::torch::Tensor out_data = ::at::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
-  router::RouteBackWithLocalIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
-                                    gates_data_ptr, route_indices.data_ptr<int>(),
-                                    dst_loads.data_ptr<int>(), sample_num, sample_dim, path_num,
-                                    at::cuda::getDefaultCUDAStream().stream());
+  router::CombineWithSrcIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
+                                gates_data_ptr, route_indices.data_ptr<int>(),
+                                loads.data_ptr<int>(), sample_num, sample_dim, path_num,
+                                at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
@@ -191,10 +216,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none());
   m.def("convert_index_format", &brt::backend::torch::convert_index_format,
         "convert indices to the new index format");
-  m.def("route_with_dst_indices", &brt::backend::torch::route_with_dst_indices,
+  m.def("dispatch_with_dst_indices_1d", &brt::backend::torch::dispatch_with_dst_indices_1d,
         "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("dst_indices"),
         pybind11::arg("dst_loads"), pybind11::arg("gates") = pybind11::none());
-  m.def("route_back_with_dst_indices", &brt::backend::torch::route_back_with_dst_indices,
+  m.def("combine_with_src_indices", &brt::backend::torch::combine_with_src_indices,
         "Route data back with dst indices", pybind11::arg("in_data"), pybind11::arg("dst_indices"),
         pybind11::arg("loads"), pybind11::arg("gates") = pybind11::none());
 }

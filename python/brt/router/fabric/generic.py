@@ -85,7 +85,6 @@ class DispatchFabric(FabricBase):
     ):
         all_out_flows = []
         path_num = route_indices.size(1)
-
         for flow_idx, flow in enumerate(in_flows):
             (
                 flow_data,
@@ -111,7 +110,6 @@ class DispatchFabric(FabricBase):
                 raise ValueError("route_logic must be 1d or 2d")
 
             out_flows = []
-            print(route_indices)
             for i in range(path_num):
                 tag_indices = route_indices[: real_loads[i], i : i + 1].to(
                     torch.int64, non_blocking=True
