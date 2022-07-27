@@ -4,8 +4,8 @@ from segm_config import SemanticSegmentationConfig
 
 _config_dict = dict(
     MODEL=dict(
-        WEIGHTS="/home/whcui/checkpoints/dynamic_B_miou74_3.pth",
-        CAL_FLOPS=True,
+        WEIGHTS="/home/ouyang/project/brainstorm/benchmark/dynamic_routing/pth/dynamic_B_miou74_3.pth",
+        CAL_FLOPS=False,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],
             LAYER_NUM=16,
@@ -80,7 +80,7 @@ _config_dict = dict(
     SEED=0,
     BRT=dict(
         PREDICT_MODE=True,
-        GATE_HISTORY_PATH="/home/whcui/model_logs/dl_lib_playground/Dynamic/Seg.Layer16.SmallGate.Dynamic_B/gate_history.csv",
+        GATE_HISTORY_PATH="/home/ouyang/project/brainstorm/benchmark/dynamic_routing/logs/Seg.Layer16.SmallGate.Dynamic_B/gate_history.csv",
     ),
 )
 

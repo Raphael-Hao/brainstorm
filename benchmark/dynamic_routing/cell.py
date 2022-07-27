@@ -1,14 +1,24 @@
 # encoding: utf-8
 # network file -> build Cell for Dynamic Backbone
 # @author: yanwei.li
-import brt.frontend.nn as nn
+
+import sys
+
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from ops import OPS, Conv2dNormAct, Identity, kaiming_init_module
 
-__all__ = ["Mixed_OP", "Cell"]
+print(sys.path)
 
+from brt.routers import ScatterRouter, GatherRouter, ProtoTensor
+
+from macro import *
+
+from typing import *
+
+__all__ = ["Mixed_OP", "Cell"]
 
 # soft gate for path choice
 def soft_gate(x, x_t=None, momentum=0.1, is_update=False):
@@ -47,34 +57,21 @@ class Mixed_OP(nn.Module):
     """
 
     def __init__(
-        self,
-        inplanes,
-        outplanes,
-        stride,
-        cell_type,
-        norm="",
-        affine=True,
-        input_size=None,
+        self, inplanes, outplanes, stride, cell_type, norm="", affine=True, input_size=None,
     ):
         super(Mixed_OP, self).__init__()
         self._ops = nn.ModuleList()
-        self.op_flops = []
+        # self.op_flops = []
         for key in cell_type:
             op = OPS[key](
-                inplanes,
-                outplanes,
-                stride,
-                norm_layer=norm,
-                affine=affine,
-                input_size=input_size,
+                inplanes, outplanes, stride, norm_layer=norm, affine=affine, input_size=input_size,
             )
             self._ops.append(op)
-            self.op_flops.append(op.flops)
-        self.real_flops = sum(op_flop for op_flop in self.op_flops)
+            # self.op_flops.append(op.flops)
+        # if IS_CALCU_FLOPS in locals() and IS_CALCU_FLOPS:
+        #     self.real_flops = sum(op_flop for op_flop in self.op_flops)
 
-    def forward(
-        self, x, is_drop_path=False, drop_prob=0.0, layer_rate=0.0, step_rate=0.0
-    ):
+    def forward(self, x, is_drop_path=False, drop_prob=0.0, layer_rate=0.0, step_rate=0.0):
         if is_drop_path:
             y = []
             for op in self._ops:
@@ -126,6 +123,22 @@ class Cell(nn.Module):
             affine=affine,
             input_size=input_size,
         )
+
+        if self.allow_up and self.allow_down:
+            self.gate_num = 3
+        elif self.allow_up or self.allow_down:
+            self.gate_num = 2
+        else:
+            self.gate_num = 1
+
+        self.scatter_router = ScatterRouter(
+            dst_num=self.gate_num,
+            route_method="threshold",
+            threshold=0,
+            residual_dst=0,
+            routing_gates=True,
+        )
+
         # resolution keep
         self.res_keep = nn.ReLU()
         # resolution up and dim down
@@ -139,6 +152,7 @@ class Cell(nn.Module):
                     stride=1,
                     padding=0,
                     bias=False,
+                    # TODO: norm type
                     norm=nn.SyncBatchNorm(self.channel_out // 2),
                     activation=nn.ReLU(),
                 ),
@@ -156,19 +170,13 @@ class Cell(nn.Module):
                     stride=2,
                     padding=0,
                     bias=False,
-                    norm=nn.SyncBatchNorm(2 * self.channel_out),
+                    # TODO: norm type
+                    norm=nn.SyncBatchNorm(self.channel_out * 2),
                     activation=nn.ReLU(),
                 ),
             )
-
             # using Kaiming init
             kaiming_init_module(self.res_down, mode="fan_in")
-        if self.allow_up and self.allow_down:
-            self.gate_num = 3
-        elif self.allow_up or self.allow_down:
-            self.gate_num = 2
-        else:
-            self.gate_num = 1
         if self.using_gate:
             self.gate_conv_beta = nn.Sequential(
                 Conv2dNormAct(
@@ -178,11 +186,12 @@ class Cell(nn.Module):
                     stride=1,
                     padding=0,
                     bias=False,
+                    # TODO: norm type
                     norm=nn.SyncBatchNorm(self.channel_in // 2),
                     activation=nn.ReLU(),
                 ),
                 nn.AdaptiveAvgPool2d((1, 1)),
-                Conv2dNormAct(
+                nn.Conv2d(
                     self.channel_in // 2,
                     self.gate_num,
                     kernel_size=1,
@@ -196,15 +205,11 @@ class Cell(nn.Module):
             # using Kaiming init and predefined bias for gate
             kaiming_init_module(self.gate_conv_beta, mode="fan_in", bias=gate_bias)
         else:
-            self.register_buffer(
-                "gate_weights_beta", torch.ones(1, self.gate_num, 1, 1).cuda()
-            )
+            self.register_buffer("gate_weights_beta", torch.ones(1, self.gate_num, 1, 1).cuda())
 
     def forward(
         self,
-        h_l1,
-        flops_in_expt=None,
-        flops_in_real=None,
+        h_l1: Union[torch.Tensor, ProtoTensor],
         is_drop_path=False,
         drop_prob=0.0,
         layer_rate=0.0,
@@ -216,15 +221,15 @@ class Cell(nn.Module):
         """
         drop_cell = False
         # drop the cell if input type is float
-        if not isinstance(h_l1, float):
+        # NOTE: change the branch condition
+        # if not isinstance(h_l1, float):
+        if h_l1.numel() != 0:
             # calculate soft conditional gate
+            # gate_weights_beta = [keep(, up(, down)?)?]
             if self.using_gate:
                 if self.small_gate:
                     h_l1_gate = F.interpolate(
-                        input=h_l1,
-                        scale_factor=0.25,
-                        mode="bilinear",
-                        align_corners=False,
+                        input=h_l1, scale_factor=0.25, mode="bilinear", align_corners=False,
                     )
                 else:
                     h_l1_gate = h_l1
@@ -239,24 +244,79 @@ class Cell(nn.Module):
             if not drop_cell:
                 drop_cell = gate_weights_beta.sum() < 0.0001
             if drop_cell:
-                result_list = [[0.0], [h_l1], [0.0]]
-                weights_list_beta = [[0.0], [0.0], [0.0]]
-
-            return (
-                result_list,
-                weights_list_beta,
+                # result_list = [[0.0], [h_l1], [0.0]]
+                # weights_list = [[0.0], [0.0], [0.0]]
+                # ProtoTensor(
+                #     data: tensor([], device='cuda:0')
+                #     tag_stack: [tensor([], device='cuda:0', size=(0, 1), dtype=torch.int64)]
+                #     load stack: [11])
+                print('#', end='')
+                result_list = [
+                    [torch.zeros(0).to(h_l1.device)],
+                    [h_l1],
+                    [torch.zeros(0).to(h_l1.device)],
+                ]
+                weights_list = [
+                    [torch.zeros(0).to(h_l1.device)],
+                    [torch.zeros(0).to(h_l1.device)],
+                    [torch.zeros(0).to(h_l1.device)],
+                ]
+                return (
+                    result_list,
+                    weights_list,
+                )
+            h_l = self.cell_ops(h_l1, is_drop_path, drop_prob, layer_rate, step_rate)
+            # NOTE: brt, using for inference
+            # route = [keep(, up(, down)?)?]
+            route_h_l, route_weight = self.scatter_router(
+                h_l, gate_weights_beta.view(h_l.size(0), self.gate_num)
             )
+            route_weight = [x.view(-1, 1, 1, 1) for x in route_weight]
+            result_list = [[], [], []]
+            weights_list = [[], [], []]
+            ## keep
+            route_h_l_keep = self.res_keep(route_h_l[0])
+            if isinstance(route_h_l[0], ProtoTensor):
+                route_h_l1 = h_l1.index_select(0, route_weight[0].tag.squeeze())
+            else:  # isinstance(h_l_route[0], torch.Tensor)
+                route_h_l1 = h_l1
+            residual_mask = (route_weight[0] == 0).float()
+            route_result_keep = residual_mask * route_h_l1 + route_weight[0] * route_h_l_keep
+            result_list[1].append(route_result_keep)
+            weights_list[1].append(residual_mask + route_weight[0])
+            ## up
+            if self.allow_up:
+                route_h_l_up = self.res_up(route_h_l[1])
+                route_h_l_up = F.interpolate(
+                    input=route_h_l_up, scale_factor=2, mode="bilinear", align_corners=False,
+                )
+                result_list[0].append(route_h_l_up * route_weight[1])
+                weights_list[0].append(route_weight[1])
+            else:
+                result_list[0].append(torch.empty(0))
+                weights_list[0].append(torch.empty(0))
+            ## down
+            if self.allow_down:
+                route_h_l_down = self.res_down(route_h_l[-1])
+                result_list[2].append(route_h_l_down * route_weight[-1])
+                weights_list[2].append(route_weight[-1])
+            else:
+                result_list[2].append(torch.empty(0))
+                weights_list[2].append(torch.empty(0))
+
+            return result_list, weights_list
 
         h_l = self.cell_ops(h_l1, is_drop_path, drop_prob, layer_rate, step_rate)
 
         # resolution and dimension change
         # resolution: [up, keep, down]
+        # NOTE: origin, using for training
         h_l_keep = self.res_keep(h_l)
         gate_weights_beta_keep = gate_weights_beta[:, 0].unsqueeze(-1)
         # using residual connection if drop cell
         gate_mask = (gate_weights_beta.sum(dim=1, keepdim=True) < 0.0001).float()
         result_list = [[], [gate_mask * h_l1 + gate_weights_beta_keep * h_l_keep], []]
-        weights_list_beta = [[], [gate_mask * 1.0 + gate_weights_beta_keep], []]
+        weights_list = [[], [gate_mask * 1.0 + gate_weights_beta_keep], []]
 
         if self.allow_up:
             h_l_up = self.res_up(h_l)
@@ -265,12 +325,12 @@ class Cell(nn.Module):
             )
             gate_weights_beta_up = gate_weights_beta[:, 1].unsqueeze(-1)
             result_list[0].append(h_l_up * gate_weights_beta_up)
-            weights_list_beta[0].append(gate_weights_beta_up)
+            weights_list[0].append(gate_weights_beta_up)
 
         if self.allow_down:
             h_l_down = self.res_down(h_l)
             gate_weights_beta_down = gate_weights_beta[:, -1].unsqueeze(-1)
             result_list[2].append(h_l_down * gate_weights_beta_down)
-            weights_list_beta[2].append(gate_weights_beta_down)
+            weights_list[2].append(gate_weights_beta_down)
 
-        return result_list, weights_list_beta
+        return result_list, weights_list

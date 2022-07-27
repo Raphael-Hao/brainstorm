@@ -3,7 +3,7 @@
 # @author: yanwei.li
 from collections import namedtuple
 
-import brt.frontend.nn as nn
+import torch.nn as nn
 import torch
 
 OPS = {
@@ -46,6 +46,7 @@ OPS = {
     ),
 }
 
+
 class ShapeSpec(namedtuple("_ShapeSpec", ["channels", "height", "width", "stride"])):
     """
     A simple structure that contains basic shape specification about a tensor.
@@ -69,15 +70,19 @@ def kaiming_init_module(
     assert distribution in ["uniform", "normal"]
 
     for _name, m in module.named_modules():
-        if isinstance(m, nn.Conv2dNormAct):
-            if distribution == "uniform":
-                nn.init.kaiming_uniform_(
-                    m.weight, a=a, mode=mode, nonlinearity=nonlinearity
-                )
-            else:
-                nn.init.kaiming_normal_(
-                    m.weight, a=a, mode=mode, nonlinearity=nonlinearity
-                )
+        if isinstance(m, Conv2dNormAct):
+            # TODO: not accessible
+            # assert not hasattr(m, "weight")
+            # assert not hasattr(m, "bias")
+            if hasattr(m, "weight") and m.weight is not None:
+                if distribution == "uniform":
+                    nn.init.kaiming_uniform_(
+                        m.weight, a=a, mode=mode, nonlinearity=nonlinearity
+                    )
+                elif m:
+                    nn.init.kaiming_normal_(
+                        m.weight, a=a, mode=mode, nonlinearity=nonlinearity
+                    )
             if hasattr(m, "bias") and m.bias is not None:
                 nn.init.constant_(m.bias, bias)
         elif isinstance(m, (nn.BatchNorm2d, nn.SyncBatchNorm)):
@@ -87,7 +92,7 @@ def kaiming_init_module(
                 nn.init.constant_(m.bias, 0)
 
 
-class Conv2dNormAct(nn.Module):
+class Conv2dNormAct(nn.Conv2d):
     def __init__(
         self,
         in_channels: int,
@@ -104,18 +109,17 @@ class Conv2dNormAct(nn.Module):
         norm=None,
         activation=None,
     ) -> None:
-        print(f"Conv2dNormAct: {in_channels} -> {out_channels}")
-        print(f"kernel_size: {kernel_size}")
-        print(f"stride: {stride}")
-        print(f"padding: {padding}")
-        print(f"dilation: {dilation}")
-        print(f"groups: {groups}")
-        print(f"bias: {bias}")
-        print(f"padding_mode: {padding_mode}")
-        print(f"norm: {norm}")
-        print(f"activation: {activation}")
-        super().__init__()
-        self.conv2d = nn.Conv2d(
+        # print(f"Conv2dNormAct: {in_channels} -> {out_channels}")
+        # print(f"kernel_size: {kernel_size}")
+        # print(f"stride: {stride}")
+        # print(f"padding: {padding}")
+        # print(f"dilation: {dilation}")
+        # print(f"groups: {groups}")
+        # print(f"bias: {bias}")
+        # print(f"padding_mode: {padding_mode}")
+        # print(f"norm: {norm}")
+        # print(f"activation: {activation}")
+        super().__init__(
             in_channels,
             out_channels,
             kernel_size,
@@ -132,11 +136,12 @@ class Conv2dNormAct(nn.Module):
         self.activation = activation
 
     def forward(self, x):
-        self.conv2d(x)
+        x = super().forward(x)
         if self.norm is not None:
-            self.norm(x)
+            x = self.norm(x)
         if self.activation is not None:
             x = self.activation(x)
+        return x
 
 
 class SepConv(nn.Module):
@@ -213,6 +218,7 @@ class Identity(nn.Module):
                 kernel_size=1,
                 padding=0,
                 bias=False,
+                # TODO: norm type
                 norm=nn.SyncBatchNorm(C_out),
             )
 
