@@ -250,15 +250,16 @@ class Cell(nn.Module):
                 #     data: tensor([], device='cuda:0')
                 #     tag_stack: [tensor([], device='cuda:0', size=(0, 1), dtype=torch.int64)]
                 #     load stack: [11])
+                print('#', end='')
                 result_list = [
-                    [torch.empty(0).to(h_l1.device)],
+                    [torch.zeros(0).to(h_l1.device)],
                     [h_l1],
-                    [torch.empty(0).to(h_l1.device)],
+                    [torch.zeros(0).to(h_l1.device)],
                 ]
                 weights_list = [
-                    [torch.empty(0).to(h_l1.device)],
-                    [torch.empty(0).to(h_l1.device)],
-                    [torch.empty(0).to(h_l1.device)],
+                    [torch.zeros(0).to(h_l1.device)],
+                    [torch.zeros(0).to(h_l1.device)],
+                    [torch.zeros(0).to(h_l1.device)],
                 ]
                 return (
                     result_list,

@@ -72,8 +72,8 @@ def kaiming_init_module(
     for _name, m in module.named_modules():
         if isinstance(m, Conv2dNormAct):
             # TODO: not accessible
-            assert not hasattr(m, "weight")
-            assert not hasattr(m, "bias")
+            # assert not hasattr(m, "weight")
+            # assert not hasattr(m, "bias")
             if hasattr(m, "weight") and m.weight is not None:
                 if distribution == "uniform":
                     nn.init.kaiming_uniform_(
@@ -92,7 +92,7 @@ def kaiming_init_module(
                 nn.init.constant_(m.bias, 0)
 
 
-class Conv2dNormAct(nn.Module):
+class Conv2dNormAct(nn.Conv2d):
     def __init__(
         self,
         in_channels: int,
@@ -119,8 +119,7 @@ class Conv2dNormAct(nn.Module):
         # print(f"padding_mode: {padding_mode}")
         # print(f"norm: {norm}")
         # print(f"activation: {activation}")
-        super().__init__()
-        self.conv2d = nn.Conv2d(
+        super().__init__(
             in_channels,
             out_channels,
             kernel_size,
@@ -137,7 +136,7 @@ class Conv2dNormAct(nn.Module):
         self.activation = activation
 
     def forward(self, x):
-        x = self.conv2d(x)
+        x = super().forward(x)
         if self.norm is not None:
             x = self.norm(x)
         if self.activation is not None:

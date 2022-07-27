@@ -74,7 +74,7 @@ _config_dict = dict(
         ),
     ),
     OUTPUT_DIR=osp.join(
-        "/home/whcui/model_logs/dl_lib_playground",
+        "/home/whcui/model_logs/dl_lib_playground/",
         osp.split(osp.realpath(__file__))[0].split("playground/")[-1],
     ),
     SEED=0,
