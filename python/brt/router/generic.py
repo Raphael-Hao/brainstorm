@@ -8,7 +8,7 @@ from brt.runtime import log
 from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
-from brt.router.proto_tensor import ProtoTensor
+from brt.runtime.proto_tensor import ProtoTensor
 from brt.router.utils import pad_to_max
 
 __all__ = [

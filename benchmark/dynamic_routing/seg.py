@@ -15,7 +15,7 @@ from image_list import ImageList
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 from postprocessing import sem_seg_postprocess
 
-from brt.routers import GatherRouter
+from brt.router import GatherRouter
 
 class DynamicNet4Seg(nn.Module):
     """

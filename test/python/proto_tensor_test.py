@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import brt
-from brt.router.proto_tensor import (
+from brt.runtime.proto_tensor import (
     collect_proto_attr_stack,
     deinit_proto_tensor,
     init_proto_tensor,
@@ -18,7 +18,7 @@ from brt.router.proto_tensor import (
 class ProtoTensorTest(unittest.TestCase):
     def test_runtime_flow_tensor_cls_modification(self):
         make_proto_tensor_cls(extra_attrs=["dummy_a"], default_values=[0], mode="new")
-        from brt.router.proto_tensor import ProtoTensor
+        from brt.runtime.proto_tensor import ProtoTensor
 
         self.assertEqual(ProtoTensor.EXTRA_ATTRS, ["dummy_a"])
         self.assertEqual(ProtoTensor.EXTRA_ATTRS_DEFAULT_VALUES["dummy_a"], 0)
@@ -28,7 +28,7 @@ class ProtoTensorTest(unittest.TestCase):
         )
 
         make_proto_tensor_cls(extra_attrs=["dummy_b"], default_values=[1], mode="new")
-        from brt.router.proto_tensor import ProtoTensor
+        from brt.runtime.proto_tensor import ProtoTensor
 
         self.assertEqual(ProtoTensor.EXTRA_ATTRS, ["dummy_b"])
         self.assertEqual(ProtoTensor.EXTRA_ATTRS_DEFAULT_VALUES["dummy_b"], 1)
@@ -42,7 +42,7 @@ class ProtoTensorTest(unittest.TestCase):
         )
 
         reset_proto_tensor_cls()
-        from brt.router.proto_tensor import ProtoTensor
+        from brt.runtime.proto_tensor import ProtoTensor
 
         self.assertEqual(ProtoTensor.EXTRA_ATTRS, [])
         self.assertEqual(ProtoTensor.EXTRA_ATTRS_DEFAULT_VALUES, {})
@@ -58,7 +58,7 @@ class ProtoTensorTest(unittest.TestCase):
 
     def test_initiliaze(self):
         reset_proto_tensor_cls()
-        from brt.router.proto_tensor import ProtoTensor
+        from brt.runtime.proto_tensor import ProtoTensor
 
         common_tensor = torch.Tensor([1, 2, 3])
         proto_tensor = torch.Tensor.as_subclass(common_tensor, ProtoTensor)

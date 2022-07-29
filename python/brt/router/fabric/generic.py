@@ -8,7 +8,7 @@ import torch
 from brt.runtime import log
 from brt.router.utils import pad_to_max
 from brt.router.fabric.base import FabricBase, register_fabric
-from brt.router.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
+from brt.runtime.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
 

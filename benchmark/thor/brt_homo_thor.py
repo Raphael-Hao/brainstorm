@@ -3,7 +3,7 @@
 
 # %%
 import torch
-from brt.router import reset_proto_tensor_cls
+from brt.runtime.proto_tensor import reset_proto_tensor_cls
 from brt.app import init_rand_homo_fused_router
 
 from thor_config import ThorConfig
