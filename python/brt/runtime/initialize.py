@@ -2,5 +2,5 @@
 # Licensed under the MIT license.
 
 def initialize(shallow_transport=False):
-    from brt.router.proto_tensor import ProtoTensor
+    from brt.runtime.proto_tensor import ProtoTensor
     ProtoTensor.SHALLOW_TRANSPORT = shallow_transport

@@ -10,7 +10,7 @@ __all__ = ["Backbone"]
 from cell import Cell
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 
-from brt.routers import GatherRouter
+from brt.router import GatherRouter
 
 class Backbone(nn.Module):
     """

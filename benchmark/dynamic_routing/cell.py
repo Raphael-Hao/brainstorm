@@ -12,7 +12,7 @@ from ops import OPS, Conv2dNormAct, Identity, kaiming_init_module
 
 print(sys.path)
 
-from brt.routers import ScatterRouter, GatherRouter, ProtoTensor
+from brt.router import ScatterRouter, ProtoTensor
 
 from macro import *
 
@@ -57,21 +57,35 @@ class Mixed_OP(nn.Module):
     """
 
     def __init__(
-        self, inplanes, outplanes, stride, cell_type, norm="", affine=True, input_size=None,
+        self,
+        inplanes,
+        outplanes,
+        stride,
+        cell_type,
+        norm="",
+        affine=True,
+        input_size=None,
     ):
         super(Mixed_OP, self).__init__()
         self._ops = nn.ModuleList()
         # self.op_flops = []
         for key in cell_type:
             op = OPS[key](
-                inplanes, outplanes, stride, norm_layer=norm, affine=affine, input_size=input_size,
+                inplanes,
+                outplanes,
+                stride,
+                norm_layer=norm,
+                affine=affine,
+                input_size=input_size,
             )
             self._ops.append(op)
             # self.op_flops.append(op.flops)
         # if IS_CALCU_FLOPS in locals() and IS_CALCU_FLOPS:
         #     self.real_flops = sum(op_flop for op_flop in self.op_flops)
 
-    def forward(self, x, is_drop_path=False, drop_prob=0.0, layer_rate=0.0, step_rate=0.0):
+    def forward(
+        self, x, is_drop_path=False, drop_prob=0.0, layer_rate=0.0, step_rate=0.0
+    ):
         if is_drop_path:
             y = []
             for op in self._ops:
@@ -205,7 +219,9 @@ class Cell(nn.Module):
             # using Kaiming init and predefined bias for gate
             kaiming_init_module(self.gate_conv_beta, mode="fan_in", bias=gate_bias)
         else:
-            self.register_buffer("gate_weights_beta", torch.ones(1, self.gate_num, 1, 1).cuda())
+            self.register_buffer(
+                "gate_weights_beta", torch.ones(1, self.gate_num, 1, 1).cuda()
+            )
 
     def forward(
         self,
@@ -229,7 +245,10 @@ class Cell(nn.Module):
             if self.using_gate:
                 if self.small_gate:
                     h_l1_gate = F.interpolate(
-                        input=h_l1, scale_factor=0.25, mode="bilinear", align_corners=False,
+                        input=h_l1,
+                        scale_factor=0.25,
+                        mode="bilinear",
+                        align_corners=False,
                     )
                 else:
                     h_l1_gate = h_l1
@@ -250,7 +269,7 @@ class Cell(nn.Module):
                 #     data: tensor([], device='cuda:0')
                 #     tag_stack: [tensor([], device='cuda:0', size=(0, 1), dtype=torch.int64)]
                 #     load stack: [11])
-                print('#', end='')
+                print("#", end="")
                 result_list = [
                     [torch.zeros(0).to(h_l1.device)],
                     [h_l1],
@@ -281,14 +300,19 @@ class Cell(nn.Module):
             else:  # isinstance(h_l_route[0], torch.Tensor)
                 route_h_l1 = h_l1
             residual_mask = (route_weight[0] == 0).float()
-            route_result_keep = residual_mask * route_h_l1 + route_weight[0] * route_h_l_keep
+            route_result_keep = (
+                residual_mask * route_h_l1 + route_weight[0] * route_h_l_keep
+            )
             result_list[1].append(route_result_keep)
             weights_list[1].append(residual_mask + route_weight[0])
             ## up
             if self.allow_up:
                 route_h_l_up = self.res_up(route_h_l[1])
                 route_h_l_up = F.interpolate(
-                    input=route_h_l_up, scale_factor=2, mode="bilinear", align_corners=False,
+                    input=route_h_l_up,
+                    scale_factor=2,
+                    mode="bilinear",
+                    align_corners=False,
                 )
                 result_list[0].append(route_h_l_up * route_weight[1])
                 weights_list[0].append(route_weight[1])

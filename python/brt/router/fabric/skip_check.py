@@ -7,7 +7,7 @@ import torch
 from brt.runtime import log
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import DispatchFabric
-from brt.router.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
+from brt.runtime.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
 

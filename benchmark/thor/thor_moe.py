@@ -9,13 +9,12 @@ import torch
 import torch.nn as nn
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
 from brt.jit import make_jit_kernel
-from brt.router import collect_proto_attr_stack, init_proto_tensor
+from brt.runtime.proto_tensor import collect_proto_attr_stack, init_proto_tensor
 from brt.app import (
-    RandGatherRouter,
-    RandHomoFusedGatherRouter,
-    RandHomoFusedScatterRouter,
-    RandScatterRouter,
+    RandScatter,
 )
+from brt.router import GatherRouter
+
 from transformers.activations import ACT2FN
 
 
@@ -187,7 +186,7 @@ class FusedThorMoE(nn.Module):
         # self.end_event.record(stream=self.stream)
         # self.stream.synchronize()
         # print("fused scatter time: ", self.start_event.elapsed_time(self.end_event))
-        
+
         # self.start_event.record(stream=self.stream)
         x = self.fused_expert(x)
         # self.end_event.record(stream=self.stream)
@@ -199,7 +198,7 @@ class FusedThorMoE(nn.Module):
         # self.end_event.record(stream=self.stream)
         # self.stream.synchronize()
         # print("gather router time: ", self.start_event.elapsed_time(self.end_event))
-        
+
         # T x H -> B x T x H
         # self.start_event.record(stream=self.stream)
         inter_states = inter_states.view(
@@ -209,7 +208,7 @@ class FusedThorMoE(nn.Module):
         # self.end_event.record(stream=self.stream)
         # self.stream.synchronize()
         # print("layer norm time: ", self.start_event.elapsed_time(self.end_event))
-        
+
         return x
 
 

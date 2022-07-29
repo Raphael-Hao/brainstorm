@@ -7,8 +7,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from brt.routers import ScatterRouter, BaseRouter
-from brt.routers.proto_tensor import (
+from brt.router import ScatterRouter 
+from brt.runtime.proto_tensor import (
     ProtoTensor,
     to_torch_tensor,
 )
