@@ -18,6 +18,8 @@ def register_leaf_node():
 
         return global_register_func(leaf_node_cls)
 
+    return local_register_func
+
 
 def is_leaf_node(cls_or_instance) -> bool:
 
@@ -25,5 +27,7 @@ def is_leaf_node(cls_or_instance) -> bool:
         leaf_node_cls = cls_or_instance.__class__
     else:
         leaf_node_cls = cls_or_instance
+
+    Registry.register_cls_type("leaf_node")
 
     return Registry.cls_exists_and_registered(leaf_node_cls, "leaf_node")
