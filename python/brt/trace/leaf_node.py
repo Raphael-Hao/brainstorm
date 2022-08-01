@@ -28,6 +28,4 @@ def is_leaf_node(cls_or_instance) -> bool:
     else:
         leaf_node_cls = cls_or_instance
 
-    Registry.register_cls_type("leaf_node")
-
     return Registry.cls_exists_and_registered(leaf_node_cls, "leaf_node")
