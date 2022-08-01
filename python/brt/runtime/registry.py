@@ -73,6 +73,11 @@ class Registry:
         return register_func
 
     @classmethod
+    def register_cls_type(cls, cls_type: str):
+        if cls_type not in cls.cls_registries:
+            cls.cls_registries[cls_type] = []
+
+    @classmethod
     def cls_exists_and_registered(cls, registered_cls, cls_type: str) -> bool:
 
         if cls_type not in cls.cls_registries:
@@ -84,6 +89,3 @@ class Registry:
             return True
 
         return False
-
-
-
