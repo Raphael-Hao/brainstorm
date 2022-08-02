@@ -3,7 +3,7 @@
 
 
 import brt
-from brt.transform.base import PassBase, register_pass
+from brt.passes.base import PassBase, register_pass
 
 @register_pass("pipline")
 class PipelinePass(PassBase):

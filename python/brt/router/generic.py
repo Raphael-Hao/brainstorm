@@ -64,7 +64,7 @@ class ScatterRouter(RouterBase):
         elif self.protocol_type == "threshold":
             self.protocol_kwargs = {
                 "threshold": 0.0,
-                "residual_path": 0,
+                "residual_path": -1,
                 "supported_capacities": None,
             }
         common_kwargs = {"index_format": "src_index", "index_gen_opt": True}
@@ -89,14 +89,19 @@ class ScatterRouter(RouterBase):
 
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
-    def forward(self, in_flow: ProtoTensor, score: torch.Tensor) -> List[ProtoTensor]:
+    def forward(self, in_flows, score: torch.Tensor):
 
         route_indices, loads, capacities = self.protocol(score)
         self.capature_flow_stats(loads, capacities)
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
-        in_flows = [in_flow, score] if self.dispatch_score else in_flow
+        if self.dispatch_score:
+            in_flows = (
+                in_flows.append(score)
+                if isinstance(in_flows, List)
+                else [in_flows, score]
+            )
         out_flows = self.fabric(in_flows, route_indices, loads, capacities, score)
 
         return out_flows
