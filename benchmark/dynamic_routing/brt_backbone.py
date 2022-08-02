@@ -3,14 +3,11 @@ import csv
 
 import torch.nn as nn
 import numpy as np
-import torch
 
 __all__ = ["Backbone"]
 
-from cell import Cell
+from brt_cell import Cell
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
-
-from brt.router import GatherRouter
 
 
 class Backbone(nn.Module):
@@ -210,7 +207,6 @@ class DynamicNetwork(Backbone):
         input_shape,
         cell_num_list,
         layer_num,
-        ext_layer=None,
         norm="",
         cal_flops=True,
         cell_type="",
@@ -221,7 +217,6 @@ class DynamicNetwork(Backbone):
         gate_bias=1.5,
         drop_prob=0.0,
         device=None,
-        gate_history_path=None,
     ):
         super(DynamicNetwork, self).__init__()
         self.device = device
@@ -310,12 +305,7 @@ class DynamicNetwork(Backbone):
                 )
                 # allow dim change in each aggregation
                 dim_up, dim_down, dim_keep = False, False, True
-                # gather router
-                self.gather_routers = [
-                    GatherRouter(1),
-                    GatherRouter(2),
-                    GatherRouter(3),
-                ]
+
                 # dim up and resolution down by 2
                 if cell_index > 0:
                     dim_up = True
@@ -344,57 +334,17 @@ class DynamicNetwork(Backbone):
                     self._out_features.append(name)
             self.all_cell_list.append(layer_cell_list)
             self.all_cell_type_list.append(layer_cell_type)
-        # prepare for gate history
-        self.gate_history_path = gate_history_path
-        if self.gate_history_path is not None:
-            header_row = [
-                "layer_0_cell_0_up",
-                "layer_0_cell_0_keep",
-                "layer_0_cell_0_down",
-            ]
-            for layer_index in range(len(self.cell_num_list)):
-                for cell_index in range(self.cell_num_list[layer_index]):
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_up"
-                    )
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_keep"
-                    )
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_down"
-                    )
-            self.gate_history_file = open(self.gate_history_path, mode="w")
-            self.writer = csv.writer(self.gate_history_file)
-            self.writer.writerow(header_row)
 
     @property
     def size_divisibility(self):
         return self._size_divisibility
 
-    def forward(self, x, step_rate=0.0, predict_mode=True):
-        if not predict_mode:
-            # print("Stem To Device: ", self.device)
-            self.stem.to(self.device)
+    def forward(self, x, step_rate=0.0):
         h_l1 = self.stem(x)
         # the initial layer
-        if not predict_mode:
-            self.init_layer.to(self.device)
         h_l1_list, h_beta_list = self.init_layer(h_l1=h_l1)
         prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
         # build forward outputs
-        gate_history_list = [gate_w[0] if gate_w else 0 for gate_w in h_beta_list]
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
             layer_rate = (layer_index + 1) / float(len(self.cell_num_list))
@@ -403,22 +353,17 @@ class DynamicNetwork(Backbone):
                 cell_input = []
 
                 if self.all_cell_type_list[layer_index][cell_index][0]:
-                    cell_input.append(prev_out_list[cell_index - 1][2][0])
+                    cell_input.append(prev_out_list[cell_index - 1][2])
                 if self.all_cell_type_list[layer_index][cell_index][1]:
-                    cell_input.append(prev_out_list[cell_index][1][0])
+                    cell_input.append(prev_out_list[cell_index][1])
                 if self.all_cell_type_list[layer_index][cell_index][2]:
-                    cell_input.append(prev_out_list[cell_index + 1][0][0])
+                    cell_input.append(prev_out_list[cell_index + 1][0])
 
                 layer_input.append(cell_input)
 
             # calculate each cell
             for _cell_index in range(len(self.all_cell_type_list[layer_index])):
-                if not predict_mode:
-                    # print(f"layer index: {layer_index}, cell index: {_cell_index} to device: {self.device}")
-                    self.all_cell_list[layer_index][_cell_index].to(self.device)
-                (cell_output, gate_weights_beta,) = self.all_cell_list[layer_index][
-                    _cell_index
-                ](
+                cell_output = self.all_cell_list[layer_index][_cell_index](
                     h_l1=layer_input[_cell_index],
                     is_drop_path=self.drop_path,
                     drop_prob=self.drop_prob,
@@ -430,7 +375,7 @@ class DynamicNetwork(Backbone):
 
             # update layer output
             prev_out_list = layer_output
-        final_out_list = [prev_out_list[_i][1][0] for _i in range(len(prev_out_list))]
+        final_out_list = [prev_out_list[_i][1] for _i in range(len(prev_out_list))]
         final_out_dict = dict(zip(self._out_features, final_out_list))
         return final_out_dict
 

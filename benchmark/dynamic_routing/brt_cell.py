@@ -83,20 +83,9 @@ class Mixed_OP(nn.Module):
         # if IS_CALCU_FLOPS in locals() and IS_CALCU_FLOPS:
         #     self.real_flops = sum(op_flop for op_flop in self.op_flops)
 
-    def forward(
-        self, x, is_drop_path=False, drop_prob=0.0, layer_rate=0.0, step_rate=0.0
-    ):
-        if is_drop_path:
-            y = []
-            for op in self._ops:
-                if not isinstance(op, Identity):
-                    y.append(drop_path(op(x), drop_prob, layer_rate, step_rate))
-                else:
-                    y.append(op(x))
-            return sum(y)
-        else:
-            # using sum up rather than random choose one branch.
-            return sum(op(x) for op in self._ops)
+    def forward(self, x):
+
+        return sum(op(x) for op in self._ops)
 
     @property
     def flops(self):
@@ -230,14 +219,7 @@ class Cell(nn.Module):
                 "gate_weights_beta", torch.ones(1, self.gate_num, 1, 1).cuda()
             )
 
-    def forward(
-        self,
-        h_l1: List[torch.Tensor],
-        is_drop_path=False,
-        drop_prob=0.0,
-        layer_rate=0.0,
-        step_rate=0.0,
-    ):
+    def forward(self, h_l1: List[torch.Tensor]):
         """
         :param h_l1: # the former hidden layer output
         :return: current hidden cell result h_l
@@ -264,38 +246,14 @@ class Cell(nn.Module):
 
         drop_route_results = self.drop_scatter(h_l1, gate_weights_beta)
 
-        if drop_cell:
-            # result_list = [[0.0], [h_l1], [0.0]]
-            # weights_list = [[0.0], [0.0], [0.0]]
-            # ProtoTensor(
-            #     data: tensor([], device='cuda:0')
-            #     tag_stack: [tensor([], device='cuda:0', size=(0, 1), dtype=torch.int64)]
-            #     load stack: [11])
-            print("#", end="")
-            result_list = [
-                [torch.zeros(0).to(h_l1.device)],
-                [h_l1],
-                [torch.zeros(0).to(h_l1.device)],
-            ]
-            weights_list = [
-                [torch.zeros(0).to(h_l1.device)],
-                [torch.zeros(0).to(h_l1.device)],
-                [torch.zeros(0).to(h_l1.device)],
-            ]
-            return (
-                result_list,
-                weights_list,
-            )
-
-        h_l = self.cell_ops(h_l1, is_drop_path, drop_prob, layer_rate, step_rate)
+        h_l = self.cell_ops(drop_route_results)
         # NOTE: brt, using for inference
         # route = [keep(, up(, down)?)?]
         route_h_l, route_weight = self.scatter_router(
             h_l, gate_weights_beta.view(h_l.size(0), self.gate_num)
         )
         route_weight = [x.view(-1, 1, 1, 1) for x in route_weight]
-        result_list = [[], [], []]
-        weights_list = [[], [], []]
+        result_list = [None, None, None]
         ## keep
         route_h_l_keep = self.res_keep(route_h_l[0])
         if isinstance(route_h_l[0], ProtoTensor):
@@ -307,7 +265,6 @@ class Cell(nn.Module):
             residual_mask * route_h_l1 + route_weight[0] * route_h_l_keep
         )
         result_list[1].append(route_result_keep)
-        weights_list[1].append(residual_mask + route_weight[0])
         ## up
         if self.allow_up:
             route_h_l_up = self.res_up(route_h_l[1])
@@ -317,18 +274,14 @@ class Cell(nn.Module):
                 mode="bilinear",
                 align_corners=False,
             )
-            result_list[0].append(route_h_l_up * route_weight[1])
-            weights_list[0].append(route_weight[1])
+            result_list[0] = route_h_l_up * route_weight[1]
         else:
-            result_list[0].append(torch.empty(0))
-            weights_list[0].append(torch.empty(0))
+            result_list[0] = torch.empty(0)
         ## down
         if self.allow_down:
             route_h_l_down = self.res_down(route_h_l[-1])
-            result_list[2].append(route_h_l_down * route_weight[-1])
-            weights_list[2].append(route_weight[-1])
+            result_list[2] = route_h_l_down * route_weight[-1]
         else:
-            result_list[2].append(torch.empty(0))
-            weights_list[2].append(torch.empty(0))
+            result_list[2] = torch.empty(0)
 
-        return result_list, weights_list
+        return result_list
