@@ -5,6 +5,7 @@ from typing import List, Union
 
 import numpy as np
 import torch
+import torch.distributed as dist
 from brt.runtime import log
 from brt.router.utils import pad_to_max
 from brt.router.fabric.base import FabricBase, register_fabric
