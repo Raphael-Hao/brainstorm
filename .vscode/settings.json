@@ -197,5 +197,6 @@
       "folderPath": "src",
       "prefix": "BRT_"
     }
-  ]
+  ],
+  "python.formatting.provider": "black"
 }
