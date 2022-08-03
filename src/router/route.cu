@@ -4,43 +4,48 @@
 namespace brt {
 namespace router {
 
-__global__ void __launch_bounds__(1024) no_transform_dispatch_with_dst_indices(
-    float* __restrict__ in_data /*[sample_num x sample_dim]*/,
-    float* __restrict__ out_data /*[?load*path_num x sample_dim]*/,
-    int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim, int path_num) {
-  for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
-    int route_index = i * path_num + blockIdx.y;
-    int local_dst = route_indices[route_index];
-    if (local_dst == 0) {
-      continue;
-    }
-    int global_dst = local_dst - 1;
-    for (int j = 0; j < blockIdx.y; j++) {
-      global_dst += loads[j];
-    }
-    for (int j = threadIdx.x; j < sample_dim; j += 1024) {
-      out_data[global_dst * sample_dim + j] = in_data[i * sample_dim + j];
-    }
-  }
-}
-
 __global__ void __launch_bounds__(1024) dispatch_with_dst_indices_2d(
     float* __restrict__ in_data /*[path_num x sample_num x sample_dim]*/,
     float* __restrict__ out_data /*[?load*path_num x sample_dim]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
     int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim, int path_num) {
   in_data += sample_num * sample_dim * blockIdx.x;
+
+  int load_start = 0;
+  for (int i = 0; i < blockIdx.y; i++) {
+    load_start += loads[i];
+  }
+
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     int route_index = i * path_num + blockIdx.y;
     int local_dst = route_indices[route_index];
-    if (local_dst == 0) {
+    if (local_dst == 0 || local_dst > loads[blockIdx.y]) {
       continue;
     }
-    int global_dst = local_dst - 1;
-    for (int j = 0; j < blockIdx.y; j++) {
-      global_dst += loads[j];
+    int global_dst = local_dst - 1 + load_start;
+    for (int j = threadIdx.x; j < sample_dim; j += 1024) {
+      out_data[global_dst * sample_dim + j] = in_data[i * sample_dim + j];
     }
+  }
+}
+
+__global__ void __launch_bounds__(1024) no_transform_dispatch_with_dst_indices(
+    float* __restrict__ in_data /*[sample_num x sample_dim]*/,
+    float* __restrict__ out_data /*[?load*path_num x sample_dim]*/,
+    int* __restrict__ route_indices /*[sample_num x path_num]*/,
+    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim, int path_num) {
+  int load_start = 0;
+  for (int i = 0; i < blockIdx.y; i++) {
+    load_start += loads[i];
+  }
+
+  for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
+    int route_index = i * path_num + blockIdx.y;
+    int local_dst = route_indices[route_index];
+    if (local_dst == 0 || local_dst > loads[blockIdx.y]) {
+      continue;
+    }
+    int global_dst = local_dst - 1 + load_start;
     for (int j = threadIdx.x; j < sample_dim; j += 1024) {
       out_data[global_dst * sample_dim + j] = in_data[i * sample_dim + j];
     }
@@ -54,17 +59,19 @@ __global__ void __launch_bounds__(1024)
                              int* __restrict__ route_indices /*[sample_num x path_num]*/,
                              int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_dim,
                              int path_num) {
+  int load_start = 0;
+  for (int i = 0; i < blockIdx.y; i++) {
+    load_start += loads[i];
+  }
+
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     int route_index = i * path_num + blockIdx.y;
 
     int local_dst = route_indices[route_index];
-    if (local_dst == 0) {
+    if (local_dst == 0 || local_dst > loads[blockIdx.y]) {
       continue;
     }
-    int global_dst = local_dst - 1;
-    for (int j = 0; j < blockIdx.y; j++) {
-      global_dst += loads[j];
-    }
+    int global_dst = local_dst - 1 + load_start;
 
     for (int j = threadIdx.x; j < sample_dim; j += 1024) {
       out_data[global_dst * sample_dim + j] = in_data[i * sample_dim + j] * gates[route_index];
@@ -81,7 +88,7 @@ __global__ void __launch_bounds__(1024) no_transform_combine_with_src_indices(
     for (int j = 0; j < path_num; j++) {
       int route_index = i * path_num + j;
       int local_dst = route_indices[route_index];
-      if (local_dst == 0) {
+      if (local_dst == 0 || local_dst > loads[j]) {
         continue;
       }
       int global_dst = local_dst - 1;

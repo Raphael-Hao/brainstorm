@@ -28,10 +28,12 @@ __all__ = [
 class HomoFusedDispatchFabric(DispatchFabric):
     def __init__(
         self,
+        auto_padding: bool = False,
         throttling=False,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
     ):
+        self.auto_padding = auto_padding
         super().__init__(
             throttling=throttling, route_logic=route_logic, transform=transform
         )
@@ -89,7 +91,9 @@ class HomoFusedDispatchFabric(DispatchFabric):
 
     def pack_invalid_flow(self, in_flow):
 
-        from ...runtime.proto_tensor import ProtoTensor  # we need to keep ProtoTensor updated
+        from ...runtime.proto_tensor import (
+            ProtoTensor,
+        )  # we need to keep ProtoTensor updated
 
         if isinstance(in_flow, ProtoTensor):
             pass
