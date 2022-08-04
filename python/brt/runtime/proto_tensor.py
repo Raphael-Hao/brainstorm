@@ -99,7 +99,7 @@ def pack_proto_attr_stack(
 
 
 class ProtoTensor(torch.Tensor):
-    SHALLOW_TRANSPORT = True
+    SHALLOW_TRANSPORT = False
     CHECK_TAGS = False
     EXTRA_ATTRS = []
     EXTRA_ATTRS_STACK = []

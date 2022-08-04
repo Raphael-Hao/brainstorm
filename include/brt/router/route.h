@@ -11,25 +11,25 @@
 namespace brt {
 namespace router {
 
-void DispatchWithDstIndices1D(float* src_data /*[sample_num x sample_dim]*/,
-                              float* dst_data /*[?load*dst_num x sample_dim]*/,
+void DispatchWithDstIndices1D(float* src_data /*[sample_num x sample_size]*/,
+                              float* dst_data /*[?load*dst_num x sample_size]*/,
                               float* gates /*[sample_num x dst_num]*/,
                               int* route_indices /*[sample_num x dst_num]*/,
-                              int* loads /*[dst_num]*/, const int& sample_num,
-                              const int& sample_dim, const int& path_num, cudaStream_t stream);
+                              int* loads /*[dst_num]*/, const int& capacity, const int& sample_num,
+                              const int& sample_size, const int& path_num, cudaStream_t stream);
 
-void DispatchWithDstIndices2D(float* src_data /*[sample_num x sample_dim]*/,
-                              float* dst_data /*[?load*dst_num x sample_dim]*/,
+void DispatchWithDstIndices2D(float* src_data /*[sample_num x sample_size]*/,
+                              float* dst_data /*[?load*dst_num x sample_size]*/,
                               int* route_indices /*[sample_num x dst_num]*/,
-                              int* loads /*[dst_num]*/, const int& sample_num,
-                              const int& sample_dim, const int& path_num, cudaStream_t stream);
+                              int* loads /*[dst_num]*/, const int& capacity, const int& sample_num,
+                              const int& sample_size, const int& path_num, cudaStream_t stream);
 
-void CombineWithSrcIndices(float* src_data /*[?load*dst_num x sample_dim]*/,
-                           float* dst_data /*[sample_num x sample_dim]*/,
+void CombineWithSrcIndices(float* src_data /*[?load*dst_num x sample_size]*/,
+                           float* dst_data /*[sample_num x sample_size]*/,
                            float* gates /*[sample_num x dst_num]*/,
                            int* route_indices /*[sample_num x dst_num]*/, int* loads /*[dst_num]*/,
-                           const int& sample_num, const int& sample_dim, const int& path_num,
-                           cudaStream_t stream);
+                           const int& capacity, const int& sample_num, const int& sample_size,
+                           const int& path_num, cudaStream_t stream);
 }  // namespace router
 }  // namespace brt
 
