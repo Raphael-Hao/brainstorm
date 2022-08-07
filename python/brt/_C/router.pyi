@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 
@@ -26,16 +26,19 @@ def dispatch_with_dst_indices_1d(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
     loads: torch.Tensor,
-    gates: torch.Tensor,
+    auto_pad: bool = False,
+    gates: torch.Tensor = None,
 ) -> torch.Tensor: ...
 def dispatch_with_dst_indices_2d(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
     loads: torch.Tensor,
+    auto_pad: bool = False,
 ) -> torch.Tensor: ...
 def combine_with_src_indices(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
     loads: torch.Tensor,
-    gates: torch.Tensor,
+    auto_pad: bool = False,
+    gates: torch.Tensor = None,
 ) -> torch.Tensor: ...

@@ -39,7 +39,7 @@ def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
                         inputs.insert(out_index, out_data[i])
                     jit_kernel(*inputs)
                     outputs = [inputs[i] for i in output_indices]
-                    return outputs
+                    return tuple(outputs)
 
         elif opt_level == "hetero_fuse":
             assert isinstance(
@@ -102,7 +102,7 @@ def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
 
                     outputs = [new_inputs[j] for j in final_output_indices]
 
-                    return outputs
+                    return tuple(outputs)
 
         elif opt_level == "homo_fuse":
             candidate_module = modules[0]
@@ -132,7 +132,7 @@ def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
                     shared_inputs = in_data + out_data
                     jit_kernel(shared_inputs, standalone_inputs, capacities)
                     outputs = shared_inputs[in_data_num:]
-                    return outputs
+                    return tuple(outputs)
 
     elif mode == "train":
         raise NotImplementedError

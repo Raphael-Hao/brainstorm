@@ -2,7 +2,7 @@ import unittest
 
 import torch
 import torch.nn as nn
-from brt.jit import CUDACompiler, make_jit_function, make_jit_kernel
+from brt.jit import make_jit_function, make_jit_kernel
 
 
 class JitFunctionTest(unittest.TestCase):

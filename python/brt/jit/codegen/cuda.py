@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 from brt.runtime import log
-from brt.jit import CUDACompiler
+from brt.jit.compiler import CUDACompiler
 
 from brt.jit.codegen.kernel import Kernel
 

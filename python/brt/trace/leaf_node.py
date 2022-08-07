@@ -18,6 +18,8 @@ def register_leaf_node():
 
         return global_register_func(leaf_node_cls)
 
+    return local_register_func
+
 
 def is_leaf_node(cls_or_instance) -> bool:
 

@@ -73,17 +73,17 @@ class Registry:
         return register_func
 
     @classmethod
+    def register_cls_type(cls, cls_type: str):
+        if cls_type not in cls.cls_registries:
+            cls.cls_registries[cls_type] = []
+
+    @classmethod
     def cls_exists_and_registered(cls, registered_cls, cls_type: str) -> bool:
 
         if cls_type not in cls.cls_registries:
-            raise ValueError(
-                f"No key of {cls_type} exists in the registry, register a key for this class type first."
-            )
+            cls.register_cls_type(cls_type)
 
         if registered_cls in cls.cls_registries[cls_type]:
             return True
 
         return False
-
-
-
