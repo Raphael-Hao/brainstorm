@@ -180,6 +180,33 @@ class ClassSR_Model(BaseModel):
         psnr_type2 = 0
         psnr_type3 = 0
 
+        brt_lr = (
+            torch.Tensor(np.array(lr_list))
+            .to(self.device)
+            .index_select(dim=3, index=torch.tensor([2, 1, 0], dtype=torch.int, device=self.device))
+            .permute((0, 3, 1, 2))
+            .contiguous()
+        )
+        torch.Tensor.__getitem__
+        brt_gt = (
+            torch.Tensor(np.array(gt_list))
+            .to(self.device)
+            .index_select(dim=3, index=torch.tensor([2, 1, 0], dtype=torch.int, device=self.device))
+            .permute((0, 3, 1, 2))
+            .contiguous()
+        )
+        if self.which_model != "classSR_3class_rcan":
+            brt_lr = brt_lr.divide(255.0)
+        assert brt_lr.shape[1:] == (3, 32, 32)
+        # if img.ndim == 2:
+        #     assert False,
+        #     img = np.expand_dims(img, axis=2)
+        # # some images have 4 channels
+        # if img.shape[2] > 3:
+        #     img = img[:, :, :3]
+        with torch.no_grad():
+            brt_srt, brt_type = self.netG(brt_lr, False)
+
         for LR_img, GT_img in zip(lr_list, gt_list):
 
             if self.which_model == "classSR_3class_rcan":
