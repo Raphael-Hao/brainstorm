@@ -4,9 +4,7 @@
 from typing import Callable
 
 import torch
-import torch.fx as fx
 from brt._C import jit
-from functorch.compile import aot_function, aot_module
 
 __all__ = ["CUDACompiler"]
 

@@ -114,18 +114,26 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
 }
 
 ::torch::Tensor dispatch_with_dst_indices_1d(
-    const ::torch::Tensor& in_data /*[sample_num x sample_dim]*/,
+    const ::torch::Tensor& in_data /*[sample_num x sample_size]*/,
     const ::torch::Tensor& route_indices /*[sample_num x path_num]*/,
-    const ::torch::Tensor& loads /*[path_num]*/,
+    const ::torch::Tensor& loads /*[path_num]*/, const bool& auto_pad = false,
     const ::c10::optional<::torch::Tensor>& gates = {} /*[sample_num x path_num]*/) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
   CHECK_ON_CUDA(loads);
 
   int sample_num = in_data.size(0);
-  int sample_dim = in_data.numel() / sample_num;
+  int sample_size = in_data.numel() / sample_num;
   int path_num = route_indices.size(1);
-  int total_load = loads.sum().item<int>();
+
+  int total_load = 0;
+  int capacity = 0;
+  if (auto_pad) {
+    capacity = loads.max().item<int>();
+    total_load = capacity * path_num;
+  } else {
+    total_load = loads.sum().item<int>();
+  }
 
   float* gates_data_ptr = nullptr;
   if (gates.has_value()) {
@@ -140,23 +148,31 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
 
   router::DispatchWithDstIndices1D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
                                    gates_data_ptr, route_indices.data_ptr<int>(),
-                                   loads.data_ptr<int>(), sample_num, sample_dim, path_num,
-                                   at::cuda::getDefaultCUDAStream().stream());
+                                   loads.data_ptr<int>(), capacity, sample_num, sample_size,
+                                   path_num, at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
 ::torch::Tensor dispatch_with_dst_indices_2d(
-    const ::torch::Tensor& in_data /*[sample_num x sample_dim]*/,
+    const ::torch::Tensor& in_data /*[sample_num x sample_size]*/,
     const ::torch::Tensor& route_indices /*[sample_num x path_num]*/,
-    const ::torch::Tensor& loads /*[path_num]*/) {
+    const ::torch::Tensor& loads /*[path_num]*/, const bool& auto_pad = false) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
   CHECK_ON_CUDA(loads);
 
   int sample_num = in_data.size(0);
-  int sample_dim = in_data.numel() / sample_num;
+  int sample_size = in_data.numel() / sample_num;
   int path_num = route_indices.size(1);
-  int total_load = loads.sum().item<int>();
+
+  int total_load = 0;
+  int capacity = 0;
+  if (auto_pad) {
+    capacity = loads.max().item<int>();
+    total_load = capacity * path_num;
+  } else {
+    total_load = loads.sum().item<int>();
+  }
 
   auto out_shape = in_data.sizes().vec();
   out_shape[0] = total_load;
@@ -164,22 +180,23 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   CHECK_ON_CUDA(out_data);
 
   router::DispatchWithDstIndices2D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
-                                   route_indices.data_ptr<int>(), loads.data_ptr<int>(), sample_num,
-                                   sample_dim, path_num, at::cuda::getDefaultCUDAStream().stream());
+                                   route_indices.data_ptr<int>(), loads.data_ptr<int>(), capacity,
+                                   sample_num, sample_size, path_num,
+                                   at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
 ::torch::Tensor combine_with_src_indices(
-    const ::torch::Tensor& in_data /*[?load*path_num x sample_dim]*/,
+    const ::torch::Tensor& in_data /*[?load*path_num x sample_size]*/,
     const ::torch::Tensor& route_indices /*[sample_num x path_num]*/,
-    const ::torch::Tensor& loads /*[path_num]*/,
+    const ::torch::Tensor& loads /*[path_num]*/, const bool& auto_pad = false,
     const ::c10::optional<::torch::Tensor>& gates = {} /*[sample_num x path_num]*/) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
   CHECK_ON_CUDA(loads);
 
   int sample_num = route_indices.size(0);
-  int sample_dim = in_data.numel() / in_data.size(0);
+  int sample_size = in_data.numel() / in_data.size(0);
   int path_num = route_indices.size(1);
 
   float* gates_data_ptr = nullptr;
@@ -189,13 +206,19 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   }
 
   auto out_shape = in_data.sizes().vec();
+
+  int capacity = 0;
+  if (auto_pad) {
+    capacity = out_shape[0] / path_num;
+  }
+
   out_shape[0] = sample_num;
   ::torch::Tensor out_data = ::at::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
   router::CombineWithSrcIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
                                 gates_data_ptr, route_indices.data_ptr<int>(),
-                                loads.data_ptr<int>(), sample_num, sample_dim, path_num,
+                                loads.data_ptr<int>(), capacity, sample_num, sample_size, path_num,
                                 at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
@@ -217,12 +240,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "convert indices to the new index format");
   m.def("dispatch_with_dst_indices_1d", &brt::backend::torch::dispatch_with_dst_indices_1d,
         "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("route_indices"),
-        pybind11::arg("loads"), pybind11::arg("gates") = pybind11::none());
+        pybind11::arg("loads"), pybind11::arg("auto_pad") = false,
+        pybind11::arg("gates") = pybind11::none());
   m.def("dispatch_with_dst_indices_2d", &brt::backend::torch::dispatch_with_dst_indices_2d,
         "Route data with local indices", pybind11::arg("in_data"), pybind11::arg("route_indices"),
-        pybind11::arg("loads"));
+        pybind11::arg("loads"), pybind11::arg("auto_pad") = false);
   m.def("combine_with_src_indices", &brt::backend::torch::combine_with_src_indices,
         "Route data back with dst indices", pybind11::arg("in_data"),
-        pybind11::arg("route_indices"), pybind11::arg("loads"),
+        pybind11::arg("route_indices"), pybind11::arg("loads"), pybind11::arg("auto_pad") = false,
         pybind11::arg("gates") = pybind11::none());
 }
