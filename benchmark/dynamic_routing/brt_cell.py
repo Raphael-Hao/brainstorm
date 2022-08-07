@@ -140,13 +140,22 @@ class Cell(nn.Module):
             protocol_type="threshold_drop", protocol_kwargs={"threshold": 0.001}
         )
 
-        self.scatter_router = ScatterRouter(
+        self.threeway_scatter = ScatterRouter(
             dispatch_score=True,
             protocol_type="threshold",
             protocol_kwargs={
                 "threshold": 0.0001,
                 "residual_dst": 0,
             },
+        )
+        
+        self.res_scatter = ScatterRouter(
+            dispatch_score=True,
+            protocol_type="residual",
+            protocol_kwargs={
+                "threshold": 0.0001,
+                "residual_dst": 0,
+            }
         )
 
         # resolution keep
@@ -249,7 +258,7 @@ class Cell(nn.Module):
         h_l = self.cell_ops(drop_route_results)
         # NOTE: brt, using for inference
         # route = [keep(, up(, down)?)?]
-        route_h_l, route_weight = self.scatter_router(
+        route_h_l, route_weight = self.threeway_scatter(
             h_l, gate_weights_beta.view(h_l.size(0), self.gate_num)
         )
         route_weight = [x.view(-1, 1, 1, 1) for x in route_weight]
