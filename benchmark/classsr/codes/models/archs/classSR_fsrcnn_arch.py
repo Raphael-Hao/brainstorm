@@ -7,6 +7,8 @@ from models.archs.FSRCNN_arch import FSRCNN_net
 import numpy as np
 import time
 
+from brt.router import ScatterRouter, GatherRouter
+
 
 class classSR_3class_fsrcnn_net(nn.Module):
     def __init__(self, in_nc=3, out_nc=3):
@@ -16,55 +18,42 @@ class classSR_3class_fsrcnn_net(nn.Module):
         self.net1 = FSRCNN_net(in_nc, self.upscale, 16, 12, 4)
         self.net2 = FSRCNN_net(in_nc, self.upscale, 36, 12, 4)
         self.net3 = FSRCNN_net(in_nc, self.upscale, 56, 12, 4)
+        self.scatter_router = ScatterRouter(
+            protocol_type="topk", protocol_kwargs={"top_k": 1}
+        )
+        self.gather_router = GatherRouter(fabric_type="combine")
 
     def forward(self, x, is_train):
         if is_train:
-            for i in range(len(x)):
-                # print(x[i].unsqueeze(0).shape)
-                type = self.classifier(x[i].unsqueeze(0))
-                p = F.softmax(type, dim=1)
-                p1 = p[0][0]
-                p2 = p[0][1]
-                p3 = p[0][2]
+            assert False, "This should only be excuted while training!"
+        
+        weights = self.classifier(x)
+        sr_x = self.scatter_router(x, weights)
+        y = [self.net1(sr_x[0]), self.net2(sr_x[1]), self.net3(sr_x[2])]
+        gr_x = self.gather_router(y)
+        return gr_x, [yy.shape[0] for yy in y]
+        
+        # for i in range(len(x)):
+        #     type = self.classifier(x[i].unsqueeze(0))
 
-                out1 = self.net1(x[i].unsqueeze(0))
-                out2 = self.net2(x[i].unsqueeze(0))
-                out3 = self.net3(x[i].unsqueeze(0))
+        #     flag = torch.max(type, 1)[1].data.squeeze()
+        #     p = F.softmax(type, dim=1)
+        #     # flag=np.random.randint(0,2)
+        #     # flag=2
+        #     if flag == 0:
+        #         out = self.net1(x[i].unsqueeze(0))
+        #     elif flag == 1:
+        #         out = self.net2(x[i].unsqueeze(0))
+        #     elif flag == 2:
+        #         out = self.net3(x[i].unsqueeze(0))
+        #     if i == 0:
+        #         out_res = out
+        #         type_res = p
+        #     else:
+        #         out_res = torch.cat((out_res, out), 0)
+        #         type_res = torch.cat((type_res, p), 0)
 
-                out = out1 * p1 + out2 * p2 + out3 * p3
-
-                if i == 0:
-                    out_res = out
-                    type_res = p
-                else:
-                    out_res = torch.cat((out_res, out), 0)
-                    type_res = torch.cat((type_res, p), 0)
-        else:
-
-            for i in range(len(x)):
-                type = self.classifier(x[i].unsqueeze(0))
-
-                flag = torch.max(type, 1)[1].data.squeeze()
-                p = F.softmax(type, dim=1)
-                # flag=np.random.randint(0,2)
-                # flag=2
-                # NOTE: network branching
-                if flag == 0:
-                    out = self.net1(x[i].unsqueeze(0))
-                elif flag == 1:
-                    out = self.net2(x[i].unsqueeze(0))
-                elif flag == 2:
-                    out = self.net3(x[i].unsqueeze(0))
-                if i == 0:
-                    out_res = out
-                    type_res = p
-                else:
-                    out_res = torch.cat((out_res, out), 0)
-                    type_res = torch.cat((type_res, p), 0)
-
-            return out_res, type_res
-
-        return out_res, type_res
+        # return out_res, type_res
 
 
 class Classifier(nn.Module):
