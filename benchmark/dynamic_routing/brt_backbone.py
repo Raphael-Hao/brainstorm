@@ -339,7 +339,7 @@ class DynamicNetwork(Backbone):
     def size_divisibility(self):
         return self._size_divisibility
 
-    def forward(self, x, step_rate=0.0):
+    def forward(self, x):
         h_l1 = self.stem(x)
         # the initial layer
         h_l1_list, h_beta_list = self.init_layer(h_l1=h_l1)
@@ -347,7 +347,6 @@ class DynamicNetwork(Backbone):
         # build forward outputs
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
-            layer_rate = (layer_index + 1) / float(len(self.cell_num_list))
             # aggregate cell input
             for cell_index in range(len(self.all_cell_type_list[layer_index])):
                 cell_input = []
@@ -364,11 +363,7 @@ class DynamicNetwork(Backbone):
             # calculate each cell
             for _cell_index in range(len(self.all_cell_type_list[layer_index])):
                 cell_output = self.all_cell_list[layer_index][_cell_index](
-                    h_l1=layer_input[_cell_index],
-                    is_drop_path=self.drop_path,
-                    drop_prob=self.drop_prob,
-                    layer_rate=layer_rate,
-                    step_rate=step_rate,
+                    h_l1=layer_input[_cell_index]
                 )
 
                 layer_output.append(cell_output)
