@@ -6,7 +6,7 @@ import numpy as np
 
 __all__ = ["Backbone"]
 
-from brt_cell import Cell
+from benchmark.dynamic_routing.cell_brt import Cell
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 
 
