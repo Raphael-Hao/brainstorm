@@ -156,7 +156,7 @@ class SemSegDecoderHead(nn.Module):
         pred, pred_output = None, None
         for _index in range(len(self.in_features)):
             out_index = len(self.in_features) - _index - 1
-            out_feat = features[self.in_features[out_index]]
+            out_feat = features[out_index]
 
             # if isinstance(out_feat, float): # TODO:
             # if out_feat.numel() == 0:

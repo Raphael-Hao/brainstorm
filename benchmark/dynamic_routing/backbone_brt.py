@@ -6,7 +6,7 @@ import numpy as np
 
 __all__ = ["Backbone"]
 
-from benchmark.dynamic_routing.cell_brt import Cell
+from cell_brt import Cell
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 
 
@@ -342,8 +342,8 @@ class DynamicNetwork(Backbone):
     def forward(self, x):
         h_l1 = self.stem(x)
         # the initial layer
-        h_l1_list, h_beta_list = self.init_layer(h_l1=h_l1)
-        prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
+        h_l1_list = self.init_layer(h_l1=h_l1)
+        prev_out_list = [h_l1_list]
         # build forward outputs
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
@@ -352,11 +352,11 @@ class DynamicNetwork(Backbone):
                 cell_input = []
 
                 if self.all_cell_type_list[layer_index][cell_index][0]:
-                    cell_input.append(prev_out_list[cell_index - 1][2])
+                    cell_input.extend(prev_out_list[cell_index - 1][2])
                 if self.all_cell_type_list[layer_index][cell_index][1]:
-                    cell_input.append(prev_out_list[cell_index][1])
+                    cell_input.extend(prev_out_list[cell_index][1])
                 if self.all_cell_type_list[layer_index][cell_index][2]:
-                    cell_input.append(prev_out_list[cell_index + 1][0])
+                    cell_input.extend(prev_out_list[cell_index + 1][0])
 
                 layer_input.append(cell_input)
 
@@ -371,8 +371,8 @@ class DynamicNetwork(Backbone):
             # update layer output
             prev_out_list = layer_output
         final_out_list = [prev_out_list[_i][1] for _i in range(len(prev_out_list))]
-        final_out_dict = dict(zip(self._out_features, final_out_list))
-        return final_out_dict
+        # final_out_dict = dict(zip(self._out_features, final_out_list))
+        return final_out_list
 
     def output_shape(self):
         return {
@@ -411,7 +411,6 @@ def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
         gate_bias=cfg.MODEL.GATE.GATE_INIT_BIAS,
         drop_prob=cfg.MODEL.BACKBONE.DROP_PROB,
         device=cfg.MODEL.DEVICE,
-        gate_history_path=cfg.BRT.GATE_HISTORY_PATH,
     )
 
     return backbone
