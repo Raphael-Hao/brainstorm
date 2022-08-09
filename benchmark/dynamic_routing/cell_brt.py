@@ -14,9 +14,7 @@ from ops import OPS, Conv2dNormAct, Identity, kaiming_init_module
 print(sys.path)
 
 from brt.router import ScatterRouter, GatherRouter
-from brt.runtime import ProtoTensor
 
-from macro import *
 
 __all__ = ["Mixed_OP", "Cell"]
 
@@ -145,7 +143,7 @@ class Cell(nn.Module):
             protocol_type="threshold",
             protocol_kwargs={
                 "threshold": 0.0001,
-                "residual_dst": 0,
+                "residual_path": -1,
             },
         )
 
@@ -224,6 +222,7 @@ class Cell(nn.Module):
         :param h_l1: # the former hidden layer output
         :return: current hidden cell result h_l
         """
+        h_l1 = self.cell_gather(h_l1)
         if self.small_gate:
             h_l1_gate = F.interpolate(
                 input=h_l1,
@@ -244,12 +243,13 @@ class Cell(nn.Module):
         route_h_l, route_weight = self.threeway_scatter(
             h_l, gate_weights_beta.view(h_l.size(0), self.gate_num)
         )
-        route_weight = [x.view(-1, 1, 1, 1) for x in route_weight]
+
+        # route_weight = [x.view(-1, 1, 1, 1) for x in route_weight]
 
         ## keep
         route_h_l_keep = self.res_keep(route_h_l[0])
 
-        route_result_keep = route_h_l_keep * route_weight[0]
+        route_result_keep = route_h_l_keep * (route_weight[0].view(-1, 1, 1, 1))
 
         ## up
         if self.allow_up:
@@ -260,20 +260,22 @@ class Cell(nn.Module):
                 mode="bilinear",
                 align_corners=False,
             )
-            route_result_up = route_h_l_up * route_weight[1]
+            route_result_up = route_h_l_up * (route_weight[1].view(-1, 1, 1, 1))
 
         ## down
         if self.allow_down:
             route_h_l_down = self.res_down(route_h_l[-1])
-            route_result_down = route_h_l_down * route_weight[-1]
+            route_result_down = route_h_l_down * (route_weight[-1].view(-1, 1, 1, 1))
 
         if self.allow_up and self.allow_down:
             return [
-                route_result_up,
+                [route_result_up],
                 [route_result_keep, residual_h_l],
-                route_result_down,
+                [route_result_down],
             ]
         elif self.allow_up:
-            return [route_result_up, [route_result_keep, residual_h_l]]
+            return [[route_result_up], [route_result_keep, residual_h_l], []]
+        elif self.allow_down:
+            return [[], [route_result_keep, residual_h_l], [route_result_down]]
         else:
-            return [[route_result_keep, residual_h_l], route_result_down]
+            return [[], [route_result_keep, residual_h_l], []]
