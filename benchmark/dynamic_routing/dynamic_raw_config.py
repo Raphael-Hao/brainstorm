@@ -5,7 +5,7 @@ from segm_config import SemanticSegmentationConfig
 _config_dict = dict(
     ARCH_NAME="dynamic_raw",
     MODEL=dict(
-        WEIGHTS="/home/ouyang/project/brainstorm/benchmark/dynamic_routing/dynamic_raw_miou76_7.pth",
+        WEIGHTS="/home/whcui/brainstorm_project/brainstorm/.cache/ckpt/pytorch/dynamic_raw_miou76_7.pth",
         CAL_FLOPS=False,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],
@@ -24,7 +24,6 @@ _config_dict = dict(
         ),
         SEM_SEG_HEAD=dict(
             IN_FEATURES=["layer_0", "layer_1", "layer_2", "layer_3"],
-            # IN_FEATURES=["layer_0", "layer_1", "layer_2"],
             NUM_CLASSES=19,
             IGNORE_VALUE=255,
             NORM="nnSyncBN",

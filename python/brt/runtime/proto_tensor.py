@@ -263,7 +263,7 @@ class ProtoTensor(torch.Tensor):
         return len(self.tag_stack)
 
     def __repr__(self):
-        return f"ProtoTensor(\ndata: {super().__repr__()}\ntag_stack: {self.tag_stack}\nload stack: {self.load_stack})"
+        return f"{super().__repr__()}\ntag_stack: {self.tag_stack}\nload stack: {self.load_stack})"
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):

@@ -341,8 +341,9 @@ class DynamicNetwork(Backbone):
 
     def forward(self, x):
         h_l1 = self.stem(x)
+
         # the initial layer
-        h_l1_list = self.init_layer(h_l1=h_l1)
+        h_l1_list = self.init_layer([h_l1])
         prev_out_list = [h_l1_list]
         # build forward outputs
         for layer_index in range(len(self.cell_num_list)):
@@ -370,7 +371,16 @@ class DynamicNetwork(Backbone):
 
             # update layer output
             prev_out_list = layer_output
-        final_out_list = [prev_out_list[_i][1] for _i in range(len(prev_out_list))]
+            # print(f"layer_index: {layer_index}, layer_output:")
+            # for cell_id, cell_output in enumerate(layer_output):  # cell index
+            #     for outputs in cell_output:
+            #         if outputs:
+            #             print(f"cell_id: {cell_id} [",end =" ")
+            #             for id, output in enumerate(outputs):
+            #                 print(f"output_{id}: {output.numel()},",end =" ")
+            #             print("]")
+            # print("")
+        final_out_list = [prev_out_list[_i][1][0] for _i in range(len(prev_out_list))]
         # final_out_dict = dict(zip(self._out_features, final_out_list))
         return final_out_list
 

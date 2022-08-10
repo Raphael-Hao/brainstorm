@@ -121,10 +121,11 @@ def inference_on_dataset(model, data_loader, evaluator, predict_mode=True):
             if idx == num_warmup:
                 start_time = time.time()
                 total_compute_time = 0
-            if not predict_mode:
-                model.cpu()
+            # if not predict_mode:
+            #     model.cpu()
             start_compute_time = time.time()
-            outputs = model(inputs, predict_mode=predict_mode)
+            outputs = model(inputs)
+            # outputs = model(inputs, predict_mode=predict_mode)
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
             total_compute_time += time.time() - start_compute_time
