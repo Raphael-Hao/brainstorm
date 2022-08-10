@@ -51,7 +51,7 @@ class ThresholdProtocol(ProtocolBase):
         self.supported_capacities = supported_capacities
 
 
-@register_protocol("threshold_drop")
+@register_protocol("batched_threshold")
 class ThresholdDropProtocol(ProtocolBase):
     def __init__(
         self,
@@ -69,24 +69,15 @@ class ThresholdDropProtocol(ProtocolBase):
     def make_route_decision(self, score: torch.Tensor):
 
         self.threshold.to(score.device)
-        total_score = score.sum()
+        hot_mask = (score.sum(dim=1, keepdim=True) < self.threshold).long()
 
-        route_indices = (
-            torch.arange(0, score.size(0), dtype=torch.int64, device=score.device)
-            .view(-1, 1)
-            .repeat(1, 2)
+        hot_mask = torch.zeros(
+            score.size(0), 2, dtype=torch.int64, device=score.device
+        ).scatter_(1, hot_mask, 1)
+
+        route_indices, loads = generate_indices(
+            hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
         )
-        loads = torch.tensor(
-            [score.size(0), score.size(0)], dtype=torch.int64, device=score.device
-        )
-
-        if total_score > self.threshold:
-            route_indices[:, 1 - self.drop_path] = 0
-            loads[1 - self.drop_path] = 0
-        else:
-            route_indices[:, self.drop_path] = 0
-            loads[self.drop_path] = 0
-
         return route_indices, loads, loads
 
     def update(self, supported_capacities):

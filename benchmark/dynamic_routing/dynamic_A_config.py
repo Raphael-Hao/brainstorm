@@ -3,6 +3,7 @@ import os.path as osp
 from segm_config import SemanticSegmentationConfig
 
 _config_dict = dict(
+    ARCH_NAME="dynamic_A",
     MODEL=dict(
         WEIGHTS="/home/ouyang/project/brainstorm/benchmark/dynamic_routing/pth/dynamic_A_miou73_9.pth",
         CAL_FLOPS=False,

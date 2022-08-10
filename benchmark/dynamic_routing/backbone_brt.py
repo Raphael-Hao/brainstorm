@@ -6,7 +6,7 @@ import numpy as np
 
 __all__ = ["Backbone"]
 
-from brt_cell import Cell
+from cell_brt import Cell
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 
 
@@ -339,36 +339,31 @@ class DynamicNetwork(Backbone):
     def size_divisibility(self):
         return self._size_divisibility
 
-    def forward(self, x, step_rate=0.0):
+    def forward(self, x):
         h_l1 = self.stem(x)
         # the initial layer
-        h_l1_list, h_beta_list = self.init_layer(h_l1=h_l1)
-        prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
+        h_l1_list = self.init_layer(h_l1=h_l1)
+        prev_out_list = [h_l1_list]
         # build forward outputs
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
-            layer_rate = (layer_index + 1) / float(len(self.cell_num_list))
             # aggregate cell input
             for cell_index in range(len(self.all_cell_type_list[layer_index])):
                 cell_input = []
 
                 if self.all_cell_type_list[layer_index][cell_index][0]:
-                    cell_input.append(prev_out_list[cell_index - 1][2])
+                    cell_input.extend(prev_out_list[cell_index - 1][2])
                 if self.all_cell_type_list[layer_index][cell_index][1]:
-                    cell_input.append(prev_out_list[cell_index][1])
+                    cell_input.extend(prev_out_list[cell_index][1])
                 if self.all_cell_type_list[layer_index][cell_index][2]:
-                    cell_input.append(prev_out_list[cell_index + 1][0])
+                    cell_input.extend(prev_out_list[cell_index + 1][0])
 
                 layer_input.append(cell_input)
 
             # calculate each cell
             for _cell_index in range(len(self.all_cell_type_list[layer_index])):
                 cell_output = self.all_cell_list[layer_index][_cell_index](
-                    h_l1=layer_input[_cell_index],
-                    is_drop_path=self.drop_path,
-                    drop_prob=self.drop_prob,
-                    layer_rate=layer_rate,
-                    step_rate=step_rate,
+                    h_l1=layer_input[_cell_index]
                 )
 
                 layer_output.append(cell_output)
@@ -376,8 +371,8 @@ class DynamicNetwork(Backbone):
             # update layer output
             prev_out_list = layer_output
         final_out_list = [prev_out_list[_i][1] for _i in range(len(prev_out_list))]
-        final_out_dict = dict(zip(self._out_features, final_out_list))
-        return final_out_dict
+        # final_out_dict = dict(zip(self._out_features, final_out_list))
+        return final_out_list
 
     def output_shape(self):
         return {
@@ -416,7 +411,6 @@ def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
         gate_bias=cfg.MODEL.GATE.GATE_INIT_BIAS,
         drop_prob=cfg.MODEL.BACKBONE.DROP_PROB,
         device=cfg.MODEL.DEVICE,
-        gate_history_path=cfg.BRT.GATE_HISTORY_PATH,
     )
 
     return backbone
