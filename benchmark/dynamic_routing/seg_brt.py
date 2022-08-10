@@ -8,8 +8,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-# TODO: differece?
-# from brt.frontend.nn import BatchNorm2d
 from torch.nn import BatchNorm2d
 
 from image_list import ImageList
@@ -144,10 +142,10 @@ class SemSegDecoderHead(nn.Module):
             stride=1,
             padding=1,
         )
-        self.decoder_gathers = [
+        self.decoder_gathers = nn.ModuleList([
             GatherRouter(fabric_kwargs={"sparse": True})
             for _ in range(len(self.in_features) - 1)
-        ]
+        ])
 
         # using Kaiming init
         kaiming_init_module(self.predictor, mode="fan_in")
@@ -164,7 +162,7 @@ class SemSegDecoderHead(nn.Module):
 
             if _index > 0:
                 # out_feat = pred + out_feat # TODO: GatherRouter
-                out_feat = self.decoder_gathers[_index]([pred, out_feat])
+                out_feat = self.decoder_gathers[_index - 1]([pred, out_feat])
 
             pred = self.layer_decoder_list[out_index](out_feat)
             if out_index > 0:

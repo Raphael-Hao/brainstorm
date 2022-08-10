@@ -52,28 +52,38 @@ class ThresholdProtocol(ProtocolBase):
 
 
 @register_protocol("batched_threshold")
-class ThresholdDropProtocol(ProtocolBase):
+class BatchedThresholdProtocol(ProtocolBase):
     def __init__(
         self,
         threshold=0.0,
-        drop_path=1,
+        drop_path=0,
+        supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
     ):
         if index_format != "src_index":
-            logger.error("ThresholdDropProtocol only supports src_index format")
+            logger.error("BatchedThresholdProtocol only supports src_index format")
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.threshold = torch.tensor(threshold, dtype=torch.float)
         self.drop_path = drop_path
+        self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
 
         self.threshold.to(score.device)
+
         hot_mask = (score.sum(dim=1, keepdim=True) < self.threshold).long()
 
-        hot_mask = torch.zeros(
-            score.size(0), 2, dtype=torch.int64, device=score.device
-        ).scatter_(1, hot_mask, 1)
+        if self.drop_path == 0:
+            hot_mask = torch.ones(
+                score.size(0), 2, dtype=torch.int64, device=score.device
+            ).scatter_(1, hot_mask, 0)
+        elif self.drop_path == 1:
+            hot_mask = torch.zeros(
+                score.size(0), 2, dtype=torch.int64, device=score.device
+            ).scatter_(1, hot_mask, 1)
+        else:
+            raise ValueError("drop_path should be 0 or 1")
 
         route_indices, loads = generate_indices(
             hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt

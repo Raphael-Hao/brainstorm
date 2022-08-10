@@ -5,7 +5,7 @@ from segm_config import SemanticSegmentationConfig
 _config_dict = dict(
     ARCH_NAME="dynamic_B",
     MODEL=dict(
-        WEIGHTS="/home/ouyang/project/brainstorm/benchmark/dynamic_routing/pth/dynamic_B_miou74_3.pth",
+        WEIGHTS="/home/whcui/brainstorm_project/brainstorm/.cache/ckpt/pytorch/dynamic_B_miou74_3.pth",
         CAL_FLOPS=False,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],

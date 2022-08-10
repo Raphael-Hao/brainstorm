@@ -1,7 +1,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
-# from dynamic_raw_config import config
-from dynamic_A_config import config
+from dynamic_raw_config import config
+# from dynamic_A_config import config
+
 # from dynamic_B_config import config
 # from dynamic_C_config import config
 from brt.trace.graph import GraphTracer
@@ -29,7 +30,8 @@ import logging
 import os
 import re
 import sys
-sys.path.insert(0, '.')  # noqa: E402
+
+sys.path.insert(0, ".")  # noqa: E402
 
 from collections import OrderedDict
 import torch
@@ -37,11 +39,19 @@ import torch
 import dl_lib.utils.comm as comm
 from dl_lib.checkpoint import DetectionCheckpointer
 from dl_lib.data import MetadataCatalog
-from dl_lib.engine import (CustomizedTrainer, default_argument_parser,
-                           default_setup, launch)
-from dl_lib.evaluation import (CityscapesEvaluator, DatasetEvaluators,
-                               PascalVOCDetectionEvaluator, SemSegEvaluator,
-                               verify_results)
+from dl_lib.engine import (
+    CustomizedTrainer,
+    default_argument_parser,
+    default_setup,
+    launch,
+)
+from dl_lib.evaluation import (
+    CityscapesEvaluator,
+    DatasetEvaluators,
+    PascalVOCDetectionEvaluator,
+    SemSegEvaluator,
+    verify_results,
+)
 from dl_lib.modeling import SemanticSegmentorWithTTA
 from net_brt import build_model
 
@@ -53,6 +63,7 @@ class Trainer(CustomizedTrainer):
     are working on a new research project. In that case you can use the cleaner
     "SimpleTrainer", or write your own training loop.
     """
+
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
         """
@@ -73,7 +84,8 @@ class Trainer(CustomizedTrainer):
                     num_classes=cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES,
                     ignore_label=cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE,
                     output_dir=output_folder,
-                ))
+                )
+            )
         if evaluator_type == "cityscapes":
             assert (
                 torch.cuda.device_count() >= comm.get_rank()
@@ -84,11 +96,14 @@ class Trainer(CustomizedTrainer):
         if hasattr(cfg, "EVALUATORS"):
             for evaluator in cfg.EVALUATORS:
                 evaluator_list.append(
-                    evaluator(dataset_name, True, output_folder, dump=False))
+                    evaluator(dataset_name, True, output_folder, dump=False)
+                )
         if len(evaluator_list) == 0:
             raise NotImplementedError(
                 "no Evaluator for the dataset {} with the type {}".format(
-                    dataset_name, evaluator_type))
+                    dataset_name, evaluator_type
+                )
+            )
         if len(evaluator_list) == 1:
             return evaluator_list[0]
         return DatasetEvaluators(evaluator_list)
@@ -98,15 +113,13 @@ class Trainer(CustomizedTrainer):
         logger = logging.getLogger("dl_lib.trainer")
         # In the end of training, run an evaluation with TTA
         logger.info("Running inference with test-time augmentation ...")
-        evaluator_type = MetadataCatalog.get(
-            cfg.DATASETS.TEST[0]).evaluator_type
+        evaluator_type = MetadataCatalog.get(cfg.DATASETS.TEST[0]).evaluator_type
         if evaluator_type == "sem_seg":
             model = SemanticSegmentorWithTTA(cfg, model)
         evaluators = [
-            cls.build_evaluator(cfg,
-                                name,
-                                output_folder=os.path.join(
-                                    cfg.OUTPUT_DIR, "inference_TTA"))
+            cls.build_evaluator(
+                cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference_TTA")
+            )
             for name in cfg.DATASETS.TEST
         ]
         res = cls.test(cfg, model, evaluators)
@@ -116,17 +129,15 @@ class Trainer(CustomizedTrainer):
 
 def test_argument_parser():
     parser = default_argument_parser()
-    parser.add_argument("--start-iter",
-                        type=int,
-                        default=0,
-                        help="start iter used to test")
-    parser.add_argument("--end-iter",
-                        type=int,
-                        default=None,
-                        help="end iter used to test")
-    parser.add_argument("--debug",
-                        action="store_true",
-                        help="use debug mode or not")
+    parser.add_argument(
+        "--start-iter", type=int, default=0, help="start iter used to test"
+    )
+    parser.add_argument(
+        "--end-iter", type=int, default=None, help="end iter used to test"
+    )
+    parser.add_argument("--debug", action="store_true", help="use debug mode or not")
+    parser.add_argument("--trace", action="store_true", help="trace the model or not")
+
     return parser
 
 
@@ -137,18 +148,28 @@ def main(args):
         batches = int(cfg.SOLVER.IMS_PER_BATCH / 8 * args.num_gpus)
         if cfg.SOLVER.IMS_PER_BATCH != batches:
             cfg.SOLVER.IMS_PER_BATCH = batches
-            logger.warning(
-                "SOLVER.IMS_PER_BATCH is changed to {}".format(batches))
+            logger.warning("SOLVER.IMS_PER_BATCH is changed to {}".format(batches))
 
     model = build_model(cfg)
-    tracer= GraphTracer()
-    graph = tracer.trace(model.backbone)
-    graph_module= GraphModule(tracer.root, graph, cfg.ARCH_NAME)
-    
-    graph_drawer = FxGraphDrawer(graph_module,cfg.ARCH_NAME)
-    with open("{}.svg".format(cfg.ARCH_NAME), 'wb') as f:
-        f.write(graph_drawer.get_dot_graph().create_svg())
-    
+    DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+        cfg.MODEL.WEIGHTS, resume=args.resume
+    )
+
+    res = Trainer.test(cfg, model)
+    # model.eval()
+    # input = torch.randn(1, 3, 1024, 2048).cuda()
+    # outputs = model.backbone(input)
+    # print(outputs)
+
+    if args.trace:
+        tracer = GraphTracer()
+        graph = tracer.trace(model.backbone)
+        graph_module = GraphModule(tracer.root, graph, cfg.ARCH_NAME)
+
+        graph_drawer = FxGraphDrawer(graph_module, cfg.ARCH_NAME)
+        with open("{}.svg".format(cfg.ARCH_NAME), "wb") as f:
+            f.write(graph_drawer.get_dot_graph().create_svg())
+
 
 if __name__ == "__main__":
     args = test_argument_parser().parse_args()

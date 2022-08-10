@@ -171,7 +171,6 @@ class CombineFabric(FabricBase):
     def forward(
         self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]]
     ) -> Union[ProtoTensor, List[ProtoTensor]]:
-        print(in_flows)
         in_flows = self.pack_invalid_flow(in_flows)
 
         if self.flow_num == 1:
