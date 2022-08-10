@@ -135,7 +135,13 @@ class Cell(nn.Module):
         self.cell_gather = GatherRouter(fabric_kwargs={"sparse": True})
 
         self.residual_scatter = ScatterRouter(
-            protocol_type="batched_threshold", protocol_kwargs={"threshold": 0.0001}
+            protocol_type="batched_threshold",
+            protocol_kwargs={"threshold": 0.0001},
+            fabric_kwargs={
+                "flow_num": 2,
+                "route_logic": ["1d", "1d"],
+                "transform": [False, False],
+            },
         )
 
         self.threeway_scatter = ScatterRouter(
@@ -234,17 +240,21 @@ class Cell(nn.Module):
             h_l1_gate = h_l1
         gate_feat_beta = self.gate_conv_beta(h_l1_gate)
         gate_weights_beta = soft_gate(gate_feat_beta)
+        gate_weights_beta = gate_weights_beta.view(
+            gate_weights_beta.shape[0], self.gate_num
+        )
 
-        residual_h_l, keeped_h_l = self.residual_scatter(h_l1, gate_weights_beta)
+        residual_h_l, residual_w_beta = self.residual_scatter(
+            [h_l1, gate_weights_beta], gate_weights_beta
+        )
+        # print(residual_h_l)
 
-        h_l = self.cell_ops(keeped_h_l)
+        h_l = self.cell_ops(residual_h_l[1])
         # NOTE: brt, using for inference
         # route = [keep(, up(, down)?)?]
         route_h_l, route_weight = self.threeway_scatter(
-            h_l, gate_weights_beta.view(h_l.size(0), self.gate_num)
+            h_l, residual_w_beta[1].view(h_l.size(0), self.gate_num)
         )
-
-        # route_weight = [x.view(-1, 1, 1, 1) for x in route_weight]
 
         ## keep
         route_h_l_keep = self.res_keep(route_h_l[0])
@@ -270,12 +280,12 @@ class Cell(nn.Module):
         if self.allow_up and self.allow_down:
             return [
                 [route_result_up],
-                [route_result_keep, residual_h_l],
+                [route_result_keep, residual_h_l[0]],
                 [route_result_down],
             ]
         elif self.allow_up:
-            return [[route_result_up], [route_result_keep, residual_h_l], []]
+            return [[route_result_up], [route_result_keep, residual_h_l[0]], []]
         elif self.allow_down:
-            return [[], [route_result_keep, residual_h_l], [route_result_down]]
+            return [[], [route_result_keep, residual_h_l[0]], [route_result_down]]
         else:
-            return [[], [route_result_keep, residual_h_l], []]
+            return [[], [route_result_keep, residual_h_l[0]], []]

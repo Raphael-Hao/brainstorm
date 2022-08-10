@@ -154,8 +154,6 @@ class GatherRouter(RouterBase):
         if fabric_kwargs is not None:
             self.fabric_kwargs.update(fabric_kwargs)
 
-        print(self.fabric_kwargs)
-        
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flows):
