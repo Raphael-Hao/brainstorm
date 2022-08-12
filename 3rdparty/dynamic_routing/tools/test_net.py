@@ -131,40 +131,40 @@ def main(args):
             logger.warning(
                 "SOLVER.IMS_PER_BATCH is changed to {}".format(batches))
 
-    if cfg.MODEL.WEIGHTS:
-        valid_files = [cfg.MODEL.WEIGHTS]
-    else:
-        list_of_files = glob.glob(os.path.join(cfg.OUTPUT_DIR, '*.pth'))
-        assert list_of_files, "no pth file found in {}".format(cfg.OUTPUT_DIR)
-        list_of_files.sort(key=os.path.getctime)
-        latest_file = list_of_files[-1]
-        if not args.end_iter:
-            valid_files = [latest_file]
-        else:
-            files = [f for f in list_of_files if str(f) <= str(latest_file)]
-            valid_files = []
-            for f in files:
-                try:
-                    model_iter = int(re.split(r'(model_|\.pth)', f)[-3])
-                except Exception:
-                    logger.warning("remove {}".format(f))
-                    continue
-                if args.start_iter <= model_iter <= args.end_iter:
-                    valid_files.append(f)
-            assert valid_files, "No .pth files satisfy your requirement"
+    # if cfg.MODEL.WEIGHTS:
+    #     valid_files = [cfg.MODEL.WEIGHTS]
+    # else:
+    #     list_of_files = glob.glob(os.path.join(cfg.OUTPUT_DIR, '*.pth'))
+    #     assert list_of_files, "no pth file found in {}".format(cfg.OUTPUT_DIR)
+    #     list_of_files.sort(key=os.path.getctime)
+    #     latest_file = list_of_files[-1]
+    #     if not args.end_iter:
+    #         valid_files = [latest_file]
+    #     else:
+    #         files = [f for f in list_of_files if str(f) <= str(latest_file)]
+    #         valid_files = []
+    #         for f in files:
+    #             try:
+    #                 model_iter = int(re.split(r'(model_|\.pth)', f)[-3])
+    #             except Exception:
+    #                 logger.warning("remove {}".format(f))
+    #                 continue
+    #             if args.start_iter <= model_iter <= args.end_iter:
+    #                 valid_files.append(f)
+    #         assert valid_files, "No .pth files satisfy your requirement"
 
     # * means all if need specific format then *.csv
-    for current_file in valid_files:
-        cfg.MODEL.WEIGHTS = current_file
-        model = build_model(cfg)
+    # for current_file in valid_files:
+    # cfg.MODEL.WEIGHTS = current_file
+    model = build_model(cfg)
 
-        DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            cfg.MODEL.WEIGHTS, resume=args.resume)
-        res = Trainer.test(cfg, model)
-        if comm.is_main_process():
-            verify_results(cfg, res)
-        if cfg.TEST.AUG.ENABLED:
-            res.update(Trainer.test_with_TTA(cfg, model))
+    DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+        cfg.MODEL.WEIGHTS, resume=args.resume)
+    res = Trainer.test(cfg, model)
+    if comm.is_main_process():
+        verify_results(cfg, res)
+    if cfg.TEST.AUG.ENABLED:
+        res.update(Trainer.test_with_TTA(cfg, model))
 
     # return res
 
