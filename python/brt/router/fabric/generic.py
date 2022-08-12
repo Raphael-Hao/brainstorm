@@ -85,6 +85,8 @@ class DispatchFabric(FabricBase):
     ) -> List[List[ProtoTensor]]:
         all_out_flows = []
         path_num = route_indices.size(1)
+        real_loads_cpu = real_loads.cpu()
+        route_indices_64 = route_indices.to(torch.int64)
         for flow_idx in range(self.flow_num):
             flow = in_flows[flow_idx]
             (
@@ -94,11 +96,14 @@ class DispatchFabric(FabricBase):
                 extra_attr_stack_dict,
             ) = to_torch_tensor(flow, return_stack=True)
 
-            flow_tag = flow_tag_stack.pop()
-            flow_load = flow_load_stack.pop()
+            flow_tag = flow_tag_stack[-1]
+            flow_load = flow_load_stack[-1]
 
-            for attr_stack in extra_attr_stack_dict.values():
-                attr_stack.pop()
+            flow_tag_stack = flow_tag_stack[:-1]
+            flow_load_stack = flow_load_stack[:-1]
+            flow_extra_attr_stack_dict = {}
+            for attr_dict, attr_stack in extra_attr_stack_dict.items():
+                flow_extra_attr_stack_dict[attr_dict] = attr_stack[:-1]
 
             if self.route_logics[flow_idx] == "1d":
                 route_shape = list(flow_data.shape[1:])
@@ -110,12 +115,10 @@ class DispatchFabric(FabricBase):
                 # route_size = np.prod(route_shape)
             else:
                 raise ValueError("route_logic must be 1d or 2d")
-
             out_flows = []
             for i in range(path_num):
-                tag_indices = route_indices[: real_loads[i], i : i + 1].to(
-                    torch.int64, non_blocking=True
-                )
+                tag_indices = route_indices_64[: real_loads_cpu[i], i : i + 1]
+
                 if tag_indices.numel() > 0:
                     out_flow_tag = torch.gather(flow_tag, 0, tag_indices)
                     if self.route_logics[flow_idx] == "1d":
@@ -133,7 +136,7 @@ class DispatchFabric(FabricBase):
                         out_flow_data,
                         flow_tag_stack,
                         flow_load_stack,
-                        extra_attr_stack_dict,
+                        flow_extra_attr_stack_dict,
                     )
                     out_flow.pack(out_flow_tag, flow_load)
                 else:
@@ -146,7 +149,7 @@ class DispatchFabric(FabricBase):
                         ),
                         flow_tag_stack,
                         flow_load_stack,
-                        extra_attr_stack_dict,
+                        flow_extra_attr_stack_dict,
                     )
                     out_flow.pack(
                         torch.zeros(0, 1, dtype=torch.int64, device=flow_data.device),
@@ -201,18 +204,17 @@ class CombineFabric(FabricBase):
                     flow, return_stack=True
                 )
                 in_flows_data.append(data)
-                in_flows_tag.append(flow_tags.pop())
-                in_flows_load.append(flow_loads.pop())
-
-            for attr_stack in extra_attr_stack_dict.values():
-                attr_stack.pop()
+                in_flows_tag.append(flow_tags[-1])
+                in_flows_load.append(flow_loads[-1])
 
             in_flows_data = torch.cat(in_flows_data, dim=0)
             in_flows_tag = torch.cat(in_flows_tag, dim=0)
             in_flows_load = np.max(in_flows_load)
-            in_flows_tag_stack = flow_tags
-            in_flows_load_stack = flow_loads
-            in_flows_extra_stack_dict = extra_attr_stack_dict
+            in_flows_tag_stack = flow_tags[:-1]
+            in_flows_load_stack = flow_loads[:-1]
+            in_flows_extra_stack_dict = {}
+            for attr_dict, attr_stack in extra_attr_stack_dict.items():
+                in_flows_extra_stack_dict[attr_dict] = attr_stack[:-1]
 
             route_shape = list(in_flows_data.shape[1:])
             route_size = np.prod(route_shape)
@@ -233,7 +235,6 @@ class CombineFabric(FabricBase):
                     )
                     route_indices = inverse.repeat(1, route_size).view(-1, *route_shape)
                     out_flow_tag = out_flow_tag.view(-1, 1)
-                    # FIXME: not sure if this is correct
                     out_flow_load = out_flow_tag.numel()
                 else:
                     route_indices = in_flows_tag.repeat(1, route_size).view(

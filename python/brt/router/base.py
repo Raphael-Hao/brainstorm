@@ -80,6 +80,9 @@ class RouterBase(nn.Module):
     def inject_schedule(self, schedule_function):
         self.schedule_functions.append(schedule_function)
 
+    def capature_flow_shape(self, flows) -> None:
+        pass
+
     def run_schedule(self):
         for func in self.schedule_functions:
             func()

@@ -64,13 +64,11 @@ class BatchedThresholdProtocol(ProtocolBase):
         if index_format != "src_index":
             logger.error("BatchedThresholdProtocol only supports src_index format")
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
-        self.threshold = torch.tensor(threshold, dtype=torch.float)
+        self.threshold = threshold
         self.drop_path = drop_path
         self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
-
-        self.threshold.to(score.device)
 
         hot_mask = (score.sum(dim=1, keepdim=True) < self.threshold).long()
 

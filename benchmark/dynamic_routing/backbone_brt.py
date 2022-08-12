@@ -394,6 +394,8 @@ class DynamicNetwork(Backbone):
             )
             for name in self._out_features
         }
+    def input_shape(self):
+        pass
 
 
 def build_dynamic_backbone(cfg, input_shape: ShapeSpec):

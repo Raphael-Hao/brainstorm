@@ -73,6 +73,7 @@ class RouterTest(unittest.TestCase):
         dst: int,
         which_half: str = None,
         sparse=False,
+        GPU=False,
     ):
         def gate(inputs):
             gates = torch.zeros(
@@ -85,8 +86,10 @@ class RouterTest(unittest.TestCase):
             else:
                 gates[:, dst] = 1
             return gates
-
-        model = Model(gate=gate, sparse=sparse)
+        model = Model(gate=gate, sparse=sparse).eval()
+        if GPU:
+            inputs = inputs.cuda()
+            model.cuda()
         results = model(inputs)
 
         if which_half is None:
@@ -153,26 +156,28 @@ class RouterTest(unittest.TestCase):
     def test_2d_route(self):
         for i in range(2):
             x = torch.arange(0, 80, dtype=torch.float32).view(8, 10)
-            # self.simple_route(BranchRoute, x, dst=i, sparse=False)
-            # self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=False)
-            # self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=False)
-            # self.simple_route(BranchRoute, x, dst=i, sparse=True)
-            # self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=True)
-            # self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=True)
+            self.simple_route(BranchRoute, x, dst=i, sparse=False)
+            self.simple_route(BranchRoute, x, dst=i, sparse=False, GPU=True)
+            self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=False)
+            self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=False)
+            self.simple_route(BranchRoute, x, dst=i, sparse=True)
+            self.simple_route(BranchRoute, x, dst=i, sparse=True, GPU=True)
+            self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=True)
+            self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=True)
             self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=False)
-            # self.weighted_route(
-            #     WeightedBranchRoute, x, dst=i, which_half="upper", sparse=False
-            # )
-            # self.weighted_route(
-            #     WeightedBranchRoute, x, dst=i, which_half="lower", sparse=False
-            # )
-            # self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=True)
-            # self.weighted_route(
-            #     WeightedBranchRoute, x, dst=i, which_half="upper", sparse=True
-            # )
-            # self.weighted_route(
-            #     WeightedBranchRoute, x, dst=i, which_half="lower", sparse=True
-            # )
+            self.weighted_route(
+                WeightedBranchRoute, x, dst=i, which_half="upper", sparse=False
+            )
+            self.weighted_route(
+                WeightedBranchRoute, x, dst=i, which_half="lower", sparse=False
+            )
+            self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=True)
+            self.weighted_route(
+                WeightedBranchRoute, x, dst=i, which_half="upper", sparse=True
+            )
+            self.weighted_route(
+                WeightedBranchRoute, x, dst=i, which_half="lower", sparse=True
+            )
 
     def test_3d_route(self):
         for i in range(2):
