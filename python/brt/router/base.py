@@ -1,9 +1,10 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import inspect
-from typing import Callable, Dict, List, Type, Union, Any
+from typing import Callable, Dict, List, Any, Tuple
 
 import os
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -27,8 +28,8 @@ class RouterBase(nn.Module):
             self.capaturing = True
         if self.capaturing:
             self.history_len = 0
-            self.register_buffer("load_history", None)
-            self.register_buffer("capacity_history", None)
+            self.load_histor = None
+            self.capacity_history = None
         self.schedule_functions: List[Callable] = []
 
     def forward(self):
@@ -50,7 +51,7 @@ class RouterBase(nn.Module):
         return new_route_indices
 
     def capature_flow_stats(
-        self, loads: torch.Tensor, capacities: torch.Tensor = None
+        self, loads: np.ndarray, capacities: np.ndarray = None
     ) -> None:
         """
         Capture the flow.
@@ -58,19 +59,20 @@ class RouterBase(nn.Module):
         if not self.capaturing:
             return
 
-        with torch.no_grad():
-            if self.history_len == 0:
-                self.load_history = torch.zeros_like(loads)
-                self.capacity_history = (
-                    torch.zeros_like(capacities) if capacities is not None else None
-                )
-            self.load_history = (self.load_history * self.history_len + loads) / (
-                self.history_len + 1
+        if self.history_len == 0:
+            self.load_history = np.zeros_like(loads, dtype=np.float64)
+            self.capacity_history = (
+                np.zeros_like(capacities, dtype=np.float64)
+                if capacities is not None
+                else None
             )
-            if capacities is not None:
-                self.capacity_history = (
-                    self.capacity_history * self.history_len + capacities
-                ) / (self.history_len + 1)
+        self.load_history = (self.load_history * self.history_len + loads) / (
+            self.history_len + 1.0
+        )
+        if capacities is not None:
+            self.capacity_history = (
+                self.capacity_history * self.history_len + capacities
+            ) / (self.history_len + 1.0)
 
     def reset_flow_stats(self):
         self.history_len = 0
@@ -86,6 +88,35 @@ class RouterBase(nn.Module):
     def run_schedule(self):
         for func in self.schedule_functions:
             func()
+
+    def skip_routing(self, in_flows, score: torch.Tensor, router_kind: str):
+        empty_flows, flows_load = self._check_empty(in_flows)
+        if empty_flows:
+            if router_kind == "scatter":
+                pass
+            elif router_kind == "gather":
+                pass
+            else:
+                raise ValueError(f"Unknown router kind: {router_kind}")
+        else:
+            return False, None
+
+    def _check_empty(self, in_flows) -> Tuple[bool, int]:
+        if isinstance(in_flows, torch.Tensor):
+            if in_flows.numel() == 0:
+                return True, 0
+            else:
+                return False, 0
+        if isinstance(in_flows, (Tuple, List)):
+            empty_flows = True
+            flows_load = 0
+            for flow in in_flows:
+                empty_flow, load = self._check_empty(flow)
+                empty_flows = empty_flows and empty_flow
+                load = np.max([flows_load, load])
+                if not empty_flows:
+                    return False, load
+            return empty_flows, flows_load
 
 
 def register_router(router_type: str) -> Callable:

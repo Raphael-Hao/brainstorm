@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Tuple
+from typing import Tuple, List
 
 import torch
 
@@ -17,6 +17,14 @@ def generate_src_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
+def generate_dst_indices_np(
+    hot_mask: torch.Tensor,
+    supported_capacities: torch.Tensor,
+) -> Tuple[torch.Tensor, List[int]]: ...
+def generate_src_indices_np(
+    hot_mask: torch.Tensor,
+    supported_capacities: torch.Tensor,
+) -> Tuple[torch.Tensor, List[int]]: ...
 def convert_index_format(
     origin_indices: torch.Tensor,
     loads: torch.Tensor,
