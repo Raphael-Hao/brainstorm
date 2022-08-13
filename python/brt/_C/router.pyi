@@ -12,19 +12,13 @@ def generate_global_dst_indices(
 def generate_dst_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
+    load_on_cpu: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
 def generate_src_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor,
+    load_on_cpu: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
-def generate_dst_indices_np(
-    hot_mask: torch.Tensor,
-    supported_capacities: torch.Tensor,
-) -> Tuple[torch.Tensor, List[int]]: ...
-def generate_src_indices_np(
-    hot_mask: torch.Tensor,
-    supported_capacities: torch.Tensor,
-) -> Tuple[torch.Tensor, List[int]]: ...
 def convert_index_format(
     origin_indices: torch.Tensor,
     loads: torch.Tensor,

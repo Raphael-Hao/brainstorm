@@ -28,8 +28,8 @@ class RouterBase(nn.Module):
             self.capaturing = True
         if self.capaturing:
             self.history_len = 0
-            self.load_histor = None
-            self.capacity_history = None
+            self.register_buffer("load_history", None)
+            self.register_buffer("capacity_history", None)
         self.schedule_functions: List[Callable] = []
 
     def forward(self):
@@ -51,7 +51,7 @@ class RouterBase(nn.Module):
         return new_route_indices
 
     def capature_flow_stats(
-        self, loads: np.ndarray, capacities: np.ndarray = None
+        self, loads: torch.Tensor, capacities: torch.Tensor = None
     ) -> None:
         """
         Capture the flow.
@@ -60,9 +60,11 @@ class RouterBase(nn.Module):
             return
 
         if self.history_len == 0:
-            self.load_history = np.zeros_like(loads, dtype=np.float64)
+            self.load_history = torch.zeros_like(
+                loads, dtype=torch.float64, device="cpu"
+            )
             self.capacity_history = (
-                np.zeros_like(capacities, dtype=np.float64)
+                torch.zeros_like(capacities, dtype=torch.float64, device="cpu")
                 if capacities is not None
                 else None
             )

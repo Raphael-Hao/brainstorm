@@ -55,8 +55,8 @@ class DispatchFabric(FabricBase):
         self,
         in_flow: Union[ProtoTensor, List[ProtoTensor]],
         route_indices: torch.Tensor,
-        loads: np.ndarray,
-        capacities: np.ndarray = None,
+        loads: torch.Tensor,
+        capacities: torch.Tensor = None,
         score: torch.Tensor = None,
         skip=False,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
@@ -68,7 +68,7 @@ class DispatchFabric(FabricBase):
             in_flows = in_flow
 
         if self.throttling:
-            real_loads = np.minimum(loads, capacities)
+            real_loads = torch.minimum(loads, capacities)
         else:
             real_loads = loads
         all_out_flows = self.dispatch(in_flows, route_indices, real_loads, score)
@@ -80,7 +80,7 @@ class DispatchFabric(FabricBase):
         self,
         in_flows: List[ProtoTensor],
         route_indices: torch.Tensor,
-        real_loads: np.ndarray,
+        real_loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[List[ProtoTensor]]:
         all_out_flows = []
