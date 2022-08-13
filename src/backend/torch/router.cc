@@ -46,8 +46,8 @@ std::vector<::torch::Tensor> generate_global_dst_indices(
 
 std::pair<::torch::Tensor, ::torch::Tensor> generate_src_indices(
     const ::torch::Tensor& hot_mask /*[sample_num x path_num]*/,
-    const ::c10::optional<::torch::Tensor>& supported_capacities =
-        {} /*[supported_capacity_num]*/) {
+    const ::c10::optional<::torch::Tensor>& supported_capacities = {} /*[supported_capacity_num]*/,
+    const bool& load_on_cpu = true) {
   CHECK_ON_CUDA(hot_mask);
 
   // hot_mask.to(at::kInt, true);
@@ -70,46 +70,17 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_src_indices(
                              loads.data_ptr<int>(), supported_capacities_data_ptr, sample_num,
                              path_num, supported_capacity_num,
                              at::cuda::getDefaultCUDAStream().stream());
+  if (load_on_cpu) {
+    loads = loads.cpu();
+  }
+
   return {src_indices, loads};
-}
-
-std::pair<::torch::Tensor, std::vector<int>> generate_src_indices_np(
-    const ::torch::Tensor& hot_mask /*[sample_num x path_num]*/,
-    const ::c10::optional<::torch::Tensor>& supported_capacities =
-        {} /*[supported_capacity_num]*/) {
-  CHECK_ON_CUDA(hot_mask);
-
-  // hot_mask.to(at::kInt, true);
-
-  auto sample_num = hot_mask.size(0);
-  auto path_num = hot_mask.size(1);
-
-  int supported_capacity_num = 0;
-  int* supported_capacities_data_ptr = nullptr;
-
-  if (supported_capacities.has_value()) {
-    CHECK_ON_CUDA(supported_capacities.value());
-    supported_capacities_data_ptr = supported_capacities.value().data_ptr<int>();
-    supported_capacity_num = supported_capacities.value().size(0);
-  }
-
-  ::torch::Tensor src_indices = ::at::zeros_like(hot_mask, hot_mask.options());
-  ::torch::Tensor loads = ::at::zeros({path_num}, hot_mask.options());
-  router::GenerateSrcIndices(hot_mask.data_ptr<int>(), src_indices.data_ptr<int>(),
-                             loads.data_ptr<int>(), supported_capacities_data_ptr, sample_num,
-                             path_num, supported_capacity_num,
-                             at::cuda::getDefaultCUDAStream().stream());
-  // START_CUDA_TIMER(load, 0);
-  loads = loads.cpu();
-  std::vector<int> loads_np(loads.data_ptr<int>(), loads.data_ptr<int>() + loads.numel());
-  // STOP_CUDA_TIMER(load, 0);
-  return {src_indices, loads_np};
 }
 
 std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
     const ::torch::Tensor& hot_mask /*[sample_num x path_num]*/,
-    const ::c10::optional<::torch::Tensor>& supported_capacities =
-        {} /*[supported_capacity_num]*/) {
+    const ::c10::optional<::torch::Tensor>& supported_capacities = {} /*[supported_capacity_num]*/,
+    const bool& load_on_cpu = true) {
   CHECK_ON_CUDA(hot_mask);
 
   auto sample_num = hot_mask.size(0);
@@ -129,37 +100,10 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
                              loads.data_ptr<int>(), supported_capacities_data_ptr, sample_num,
                              path_num, supported_capacity_num,
                              at::cuda::getDefaultCUDAStream().stream());
+  if (load_on_cpu) {
+    loads = loads.cpu();
+  }
   return {dst_indices, loads};
-}
-
-std::pair<::torch::Tensor, std::vector<int>> generate_dst_indices_np(
-    const ::torch::Tensor& hot_mask /*[sample_num x path_num]*/,
-    const ::c10::optional<::torch::Tensor>& supported_capacities =
-        {} /*[supported_capacity_num]*/) {
-  CHECK_ON_CUDA(hot_mask);
-
-  auto sample_num = hot_mask.size(0);
-  auto path_num = hot_mask.size(1);
-
-  int* supported_capacities_data_ptr = nullptr;
-  int supported_capacity_num = 0;
-  if (supported_capacities.has_value()) {
-    CHECK_ON_CUDA(supported_capacities.value());
-    supported_capacities_data_ptr = supported_capacities.value().data_ptr<int>();
-    supported_capacity_num = supported_capacities.value().size(0);
-  }
-
-  ::torch::Tensor dst_indices = ::at::zeros_like(hot_mask, hot_mask.options());
-  ::torch::Tensor loads = ::at::zeros({path_num}, hot_mask.options());
-  router::GenerateDstIndices(hot_mask.data_ptr<int>(), dst_indices.data_ptr<int>(),
-                             loads.data_ptr<int>(), supported_capacities_data_ptr, sample_num,
-                             path_num, supported_capacity_num,
-                             at::cuda::getDefaultCUDAStream().stream());
-  // START_CUDA_TIMER(load, at::cuda::getDefaultCUDAStream().stream());
-  loads = loads.cpu();
-  std::vector<int> loads_np(loads.data_ptr<int>(), loads.data_ptr<int>() + loads.numel());
-  // STOP_CUDA_TIMER(load, at::cuda::getDefaultCUDAStream().stream());
-  return {dst_indices, loads_np};
 }
 
 ::torch::Tensor convert_index_format(
@@ -295,18 +239,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Generate global indices with each dst's load mapped to supported capacity");
   m.def("generate_src_indices", &brt::backend::torch::generate_src_indices,
         "Generate a tensor for all src indices with each path's load mapped to supported capacity",
-        pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none());
+        pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none(),
+        pybind11::arg("load_on_cpu") = true);
   m.def("generate_dst_indices", &brt::backend::torch::generate_dst_indices,
         "Generate a tensor for all dst indices with each path's load mapped to supported capacity",
-        pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none());
-
-  m.def("generate_src_indices_np", &brt::backend::torch::generate_src_indices_np,
-        "Generate a tensor for all src indices with each path's load mapped to supported capacity",
-        pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none());
-  m.def("generate_dst_indices_np", &brt::backend::torch::generate_dst_indices_np,
-        "Generate a tensor for all dst indices with each path's load mapped to supported capacity",
-        pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none());
-
+        pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none(),
+        pybind11::arg("load_on_cpu") = true);
   m.def("convert_index_format", &brt::backend::torch::convert_index_format,
         "convert indices to the new index format");
   m.def("dispatch_with_dst_indices_1d", &brt::backend::torch::dispatch_with_dst_indices_1d,
