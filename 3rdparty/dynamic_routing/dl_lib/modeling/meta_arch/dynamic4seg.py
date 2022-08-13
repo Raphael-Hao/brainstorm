@@ -57,6 +57,27 @@ class DynamicNet4Seg(nn.Module):
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [self.normalizer(x) for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
+        # for _ in range(10):
+        #     features, expt_flops, real_flops = self.backbone(
+        #         images.tensor, step_rate, predict_mode
+        #     )
+        # torch.cuda.current_stream().synchronize()
+        # start_event = torch.cuda.Event(enable_timing=True)
+        # end_event = torch.cuda.Event(enable_timing=True)
+        # iterations = 100
+        # start_event.record(torch.cuda.current_stream())
+        # for _ in range(iterations):
+        #     features, expt_flops, real_flops = self.backbone(
+        #         images.tensor, step_rate, predict_mode
+        #     )
+        # end_event.record(torch.cuda.current_stream())
+        # torch.cuda.current_stream().synchronize()
+        # print(
+        #     "{} elapsed time: {:.3f}".format(
+        #         "dynamic_routing",
+        #         start_event.elapsed_time(end_event) / iterations,
+        #     )
+        # )
         features, expt_flops, real_flops = self.backbone(
             images.tensor, step_rate, predict_mode
         )

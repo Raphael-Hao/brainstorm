@@ -116,6 +116,14 @@ def inference_on_dataset(model, data_loader, evaluator, predict_mode=True):
     num_warmup = min(5, logging_interval - 1, total - 1)
     start_time = time.time()
     total_compute_time = 0
+    profiler = torch.profiler.profile(
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/whcui/brainstorm_project/brainstorm/.cache/log/model_logs/brt_dr'),
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True
+    )
+    profiler.start()
     with inference_context(model), torch.no_grad():
         for idx, inputs in enumerate(data_loader):
             if idx == num_warmup:
@@ -125,6 +133,7 @@ def inference_on_dataset(model, data_loader, evaluator, predict_mode=True):
             #     model.cpu()
             start_compute_time = time.time()
             outputs = model(inputs)
+            profiler.step()
             # outputs = model(inputs, predict_mode=predict_mode)
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
@@ -142,6 +151,10 @@ def inference_on_dataset(model, data_loader, evaluator, predict_mode=True):
                         idx + 1, total, seconds_per_img, str(eta)
                     )
                 )
+            if idx > 20:
+                profiler.stop()
+                break
+            # break
 
     # Measure the time only for this worker (before the synchronization barrier)
     total_time = int(time.time() - start_time)
