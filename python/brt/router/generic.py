@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Union, Dict, Any
+from typing import List, Dict, Any
 
 import torch
 from brt.runtime import log
@@ -9,7 +9,6 @@ from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
 from brt.runtime.proto_tensor import ProtoTensor
-from brt.router.utils import pad_to_max
 
 __all__ = [
     "ScatterRouter",

@@ -44,10 +44,9 @@ class SwinMoEProtocol(ProtocolBase):
         normalize_gate=True,
         is_gshard_loss=True,
         alignment=1,
-        **kwargs
+        index_format="dst_index",
+        index_gen_opt=True,
     ):
-        index_format = kwargs.get("index_format", "dst_index")
-        index_gen_opt = kwargs.get("index_gen_opt", True)
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.top_k = top_k
         self.capacity_factor = capacity_factor

@@ -99,10 +99,10 @@ std::pair<::torch::Tensor, std::vector<int>> generate_src_indices_np(
                              loads.data_ptr<int>(), supported_capacities_data_ptr, sample_num,
                              path_num, supported_capacity_num,
                              at::cuda::getDefaultCUDAStream().stream());
-  START_CUDA_TIMER(load, 0);
+  // START_CUDA_TIMER(load, 0);
   loads = loads.cpu();
   std::vector<int> loads_np(loads.data_ptr<int>(), loads.data_ptr<int>() + loads.numel());
-  STOP_CUDA_TIMER(load, 0);
+  // STOP_CUDA_TIMER(load, 0);
   return {src_indices, loads_np};
 }
 
@@ -155,10 +155,10 @@ std::pair<::torch::Tensor, std::vector<int>> generate_dst_indices_np(
                              loads.data_ptr<int>(), supported_capacities_data_ptr, sample_num,
                              path_num, supported_capacity_num,
                              at::cuda::getDefaultCUDAStream().stream());
-  START_CUDA_TIMER(load, at::cuda::getDefaultCUDAStream().stream());
+  // START_CUDA_TIMER(load, at::cuda::getDefaultCUDAStream().stream());
   loads = loads.cpu();
   std::vector<int> loads_np(loads.data_ptr<int>(), loads.data_ptr<int>() + loads.numel());
-  STOP_CUDA_TIMER(load, at::cuda::getDefaultCUDAStream().stream());
+  // STOP_CUDA_TIMER(load, at::cuda::getDefaultCUDAStream().stream());
   return {dst_indices, loads_np};
 }
 

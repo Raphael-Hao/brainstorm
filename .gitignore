@@ -79,3 +79,5 @@ venv.bak/
 
 # .nfs files are created when an open file is removed but is still being accessed
 .nfs*
+benchmark/dynamic_routing/inference/*
+benchmark/dynamic_routing/log.txt

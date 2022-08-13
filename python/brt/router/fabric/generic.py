@@ -55,11 +55,11 @@ class DispatchFabric(FabricBase):
         self,
         in_flow: Union[ProtoTensor, List[ProtoTensor]],
         route_indices: torch.Tensor,
-        loads: torch.Tensor,
-        capacities: torch.Tensor = None,
+        loads: np.ndarray,
+        capacities: np.ndarray = None,
         score: torch.Tensor = None,
+        skip=False,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
-
         in_flow = self.pack_invalid_flow(in_flow)
 
         if self.flow_num == 1:
@@ -68,7 +68,7 @@ class DispatchFabric(FabricBase):
             in_flows = in_flow
 
         if self.throttling:
-            real_loads = torch.minimum(loads, capacities)
+            real_loads = np.minimum(loads, capacities)
         else:
             real_loads = loads
         all_out_flows = self.dispatch(in_flows, route_indices, real_loads, score)
@@ -80,12 +80,12 @@ class DispatchFabric(FabricBase):
         self,
         in_flows: List[ProtoTensor],
         route_indices: torch.Tensor,
-        real_loads: torch.Tensor,
+        real_loads: np.ndarray,
         score: torch.Tensor,
     ) -> List[List[ProtoTensor]]:
         all_out_flows = []
         path_num = route_indices.size(1)
-        real_loads_cpu = real_loads.cpu()
+        # real_loads = real_loads.cpu()
         route_indices_64 = route_indices.to(torch.int64)
         for flow_idx in range(self.flow_num):
             flow = in_flows[flow_idx]
@@ -117,7 +117,7 @@ class DispatchFabric(FabricBase):
                 raise ValueError("route_logic must be 1d or 2d")
             out_flows = []
             for i in range(path_num):
-                tag_indices = route_indices_64[: real_loads_cpu[i], i : i + 1]
+                tag_indices = route_indices_64[: real_loads[i], i : i + 1]
 
                 if tag_indices.numel() > 0:
                     out_flow_tag = torch.gather(flow_tag, 0, tag_indices)
@@ -172,7 +172,7 @@ class CombineFabric(FabricBase):
         self.granularity_padding = granularity_padding
 
     def forward(
-        self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]]
+        self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]], skip=False
     ) -> Union[ProtoTensor, List[ProtoTensor]]:
         in_flows = self.pack_invalid_flow(in_flows)
 
@@ -231,7 +231,7 @@ class CombineFabric(FabricBase):
             else:
                 if self.sparse:
                     out_flow_tag, inverse = torch.unique(
-                        in_flows_tag, sorted=True, return_inverse=True
+                        in_flows_tag, return_inverse=True
                     )
                     route_indices = inverse.repeat(1, route_size).view(-1, *route_shape)
                     out_flow_tag = out_flow_tag.view(-1, 1)

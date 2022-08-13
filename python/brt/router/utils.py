@@ -3,7 +3,7 @@
 from typing import Tuple, List, Dict, Any
 
 import torch
-import numpy
+import numpy as np
 import brt._C.router as C_router
 
 __all__ = ["generate_src_indices", "generate_dst_indices"]
@@ -13,7 +13,7 @@ def generate_src_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor = None,
     index_gen_opt=True,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, np.ndarray]:
     """generate source indices according to hot_mask
 
     Args:
@@ -26,14 +26,15 @@ def generate_src_indices(
     """
 
     if hot_mask.is_cuda and index_gen_opt:
-        src_indices, loads = C_router.generate_src_indices(
+        src_indices, loads = C_router.generate_src_indices_np(
             hot_mask.to(torch.int32), supported_capacities
         )
+        loads = np.array(loads, dtype=np.int64)
     else:
         src_indices = torch.zeros_like(hot_mask)
-        loads = torch.zeros(
-            (hot_mask.size(1),), dtype=torch.int64, device=hot_mask.device
-        )
+        # loads = [0 for _ in range(hot_mask.size(1))]
+        loads = np.zeros(hot_mask.size(1),dtype=np.int64)
+        torch.zeros((hot_mask.size(1),), dtype=torch.int64, device=hot_mask.device)
         hot_mask_t = hot_mask.t().contiguous()
         for i in range(hot_mask.size(1)):
             src_indices_per_path = hot_mask_t[i].view(-1).nonzero()
@@ -53,7 +54,7 @@ def generate_dst_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor = None,
     index_gen_opt=True,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, np.ndarray]:
     """generate destination indices according to hot_mask
 
     Args:
@@ -64,12 +65,13 @@ def generate_dst_indices(
         Tuple[torch.Tensor, torch.Tensor]: destination indices and loads
     """
     if hot_mask.is_cuda and index_gen_opt:
-        dst_indices, loads = C_router.generate_dst_indices(
+        dst_indices, loads = C_router.generate_dst_indices_np(
             hot_mask.to(torch.int32), supported_capacities
         )
+        loads = np.array(loads, dtype=np.int64)
     else:
         dst_indices = torch.cumsum(hot_mask, dim=0) * hot_mask
-        loads = torch.sum(hot_mask, dim=0)
+        loads = torch.sum(hot_mask, dim=0).numpy().astype(np.int64)
         if supported_capacities is not None:
             for i in range(hot_mask.size(1)):
                 real_load = loads[i]
@@ -94,6 +96,8 @@ def generate_indices(
         indices, loads = generate_dst_indices(
             hot_mask, supported_capacities, index_gen_opt
         )
+    else:
+        raise ValueError(f"Unknown index format: {index_format}")
     return indices, loads
 
 
@@ -122,7 +126,7 @@ def pad_to_max(tensors: List[torch.Tensor], pad_value=0):
     """
     lengths = [t.numel() // t.size(0) for t in tensors]
 
-    max_id = numpy.argmax(lengths)
+    max_id = np.argmax(lengths)
 
     max_length = lengths[max_id]
 
