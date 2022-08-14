@@ -22,7 +22,8 @@ class FabricBase(nn.Module):
         assert self.index_format in [
             "dst_index",
             "src_index",
-        ], f"index_format should be dst_index or src_index, but got {index_format}"
+            None,
+        ], f"index_format should be dst_index, src_index or None, but got {index_format}"
 
     def start_timer(self):
         self.start_event.record(torch.cuda.current_stream())
