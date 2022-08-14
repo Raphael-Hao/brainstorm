@@ -8,8 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from brt.runtime import log
-from brt.runtime import Registry
+from brt.runtime import log, Registry, ProtoTensor
 from brt.router.utils import convert_index_format, make_kwargs
 from brt.trace.initialize import trace_init
 
@@ -90,36 +89,6 @@ class RouterBase(nn.Module):
     def run_schedule(self):
         for func in self.schedule_functions:
             func()
-
-    def skip_routing(self, in_flows, score: torch.Tensor, router_kind: str):
-        empty_flows, flows_load = self._check_empty(in_flows)
-        if empty_flows:
-            if router_kind == "scatter":
-                pass
-            elif router_kind == "gather":
-                pass
-            else:
-                raise ValueError(f"Unknown router kind: {router_kind}")
-        else:
-            return False, None
-
-    def _check_empty(self, in_flows) -> Tuple[bool, int]:
-        if isinstance(in_flows, torch.Tensor):
-            if in_flows.numel() == 0:
-                return True, 0
-            else:
-                return False, 0
-        if isinstance(in_flows, (Tuple, List)):
-            empty_flows = True
-            flows_load = 0
-            for flow in in_flows:
-                empty_flow, load = self._check_empty(flow)
-                empty_flows = empty_flows and empty_flow
-                load = np.max([flows_load, load])
-                if not empty_flows:
-                    return False, load
-            return empty_flows, flows_load
-
 
 def register_router(router_type: str) -> Callable:
     global_register_func = Registry.register_sub_cls(router_type, RouterBase)

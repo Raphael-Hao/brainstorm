@@ -110,6 +110,8 @@ class SwinMoEProtocol(ProtocolBase):
 
                 for indices, gates in zip(indices_s, gates_s):
                     new_score.scatter_(1, indices.unsqueeze(-1), gates.unsqueeze(-1))
+        else:
+            acc_base = loads_1
 
         samples_per_expert = (
             int(score.size(0)) + num_global_experts - 1
@@ -139,6 +141,10 @@ class SwinMoEProtocol(ProtocolBase):
         remainder = capacity % self.alignment
         if remainder > 0:
             capacity = capacity + self.alignment - remainder
+
+        loads = acc_base.view(-1).cpu()
+        capacity = torch.zeros_like(loads, dtype=loads.dtype, device=loads.device).fill_(capacity)
+
         return route_indices, acc_base.view(-1), capacity, new_score, loss
 
     def generate_auxiliary(self, score, logits_wo_noise, logits, topk_ids):
