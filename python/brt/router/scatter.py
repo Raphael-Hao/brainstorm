@@ -79,7 +79,8 @@ class ScatterRouter(RouterBase):
         self.fabric_type = fabric_type
 
         self.fabric_kwargs = {}
-        if self.fabric_type == "dispatch":
+
+        if "dispatch" in self.fabric_type:
             built_in_fabric_kwargs = {
                 "flow_num": 1,
                 "throttling": False,

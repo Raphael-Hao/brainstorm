@@ -34,7 +34,7 @@ class GatherRouter(RouterBase):
         self.fabric_type = fabric_type
         self.fabric_kwargs = {}
 
-        if fabric_type == "combine":
+        if "combine" in self.fabric_type:
             bult_in_fabric_kwargs = {
                 "flow_num": 1,
                 "reduction": "add",
