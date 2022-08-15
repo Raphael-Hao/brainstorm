@@ -20,18 +20,20 @@ class ZeroSkipFabric(FabricBase):
         if score is not None:
             path_num = score.size(1)
         if self.flow_num == 1:
-            empty_flows, ret_flows = self._check_empty(in_flows, score, "scatter")
-
+            empty_flows, ret_flows = self._check_empty(in_flows)
+            if not empty_flows:
+                return False, None
             if path_num == 1:
-                return empty_flows, ret_flows
+                return True, ret_flows
             else:
-                return empty_flows, [ret_flows for _ in range(path_num)]
+                return True, [ret_flows for _ in range(path_num)]
         else:
             """NOTE: we assume the in_flows will all be the same zero or no-zero
             tensors, therefore we will only check the first in_flow
             """
             empty_flows, ret_flows = self._check_empty(in_flows[0])
-
+            if not empty_flows:
+                return False, None
             if path_num == 1:
                 return True, [ret_flows for _ in range(self.flow_num)]
             else:
@@ -44,7 +46,7 @@ class ZeroSkipFabric(FabricBase):
             if in_flows.numel() == 0:
                 return True, in_flows
             else:
-                return False, 0
+                return False, None
         if isinstance(in_flows, (Tuple, List)):
             empty_flows = True
             for flow in in_flows:
