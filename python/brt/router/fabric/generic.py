@@ -123,6 +123,8 @@ class DispatchFabric(FabricBase):
                         dispatched_data = flow_data
                     elif self.route_logics[flow_idx] == "2d":
                         dispatched_data = flow_data[:, i : i + 1].contiguous()
+                    else:
+                        raise ValueError("route_logic must be 1d or 2d")
                     if self.transforms[flow_idx]:
                         dispatched_data = dispatched_data * score[:, i].view(
                             (-1,) + (1,) * len(route_shape)
