@@ -19,7 +19,7 @@ class GatherRouter(RouterBase):
         self,
         fabric_type: str = "combine",
         fabric_kwargs: Dict[str, Any] = None,
-        capaturing=True,
+        capaturing=False,
     ):
         """gather router
 

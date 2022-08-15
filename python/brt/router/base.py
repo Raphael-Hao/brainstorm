@@ -24,6 +24,8 @@ class RouterBase(nn.Module):
         )
         if env_capaturing or capaturing:
             self.capaturing = True
+        else:
+            self.capaturing = False
         if self.capaturing:
             self.history_len = 0
             self.register_buffer("load_history", None)
