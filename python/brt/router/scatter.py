@@ -26,7 +26,7 @@ class ScatterRouter(RouterBase):
         fabric_type: str = "dispatch",
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
-        capaturing=True,
+        capaturing=False,
     ):
         """base scatter router
 

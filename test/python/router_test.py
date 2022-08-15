@@ -73,7 +73,6 @@ class RouterTest(unittest.TestCase):
         dst: int,
         which_half: str = None,
         sparse=False,
-        GPU=False,
     ):
         def gate(inputs):
             gates = torch.zeros(
@@ -86,48 +85,54 @@ class RouterTest(unittest.TestCase):
             else:
                 gates[:, dst] = 1
             return gates
-        model = Model(gate=gate, sparse=sparse).eval()
-        if GPU:
-            inputs = inputs.cuda()
-            model.cuda()
-        results = model(inputs)
 
-        if which_half is None:
-            self.assertTrue(torch.allclose(results[dst].data, inputs))
-            self.assertTrue(results[1 - dst].data.numel() == 0)
-            self.assertTrue(torch.allclose(results[2].data, inputs))
-        else:
-            self.assertTrue(results[1 - dst].data.numel() == 0)
-            if which_half == "upper":
-                self.assertTrue(
-                    torch.allclose(results[dst].data, inputs[inputs.size(0) // 2 :])
-                )
-                if sparse:
+        model = Model(gate=gate, sparse=sparse).eval()
+        for i in range(2):
+            if i == 1:
+                inputs = inputs.cuda()
+                model.cuda()
+            results = model(inputs)
+
+            if which_half is None:
+                self.assertTrue(torch.allclose(results[dst].data, inputs))
+                self.assertTrue(results[1 - dst].data.numel() == 0)
+                self.assertTrue(torch.allclose(results[2].data, inputs))
+            else:
+                self.assertTrue(results[1 - dst].data.numel() == 0)
+                if which_half == "upper":
                     self.assertTrue(
-                        torch.allclose(results[2].data, inputs[inputs.size(0) // 2 :])
+                        torch.allclose(results[dst].data, inputs[inputs.size(0) // 2 :])
                     )
-                else:
-                    self.assertTrue(
-                        torch.allclose(
-                            results[2].data[inputs.size(0) // 2 :],
-                            inputs[inputs.size(0) // 2 :],
+                    if sparse:
+                        self.assertTrue(
+                            torch.allclose(
+                                results[2].data, inputs[inputs.size(0) // 2 :]
+                            )
                         )
-                    )
-            elif which_half == "lower":
-                self.assertTrue(
-                    torch.allclose(results[dst], inputs[: inputs.size(0) // 2])
-                )
-                if sparse:
-                    self.assertTrue(
-                        torch.allclose(results[2].data, inputs[: inputs.size(0) // 2])
-                    )
-                else:
-                    self.assertTrue(
-                        torch.allclose(
-                            results[2].data[: inputs.size(0) // 2],
-                            inputs[: inputs.size(0) // 2],
+                    else:
+                        self.assertTrue(
+                            torch.allclose(
+                                results[2].data[inputs.size(0) // 2 :],
+                                inputs[inputs.size(0) // 2 :],
+                            )
                         )
+                elif which_half == "lower":
+                    self.assertTrue(
+                        torch.allclose(results[dst], inputs[: inputs.size(0) // 2])
                     )
+                    if sparse:
+                        self.assertTrue(
+                            torch.allclose(
+                                results[2].data, inputs[: inputs.size(0) // 2]
+                            )
+                        )
+                    else:
+                        self.assertTrue(
+                            torch.allclose(
+                                results[2].data[: inputs.size(0) // 2],
+                                inputs[: inputs.size(0) // 2],
+                            )
+                        )
 
     def weighted_route(
         self,
@@ -150,18 +155,21 @@ class RouterTest(unittest.TestCase):
             return gates
 
         model = Model(gate=gate, sparse=sparse)
-        results = model(inputs)
-        self.assertTrue(torch.allclose(results[0].data, results[1].data))
+        for i in range(2):
+            if i == 1:
+                inputs = inputs.cuda()
+                model.cuda()
+
+            results = model(inputs)
+            self.assertTrue(torch.allclose(results[0].data, results[1].data))
 
     def test_2d_route(self):
         for i in range(2):
             x = torch.arange(0, 80, dtype=torch.float32).view(8, 10)
             self.simple_route(BranchRoute, x, dst=i, sparse=False)
-            self.simple_route(BranchRoute, x, dst=i, sparse=False, GPU=True)
             self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=False)
             self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=False)
             self.simple_route(BranchRoute, x, dst=i, sparse=True)
-            self.simple_route(BranchRoute, x, dst=i, sparse=True, GPU=True)
             self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=True)
             self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=True)
             self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=False)
