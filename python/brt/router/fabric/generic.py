@@ -5,7 +5,6 @@ from typing import List, Union
 
 import numpy as np
 import torch
-import torch.distributed as dist
 from brt.runtime import log
 from brt.router.utils import pad_to_max
 from brt.router.fabric.base import FabricBase, register_fabric
@@ -58,7 +57,6 @@ class DispatchFabric(FabricBase):
         loads: torch.Tensor,
         capacities: torch.Tensor = None,
         score: torch.Tensor = None,
-        skip=False,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
         in_flow = self.pack_invalid_flow(in_flow)
 
@@ -163,7 +161,11 @@ class DispatchFabric(FabricBase):
 @register_fabric("combine")
 class CombineFabric(FabricBase):
     def __init__(
-        self, flow_num: int, reduction="add", sparse=False, granularity_padding=False
+        self,
+        flow_num: int,
+        reduction="add",
+        sparse=False,
+        granularity_padding=False,
     ):
         super().__init__(index_format="src_index", flow_num=flow_num)
 
@@ -172,7 +174,7 @@ class CombineFabric(FabricBase):
         self.granularity_padding = granularity_padding
 
     def forward(
-        self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]], skip=False
+        self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]]
     ) -> Union[ProtoTensor, List[ProtoTensor]]:
         in_flows = self.pack_invalid_flow(in_flows)
 
