@@ -1,14 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import inspect
-from typing import Callable, Dict, List, Any, Tuple
+from typing import Callable, Dict, List, Any
 
 import os
-import numpy as np
 import torch
 import torch.nn as nn
 
-from brt.runtime import log, Registry, ProtoTensor
+from brt.runtime import log, Registry
 from brt.router.utils import convert_index_format, make_kwargs
 from brt.trace.initialize import trace_init
 
