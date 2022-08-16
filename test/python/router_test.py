@@ -12,31 +12,6 @@ from brt.router import GatherRouter, ScatterRouter
 from brt.trace.graph import GraphTracer
 
 
-class SinglePTURoute(nn.Module):
-    def __init__(self, gate, dispatch_score=False) -> None:
-        super().__init__()
-        self.gate = gate
-        self.scatter_router = ScatterRouter(
-            dispatch_score=dispatch_score,
-            protocol_type="threshold",
-            protocol_kwargs={"threshold": 0.5},
-            fabric_type="single_ptu_dispatch",
-        )
-        self.expert1 = nn.Identity()
-        self.expert2 = nn.Identity()
-        self.gather_router = GatherRouter(
-            fabric_type="single_ptu_combine", fabric_kwargs={"sparse": True}
-        )
-
-    def forward(self, x):
-        score = self.gate(x)
-        routed_results = self.scatter_router(x, score)
-        x_0 = self.expert1(routed_results[0])
-        x_1 = self.expert2(routed_results[1])
-        x = self.gather_router([x_0, x_1])
-        return x_0, x_1, x
-
-
 class BranchRoute(nn.Module):
     def __init__(
         self,
