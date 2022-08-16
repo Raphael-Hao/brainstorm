@@ -252,11 +252,9 @@ class Cell(nn.Module):
         residual_h_l, residual_w_beta = self.residual_scatter(
             [h_l1, gate_weights_beta], gate_weights_beta
         )
-        # print(residual_h_l)
 
         h_l = self.cell_ops(residual_h_l[1])
-        # NOTE: brt, using for inference
-        # route = [keep(, up(, down)?)?]
+
         route_h_l, route_weight = self.threeway_scatter(
             h_l, residual_w_beta[1].view(h_l.size(0), self.gate_num)
         )
@@ -264,7 +262,7 @@ class Cell(nn.Module):
         ## keep
         route_h_l_keep = self.res_keep(route_h_l[0])
 
-        route_result_keep = route_h_l_keep * (route_weight[0].view(-1, 1, 1, 1))
+        route_result_keep = (route_weight[0].view(-1, 1, 1, 1)) * route_h_l_keep
 
         ## up
         if self.allow_up:
