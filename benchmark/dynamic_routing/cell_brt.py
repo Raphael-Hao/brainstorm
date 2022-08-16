@@ -132,11 +132,14 @@ class Cell(nn.Module):
         else:
             self.gate_num = 1
 
-        self.cell_gather = GatherRouter(fabric_kwargs={"sparse": True})
+        self.cell_gather = GatherRouter(
+            fabric_type="single_ptu_combine", fabric_kwargs={"sparse": True}
+        )
 
         self.residual_scatter = ScatterRouter(
             protocol_type="batched_threshold",
-            protocol_kwargs={"threshold": 0.0001},
+            fabric_type="single_ptu_dispatch",
+            protocol_kwargs={"threshold": 0.0001, "single_tpu": True},
             fabric_kwargs={
                 "flow_num": 2,
                 "route_logic": ["1d", "1d"],
@@ -147,9 +150,11 @@ class Cell(nn.Module):
         self.threeway_scatter = ScatterRouter(
             dispatch_score=True,
             protocol_type="threshold",
+            fabric_type="single_ptu_dispatch",
             protocol_kwargs={
                 "threshold": 0.0001,
                 "residual_path": -1,
+                "single_tpu": True,
             },
         )
 
