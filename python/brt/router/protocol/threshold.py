@@ -17,6 +17,7 @@ class ThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         residual_path=-1,
+        single_tpu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -24,6 +25,7 @@ class ThresholdProtocol(ProtocolBase):
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.threshold = threshold
         self.residual_path = residual_path
+        self.single_tpu = single_tpu
         self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
@@ -40,7 +42,12 @@ class ThresholdProtocol(ProtocolBase):
                 device=score.device,
             )
             hot_mask = torch.scatter_add(hot_mask, 1, residual_index, residual_indices)
-
+        if self.single_tpu:
+            if hot_mask.numel() > 0:
+                loads = hot_mask.view(-1).cpu()
+            else:
+                loads = torch.zeros(hot_mask.size(1), dtype=torch.int32, device="cpu")
+            return hot_mask, loads, loads
         route_indices, loads = generate_indices(
             hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
         )
@@ -57,6 +64,7 @@ class BatchedThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         drop_path=0,
+        single_tpu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -66,6 +74,7 @@ class BatchedThresholdProtocol(ProtocolBase):
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.threshold = threshold
         self.drop_path = drop_path
+        self.single_tpu = single_tpu
         self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
@@ -82,7 +91,12 @@ class BatchedThresholdProtocol(ProtocolBase):
             ).scatter_(1, hot_mask, 1)
         else:
             raise ValueError("drop_path should be 0 or 1")
-
+        if self.single_tpu:
+            if hot_mask.numel() > 0:
+                loads = hot_mask.view(-1).cpu()
+            else:
+                loads = torch.zeros(hot_mask.size(1), dtype=torch.int32, device="cpu")
+            return hot_mask, loads, loads
         route_indices, loads = generate_indices(
             hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
         )
