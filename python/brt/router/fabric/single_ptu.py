@@ -47,7 +47,6 @@ class SinglePTUDispatchFabric(DispatchFabric):
         score: torch.Tensor,
     ) -> List[List[torch.Tensor]]:
         all_out_flows = []
-        path_num = route_indices.size(1)
         for flow_idx in range(self.flow_num):
             flow = in_flows[flow_idx]
             if_proto_tensor = False
