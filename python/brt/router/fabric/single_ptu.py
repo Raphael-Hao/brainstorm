@@ -93,7 +93,7 @@ class SinglePTUDispatchFabric(DispatchFabric):
                     if self.route_logics[flow_idx] == "1d":
                         dispatched_flow = flow
                     elif self.route_logics[flow_idx] == "2d":
-                        dispatched_flow = flow[:, path_id:path_id + 1].contiguous()
+                        dispatched_flow = flow[:, path_id : path_id + 1].contiguous()
                     else:
                         raise ValueError("route_logic must be 1d or 2d")
 
@@ -143,9 +143,10 @@ class SinglePTUCombineFabric(CombineFabric):
         out_flows = []
 
         for flow_idx in range(self.flow_num):
-            out_flow = torch.cat(in_flows[flow_idx], dim=0).sum(dim=0, keepdim=True)
+            out_flow = torch.cat(in_flows[flow_idx], dim=0)
+            if out_flow.numel() > 0:
+                out_flow = out_flow.sum(dim=0, keepdim=True)
             out_flows.append(out_flow)
-
         return out_flows
 
     def check_compatibility(self, kwargs) -> None:

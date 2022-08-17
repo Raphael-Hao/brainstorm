@@ -124,6 +124,7 @@ def inference_on_dataset(model, data_loader, evaluator, predict_mode=True):
     #     with_stack=True
     # )
     # profiler.start()
+    torch.set_printoptions(threshold=20,sci_mode=False,edgeitems=2)
     with inference_context(model), torch.no_grad():
         for idx, inputs in enumerate(data_loader):
             if idx == num_warmup:
@@ -154,7 +155,7 @@ def inference_on_dataset(model, data_loader, evaluator, predict_mode=True):
             # if idx > 1:
                 # profiler.stop()
                 # break
-            # break
+            break
 
     # Measure the time only for this worker (before the synchronization barrier)
     total_time = int(time.time() - start_time)
