@@ -146,17 +146,17 @@ class Cell(nn.Module):
                 "transform": [False, False],
             },
         )
-
-        self.threeway_scatter = ScatterRouter(
-            dispatch_score=True,
-            protocol_type="threshold",
-            fabric_type="single_ptu_dispatch",
-            protocol_kwargs={
-                "threshold": 0.0001,
-                "residual_path": -1,
-                "single_tpu": True,
-            },
-        )
+        if self.allow_down or self.allow_up:
+            self.threeway_scatter = ScatterRouter(
+                dispatch_score=True,
+                protocol_type="threshold",
+                fabric_type="single_ptu_dispatch",
+                protocol_kwargs={
+                    "threshold": 0.0001,
+                    "residual_path": -1,
+                    "single_tpu": True,
+                },
+            )
 
         # resolution keep
         self.res_keep = nn.ReLU()
@@ -254,17 +254,17 @@ class Cell(nn.Module):
         )
 
         h_l = self.cell_ops(residual_h_l[1])
+        if self.allow_up or self.allow_down:
+            route_h_l, route_weight = self.threeway_scatter(
+                h_l, residual_w_beta[1].view(h_l.size(0), self.gate_num)
+            )
+            route_h_l_keep = self.res_keep(route_h_l[0])
 
-        route_h_l, route_weight = self.threeway_scatter(
-            h_l, residual_w_beta[1].view(h_l.size(0), self.gate_num)
-        )
+            route_result_keep = (route_weight[0].view(-1, 1, 1, 1)) * route_h_l_keep
+        else:
+            route_h_l_keep = self.res_keep(h_l)
+            route_result_keep = (residual_w_beta[1].view(-1, 1, 1, 1)) * route_h_l_keep
 
-        ## keep
-        route_h_l_keep = self.res_keep(route_h_l[0])
-
-        route_result_keep = (route_weight[0].view(-1, 1, 1, 1)) * route_h_l_keep
-
-        ## up
         if self.allow_up:
             route_h_l_up = self.res_up(route_h_l[1])
             route_h_l_up = F.interpolate(
