@@ -19,7 +19,8 @@ class GatherRouter(RouterBase):
         self,
         fabric_type: str = "combine",
         fabric_kwargs: Dict[str, Any] = None,
-        capaturing=False,
+        capturing=False,
+        capture_mode: str = "c",
     ):
         """gather router
 
@@ -30,7 +31,7 @@ class GatherRouter(RouterBase):
                 sparse (bool, optional): whether restore with zero paddings. Defaults to False.
                 auto_padding (bool, optional): whether to pad the tensor to the max shape. Defaults to False.
         """
-        super().__init__(capaturing=capaturing)
+        super().__init__(capturing=capturing, capture_mode=capture_mode)
         self.fabric_type = fabric_type
         self.fabric_kwargs = {}
 

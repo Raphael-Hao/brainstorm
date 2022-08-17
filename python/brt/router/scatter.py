@@ -26,7 +26,8 @@ class ScatterRouter(RouterBase):
         fabric_type: str = "dispatch",
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
-        capaturing=False,
+        capturing=False,
+        capture_mode: str = "c",
     ):
         """base scatter router
 
@@ -49,7 +50,7 @@ class ScatterRouter(RouterBase):
                     transform (bool, optional): whether to transform the route result to the original shape. Defaults to False.
             Capturing (bool, optional): whether to capture the flow stats. Defaults to True.
         """
-        super().__init__(capaturing=capaturing)
+        super().__init__(capturing=capturing, capture_mode=capture_mode)
         self.dispatch_score = dispatch_score
 
         self.protocol_type = protocol_type
@@ -102,7 +103,7 @@ class ScatterRouter(RouterBase):
     def forward(self, in_flows, score: torch.Tensor):
 
         route_indices, loads, capacities = self.protocol(score)
-        self.capature_flow_stats(loads, capacities)
+        self.capture_flow_stats(loads, capacities)
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
@@ -130,9 +131,10 @@ class SwinMoEScatterRouter(RouterBase):
         fabric_type: str = "dispatch",
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
-        capaturing=True,
+        capturing=True,
+        capture_mode: str = "c",
     ):
-        super().__init__(capaturing=capaturing)
+        super().__init__(capturing=capturing, capture_mode=capture_mode)
         assert (
             protocol_type in self.ALLOWED_PROTOCOL_TYPES
         ), f"protocol_type {protocol_type} is not supported by SwinMoEScatterRouter"

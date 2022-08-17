@@ -2,14 +2,14 @@
 
 # from dynamic_raw_config import config
 
-from dynamic_A_config import config
+# from dynamic_A_config import config
 
-# from dynamic_B_config import config
+from dynamic_B_config import config
 # from dynamic_C_config import config
 from brt.trace.graph import GraphTracer
 from torch.fx.graph_module import GraphModule
 from torch.fx.passes.graph_drawer import FxGraphDrawer
-
+from brt.router import ScatterRouter
 
 """
 Detection Training Script.
@@ -166,10 +166,17 @@ def main(args):
         tracer = GraphTracer()
         graph = tracer.trace(model.backbone)
         graph_module = GraphModule(tracer.root, graph, cfg.ARCH_NAME)
+        modules = dict(graph_module.named_modules())
+        for node in graph.nodes:
+            if node.op == "call_module":
+                if isinstance(modules[node.target], ScatterRouter):
+                    print(
+                        f"Node: {node.target}, load history:{modules[node.target].load_history}"
+                    )
 
-        graph_drawer = FxGraphDrawer(graph_module, cfg.ARCH_NAME)
-        with open("{}.svg".format(cfg.ARCH_NAME), "wb") as f:
-            f.write(graph_drawer.get_dot_graph().create_svg())
+        # graph_drawer = FxGraphDrawer(graph_module, cfg.ARCH_NAME)
+        # with open("{}.svg".format(cfg.ARCH_NAME), "wb") as f:
+        #     f.write(graph_drawer.get_dot_graph().create_svg())
 
 
 if __name__ == "__main__":

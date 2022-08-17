@@ -17,16 +17,15 @@ logger = log.get_logger(__file__)
 
 
 class RouterBase(nn.Module):
-    def __init__(self, capaturing=False):
+    def __init__(self, capturing=False, capture_mode="a"):
         super().__init__()
-        env_capaturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in (
-            "true"
-        )
-        if env_capaturing or capaturing:
-            self.capaturing = True
+        env_capturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in ("true")
+        if env_capturing or capturing:
+            self.capturing = True
+            self.capture_mode = capture_mode
         else:
-            self.capaturing = False
-        if self.capaturing:
+            self.capturing = False
+        if self.capturing:
             self.history_len = 0
             self.register_buffer("load_history", None)
             self.register_buffer("capacity_history", None)
@@ -50,13 +49,13 @@ class RouterBase(nn.Module):
         )
         return new_route_indices
 
-    def capature_flow_stats(
+    def capture_flow_stats(
         self, loads: torch.Tensor, capacities: torch.Tensor = None
     ) -> None:
         """
         Capture the flow.
         """
-        if not self.capaturing:
+        if not self.capturing:
             return
 
         if self.history_len == 0:
@@ -68,13 +67,25 @@ class RouterBase(nn.Module):
                 if capacities is not None
                 else None
             )
-        self.load_history = (self.load_history * self.history_len + loads) / (
-            self.history_len + 1.0
-        )
-        if capacities is not None:
-            self.capacity_history = (
-                self.capacity_history * self.history_len + capacities
-            ) / (self.history_len + 1.0)
+
+        if self.capture_mode == "a":
+            self.load_history = (self.load_history * self.history_len + loads) / (
+                self.history_len + 1.0
+            )
+            if capacities is not None:
+                self.capacity_history = (
+                    self.capacity_history * self.history_len + capacities
+                ) / (self.history_len + 1.0)
+        elif self.capture_mode == "m":
+            self.load_history = torch.maximum(self.load_history, loads)
+            if capacities is not None:
+                self.capacity_history = torch.maximum(self.capacity_history, capacities)
+        elif self.capture_mode == "c":
+            self.load_history = self.load_history + loads
+            if capacities is not None:
+                self.capacity_history = self.capacity_history + capacities
+
+        self.history_len += 1
 
     def reset_flow_stats(self):
         self.history_len = 0
@@ -90,6 +101,7 @@ class RouterBase(nn.Module):
     def run_schedule(self):
         for func in self.schedule_functions:
             func()
+
 
 def register_router(router_type: str) -> Callable:
     global_register_func = Registry.register_sub_cls(router_type, RouterBase)
