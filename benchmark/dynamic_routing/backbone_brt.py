@@ -338,6 +338,7 @@ class DynamicNetwork(Backbone):
         self.final_gathers = nn.ModuleList(
             GatherRouter(
                 fabric_type="single_ptu_combine", fabric_kwargs={"sparse": True}
+                # fabric_type="combine", fabric_kwargs={"sparse": True}
             )
             for _ in range(self.cell_num_list[-1])
         )
