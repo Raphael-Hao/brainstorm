@@ -152,9 +152,9 @@ def inference_on_dataset(model, data_loader, evaluator, predict_mode=True):
                         idx + 1, total, seconds_per_img, str(eta)
                     )
                 )
-            # if idx > 1:
-                # profiler.stop()
-                # break
+            # if idx > 20:
+            #     profiler.stop()
+            #     break
             # break
 
     # Measure the time only for this worker (before the synchronization barrier)
