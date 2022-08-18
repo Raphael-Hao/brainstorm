@@ -14,7 +14,6 @@ from ops import OPS, Conv2dNormAct, Identity, kaiming_init_module
 print(sys.path)
 
 from brt.router import ScatterRouter, GatherRouter
-from brt.jit import JitModule
 
 
 __all__ = ["Mixed_OP", "Cell"]
@@ -133,26 +132,35 @@ class Cell(nn.Module):
         else:
             self.gate_num = 1
 
-        self.cell_gather = GatherRouter(fabric_kwargs={"sparse": True})
+        self.cell_gather = GatherRouter(
+            fabric_type="single_ptu_combine", fabric_kwargs={"sparse": True}
+            # fabric_type="combine", fabric_kwargs={"sparse": True}
+        )
 
         self.residual_scatter = ScatterRouter(
             protocol_type="batched_threshold",
-            protocol_kwargs={"threshold": 0.0001},
+            # fabric_type="dispatch",
+            fabric_type="single_ptu_dispatch",
+            # protocol_kwargs={"threshold": 0.0001},
+            protocol_kwargs={"threshold": 0.0001, "single_tpu": True},
             fabric_kwargs={
                 "flow_num": 2,
                 "route_logic": ["1d", "1d"],
                 "transform": [False, False],
             },
         )
-
-        self.threeway_scatter = ScatterRouter(
-            dispatch_score=True,
-            protocol_type="threshold",
-            protocol_kwargs={
-                "threshold": 0.0001,
-                "residual_path": -1,
-            },
-        )
+        if self.allow_down or self.allow_up:
+            self.threeway_scatter = ScatterRouter(
+                dispatch_score=True,
+                protocol_type="threshold",
+                fabric_type="single_ptu_dispatch",
+                # fabric_type="dispatch",
+                protocol_kwargs={
+                    "threshold": 0.0001,
+                    "residual_path": -1,
+                    "single_tpu": True,
+                },
+            )
 
         # resolution keep
         self.res_keep = nn.ReLU()
@@ -248,21 +256,19 @@ class Cell(nn.Module):
         residual_h_l, residual_w_beta = self.residual_scatter(
             [h_l1, gate_weights_beta], gate_weights_beta
         )
-        # print(residual_h_l)
 
         h_l = self.cell_ops(residual_h_l[1])
-        # NOTE: brt, using for inference
-        # route = [keep(, up(, down)?)?]
-        route_h_l, route_weight = self.threeway_scatter(
-            h_l, residual_w_beta[1].view(h_l.size(0), self.gate_num)
-        )
+        if self.allow_up or self.allow_down:
+            route_h_l, route_weight = self.threeway_scatter(
+                h_l, residual_w_beta[1].view(h_l.size(0), self.gate_num)
+            )
+            route_h_l_keep = self.res_keep(route_h_l[0])
 
-        ## keep
-        route_h_l_keep = self.res_keep(route_h_l[0])
+            route_result_keep = (route_weight[0].view(-1, 1, 1, 1)) * route_h_l_keep
+        else:
+            route_h_l_keep = self.res_keep(h_l)
+            route_result_keep = (residual_w_beta[1].view(-1, 1, 1, 1)) * route_h_l_keep
 
-        route_result_keep = route_h_l_keep * (route_weight[0].view(-1, 1, 1, 1))
-
-        ## up
         if self.allow_up:
             route_h_l_up = self.res_up(route_h_l[1])
             route_h_l_up = F.interpolate(
