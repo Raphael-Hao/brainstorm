@@ -73,6 +73,7 @@ def install(use_cuda=False):
 
 
 try:
+    print("Installing brt with CUDA runtime...")
     install(use_cuda=True)
 except:
     print("CUDA not found, skipping CUDA build")

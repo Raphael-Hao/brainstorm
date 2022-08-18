@@ -22,7 +22,8 @@ class FabricBase(nn.Module):
         assert self.index_format in [
             "dst_index",
             "src_index",
-        ], f"index_format should be dst_index or src_index, but got {index_format}"
+            None,
+        ], f"index_format should be dst_index, src_index or None, but got {index_format}"
 
     def start_timer(self):
         self.start_event.record(torch.cuda.current_stream())
@@ -98,6 +99,15 @@ class FabricBase(nn.Module):
         super().__setstate__(state)
         self.start_event = torch.cuda.Event(enable_timing=True)
         self.end_event = torch.cuda.Event(enable_timing=True)
+
+    def check_compatibility(self, kwargs) -> None:
+        pass
+
+    def assert_compatibility(self, k, expected_v, given_v) -> None:
+        raise ValueError(
+            f"compatibility check failed for {type(self).__name__},\
+                caused by keyword argument{k}: expected {expected_v}, given {given_v}"
+        )
 
 
 def register_fabric(fabric_type: str) -> Callable:

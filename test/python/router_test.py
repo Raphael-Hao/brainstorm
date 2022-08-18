@@ -1,5 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import Union, List, Type
+
 
 import unittest
 
@@ -16,18 +18,21 @@ class BranchRoute(nn.Module):
         gate,
         dispatch_score=False,
         sparse=False,
+        single_ptu_dispatch=False,
     ):
         super().__init__()
         self.gate = gate
         self.scatter_router = ScatterRouter(
             dispatch_score=dispatch_score,
             protocol_type="threshold",
+            fabric_type="single_ptu_dispatch" if single_ptu_dispatch else "dispatch",
             protocol_kwargs={"threshold": 0.5},
         )
         self.expert1 = nn.Identity()
         self.expert2 = nn.Identity()
         self.gather_router = GatherRouter(
-            fabric_type="combine", fabric_kwargs={"sparse": sparse}
+            fabric_type="single_ptu_combine" if single_ptu_dispatch else "combine",
+            fabric_kwargs={"sparse": sparse},
         )
 
     def forward(self, x):
@@ -44,8 +49,14 @@ class WeightedBranchRoute(BranchRoute):
         self,
         gate,
         sparse=False,
+        single_ptu_dispatch=False,
     ):
-        super().__init__(gate, dispatch_score=True, sparse=sparse)
+        super().__init__(
+            gate,
+            dispatch_score=True,
+            sparse=sparse,
+            single_ptu_dispatch=single_ptu_dispatch,
+        )
 
     def forward(self, x):
         score = self.gate(x)
@@ -68,7 +79,7 @@ class WeightedBranchRoute(BranchRoute):
 class RouterTest(unittest.TestCase):
     def simple_route(
         self,
-        Model: BranchRoute,
+        Model: Type[BranchRoute],
         inputs: torch.Tensor,
         dst: int,
         which_half: str = None,
@@ -86,49 +97,57 @@ class RouterTest(unittest.TestCase):
                 gates[:, dst] = 1
             return gates
 
-        model = Model(gate=gate, sparse=sparse)
-        results = model(inputs)
+        model = Model(gate=gate, sparse=sparse).eval()
+        for i in range(2):
+            if i == 1:
+                inputs = inputs.cuda()
+                model.cuda()
+            results = model(inputs)
 
-        if which_half is None:
-            self.assertTrue(torch.allclose(results[dst].data, inputs))
-            self.assertTrue(results[1 - dst].data.numel() == 0)
-            self.assertTrue(torch.allclose(results[2].data, inputs))
-        else:
-            self.assertTrue(results[1 - dst].data.numel() == 0)
-            if which_half == "upper":
-                self.assertTrue(
-                    torch.allclose(results[dst].data, inputs[inputs.size(0) // 2 :])
-                )
-                if sparse:
+            if which_half is None:
+                self.assertTrue(torch.allclose(results[dst].data, inputs))
+                self.assertTrue(results[1 - dst].data.numel() == 0)
+                self.assertTrue(torch.allclose(results[2].data, inputs))
+            else:
+                self.assertTrue(results[1 - dst].data.numel() == 0)
+                if which_half == "upper":
                     self.assertTrue(
-                        torch.allclose(results[2].data, inputs[inputs.size(0) // 2 :])
+                        torch.allclose(results[dst].data, inputs[inputs.size(0) // 2 :])
                     )
-                else:
-                    self.assertTrue(
-                        torch.allclose(
-                            results[2].data[inputs.size(0) // 2 :],
-                            inputs[inputs.size(0) // 2 :],
+                    if sparse:
+                        self.assertTrue(
+                            torch.allclose(
+                                results[2].data, inputs[inputs.size(0) // 2 :]
+                            )
                         )
-                    )
-            elif which_half == "lower":
-                self.assertTrue(
-                    torch.allclose(results[dst], inputs[: inputs.size(0) // 2])
-                )
-                if sparse:
-                    self.assertTrue(
-                        torch.allclose(results[2].data, inputs[: inputs.size(0) // 2])
-                    )
-                else:
-                    self.assertTrue(
-                        torch.allclose(
-                            results[2].data[: inputs.size(0) // 2],
-                            inputs[: inputs.size(0) // 2],
+                    else:
+                        self.assertTrue(
+                            torch.allclose(
+                                results[2].data[inputs.size(0) // 2 :],
+                                inputs[inputs.size(0) // 2 :],
+                            )
                         )
+                elif which_half == "lower":
+                    self.assertTrue(
+                        torch.allclose(results[dst], inputs[: inputs.size(0) // 2])
                     )
+                    if sparse:
+                        self.assertTrue(
+                            torch.allclose(
+                                results[2].data, inputs[: inputs.size(0) // 2]
+                            )
+                        )
+                    else:
+                        self.assertTrue(
+                            torch.allclose(
+                                results[2].data[: inputs.size(0) // 2],
+                                inputs[: inputs.size(0) // 2],
+                            )
+                        )
 
-    def weighted_route(
+    def weighted_simple_route(
         self,
-        Model,
+        Model: Type[WeightedBranchRoute],
         inputs: torch.Tensor,
         dst: int,
         which_half: str = None,
@@ -146,81 +165,120 @@ class RouterTest(unittest.TestCase):
                 gates[:, dst] = 1
             return gates
 
-        model = Model(gate=gate, sparse=sparse)
-        results = model(inputs)
-        self.assertTrue(torch.allclose(results[0].data, results[1].data))
-
-    def test_2d_route(self):
+        model = Model(gate=gate, sparse=sparse).eval()
         for i in range(2):
-            x = torch.arange(0, 80, dtype=torch.float32).view(8, 10)
-            # self.simple_route(BranchRoute, x, dst=i, sparse=False)
-            # self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=False)
-            # self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=False)
-            # self.simple_route(BranchRoute, x, dst=i, sparse=True)
-            # self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=True)
-            # self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=True)
-            self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=False)
-            # self.weighted_route(
-            #     WeightedBranchRoute, x, dst=i, which_half="upper", sparse=False
-            # )
-            # self.weighted_route(
-            #     WeightedBranchRoute, x, dst=i, which_half="lower", sparse=False
-            # )
-            # self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=True)
-            # self.weighted_route(
-            #     WeightedBranchRoute, x, dst=i, which_half="upper", sparse=True
-            # )
-            # self.weighted_route(
-            #     WeightedBranchRoute, x, dst=i, which_half="lower", sparse=True
-            # )
+            if i == 1:
+                inputs = inputs.cuda()
+                model.cuda()
 
-    def test_3d_route(self):
-        for i in range(2):
-            x = torch.arange(0, 160, dtype=torch.float32).view(8, 2, 10)
-            self.simple_route(BranchRoute, x, dst=i, sparse=False)
-            self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=False)
-            self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=False)
-            self.simple_route(BranchRoute, x, dst=i, sparse=True)
-            self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=True)
-            self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=True)
-            self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=False)
-            self.weighted_route(
-                WeightedBranchRoute, x, dst=i, which_half="upper", sparse=False
-            )
-            self.weighted_route(
-                WeightedBranchRoute, x, dst=i, which_half="lower", sparse=False
-            )
-            self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=True)
-            self.weighted_route(
-                WeightedBranchRoute, x, dst=i, which_half="upper", sparse=True
-            )
-            self.weighted_route(
-                WeightedBranchRoute, x, dst=i, which_half="lower", sparse=True
-            )
+            results = model(inputs)
+            self.assertTrue(torch.allclose(results[0].data, results[1].data))
 
-    def test_4d_route(self):
+    def test_generic_route(self):
+        multi_dims_sample = [
+            torch.arange(0, 80, dtype=torch.float32).view(8, 10),
+            torch.arange(0, 160, dtype=torch.float32).view(8, 2, 10),
+            torch.arange(0, 320, dtype=torch.float32).view(8, 2, 10, 2),
+        ]
+        for x in multi_dims_sample:
+            for i in range(2):
+                self.simple_route(BranchRoute, x, dst=i, sparse=False)
+                self.simple_route(
+                    BranchRoute, x, dst=i, which_half="upper", sparse=False
+                )
+                self.simple_route(
+                    BranchRoute, x, dst=i, which_half="lower", sparse=False
+                )
+                self.simple_route(BranchRoute, x, dst=i, sparse=True)
+                self.simple_route(
+                    BranchRoute, x, dst=i, which_half="upper", sparse=True
+                )
+                self.simple_route(
+                    BranchRoute, x, dst=i, which_half="lower", sparse=True
+                )
+                self.weighted_simple_route(WeightedBranchRoute, x, dst=i, sparse=False)
+                self.weighted_simple_route(
+                    WeightedBranchRoute, x, dst=i, which_half="upper", sparse=False
+                )
+                self.weighted_simple_route(
+                    WeightedBranchRoute, x, dst=i, which_half="lower", sparse=False
+                )
+                self.weighted_simple_route(WeightedBranchRoute, x, dst=i, sparse=True)
+                self.weighted_simple_route(
+                    WeightedBranchRoute, x, dst=i, which_half="upper", sparse=True
+                )
+                self.weighted_simple_route(
+                    WeightedBranchRoute, x, dst=i, which_half="lower", sparse=True
+                )
+
+    def single_ptu_route(
+        self,
+        Model: Type[BranchRoute],
+        inputs: torch.Tensor,
+        dst: Union[int, List[int]],
+    ):
+        def gate(x):
+            assert x.shape[0] == 1, "SinglePTURoute only supports bs==1"
+            gates = torch.zeros(1, 2, dtype=torch.float, device=inputs.device)
+            if isinstance(dst, List):
+                for d in dst:
+                    gates[:, d] = 1
+            else:
+                gates[:, dst] = 1
+            return gates
+
+        model = Model(gate=gate, sparse=True, single_ptu_dispatch=True).eval()
         for i in range(2):
-            x = torch.arange(0, 320, dtype=torch.float32).view(8, 2, 10, 2)
-            self.simple_route(BranchRoute, x, dst=i, sparse=False)
-            self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=False)
-            self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=False)
-            self.simple_route(BranchRoute, x, dst=i, sparse=True)
-            self.simple_route(BranchRoute, x, dst=i, which_half="upper", sparse=True)
-            self.simple_route(BranchRoute, x, dst=i, which_half="lower", sparse=True)
-            self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=False)
-            self.weighted_route(
-                WeightedBranchRoute, x, dst=i, which_half="upper", sparse=False
-            )
-            self.weighted_route(
-                WeightedBranchRoute, x, dst=i, which_half="lower", sparse=False
-            )
-            self.weighted_route(WeightedBranchRoute, x, dst=i, sparse=True)
-            self.weighted_route(
-                WeightedBranchRoute, x, dst=i, which_half="upper", sparse=True
-            )
-            self.weighted_route(
-                WeightedBranchRoute, x, dst=i, which_half="lower", sparse=True
-            )
+            if i == 1:
+                inputs = inputs.cuda()
+                model.cuda()
+            results = model(inputs)
+            if isinstance(dst, List):
+                for d in dst:
+                    self.assertTrue(torch.allclose(results[d], inputs))
+                self.assertTrue(torch.allclose(results[2], inputs * 2))
+            else:
+                self.assertTrue(torch.allclose(results[dst], inputs))
+                self.assertTrue(results[1 - dst].numel() == 0)
+                self.assertTrue(torch.allclose(results[2], inputs))
+
+    def weighted_single_ptu_route(
+        self,
+        Model: Type[WeightedBranchRoute],
+        inputs: torch.Tensor,
+        dst: Union[int, List[int]],
+    ):
+        def gate(x):
+            assert x.shape[0] == 1, "SinglePTURoute only supports bs==1"
+            gates = torch.zeros(1, 2, dtype=torch.float, device=inputs.device)
+            if isinstance(dst, List):
+                for d in dst:
+                    gates[:, d] = 1
+            else:
+                gates[:, dst] = 1
+            return gates
+
+        model = Model(gate=gate, sparse=True, single_ptu_dispatch=True).eval()
+        for i in range(2):
+            if i == 1:
+                inputs = inputs.cuda()
+                model.cuda()
+            results = model(inputs)
+            print(results)
+            self.assertTrue(torch.allclose(results[0], results[1]))
+
+    def test_single_ptu_route(self):
+        multi_dims_sample = [
+            torch.arange(0, 10, dtype=torch.float32).view(1, 10),
+            torch.arange(0, 20, dtype=torch.float32).view(1, 2, 10),
+            torch.arange(0, 40, dtype=torch.float32).view(1, 2, 10, 2),
+        ]
+        for x in multi_dims_sample:
+            self.single_ptu_route(BranchRoute, x, dst=0)
+            self.single_ptu_route(BranchRoute, x, dst=1)
+            self.single_ptu_route(BranchRoute, x, dst=[0, 1])
+            self.weighted_single_ptu_route(WeightedBranchRoute, x, dst=0)
+            self.weighted_single_ptu_route(WeightedBranchRoute, x, dst=1)
 
     def test_trace(self):
         gate = nn.Sequential(nn.Linear(10, 2), nn.Softmax(dim=1))

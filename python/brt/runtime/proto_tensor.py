@@ -99,7 +99,7 @@ def pack_proto_attr_stack(
 
 
 class ProtoTensor(torch.Tensor):
-    SHALLOW_TRANSPORT = False
+    SHALLOW_TRANSPORT = True
     CHECK_TAGS = False
     EXTRA_ATTRS = []
     EXTRA_ATTRS_STACK = []
@@ -357,8 +357,8 @@ def make_proto_tensor_cls(
 
 def init_proto_tensor(
     torch_tensor: torch.Tensor,
-    tag_stack: List[torch.Tensor] = [],
-    load_stack: List[int] = [],
+    tag_stack: List[torch.Tensor] = None,
+    load_stack: List[int] = None,
     extra_attrs_stack_dict: Dict[str, List[Any]] = None,
 ) -> ProtoTensor:
     proto_tensor: ProtoTensor = torch_tensor.as_subclass(ProtoTensor)

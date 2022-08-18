@@ -1,14 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import inspect
-from typing import Callable, Dict, List, Type, Union, Any
+from typing import Callable, Dict, List, Any
 
 import os
 import torch
 import torch.nn as nn
 
-from brt.runtime import log
-from brt.runtime import Registry
+from brt.runtime import log, Registry
 from brt.router.utils import convert_index_format, make_kwargs
 from brt.trace.initialize import trace_init
 
@@ -18,14 +17,15 @@ logger = log.get_logger(__file__)
 
 
 class RouterBase(nn.Module):
-    def __init__(self, capaturing=False):
+    def __init__(self, capturing=False, capture_mode="a"):
         super().__init__()
-        env_capaturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in (
-            "true"
-        )
-        if env_capaturing or capaturing:
-            self.capaturing = True
-        if self.capaturing:
+        env_capturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in ("true")
+        if env_capturing or capturing:
+            self.capturing = True
+            self.capture_mode = capture_mode
+        else:
+            self.capturing = False
+        if self.capturing:
             self.history_len = 0
             self.register_buffer("load_history", None)
             self.register_buffer("capacity_history", None)
@@ -49,28 +49,43 @@ class RouterBase(nn.Module):
         )
         return new_route_indices
 
-    def capature_flow_stats(
+    def capture_flow_stats(
         self, loads: torch.Tensor, capacities: torch.Tensor = None
     ) -> None:
         """
         Capture the flow.
         """
-        if not self.capaturing:
+        if not self.capturing:
             return
 
-        with torch.no_grad():
-            if self.history_len == 0:
-                self.load_history = torch.zeros_like(loads)
-                self.capacity_history = (
-                    torch.zeros_like(capacities) if capacities is not None else None
-                )
+        if self.history_len == 0:
+            self.load_history = torch.zeros_like(
+                loads, dtype=torch.float64, device="cpu"
+            )
+            self.capacity_history = (
+                torch.zeros_like(capacities, dtype=torch.float64, device="cpu")
+                if capacities is not None
+                else None
+            )
+
+        if self.capture_mode == "a":
             self.load_history = (self.load_history * self.history_len + loads) / (
-                self.history_len + 1
+                self.history_len + 1.0
             )
             if capacities is not None:
                 self.capacity_history = (
                     self.capacity_history * self.history_len + capacities
-                ) / (self.history_len + 1)
+                ) / (self.history_len + 1.0)
+        elif self.capture_mode == "m":
+            self.load_history = torch.maximum(self.load_history, loads)
+            if capacities is not None:
+                self.capacity_history = torch.maximum(self.capacity_history, capacities)
+        elif self.capture_mode == "c":
+            self.load_history = self.load_history + loads
+            if capacities is not None:
+                self.capacity_history = self.capacity_history + capacities
+
+        self.history_len += 1
 
     def reset_flow_stats(self):
         self.history_len = 0
@@ -79,6 +94,9 @@ class RouterBase(nn.Module):
 
     def inject_schedule(self, schedule_function):
         self.schedule_functions.append(schedule_function)
+
+    def capature_flow_shape(self, flows) -> None:
+        pass
 
     def run_schedule(self):
         for func in self.schedule_functions:

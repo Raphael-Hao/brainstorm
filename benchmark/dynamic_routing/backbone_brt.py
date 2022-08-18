@@ -3,6 +3,7 @@ import csv
 
 import torch.nn as nn
 import numpy as np
+from brt.router import GatherRouter
 
 __all__ = ["Backbone"]
 
@@ -334,6 +335,13 @@ class DynamicNetwork(Backbone):
                     self._out_features.append(name)
             self.all_cell_list.append(layer_cell_list)
             self.all_cell_type_list.append(layer_cell_type)
+        self.final_gathers = nn.ModuleList(
+            GatherRouter(
+                fabric_type="single_ptu_combine", fabric_kwargs={"sparse": True}
+                # fabric_type="combine", fabric_kwargs={"sparse": True}
+            )
+            for _ in range(self.cell_num_list[-1])
+        )
 
     @property
     def size_divisibility(self):
@@ -380,8 +388,10 @@ class DynamicNetwork(Backbone):
             #                 print(f"output_{id}: {output.numel()},",end =" ")
             #             print("]")
             # print("")
-        final_out_list = [prev_out_list[_i][1][0] for _i in range(len(prev_out_list))]
-        # final_out_dict = dict(zip(self._out_features, final_out_list))
+        final_out_list = []
+        for out_idx in range(len(prev_out_list)):
+            final_out = self.final_gathers[out_idx](prev_out_list[out_idx][1])
+            final_out_list.append(final_out)
         return final_out_list
 
     def output_shape(self):
@@ -394,6 +404,9 @@ class DynamicNetwork(Backbone):
             )
             for name in self._out_features
         }
+
+    def input_shape(self):
+        pass
 
 
 def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
