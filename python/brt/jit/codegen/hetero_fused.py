@@ -15,6 +15,7 @@ class HeteroFusedKernel(HorizFusedKernel):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "hetero_fuse")
         super().__init__(candidates=candidates)
+        
 
     def generate_new_args(self):
         super().generate_new_args()

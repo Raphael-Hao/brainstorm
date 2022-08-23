@@ -29,11 +29,16 @@ class HorizFusedKernel(GlobalKernel):
             self.initialize()
 
     def initialize(self):
+        self.mangle_candiates()
         self.generate_new_args()
         self.infer_shared_memory()
         self.calcu_launch_bounds()
         self.calcu_culaunch_dims()
         self.initialized = True
+
+    def mangle_candiates(self):
+        for i, module_kernel in enumerate(self.candidates):
+            module_kernel.perform_mangling(i)
 
     def check_candidates(self):
         self.input_infos = []
