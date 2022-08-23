@@ -165,7 +165,7 @@ class JitFunctionTest(unittest.TestCase):
         for linear in linears:
             standalone_inputs.append(linear.weight)
             standalone_inputs.append(linear.bias)
-        capacities = [2, 4, 8, 2]
+        capacities = [2, 8, 4, 2]
         homo_fused_kernel(shared_inputs, standalone_inputs, capacities)
         cuda_timer.start()
         for i in range(100):
