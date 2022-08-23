@@ -218,6 +218,7 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
     pargs[i] = kernel.arg_dptr_array[i];
     ppargs[i] = &pargs[i];
   }
+
   for (int i = (int)kernel.arg_num; i < (int)pargs.size(); ++i) {
     pargs[i] = (void*)active_blocks[i - kernel.arg_num];
     ppargs[i] = &pargs[i];

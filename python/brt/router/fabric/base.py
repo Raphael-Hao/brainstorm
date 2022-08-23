@@ -30,7 +30,7 @@ class FabricBase(nn.Module):
 
     def end_timer(self, timer_name):
         self.end_event.record(torch.cuda.current_stream())
-        torch.cuda.current_stream().synchronize()
+        self.end_event.synchronize()
         print(
             "{} elapsed time: {:.3f}".format(
                 timer_name, self.start_event.elapsed_time(self.end_event)
