@@ -25,14 +25,14 @@ class JitFunctionTest(unittest.TestCase):
             sample_inputs, linear.weight.cuda(), brt_out_gpu, linear.bias.cuda()
         )
         brt_out_cpu = brt_out_gpu.cpu()
-        print(pt_out_cpu)
-        print(pt_out_gpu)
-        print(brt_out_gpu)
         self.assertTrue(torch.allclose(brt_out_cpu, pt_out_cpu, atol=1e-6))
 
     def test_horiz_fused_function(self):
-        linears = nn.ModuleList(nn.Linear(512, 1024) for i in range(4))
-        sample_inputs = torch.randn((16, 512))
+        linears = nn.ModuleList(nn.Linear(512, 1024) for _ in range(4))
+        sample_inputs = [torch.randn((16, 512)) for _ in range(4)]
+        horiz_fused_kernel = make_jit_kernel(
+            linears, sample_inputs=sample_inputs, opt_level="horiz_fuse"
+        )
 
     def test_hetero_fused_function(self):
         linears = nn.ModuleList(nn.Linear(512, 1024) for i in range(4))
