@@ -63,7 +63,7 @@ class HomoFusedKernelFactory:
         candidate_kernels = ModuleKernelFactory.make_kernels(
             candidate_module, method, sample_inputs
         )
-        dst_num = len(modules)
+        path_num = len(modules)
         capacities = [
             sample_input[0].size(0)
             if isinstance(sample_input, (list, tuple))
@@ -85,7 +85,7 @@ class HomoFusedKernelFactory:
         assert shared_arg_grans is not None, "shared_arg_grans is None"
 
         fused_kernel = HomoFusedKernel(
-            dst_num, capacities, shared_arg_indices, shared_arg_grans, candidate_kernels
+            path_num, capacities, shared_arg_indices, shared_arg_grans, candidate_kernels
         )
         return fused_kernel
 

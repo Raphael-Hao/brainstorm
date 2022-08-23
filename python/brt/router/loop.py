@@ -27,7 +27,7 @@ class LoopRouter(RouterBase):
         dispatch_fabric_kwargs: Dict[str, Any] = None,
         combine_fabric_kwargs: Dict[str, Any] = None,
         capturing: bool = False,
-        capture_mode: str = "c",
+        capture_mode: str = "cum",
     ):
         super().__init__(capturing=capturing, capture_mode=capture_mode)
         self.protocol_type = protocol_type

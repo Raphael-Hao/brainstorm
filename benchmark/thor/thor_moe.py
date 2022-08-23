@@ -10,9 +10,7 @@ import torch.nn as nn
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
 from brt.jit import make_jit_kernel
 from brt.runtime.proto_tensor import collect_proto_attr_stack, init_proto_tensor
-from brt.app import (
-    RandScatter,
-)
+from brt.app.rand import RandScatter
 from brt.router import GatherRouter
 
 from transformers.activations import ACT2FN
@@ -142,15 +140,15 @@ class ThorMoE(nn.Module):
         self.experts = nn.ModuleList(
             [ThorExpert(config) for _ in range(config.expert_num)]
         )
-        self.scatter_router = RandScatterRouter(dst_num=config.expert_num)
-        self.gather_router = RandGatherRouter(dst_num=config.expert_num)
+        self.rand_scatter = RandScatter(path_num=config.expert_num)
+        self.gather_router = GatherRouter()
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states):
         # B x T x H -> T x H
         inter_states = hidden_states.view(-1, hidden_states.size(-1))
-        route_results = self.scatter_router(inter_states)
+        route_results = self.rand_scatter(inter_states)
         expert_results = []
         for i, expert in enumerate(self.experts):
             expert_results.append(expert(route_results[i]))
@@ -166,11 +164,19 @@ class ThorMoE(nn.Module):
 class FusedThorMoE(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
-        self.scatter_router = RandHomoFusedScatterRouter(
-            dst_num=config.expert_num,
-            supported_capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+        self.scatter_router = RandScatter(
+            path_num=config.expert_num,
+            fabric_type="homo_fused_dispatch",
+            fabric_kwargs={
+                "supported_capacities": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+            },
         )
-        self.gather_router = RandHomoFusedGatherRouter(dst_num=config.expert_num)
+        self.gather_router = GatherRouter(
+            fabric_type="homo_fused_combine",
+            fabric_kwargs={
+                "supported_capacities": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+            },
+        )
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.fused_expert = FusedThorExpert(config)
