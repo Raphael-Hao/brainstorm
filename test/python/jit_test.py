@@ -28,11 +28,30 @@ class JitFunctionTest(unittest.TestCase):
         self.assertTrue(torch.allclose(brt_out_cpu, pt_out_cpu, atol=1e-6))
 
     def test_horiz_fused_function(self):
-        linears = nn.ModuleList(nn.Linear(512, 1024) for _ in range(4))
-        sample_inputs = [torch.randn((16, 512)) for _ in range(4)]
+        linears = nn.ModuleList(nn.Linear(512, 1024) for _ in range(4)).cuda()
+        sample_inputs = [torch.randn((16, 512)).cuda() for _ in range(4)]
+        sample_outputs = [linears[i](sample_inputs[i]) for i in range(4)]
+
         horiz_fused_kernel = make_jit_kernel(
             linears, sample_inputs=sample_inputs, opt_level="horiz_fuse"
         )
+
+        horiz_fused_inputs = []
+        for i in range(4):
+            horiz_fused_inputs.append(sample_inputs[i])
+            horiz_fused_inputs.append(linears[i].weight)
+            horiz_fused_inputs.append(torch.empty_like(sample_outputs[i]))
+            horiz_fused_inputs.append(linears[i].bias)
+
+        horiz_fused_kernel(*horiz_fused_inputs)
+        for i in range(4):
+            print(horiz_fused_inputs[2 + i * 4])
+        for i in range(4):
+            self.assertTrue(
+                torch.allclose(
+                    sample_outputs[i], horiz_fused_inputs[2 + i * 4], atol=1e-6
+                )
+            )
 
     def test_hetero_fused_function(self):
         linears = nn.ModuleList(nn.Linear(512, 1024) for i in range(4))
