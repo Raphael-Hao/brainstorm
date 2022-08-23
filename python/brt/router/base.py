@@ -17,11 +17,19 @@ logger = log.get_logger(__file__)
 
 
 class RouterBase(nn.Module):
-    def __init__(self, capturing=False, capture_mode="a"):
+    def __init__(self, capturing=False, capture_mode="avg"):
         super().__init__()
         env_capturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in ("true")
         if env_capturing or capturing:
             self.capturing = True
+            assert capture_mode in (
+                "avg",
+                "max",
+                "cum",
+            ), f"Invalid capture mode: {capture_mode},valid options:\
+avg for average\
+max for maximum\
+cum for cumulative"
             self.capture_mode = capture_mode
         else:
             self.capturing = False
@@ -29,6 +37,8 @@ class RouterBase(nn.Module):
             self.history_len = 0
             self.register_buffer("load_history", None)
             self.register_buffer("capacity_history", None)
+            self.granularities: List[torch.Size] = None
+
         self.schedule_functions: List[Callable] = []
 
     def forward(self):
@@ -49,14 +59,33 @@ class RouterBase(nn.Module):
         )
         return new_route_indices
 
+    def reset_flow_stats(self):
+        self.history_len = 0
+        self.load_history = None
+        self.capacity_history = None
+        self.granularities = None
+
     def capture_flow_stats(
-        self, loads: torch.Tensor, capacities: torch.Tensor = None
+        self,
+        fabric_type: str,
+        in_flows: List[torch.Tensor],
+        loads: torch.Tensor,
+        capacities: torch.Tensor = None,
     ) -> None:
         """
         Capture the flow.
         """
+        assert "dispatch" in fabric_type, "Only dispatch fabric can capture flow stats."
+
         if not self.capturing:
             return
+
+        self.capture_flow_shape(in_flows)
+        self.capture_flow_laod(loads, capacities)
+
+        self.history_len += 1
+
+    def capture_flow_laod(self, loads, capacities):
 
         if self.history_len == 0:
             self.load_history = torch.zeros_like(
@@ -68,35 +97,53 @@ class RouterBase(nn.Module):
                 else None
             )
 
-        if self.capture_mode == "a":
+        if self.capture_mode == "avg":
             self.load_history = (self.load_history * self.history_len + loads) / (
                 self.history_len + 1.0
             )
+
             if capacities is not None:
                 self.capacity_history = (
                     self.capacity_history * self.history_len + capacities
                 ) / (self.history_len + 1.0)
-        elif self.capture_mode == "m":
+
+        elif self.capture_mode == "max":
             self.load_history = torch.maximum(self.load_history, loads)
+
             if capacities is not None:
                 self.capacity_history = torch.maximum(self.capacity_history, capacities)
-        elif self.capture_mode == "c":
+
+        elif self.capture_mode == "cum":
             self.load_history = self.load_history + loads
+
             if capacities is not None:
                 self.capacity_history = self.capacity_history + capacities
 
-        self.history_len += 1
+    def capture_flow_shape(self, flows) -> None:
+        """
+        Capture the flow shape.
+        """
+        if self.check_granularity_consistency(flows):
+            if self.granularities is None:
+                self.granularities = [flow.shape for flow in flows]
+        else:
+            self.granularities = None
 
-    def reset_flow_stats(self):
-        self.history_len = 0
-        self.load_history = None
-        self.capacity_history = None
+    def check_granularity_consistency(self, flows) -> bool:
+        if self.granularities is None:
+            if self.history_len == 0:
+                return True
+            else:
+                return False
+
+        for flow, granularity in zip(flows, self.granularities):
+            if flow.shape[1:] != granularity[1:]:
+                return False
+
+        return True
 
     def inject_schedule(self, schedule_function):
         self.schedule_functions.append(schedule_function)
-
-    def capature_flow_shape(self, flows) -> None:
-        pass
 
     def run_schedule(self):
         for func in self.schedule_functions:

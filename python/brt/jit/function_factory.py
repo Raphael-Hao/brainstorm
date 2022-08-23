@@ -74,8 +74,8 @@ def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
             arg_start_indices = []
             arg_end_indices = []
             final_output_indices = []
-            dst_num = len(modules)
-            for i in range(dst_num):
+            path_num = len(modules)
+            for i in range(path_num):
                 arg_start_indices.append(input_prefix)
                 input_prefix += input_arg_num_s[i]
                 arg_end_indices.append(input_prefix)
@@ -88,7 +88,7 @@ def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
                 def forward(*inputs, active_blocks):
                     origin_inputs = list(inputs)
                     new_inputs = []
-                    for i in range(dst_num):
+                    for i in range(path_num):
                         inputs = origin_inputs[
                             arg_start_indices[i] : arg_end_indices[i]
                         ]
