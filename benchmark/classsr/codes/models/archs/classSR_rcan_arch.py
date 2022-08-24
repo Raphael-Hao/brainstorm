@@ -104,8 +104,9 @@ class Classifier(nn.Module):
         arch_util.initialize_weights([self.CondNet], 0.1)
 
     def forward(self, x):
-        out = self.CondNet(x)
-        out = nn.AvgPool2d(out.size()[2])(out)
-        out = out.view(out.size(0), -1)
-        out = self.lastOut(out)
+        # assert x.shape[1:] == torch.Size([3, 32, 32]), x.shape
+        out = self.CondNet(x) # [bs, 32, 8, 8]
+        out = self.avgPool2d(out)  # [bs, 32, 1, 1]
+        out = out.view(-1, 32)  # [bs, 32]
+        out = self.lastOut(out)  # [bs, 3]
         return out

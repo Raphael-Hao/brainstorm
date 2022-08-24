@@ -23,16 +23,16 @@ class classSR_3class_fsrcnn_net(nn.Module):
         )
         self.gather_router = GatherRouter(fabric_type="combine")
 
-    def forward(self, x, is_train):
-        if is_train:
-            assert False, "This should only be excuted while training!"
-        
+    def forward(self, x, is_train=False):
+        # if is_train:
+        #     assert False, "This should only be excuted while training!"
+
         weights = self.classifier(x)
         sr_x = self.scatter_router(x, weights)
         y = [self.net1(sr_x[0]), self.net2(sr_x[1]), self.net3(sr_x[2])]
         gr_x = self.gather_router(y)
         return gr_x, [yy.shape[0] for yy in y]
-        
+
         # for i in range(len(x)):
         #     type = self.classifier(x[i].unsqueeze(0))
 
@@ -73,11 +73,13 @@ class Classifier(nn.Module):
             nn.LeakyReLU(0.1, True),
             nn.Conv2d(128, 32, 1),
         )
+        self.avgPool2d = nn.AvgPool2d(8)
         arch_util.initialize_weights([self.CondNet], 0.1)
 
     def forward(self, x):
-        out = self.CondNet(x)
-        out = nn.AvgPool2d(out.size()[2])(out)
-        out = out.view(out.size(0), -1)
-        out = self.lastOut(out)
+        # assert x.shape[1:] == torch.Size([3, 32, 32]), x.shape
+        out = self.CondNet(x) # [bs, 32, 8, 8]
+        out = self.avgPool2d(out)  # [bs, 32, 1, 1]
+        out = out.view(-1, 32)  # [bs, 32]
+        out = self.lastOut(out)  # [bs, 3]
         return out
