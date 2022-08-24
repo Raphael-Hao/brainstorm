@@ -138,7 +138,7 @@ class Cell(nn.Module):
         )
 
         self.residual_scatter = ScatterRouter(
-            protocol_type="batched_threshold",
+            protocol_type="residual_threshold",
             # fabric_type="dispatch",
             fabric_type="single_ptu_dispatch",
             # protocol_kwargs={"threshold": 0.0001},
