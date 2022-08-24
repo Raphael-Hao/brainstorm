@@ -20,7 +20,7 @@ __all__ = ["HomoFusedKernel"]
 class HomoFusedKernel(HorizFusedKernel):
     def __init__(
         self,
-        dst_num,
+        path_num,
         capacities,
         shared_arg_indices: List[int],
         shared_arg_grans: List[int],
@@ -29,7 +29,7 @@ class HomoFusedKernel(HorizFusedKernel):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "homo_fuse")
 
-        self.dst_num = dst_num
+        self.path_num = path_num
         self.capacities = capacities
         self.supported_capacity_num = len(self.capacities)
         self.shared_arg_indices = shared_arg_indices
@@ -44,7 +44,7 @@ class HomoFusedKernel(HorizFusedKernel):
             + "_"
             + str(self.supported_capacity_num)
             + "_"
-            + str(self.dst_num)
+            + str(self.path_num)
             + "_"
             + self.kernel_type
         )
@@ -53,7 +53,7 @@ class HomoFusedKernel(HorizFusedKernel):
             + "_"
             + str(self.supported_capacity_num)
             + "_"
-            + str(self.dst_num)
+            + str(self.path_num)
             + "_"
             + self.kernel_type
         )
@@ -135,7 +135,7 @@ class HomoFusedKernel(HorizFusedKernel):
         self,
     ):
         formated_code = self.add_line_with_indent(
-            f"// [homo_fuse_info] branch_num = {self.dst_num}", end=True
+            f"// [homo_fuse_info] branch_num = {self.path_num}", end=True
         )
         formated_code += self.add_line_with_indent(
             f"// [homo_fuse_info] supported_capacity = {self.capacities}", end=True
