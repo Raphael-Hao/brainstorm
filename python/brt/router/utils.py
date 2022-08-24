@@ -3,7 +3,7 @@
 from typing import Tuple, List, Dict, Any
 
 import torch
-import numpy
+import numpy as np
 import brt._C.router as C_router
 
 __all__ = ["generate_src_indices", "generate_dst_indices"]
@@ -31,9 +31,9 @@ def generate_src_indices(
         )
     else:
         src_indices = torch.zeros_like(hot_mask)
-        loads = torch.zeros(
-            (hot_mask.size(1),), dtype=torch.int64, device=hot_mask.device
-        )
+        # loads = [0 for _ in range(hot_mask.size(1))]
+        loads = torch.zeros(hot_mask.size(1),dtype=torch.int32, device="cpu")
+        torch.zeros((hot_mask.size(1),), dtype=torch.int64, device=hot_mask.device)
         hot_mask_t = hot_mask.t().contiguous()
         for i in range(hot_mask.size(1)):
             src_indices_per_path = hot_mask_t[i].view(-1).nonzero()
@@ -69,7 +69,7 @@ def generate_dst_indices(
         )
     else:
         dst_indices = torch.cumsum(hot_mask, dim=0) * hot_mask
-        loads = torch.sum(hot_mask, dim=0)
+        loads = torch.sum(hot_mask, dim=0).cpu()
         if supported_capacities is not None:
             for i in range(hot_mask.size(1)):
                 real_load = loads[i]
@@ -94,6 +94,8 @@ def generate_indices(
         indices, loads = generate_dst_indices(
             hot_mask, supported_capacities, index_gen_opt
         )
+    else:
+        raise ValueError(f"Unknown index format: {index_format}")
     return indices, loads
 
 
@@ -122,7 +124,7 @@ def pad_to_max(tensors: List[torch.Tensor], pad_value=0):
     """
     lengths = [t.numel() // t.size(0) for t in tensors]
 
-    max_id = numpy.argmax(lengths)
+    max_id = np.argmax(lengths)
 
     max_length = lengths[max_id]
 

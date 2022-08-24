@@ -66,6 +66,29 @@ inline void __NVRTC_CHECK(nvrtcResult x, const char* file, int line) {
   } while (0);
 }
 
+#define START_CUDA_TIMER(x, s) \
+  cudaEvent_t x##_start;       \
+  cudaEvent_t x##_stop;        \
+  start_timer(x##_start, x##_stop, s)
+
+#define STOP_CUDA_TIMER(x, s) stop_timer(x##_start, x##_stop, s)
+
+inline void start_timer(cudaEvent_t& start, cudaEvent_t& stop, cudaStream_t stream = 0) {
+  CUDA_CHECK(cudaEventCreate(&start));
+  CUDA_CHECK(cudaEventCreate(&stop));
+  CUDA_CHECK(cudaEventRecord(start, stream));
+}
+
+inline void stop_timer(cudaEvent_t& start, cudaEvent_t& stop, cudaStream_t stream = 0) {
+  CUDA_CHECK(cudaEventRecord(stop, stream));
+  CUDA_CHECK(cudaEventSynchronize(stop));
+  float elapsed_time;
+  CUDA_CHECK(cudaEventElapsedTime(&elapsed_time, start, stop));
+  printf("Elapsed time: %f ms\n", elapsed_time);
+  CUDA_CHECK(cudaEventDestroy(start));
+  CUDA_CHECK(cudaEventDestroy(stop));
+}
+
 #endif
 
 #if defined(USE_CUBLAS)

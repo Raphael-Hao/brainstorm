@@ -5,6 +5,7 @@ core
 *.pkl_memoize_py3
 total_latency.tsv
 *.qdrep
+*.svg
 
 .cache/*
 !.cache/kernel_db.sqlite
@@ -14,6 +15,13 @@ total_latency.tsv
 !.cache/log/benchmark/
 
 .vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+!.vscode/c_cpp_properties.json
+
 
 # Local History for Visual Studio Code
 .history/
@@ -71,3 +79,6 @@ venv.bak/
 
 # .nfs files are created when an open file is removed but is still being accessed
 .nfs*
+benchmark/dynamic_routing/inference/*
+benchmark/dynamic_routing/log.txt
+*.nsys-rep

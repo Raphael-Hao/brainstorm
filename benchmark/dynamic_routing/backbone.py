@@ -12,6 +12,7 @@ from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 
 from brt.router import GatherRouter
 
+
 class Backbone(nn.Module):
     """
     Abstract base class for network backbones.
@@ -406,7 +407,7 @@ class DynamicNetwork(Backbone):
                     cell_input.append(prev_out_list[cell_index][1][0])
                 if self.all_cell_type_list[layer_index][cell_index][2]:
                     cell_input.append(prev_out_list[cell_index + 1][0][0])
-                h_l1 = self.gather_routers[len(cell_input)-1](cell_input)
+                h_l1 = self.gather_routers[len(cell_input) - 1](cell_input)
                 # h_l1 = sum(cell_input)
                 # calculate input for gate
                 layer_input.append(h_l1)
@@ -416,10 +417,9 @@ class DynamicNetwork(Backbone):
                 if not predict_mode:
                     # print(f"layer index: {layer_index}, cell index: {_cell_index} to device: {self.device}")
                     self.all_cell_list[layer_index][_cell_index].to(self.device)
-                (
-                    cell_output,
-                    gate_weights_beta,
-                ) = self.all_cell_list[layer_index][_cell_index](
+                (cell_output, gate_weights_beta,) = self.all_cell_list[layer_index][
+                    _cell_index
+                ](
                     h_l1=layer_input[_cell_index],
                     is_drop_path=self.drop_path,
                     drop_prob=self.drop_prob,
@@ -434,6 +434,7 @@ class DynamicNetwork(Backbone):
                 gate_history_list.extend(gate_history)
             # update layer output
             prev_out_list = layer_output
+
         final_gate_history = []
         # final_gate_history = np.array(
         #     [
@@ -444,6 +445,7 @@ class DynamicNetwork(Backbone):
         #     ],
         #     dtype=np.float32,
         # )
+
         self.write_gate_history(final_gate_history)
         # print(gate_history_list)
         final_out_list = [prev_out_list[_i][1][0] for _i in range(len(prev_out_list))]

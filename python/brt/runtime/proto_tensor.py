@@ -99,7 +99,7 @@ def pack_proto_attr_stack(
 
 
 class ProtoTensor(torch.Tensor):
-    SHALLOW_TRANSPORT = False
+    SHALLOW_TRANSPORT = True
     CHECK_TAGS = False
     EXTRA_ATTRS = []
     EXTRA_ATTRS_STACK = []
@@ -263,7 +263,7 @@ class ProtoTensor(torch.Tensor):
         return len(self.tag_stack)
 
     def __repr__(self):
-        return f"ProtoTensor(\ndata: {super().__repr__()}\ntag_stack: {self.tag_stack}\nload stack: {self.load_stack})"
+        return f"{super().__repr__()}\ntag_stack: {self.tag_stack}\nload stack: {self.load_stack})"
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -357,8 +357,8 @@ def make_proto_tensor_cls(
 
 def init_proto_tensor(
     torch_tensor: torch.Tensor,
-    tag_stack: List[torch.Tensor] = [],
-    load_stack: List[int] = [],
+    tag_stack: List[torch.Tensor] = None,
+    load_stack: List[int] = None,
     extra_attrs_stack_dict: Dict[str, List[Any]] = None,
 ) -> ProtoTensor:
     proto_tensor: ProtoTensor = torch_tensor.as_subclass(ProtoTensor)
