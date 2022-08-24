@@ -14,9 +14,7 @@ from ops import OPS, Conv2dNormAct, Identity, kaiming_init_module
 print(sys.path)
 
 from brt.router import ScatterRouter, GatherRouter
-from brt.runtime import ProtoTensor
 
-from macro import *
 
 __all__ = ["Mixed_OP", "Cell"]
 
@@ -134,29 +132,36 @@ class Cell(nn.Module):
         else:
             self.gate_num = 1
 
-        self.cell_gather = GatherRouter(fabric_kwargs={"sparse": True})
-
-        self.drop_scatter = ScatterRouter(
-            protocol_type="threshold_drop", protocol_kwargs={"threshold": 0.001}
+        self.cell_gather = GatherRouter(
+            fabric_type="single_ptu_combine",
+            fabric_kwargs={"sparse": True}
+            # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
 
-        self.threeway_scatter = ScatterRouter(
-            dispatch_score=True,
-            protocol_type="threshold",
-            protocol_kwargs={
-                "threshold": 0.0001,
-                "residual_dst": 0,
+        self.residual_scatter = ScatterRouter(
+            protocol_type="residual_threshold",
+            # fabric_type="dispatch",
+            fabric_type="single_ptu_dispatch",
+            # protocol_kwargs={"threshold": 0.0001},
+            protocol_kwargs={"threshold": 0.0001, "single_tpu": True},
+            fabric_kwargs={
+                "flow_num": 2,
+                "route_logic": ["1d", "1d"],
+                "transform": [False, False],
             },
         )
-        
-        self.res_scatter = ScatterRouter(
-            dispatch_score=True,
-            protocol_type="residual",
-            protocol_kwargs={
-                "threshold": 0.0001,
-                "residual_dst": 0,
-            }
-        )
+        if self.allow_down or self.allow_up:
+            self.threeway_scatter = ScatterRouter(
+                dispatch_score=True,
+                protocol_type="threshold",
+                fabric_type="single_ptu_dispatch",
+                # fabric_type="dispatch",
+                protocol_kwargs={
+                    "threshold": 0.0001,
+                    "residual_path": -1,
+                    "single_tpu": True,
+                },
+            )
 
         # resolution keep
         self.res_keep = nn.ReLU()
@@ -233,14 +238,7 @@ class Cell(nn.Module):
         :param h_l1: # the former hidden layer output
         :return: current hidden cell result h_l
         """
-        drop_cell = False
-        # drop the cell if input type is float
-        # NOTE: change the branch condition
-        # if not isinstance(h_l1, float):
-
-        # calculate soft conditional gate
-        # gate_weights_beta = [keep(, up(, down)?)?]
-
+        h_l1 = self.cell_gather(h_l1)
         if self.small_gate:
             h_l1_gate = F.interpolate(
                 input=h_l1,
@@ -252,29 +250,26 @@ class Cell(nn.Module):
             h_l1_gate = h_l1
         gate_feat_beta = self.gate_conv_beta(h_l1_gate)
         gate_weights_beta = soft_gate(gate_feat_beta)
-
-        drop_route_results = self.drop_scatter(h_l1, gate_weights_beta)
-
-        h_l = self.cell_ops(drop_route_results)
-        # NOTE: brt, using for inference
-        # route = [keep(, up(, down)?)?]
-        route_h_l, route_weight = self.threeway_scatter(
-            h_l, gate_weights_beta.view(h_l.size(0), self.gate_num)
+        gate_weights_beta = gate_weights_beta.view(
+            gate_weights_beta.shape[0], self.gate_num
         )
-        route_weight = [x.view(-1, 1, 1, 1) for x in route_weight]
-        result_list = [None, None, None]
-        ## keep
-        route_h_l_keep = self.res_keep(route_h_l[0])
-        if isinstance(route_h_l[0], ProtoTensor):
-            route_h_l1 = h_l1.index_select(0, route_weight[0].tag.squeeze())
-        else:  # isinstance(h_l_route[0], torch.Tensor)
-            route_h_l1 = h_l1
-        residual_mask = (route_weight[0] == 0).float()
-        route_result_keep = (
-            residual_mask * route_h_l1 + route_weight[0] * route_h_l_keep
+
+        residual_h_l, residual_w_beta = self.residual_scatter(
+            [h_l1, gate_weights_beta], gate_weights_beta
         )
-        result_list[1].append(route_result_keep)
-        ## up
+
+        h_l = self.cell_ops(residual_h_l[1])
+        if self.allow_up or self.allow_down:
+            route_h_l, route_weight = self.threeway_scatter(
+                h_l, residual_w_beta[1].view(h_l.size(0), self.gate_num)
+            )
+            route_h_l_keep = self.res_keep(route_h_l[0])
+
+            route_result_keep = (route_weight[0].view(-1, 1, 1, 1)) * route_h_l_keep
+        else:
+            route_h_l_keep = self.res_keep(h_l)
+            route_result_keep = (residual_w_beta[1].view(-1, 1, 1, 1)) * route_h_l_keep
+
         if self.allow_up:
             route_h_l_up = self.res_up(route_h_l[1])
             route_h_l_up = F.interpolate(
@@ -283,14 +278,22 @@ class Cell(nn.Module):
                 mode="bilinear",
                 align_corners=False,
             )
-            result_list[0] = route_h_l_up * route_weight[1]
-        else:
-            result_list[0] = torch.empty(0)
+            route_result_up = route_h_l_up * (route_weight[1].view(-1, 1, 1, 1))
+
         ## down
         if self.allow_down:
             route_h_l_down = self.res_down(route_h_l[-1])
-            result_list[2] = route_h_l_down * route_weight[-1]
-        else:
-            result_list[2] = torch.empty(0)
+            route_result_down = route_h_l_down * (route_weight[-1].view(-1, 1, 1, 1))
 
-        return result_list
+        if self.allow_up and self.allow_down:
+            return [
+                [route_result_up],
+                [route_result_keep, residual_h_l[0]],
+                [route_result_down],
+            ]
+        elif self.allow_up:
+            return [[route_result_up], [route_result_keep, residual_h_l[0]], []]
+        elif self.allow_down:
+            return [[], [route_result_keep, residual_h_l[0]], [route_result_down]]
+        else:
+            return [[], [route_result_keep, residual_h_l[0]], []]

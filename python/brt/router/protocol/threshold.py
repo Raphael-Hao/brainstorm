@@ -17,6 +17,7 @@ class ThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         residual_path=-1,
+        single_tpu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -24,6 +25,7 @@ class ThresholdProtocol(ProtocolBase):
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.threshold = threshold
         self.residual_path = residual_path
+        self.single_tpu = single_tpu
         self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
@@ -40,7 +42,12 @@ class ThresholdProtocol(ProtocolBase):
                 device=score.device,
             )
             hot_mask = torch.scatter_add(hot_mask, 1, residual_index, residual_indices)
-
+        if self.single_tpu:
+            if hot_mask.numel() > 0:
+                loads = hot_mask.view(-1).cpu()
+            else:
+                loads = torch.zeros(hot_mask.size(1), dtype=torch.int32, device="cpu")
+            return hot_mask, loads, loads
         route_indices, loads = generate_indices(
             hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
         )
@@ -51,42 +58,99 @@ class ThresholdProtocol(ProtocolBase):
         self.supported_capacities = supported_capacities
 
 
-@register_protocol("threshold_drop")
-class ThresholdDropProtocol(ProtocolBase):
+@register_protocol("residual_threshold")
+class ResidualThresholdProtocol(ProtocolBase):
     def __init__(
         self,
         threshold=0.0,
-        drop_path=1,
+        residual_path=0,
+        single_tpu=False,
+        supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
     ):
         if index_format != "src_index":
-            logger.error("ThresholdDropProtocol only supports src_index format")
+            logger.error("BatchedThresholdProtocol only supports src_index format")
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
-        self.threshold = torch.tensor(threshold, dtype=torch.float)
-        self.drop_path = drop_path
+        self.threshold = threshold
+        self.residual_path = residual_path
+        self.single_tpu = single_tpu
+        self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
 
-        self.threshold.to(score.device)
-        total_score = score.sum()
+        hot_mask = (score.sum(dim=1, keepdim=True) < self.threshold).long()
 
-        route_indices = (
-            torch.arange(0, score.size(0), dtype=torch.int64, device=score.device)
-            .view(-1, 1)
-            .repeat(1, 2)
-        )
-        loads = torch.tensor(
-            [score.size(0), score.size(0)], dtype=torch.int64, device=score.device
-        )
-
-        if total_score > self.threshold:
-            route_indices[:, 1 - self.drop_path] = 0
-            loads[1 - self.drop_path] = 0
+        if self.residual_path == 0:
+            hot_mask = torch.ones(
+                score.size(0), 2, dtype=torch.int64, device=score.device
+            ).scatter_(1, hot_mask, 0)
+        elif self.residual_path == 1:
+            hot_mask = torch.zeros(
+                score.size(0), 2, dtype=torch.int64, device=score.device
+            ).scatter_(1, hot_mask, 1)
         else:
-            route_indices[:, self.drop_path] = 0
-            loads[self.drop_path] = 0
+            raise ValueError("drop_path should be 0 or 1")
+        if self.single_tpu:
+            if hot_mask.numel() > 0:
+                loads = hot_mask.view(-1).cpu()
+            else:
+                loads = torch.zeros(hot_mask.size(1), dtype=torch.int32, device="cpu")
+            return hot_mask, loads, loads
+        route_indices, loads = generate_indices(
+            hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
+        )
+        return route_indices, loads, loads
 
+    def update(self, supported_capacities):
+        self.supported_capacities = supported_capacities
+
+
+@register_protocol("binary_threshold")
+class BinaryThresholdProtocol(ProtocolBase):
+    def __init__(
+        self,
+        threshold=0.0,
+        selected_path=0,
+        single_tpu=False,
+        supported_capacities=None,
+        index_format="src_index",
+        index_gen_opt=True,
+    ):
+        if index_format != "src_index":
+            logger.error("BatchedThresholdProtocol only supports src_index format")
+        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
+        self.threshold = threshold
+        self.selected_path = selected_path
+        self.single_tpu = single_tpu
+        self.supported_capacities = supported_capacities
+
+    def make_route_decision(self, score: torch.Tensor):
+
+        hot_mask = (score > self.threshold).long()
+
+        if self.selected_path == 0:
+            hot_mask = torch.ones(
+                score.size(0), 2, dtype=torch.int64, device=score.device
+            ).scatter_(1, hot_mask, 0)
+        elif self.selected_path == 1:
+            hot_mask = torch.zeros(
+                score.size(0), 2, dtype=torch.int64, device=score.device
+            ).scatter_(1, hot_mask, 1)
+        else:
+            raise ValueError(
+                "selected_path should be 0 or 1 for a binary threshold protocol"
+            )
+
+        if self.single_tpu:
+            if hot_mask.numel() > 0:
+                loads = hot_mask.view(-1).cpu()
+            else:
+                loads = torch.zeros(hot_mask.size(1), dtype=torch.int32, device="cpu")
+            return hot_mask, loads, loads
+        route_indices, loads = generate_indices(
+            hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
+        )
         return route_indices, loads, loads
 
     def update(self, supported_capacities):

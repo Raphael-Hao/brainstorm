@@ -3,17 +3,18 @@
 # @author: yanwei.li
 from typing import Dict
 
+import torch.nn as nn
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from dl_lib.layers import Conv2d, ShapeSpec, get_norm
-from dl_lib.modeling.dynamic_arch import cal_op_flops
-from dl_lib.modeling.nn_utils import weight_init
-from dl_lib.modeling.postprocessing import sem_seg_postprocess
-from dl_lib.structures import ImageList
 
-__all__ = ["DynamicNet4Seg", "SemSegDecoderHead", "BudgetConstraint"]
+from torch.nn import BatchNorm2d
+
+from image_list import ImageList
+from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
+from postprocessing import sem_seg_postprocess
+
+from brt.router import GatherRouter
 
 
 class DynamicNet4Seg(nn.Module):
@@ -35,7 +36,7 @@ class DynamicNet4Seg(nn.Module):
         self.budget_constrint = BudgetConstraint(cfg)
         self.to(self.device)
 
-    def forward(self, batched_inputs, step_rate=0.0, predict_mode=True):
+    def forward(self, batched_inputs):
         """
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
@@ -58,18 +59,15 @@ class DynamicNet4Seg(nn.Module):
         images = [self.normalizer(x) for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         # for _ in range(10):
-        #     features, expt_flops, real_flops = self.backbone(
-        #         images.tensor, step_rate, predict_mode
-        #     )
+        #     features = self.backbone(images.tensor)
         # torch.cuda.current_stream().synchronize()
         # start_event = torch.cuda.Event(enable_timing=True)
         # end_event = torch.cuda.Event(enable_timing=True)
         # iterations = 100
         # start_event.record(torch.cuda.current_stream())
+
         # for _ in range(iterations):
-        #     features, expt_flops, real_flops = self.backbone(
-        #         images.tensor, step_rate, predict_mode
-        #     )
+        #     features = self.backbone(images.tensor)
         # end_event.record(torch.cuda.current_stream())
         # torch.cuda.current_stream().synchronize()
         # print(
@@ -78,9 +76,7 @@ class DynamicNet4Seg(nn.Module):
         #         start_event.elapsed_time(end_event) / iterations,
         #     )
         # )
-        features, expt_flops, real_flops = self.backbone(
-            images.tensor, step_rate, predict_mode
-        )
+        features = self.backbone(images.tensor)
 
         if "sem_seg" in batched_inputs[0]:
             targets = [x["sem_seg"].to(self.device) for x in batched_inputs]
@@ -89,24 +85,7 @@ class DynamicNet4Seg(nn.Module):
             ).tensor
         else:
             targets = None
-        if not predict_mode:
-            self.sem_seg_head.to(self.device)
         results, losses = self.sem_seg_head(features, targets)
-        # calculate flops
-        if self.cal_flops:
-            real_flops += self.sem_seg_head.flops
-            flops = {"real_flops": real_flops, "expt_flops": expt_flops}
-        else:
-            flops = None
-        # use budget constraint for training
-        if self.training:
-            if self.constrain_on and step_rate >= self.unupdate_rate:
-                warm_up_rate = min(1.0, (step_rate - self.unupdate_rate) / 0.02)
-                loss_budget = self.budget_constrint(
-                    expt_flops, warm_up_rate=warm_up_rate
-                )
-                losses.update({"loss_budget": loss_budget})
-            return losses, flops
 
         processed_results = []
         for result, input_per_image, image_size in zip(
@@ -115,10 +94,7 @@ class DynamicNet4Seg(nn.Module):
             height = input_per_image.get("height")
             width = input_per_image.get("width")
             r = sem_seg_postprocess(result, image_size, height, width)
-            if self.cal_flops:
-                processed_results.append({"sem_seg": r, "flops": flops})
-            else:
-                processed_results.append({"sem_seg": r})
+            processed_results.append({"sem_seg": r})
         return processed_results
 
 
@@ -160,54 +136,52 @@ class SemSegDecoderHead(nn.Module):
                 out_channel = in_channel
             else:
                 out_channel = in_channel // 2
-            conv_1x1 = Conv2d(
+            conv_1x1 = Conv2dNormAct(
                 in_channel,
                 out_channel,
                 kernel_size=1,
                 stride=1,
                 padding=0,
                 bias=False,
-                norm=get_norm(norm, out_channel),
+                norm=BatchNorm2d(out_channel),
                 activation=nn.ReLU(),
-            )
-            self.real_flops += cal_op_flops.count_ConvBNReLU_flop(
-                res_size[0],
-                res_size[1],
-                in_channel,
-                out_channel,
-                [1, 1],
-                is_affine=affine,
             )
             self.layer_decoder_list.append(conv_1x1)
         # using Kaiming init
         for layer in self.layer_decoder_list:
-            weight_init.kaiming_init_module(layer, mode="fan_in")
+            kaiming_init_module(layer, mode="fan_in")
         in_channel = feature_channels["layer_0"]
         # the output layer
-        self.predictor = Conv2d(
-            in_channel, num_classes, kernel_size=3, stride=1, padding=1
+        self.predictor = nn.Conv2d(
+            in_channels=in_channel,
+            out_channels=num_classes,
+            kernel_size=3,
+            stride=1,
+            padding=1,
         )
-        self.real_flops += cal_op_flops.count_Conv_flop(
-            feature_resolution["layer_0"][0],
-            feature_resolution["layer_0"][1],
-            in_channel,
-            num_classes,
-            [3, 3],
+        self.decoder_gathers = nn.ModuleList(
+            [
+                GatherRouter(fabric_kwargs={"sparse": True})
+                for _ in range(len(self.in_features) - 1)
+            ]
         )
+
         # using Kaiming init
-        weight_init.kaiming_init_module(self.predictor, mode="fan_in")
+        kaiming_init_module(self.predictor, mode="fan_in")
 
     def forward(self, features, targets=None):
         pred, pred_output = None, None
         for _index in range(len(self.in_features)):
             out_index = len(self.in_features) - _index - 1
-            out_feat = features[self.in_features[out_index]]
+            out_feat = features[out_index]
 
-            if isinstance(out_feat, float):
-                continue
+            # if isinstance(out_feat, float): # TODO:
+            # if out_feat.numel() == 0:
+            # continue
 
-            if out_index <= 2 and pred is not None:
-                out_feat = pred + out_feat
+            if _index > 0:
+                # out_feat = pred + out_feat # TODO: GatherRouter
+                out_feat = self.decoder_gathers[_index - 1]([pred, out_feat])
 
             pred = self.layer_decoder_list[out_index](out_feat)
             if out_index > 0:

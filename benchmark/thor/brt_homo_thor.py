@@ -3,14 +3,11 @@
 
 # %%
 import torch
-from brt.runtime.proto_tensor import reset_proto_tensor_cls
-from brt.app import init_rand_homo_fused_router
 
 from thor_config import ThorConfig
 from thor_model import ThorEncoder
 from thor_moe import FusedThorMoE
 
-init_rand_homo_fused_router()
 config = ThorConfig()
 config.token_num = 64
 config.hidden_size = 512

@@ -1,4 +1,15 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+
+# from dynamic_raw_config import config
+from dynamic_A_config import config
+# from dynamic_B_config import config
+# from dynamic_C_config import config
+
+from brt.trace.graph import GraphTracer
+from torch.fx.graph_module import GraphModule
+from torch.fx.passes.graph_drawer import FxGraphDrawer
+from brt.router import ScatterRouter
+
 """
 Detection Training Script.
 
@@ -19,22 +30,30 @@ import logging
 import os
 import re
 import sys
-sys.path.insert(0, '.')  # noqa: E402
+
+sys.path.insert(0, ".")  # noqa: E402
 
 from collections import OrderedDict
 import torch
 
 import dl_lib.utils.comm as comm
-from config import config
 from dl_lib.checkpoint import DetectionCheckpointer
 from dl_lib.data import MetadataCatalog
-from dl_lib.engine import (CustomizedTrainer, default_argument_parser,
-                           default_setup, launch)
-from dl_lib.evaluation import (CityscapesEvaluator, DatasetEvaluators,
-                               PascalVOCDetectionEvaluator, SemSegEvaluator,
-                               verify_results)
+from dl_lib.engine import (
+    CustomizedTrainer,
+    default_argument_parser,
+    default_setup,
+    launch,
+)
+from dl_lib.evaluation import (
+    CityscapesEvaluator,
+    DatasetEvaluators,
+    PascalVOCDetectionEvaluator,
+    SemSegEvaluator,
+    verify_results,
+)
 from dl_lib.modeling import SemanticSegmentorWithTTA
-from net import build_model
+from net_brt import build_model
 
 
 class Trainer(CustomizedTrainer):
@@ -44,6 +63,7 @@ class Trainer(CustomizedTrainer):
     are working on a new research project. In that case you can use the cleaner
     "SimpleTrainer", or write your own training loop.
     """
+
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
         """
@@ -64,7 +84,8 @@ class Trainer(CustomizedTrainer):
                     num_classes=cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES,
                     ignore_label=cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE,
                     output_dir=output_folder,
-                ))
+                )
+            )
         if evaluator_type == "cityscapes":
             assert (
                 torch.cuda.device_count() >= comm.get_rank()
@@ -75,11 +96,14 @@ class Trainer(CustomizedTrainer):
         if hasattr(cfg, "EVALUATORS"):
             for evaluator in cfg.EVALUATORS:
                 evaluator_list.append(
-                    evaluator(dataset_name, True, output_folder, dump=False))
+                    evaluator(dataset_name, True, output_folder, dump=False)
+                )
         if len(evaluator_list) == 0:
             raise NotImplementedError(
                 "no Evaluator for the dataset {} with the type {}".format(
-                    dataset_name, evaluator_type))
+                    dataset_name, evaluator_type
+                )
+            )
         if len(evaluator_list) == 1:
             return evaluator_list[0]
         return DatasetEvaluators(evaluator_list)
@@ -89,15 +113,13 @@ class Trainer(CustomizedTrainer):
         logger = logging.getLogger("dl_lib.trainer")
         # In the end of training, run an evaluation with TTA
         logger.info("Running inference with test-time augmentation ...")
-        evaluator_type = MetadataCatalog.get(
-            cfg.DATASETS.TEST[0]).evaluator_type
+        evaluator_type = MetadataCatalog.get(cfg.DATASETS.TEST[0]).evaluator_type
         if evaluator_type == "sem_seg":
             model = SemanticSegmentorWithTTA(cfg, model)
         evaluators = [
-            cls.build_evaluator(cfg,
-                                name,
-                                output_folder=os.path.join(
-                                    cfg.OUTPUT_DIR, "inference_TTA"))
+            cls.build_evaluator(
+                cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference_TTA")
+            )
             for name in cfg.DATASETS.TEST
         ]
         res = cls.test(cfg, model, evaluators)
@@ -107,17 +129,15 @@ class Trainer(CustomizedTrainer):
 
 def test_argument_parser():
     parser = default_argument_parser()
-    parser.add_argument("--start-iter",
-                        type=int,
-                        default=0,
-                        help="start iter used to test")
-    parser.add_argument("--end-iter",
-                        type=int,
-                        default=None,
-                        help="end iter used to test")
-    parser.add_argument("--debug",
-                        action="store_true",
-                        help="use debug mode or not")
+    parser.add_argument(
+        "--start-iter", type=int, default=0, help="start iter used to test"
+    )
+    parser.add_argument(
+        "--end-iter", type=int, default=None, help="end iter used to test"
+    )
+    parser.add_argument("--debug", action="store_true", help="use debug mode or not")
+    parser.add_argument("--trace", action="store_true", help="trace the model or not")
+
     return parser
 
 
@@ -128,55 +148,37 @@ def main(args):
         batches = int(cfg.SOLVER.IMS_PER_BATCH / 8 * args.num_gpus)
         if cfg.SOLVER.IMS_PER_BATCH != batches:
             cfg.SOLVER.IMS_PER_BATCH = batches
-            logger.warning(
-                "SOLVER.IMS_PER_BATCH is changed to {}".format(batches))
+            logger.warning("SOLVER.IMS_PER_BATCH is changed to {}".format(batches))
 
-    # if cfg.MODEL.WEIGHTS:
-    #     valid_files = [cfg.MODEL.WEIGHTS]
-    # else:
-    #     list_of_files = glob.glob(os.path.join(cfg.OUTPUT_DIR, '*.pth'))
-    #     assert list_of_files, "no pth file found in {}".format(cfg.OUTPUT_DIR)
-    #     list_of_files.sort(key=os.path.getctime)
-    #     latest_file = list_of_files[-1]
-    #     if not args.end_iter:
-    #         valid_files = [latest_file]
-    #     else:
-    #         files = [f for f in list_of_files if str(f) <= str(latest_file)]
-    #         valid_files = []
-    #         for f in files:
-    #             try:
-    #                 model_iter = int(re.split(r'(model_|\.pth)', f)[-3])
-    #             except Exception:
-    #                 logger.warning("remove {}".format(f))
-    #                 continue
-    #             if args.start_iter <= model_iter <= args.end_iter:
-    #                 valid_files.append(f)
-    #         assert valid_files, "No .pth files satisfy your requirement"
-
-    # * means all if need specific format then *.csv
-    # for current_file in valid_files:
-    # cfg.MODEL.WEIGHTS = current_file
     model = build_model(cfg)
-
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-        cfg.MODEL.WEIGHTS, resume=args.resume)
-    res = Trainer.test(cfg, model)
-    if comm.is_main_process():
-        verify_results(cfg, res)
-    if cfg.TEST.AUG.ENABLED:
-        res.update(Trainer.test_with_TTA(cfg, model))
+        cfg.MODEL.WEIGHTS, resume=args.resume
+    )
 
-    # return res
+    res = Trainer.test(cfg, model)
+    # model.eval()
+    # input = torch.randn(1, 3, 1024, 2048).cuda()
+    # outputs = model.backbone(input)
+    # print(outputs)
+
+    if args.trace:
+        tracer = GraphTracer()
+        graph = tracer.trace(model.backbone)
+        graph_module = GraphModule(tracer.root, graph, cfg.ARCH_NAME)
+        modules = dict(graph_module.named_modules())
+        for node in graph.nodes:
+            if node.op == "call_module":
+                if isinstance(modules[node.target], ScatterRouter):
+                    print(
+                        f"Node: {node.target}, load history:{modules[node.target].load_history}"
+                    )
+
+        # graph_drawer = FxGraphDrawer(graph_module, cfg.ARCH_NAME)
+        # with open("{}.svg".format(cfg.ARCH_NAME), "wb") as f:
+        #     f.write(graph_drawer.get_dot_graph().create_svg())
 
 
 if __name__ == "__main__":
     args = test_argument_parser().parse_args()
     print("Command Line Args:", args)
-    launch(
-        main,
-        args.num_gpus,
-        num_machines=args.num_machines,
-        machine_rank=args.machine_rank,
-        dist_url=args.dist_url,
-        args=(args, ),
-    )
+    main(args)

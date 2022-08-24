@@ -3,10 +3,11 @@ import csv
 
 import torch.nn as nn
 import numpy as np
+from brt.router import GatherRouter
 
 __all__ = ["Backbone"]
 
-from brt_cell import Cell
+from cell_brt import Cell
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 
 
@@ -334,50 +335,64 @@ class DynamicNetwork(Backbone):
                     self._out_features.append(name)
             self.all_cell_list.append(layer_cell_list)
             self.all_cell_type_list.append(layer_cell_type)
+        self.final_gathers = nn.ModuleList(
+            GatherRouter(
+                fabric_type="single_ptu_combine", fabric_kwargs={"sparse": True}
+                # fabric_type="combine", fabric_kwargs={"sparse": True}
+            )
+            for _ in range(self.cell_num_list[-1])
+        )
 
     @property
     def size_divisibility(self):
         return self._size_divisibility
 
-    def forward(self, x, step_rate=0.0):
+    def forward(self, x):
         h_l1 = self.stem(x)
+
         # the initial layer
-        h_l1_list, h_beta_list = self.init_layer(h_l1=h_l1)
-        prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
+        h_l1_list = self.init_layer([h_l1])
+        prev_out_list = [h_l1_list]
         # build forward outputs
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
-            layer_rate = (layer_index + 1) / float(len(self.cell_num_list))
             # aggregate cell input
             for cell_index in range(len(self.all_cell_type_list[layer_index])):
                 cell_input = []
 
                 if self.all_cell_type_list[layer_index][cell_index][0]:
-                    cell_input.append(prev_out_list[cell_index - 1][2])
+                    cell_input.extend(prev_out_list[cell_index - 1][2])
                 if self.all_cell_type_list[layer_index][cell_index][1]:
-                    cell_input.append(prev_out_list[cell_index][1])
+                    cell_input.extend(prev_out_list[cell_index][1])
                 if self.all_cell_type_list[layer_index][cell_index][2]:
-                    cell_input.append(prev_out_list[cell_index + 1][0])
+                    cell_input.extend(prev_out_list[cell_index + 1][0])
 
                 layer_input.append(cell_input)
 
             # calculate each cell
             for _cell_index in range(len(self.all_cell_type_list[layer_index])):
                 cell_output = self.all_cell_list[layer_index][_cell_index](
-                    h_l1=layer_input[_cell_index],
-                    is_drop_path=self.drop_path,
-                    drop_prob=self.drop_prob,
-                    layer_rate=layer_rate,
-                    step_rate=step_rate,
+                    h_l1=layer_input[_cell_index]
                 )
 
                 layer_output.append(cell_output)
 
             # update layer output
             prev_out_list = layer_output
-        final_out_list = [prev_out_list[_i][1] for _i in range(len(prev_out_list))]
-        final_out_dict = dict(zip(self._out_features, final_out_list))
-        return final_out_dict
+            # print(f"layer_index: {layer_index}, layer_output:")
+            # for cell_id, cell_output in enumerate(layer_output):  # cell index
+            #     for outputs in cell_output:
+            #         if outputs:
+            #             print(f"cell_id: {cell_id} [",end =" ")
+            #             for id, output in enumerate(outputs):
+            #                 print(f"output_{id}: {output.numel()},",end =" ")
+            #             print("]")
+            # print("")
+        final_out_list = []
+        for out_idx in range(len(prev_out_list)):
+            final_out = self.final_gathers[out_idx](prev_out_list[out_idx][1])
+            final_out_list.append(final_out)
+        return final_out_list
 
     def output_shape(self):
         return {
@@ -389,6 +404,9 @@ class DynamicNetwork(Backbone):
             )
             for name in self._out_features
         }
+
+    def input_shape(self):
+        pass
 
 
 def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
@@ -416,7 +434,6 @@ def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
         gate_bias=cfg.MODEL.GATE.GATE_INIT_BIAS,
         drop_prob=cfg.MODEL.BACKBONE.DROP_PROB,
         device=cfg.MODEL.DEVICE,
-        gate_history_path=cfg.BRT.GATE_HISTORY_PATH,
     )
 
     return backbone

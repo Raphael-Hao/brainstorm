@@ -18,7 +18,7 @@ class LinearInfo(ModuleInfo):
 
     @classmethod
     def ismodule(cls, module: torch.nn.Module):
-        return isinstance(module, cls.__module_cls__)
+        return isinstance(module, cls._involved_module_cls)
 
     @classmethod
     def make_kernel(

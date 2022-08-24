@@ -54,7 +54,7 @@ extern "C" __device__ __forceinline__ void AsmWarpSync(const unsigned threads_ma
     cpp_warp_sync = """
 extern "C" __device__ __forceinline__ void CppWarpSync(const unsigned threads_mask) {
   __syncwarp(threads_mask);
-}   
+}
 """
     cpp_cg_block_sync = """
 #include <cooperative_groups.h>
@@ -266,6 +266,11 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
         self.func_body = self.generate_body()
         self.verify_code()
         return self.clean_code, self.func_deps, self.func_sig, self.func_body
+
+    def perform_mangling(self, mangling_name):
+        mangling_name = str(mangling_name)
+        assert mangling_name.isalnum(), "Mangling name is not alphanumeric"
+        self.func_name = self.func_name + "_" + mangling_name
 
     def convert_to_device(self):
         assert (
