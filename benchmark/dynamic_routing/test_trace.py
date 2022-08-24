@@ -1,11 +1,10 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 # from dynamic_raw_config import config
-
 from dynamic_A_config import config
-
 # from dynamic_B_config import config
 # from dynamic_C_config import config
+
 from brt.trace.graph import GraphTracer
 from torch.fx.graph_module import GraphModule
 from torch.fx.passes.graph_drawer import FxGraphDrawer

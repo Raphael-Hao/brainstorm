@@ -8,7 +8,12 @@ import torch
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
 from brt.jit.modules import ModuleInfo
 from brt.jit.compiler import CUDACompiler
-from brt.jit.codegen import ModuleKernel, HeteroFusedKernel, HomoFusedKernel
+from brt.jit.codegen import (
+    ModuleKernel,
+    HorizFusedKernel,
+    HeteroFusedKernel,
+    HomoFusedKernel,
+)
 
 __all__ = ["make_jit_kernel"]
 
@@ -19,6 +24,9 @@ def make_jit_kernel(
     if opt_level is None:
         kernel = ModuleKernelFactory.make_kernel(modules, method, sample_inputs)
 
+    elif opt_level == "horiz_fuse":
+        kernel = HorizFusedKernelFactory.make_kernel(modules, method, sample_inputs)
+
     elif opt_level == "hetero_fuse":
         kernel = HeteroFusedKernelFactory.make_kernel(modules, method, sample_inputs)
 
@@ -28,14 +36,29 @@ def make_jit_kernel(
         raise ValueError(f"Not supported optimize level: {opt_level}")
     kernel_code, _, _, _ = kernel.get_code()
 
-    # processed_template_fname = str(
-    #     BRT_KERNEL_TEMPLATE_PATH / ("processed_" + kernel.func_name + ".cu")
-    # )
-    # with open(processed_template_fname, "w") as f:
-    #     f.write(kernel_code)
+    processed_template_fname = str(
+        BRT_KERNEL_TEMPLATE_PATH / ("processed_" + kernel.func_name[:10] + ".cu")
+    )
+    with open(processed_template_fname, "w") as f:
+        f.write(kernel_code)
 
     jit_kernel = CUDACompiler.generate_kernel(None, kernel_code)
     return jit_kernel
+
+
+class HorizFusedKernelFactory:
+    @staticmethod
+    def make_kernel(modules: torch.nn.ModuleList, method, sample_inputs):
+        assert len(modules) == len(
+            sample_inputs
+        ), "modules and sample_inputs must have the same length"
+
+        candidates = []
+        for m, sample_input in zip(modules, sample_inputs):
+            module_kernel = ModuleKernelFactory.make_kernel(m, method, sample_input)
+            candidates.append(module_kernel)
+        fused_kernel = HorizFusedKernel(candidates)
+        return fused_kernel
 
 
 class HeteroFusedKernelFactory:
@@ -63,7 +86,7 @@ class HomoFusedKernelFactory:
         candidate_kernels = ModuleKernelFactory.make_kernels(
             candidate_module, method, sample_inputs
         )
-        dst_num = len(modules)
+        path_num = len(modules)
         capacities = [
             sample_input[0].size(0)
             if isinstance(sample_input, (list, tuple))
@@ -85,7 +108,11 @@ class HomoFusedKernelFactory:
         assert shared_arg_grans is not None, "shared_arg_grans is None"
 
         fused_kernel = HomoFusedKernel(
-            dst_num, capacities, shared_arg_indices, shared_arg_grans, candidate_kernels
+            path_num,
+            capacities,
+            shared_arg_indices,
+            shared_arg_grans,
+            candidate_kernels,
         )
         return fused_kernel
 

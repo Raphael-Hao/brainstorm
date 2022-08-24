@@ -27,7 +27,7 @@ class ScatterRouter(RouterBase):
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
         capturing=False,
-        capture_mode: str = "c",
+        capture_mode: str = "cum",
     ):
         """base scatter router
 
@@ -46,7 +46,7 @@ class ScatterRouter(RouterBase):
                 supported keyword args for fabric:
                     route_logic (str, optional): route logic. Defaults to "1d" only for dispatch.
                         1d: route along the 1st dimension, selecting data from a tensor with shape (batch_size, ...)
-                        2d: route along the first 2 dimensions, selecting data from a tensor with shape (batch_size, dst_num, ...)
+                        2d: route along the first 2 dimensions, selecting data from a tensor with shape (batch_size, path_num, ...)
                     transform (bool, optional): whether to transform the route result to the original shape. Defaults to False.
             Capturing (bool, optional): whether to capture the flow stats. Defaults to True.
         """
@@ -101,20 +101,19 @@ class ScatterRouter(RouterBase):
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flows, score: torch.Tensor):
-
         route_indices, loads, capacities = self.protocol(score)
-        self.capture_flow_stats(loads, capacities)
+
+        if self.dispatch_score:
+            if isinstance(in_flows, List):
+                in_flows = in_flows.append(score)
+            else:
+                in_flows = [in_flows, score]
+
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
-        if self.dispatch_score:
-            in_flows = (
-                in_flows.append(score)
-                if isinstance(in_flows, List)
-                else [in_flows, score]
-            )
+        self.capture_flow_stats(self.fabric_type, in_flows, loads, capacities)
         out_flows = self.fabric(in_flows, route_indices, loads, capacities, score)
-
         return out_flows
 
     def update_protocol(self, **kwargs):
@@ -175,10 +174,14 @@ class SwinMoEScatterRouter(RouterBase):
             score, logits_wo_noise, logits
         )
 
-        self.capature_flow_stats(loads, capacities)
+        if isinstance(in_flows, List):
+            in_flows = in_flows.append(new_score)
+        else:
+            in_flows = [in_flows, new_score]
+
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
-        in_flows = [in_flows, new_score]
+        self.capture_flow_stats(self.fabric_type, in_flows, loads, capacities)
         out_flows = self.fabric(in_flows, route_indices, loads, capacities, score)
         return out_flows, loss
