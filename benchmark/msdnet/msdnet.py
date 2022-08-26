@@ -279,8 +279,6 @@ class MSDNet(nn.Module):
 
         if args.init_routers:
             assert args.thresholds is not None
-            assert len(args.thresholds) == self.nBlocks
-            self.routers_initilized = True
             self.build_routers(args.thresholds)
         else:
             self.routers_initilized = False
@@ -413,6 +411,8 @@ class MSDNet(nn.Module):
         return ClassifierModule(conv, nIn, num_classes)
 
     def build_routers(self, thresholds: List[float]):
+        assert len(thresholds) == self.nBlocks
+        self.routers_initilized = True
         self.scatters = nn.ModuleList()
         for i in range(self.nBlocks - 1):
             self.scatters.append(

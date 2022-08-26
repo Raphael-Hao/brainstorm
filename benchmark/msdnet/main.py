@@ -15,7 +15,8 @@ sys.path.insert(0, ".")  # noqa: E402
 from dataloader import get_dataloaders
 from args import arg_parser
 from adaptive_inference import dynamic_evaluate
-from mdsnet import MSDNet
+from theshold_inference import threshold_evaluate
+from msdnet import MSDNet
 
 args = arg_parser.parse_args()
 
@@ -95,8 +96,10 @@ def main():
 
         if args.evalmode == "anytime":
             validate(test_loader, model, criterion)
-        else:
+        elif args.evalmode == "dynamic":
             dynamic_evaluate(model, test_loader, val_loader, args)
+        else:
+            threshold_evaluate(model, val_loader, args)
         return
 
     scores = [
