@@ -13,7 +13,7 @@ logger = log.get_logger(__file__)
 
 
 class FabricBase(nn.Module):
-    def __init__(self, index_format: str, flow_num: int) -> None:
+    def __init__(self, flow_num: int, index_format: str = None, **kwargs) -> None:
         super().__init__()
         self.flow_num = flow_num
         self.index_format = index_format
