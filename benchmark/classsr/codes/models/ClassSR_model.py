@@ -180,63 +180,109 @@ class ClassSR_Model(BaseModel):
         psnr_type2 = 0
         psnr_type3 = 0
 
-        for LR_img, GT_img in zip(lr_list, gt_list):
-
-            if self.which_model == "classSR_3class_rcan":
-                img = LR_img.astype(np.float32)
-            else:
-                img = LR_img.astype(np.float32) / 255.0
-            if img.ndim == 2:
-                img = np.expand_dims(img, axis=2)
-            # some images have 4 channels
-            if img.shape[2] > 3:
-                img = img[:, :, :3]
-            img = img[:, :, [2, 1, 0]]
-            img = (
-                torch.from_numpy(np.ascontiguousarray(np.transpose(img, (2, 0, 1))))
-                .float()[None, ...]
-                .to(self.device)
+        brt_lr = (
+            torch.Tensor(np.array(lr_list))
+            .to(self.device)
+            .index_select(
+                dim=3,
+                index=torch.tensor([2, 1, 0], dtype=torch.int, device=self.device),
             )
-            with torch.no_grad():
-                srt, type = self.netG(img, False)
+            .permute((0, 3, 1, 2))
+            .contiguous()
+        )
+        torch.Tensor.__getitem__
+        brt_gt = (
+            torch.Tensor(np.array(gt_list))
+            .to(self.device)
+            .index_select(
+                dim=3,
+                index=torch.tensor([2, 1, 0], dtype=torch.int, device=self.device),
+            )
+            .permute((0, 3, 1, 2))
+            .contiguous()
+        )
+        if self.which_model != "classSR_3class_rcan":
+            brt_lr = brt_lr.divide(255.0)
+        assert brt_lr.shape[1:] == (3, 32, 32)
+        # if img.ndim == 2:
+        #     assert False,
+        #     img = np.expand_dims(img, axis=2)
+        # # some images have 4 channels
+        # if img.shape[2] > 3:
+        #     img = img[:, :, :3]
+        with torch.no_grad():
+            brt_srt, brt_type = self.netG(brt_lr, False)
 
+        # for LR_img, GT_img in zip(lr_list, gt_list):
+
+        #     if self.which_model == "classSR_3class_rcan":
+        #         img = LR_img.astype(np.float32)
+        #     else:
+        #         img = LR_img.astype(np.float32) / 255.0
+        #     if img.ndim == 2:
+        #         img = np.expand_dims(img, axis=2)
+        #     # some images have 4 channels
+        #     if img.shape[2] > 3:
+        #         img = img[:, :, :3]
+        #     img = img[:, :, [2, 1, 0]]
+        #     img = (
+        #         torch.from_numpy(np.ascontiguousarray(np.transpose(img, (2, 0, 1))))
+        #         .float()[None, ...]
+        #         .to(self.device)
+        #     )
+        #     with torch.no_grad():
+        #         srt, type = self.netG(img, False)
+
+        #     if self.which_model == "classSR_3class_rcan":
+        #         sr_img = util.tensor2img(
+        #             srt.detach()[0].float().cpu(), out_type=np.uint8, min_max=(0, 255)
+        #         )
+        #     else:
+        #         sr_img = util.tensor2img(srt.detach()[0].float().cpu())
+        #     sr_list.append(sr_img)
+
+        #     if index == 0:
+        #         type_res = type
+        #     else:
+        #         type_res = torch.cat((type_res, type), 0)
+
+        #     psnr = util.calculate_psnr(sr_img, GT_img)
+        #     flag = torch.max(type, 1)[1].data.squeeze()
+        #     if flag == 0:
+        #         psnr_type1 += psnr
+        #     if flag == 1:
+        #         psnr_type2 += psnr
+        #     if flag == 2:
+        #         psnr_type3 += psnr
+
+        #     index += 1
+
+        sr_list = []
+        for srt in brt_srt:
             if self.which_model == "classSR_3class_rcan":
                 sr_img = util.tensor2img(
-                    srt.detach()[0].float().cpu(), out_type=np.uint8, min_max=(0, 255)
+                    srt.detach().float().cpu(), out_type=np.uint8, min_max=(0, 255)
                 )
             else:
-                sr_img = util.tensor2img(srt.detach()[0].float().cpu())
+                sr_img = util.tensor2img(srt.detach().float().cpu())
             sr_list.append(sr_img)
-
-            if index == 0:
-                type_res = type
-            else:
-                type_res = torch.cat((type_res, type), 0)
-
-            psnr = util.calculate_psnr(sr_img, GT_img)
-            flag = torch.max(type, 1)[1].data.squeeze()
-            if flag == 0:
-                psnr_type1 += psnr
-            if flag == 1:
-                psnr_type2 += psnr
-            if flag == 2:
-                psnr_type3 += psnr
-
-            index += 1
-
         self.fake_H = self.combine(
             sr_list, num_h, num_w, h, w, self.patch_size, self.step
         )
         if self.opt["add_mask"]:
+            assert False, "no implement"
             self.fake_H_mask = self.combine_addmask(
                 sr_list, num_h, num_w, h, w, self.patch_size, self.step, type_res
             )
         self.real_H = self.real_H[0 : h * self.scale, 0 : w * self.scale, :]
-        self.num_res = self.print_res(type_res)
-        self.psnr_res = [psnr_type1, psnr_type2, psnr_type3]
+        # self.num_res = self.print_res(type_res)
+        self.num_res = brt_type
+        # self.psnr_res = [psnr_type1, psnr_type2, psnr_type3]
+        self.psnr_res = [0, 1, 2]
 
         # NOTE: type_res
-        self.type_res = torch.argmax(type_res, dim=1).tolist()
+        # self.type_res = torch.argmax(type_res, dim=1).tolist()
+        self.type_res = brt_type
 
         self.netG.train()
 

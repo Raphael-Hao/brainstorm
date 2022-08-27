@@ -7,6 +7,8 @@ from models.archs.RCAN_arch import RCAN
 import numpy as np
 import time
 
+from brt.router import ScatterRouter, GatherRouter
+
 
 class classSR_3class_rcan(nn.Module):
     def __init__(self, in_nc=3, out_nc=3):
@@ -44,47 +46,42 @@ class classSR_3class_rcan(nn.Module):
             scale=4,
             reduction=16,
         )
+        self.scatter_router = ScatterRouter(
+            protocol_type="topk", protocol_kwargs={"top_k": 1}
+        )
+        self.gather_router = GatherRouter(fabric_type="combine")
 
     def forward(self, x, is_train):
         if is_train:
-            self.net1.eval()
-            self.net2.eval()
-            self.net3.eval()
-            class_type = self.classifier(x / 255.0)
-            p = F.softmax(class_type, dim=1)
-            out1 = self.net1(x)
-            out2 = self.net2(x)
-            out3 = self.net3(x)
+            assert False, "This should only be excuted while training!"
 
-            p1 = p[:, 0].unsqueeze(1).unsqueeze(2).unsqueeze(3)
-            p2 = p[:, 1].unsqueeze(1).unsqueeze(2).unsqueeze(3)
-            p3 = p[:, 2].unsqueeze(1).unsqueeze(2).unsqueeze(3)
-            out = p1 * out1 + p2 * out2 + p3 * out3
-            return out, p
-        else:
-            for i in range(len(x)):
-                type = self.classifier(x[i].unsqueeze(0) / 255.0)  # rcan
+        weights = self.classifier(x.div(255.0))
+        sr_x = self.scatter_router(x, weights)
+        y = [self.net1(sr_x[0]), self.net2(sr_x[1]), self.net3(sr_x[2])]
+        gr_x = self.gather_router(y)
+        return gr_x, [yy.shape[0] for yy in y]
 
-                flag = torch.max(type, 1)[1].data.squeeze()
-                p = F.softmax(type, dim=1)
-                # flag=np.random.randint(0,2)
-                # flag=0
-                if flag == 0:
-                    out = self.net1(x[i].unsqueeze(0))
-                elif flag == 1:
-                    out = self.net2(x[i].unsqueeze(0))
-                elif flag == 2:
-                    out = self.net3(x[i].unsqueeze(0))
-                if i == 0:
-                    out_res = out
-                    type_res = p
-                else:
-                    out_res = torch.cat((out_res, out), 0)
-                    type_res = torch.cat((type_res, p), 0)
+        # for i in range(len(x)):
+        #     type = self.classifier(x[i].unsqueeze(0) / 255.0)  # rcan
 
-            return out_res, type_res
+        #     flag = torch.max(type, 1)[1].data.squeeze()
+        #     p = F.softmax(type, dim=1)
+        #     # flag=np.random.randint(0,2)
+        #     # flag=0
+        #     if flag == 0:
+        #         out = self.net1(x[i].unsqueeze(0))
+        #     elif flag == 1:
+        #         out = self.net2(x[i].unsqueeze(0))
+        #     elif flag == 2:
+        #         out = self.net3(x[i].unsqueeze(0))
+        #     if i == 0:
+        #         out_res = out
+        #         type_res = p
+        #     else:
+        #         out_res = torch.cat((out_res, out), 0)
+        #         type_res = torch.cat((type_res, p), 0)
 
-        return out_res, type_res
+        # return out_res, type_res
 
 
 class Classifier(nn.Module):
@@ -107,8 +104,9 @@ class Classifier(nn.Module):
         arch_util.initialize_weights([self.CondNet], 0.1)
 
     def forward(self, x):
-        out = self.CondNet(x)
-        out = nn.AvgPool2d(out.size()[2])(out)
-        out = out.view(out.size(0), -1)
-        out = self.lastOut(out)
+        # assert x.shape[1:] == torch.Size([3, 32, 32]), x.shape
+        out = self.CondNet(x) # [bs, 32, 8, 8]
+        out = self.avgPool2d(out)  # [bs, 32, 1, 1]
+        out = out.view(-1, 32)  # [bs, 32]
+        out = self.lastOut(out)  # [bs, 3]
         return out
