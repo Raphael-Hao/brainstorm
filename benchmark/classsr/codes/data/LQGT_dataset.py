@@ -89,6 +89,7 @@ class LQGTDataset(data.Dataset):
             )
             img_LQ = util.read_img(self.LQ_env, LQ_path, resolution)
         else:  # down-sampling on-the-fly
+            assert False, "This should only be excuted while training!"
             # randomly scale during training
             if self.opt["phase"] == "train":
                 random_scale = random.choice(self.random_scale_list)
@@ -112,6 +113,7 @@ class LQGTDataset(data.Dataset):
                 img_LQ = np.expand_dims(img_LQ, axis=2)
 
         if self.opt["phase"] == "train":
+            assert False, "This should only be excuted while training!"
             # if the image size is too small
             H, W, _ = img_GT.shape
             if H < GT_size or W < GT_size:
