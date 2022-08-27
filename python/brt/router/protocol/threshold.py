@@ -21,8 +21,11 @@ class ThresholdProtocol(ProtocolBase):
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
+        **kwargs,
     ):
-        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
+        super().__init__(
+            index_format=index_format, index_gen_opt=index_gen_opt, *kwargs
+        )
         self.threshold = threshold
         self.residual_path = residual_path
         self.single_tpu = single_tpu
@@ -68,10 +71,13 @@ class ResidualThresholdProtocol(ProtocolBase):
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
+        **kwargs,
     ):
         if index_format != "src_index":
             logger.error("BatchedThresholdProtocol only supports src_index format")
-        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
+        super().__init__(
+            index_format=index_format, index_gen_opt=index_gen_opt, **kwargs
+        )
         self.threshold = threshold
         self.residual_path = residual_path
         self.single_tpu = single_tpu
@@ -116,10 +122,13 @@ class BinaryThresholdProtocol(ProtocolBase):
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
+        **kwargs,
     ):
         if index_format != "src_index":
             logger.error("BatchedThresholdProtocol only supports src_index format")
-        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
+        super().__init__(
+            index_format=index_format, index_gen_opt=index_gen_opt, **kwargs
+        )
         self.threshold = threshold
         self.selected_path = selected_path
         self.single_tpu = single_tpu
