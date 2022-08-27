@@ -1,3 +1,7 @@
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+from typing import List
+
 import torch.nn as nn
 import torch
 import math
@@ -231,6 +235,7 @@ class MSDNet(nn.Module):
         super(MSDNet, self).__init__()
         self.blocks = nn.ModuleList()
         self.classifier = nn.ModuleList()
+        self.scatters = nn.ModuleList()
         self.nBlocks = args.nBlocks
         self.steps = [args.base]
         self.args = args
@@ -272,11 +277,11 @@ class MSDNet(nn.Module):
             else:
                 raise NotImplementedError
 
-        self.final_gather = GatherRouter(
-            fabric_type="single_ptu_combine",
-            fabric_kwargs={"sparse": True}
-            # fabric_type="combine", fabric_kwargs={"sparse": True}
-        )
+        if args.init_routers:
+            assert args.thresholds is not None
+            self.build_routers(args.thresholds)
+        else:
+            self.routers_initilized = False
 
         for m in self.blocks:
             if hasattr(m, "__iter__"):
@@ -405,24 +410,45 @@ class MSDNet(nn.Module):
         )
         return ClassifierModule(conv, nIn, num_classes)
 
-    def _build_scatter(self, threshold: float):
-        return ScatterRouter(
-            protocol_type="binary_threshold",
-            fabric_type="single_ptu_dispatch",
-            protocol_kwargs={"threshold": threshold},
-            fabric_kwargs={
-                "flow_num": 2,
-                "route_logic": ["1d", "1d"],
-                "transform": [False, False],
-            },
+    def build_routers(self, thresholds: List[float]):
+        assert len(thresholds) == self.nBlocks
+        self.routers_initilized = True
+        self.scatters = nn.ModuleList()
+        for i in range(self.nBlocks - 1):
+            self.scatters.append(
+                ScatterRouter(
+                    protocol_type="binary_threshold",
+                    fabric_type="single_ptu_dispatch",
+                    protocol_kwargs={"threshold": thresholds[i]},
+                    fabric_kwargs={
+                        "flow_num": 2,
+                        "route_logic": ["1d", "1d"],
+                        "transform": [False, False],
+                    },
+                )
+            )
+        self.final_gather = GatherRouter(
+            fabric_type="single_ptu_combine",
+            fabric_kwargs={"sparse": True}
+            # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
 
     def forward(self, x):
         res = []
-        for i in range(self.nBlocks):
-            x = self.blocks[i](x)
-            tmp_res = self.classifier[i](x)
-            routed_x, routed_res = self.scatter([x, tmp_res], tmp_res)
-            x = routed_x[1]
-            res.append(routed_res[0])
-        return self.final_gather(res)
+        if not self.training and self.routers_initilized:
+            for i in range(self.nBlocks):
+                x = self.blocks[i](x)
+                tmp_res = self.classifier[i](x)
+                if i < self.nBlocks - 1:
+                    routed_x, routed_res = self.scatter([x, tmp_res], tmp_res)
+                    routed_res = routed_res[0]
+                    x = routed_x[1]
+                else:
+                    routed_res = tmp_res
+                res.append(routed_res)
+            return self.final_gather(res)
+        else:
+            for i in range(self.nBlocks):
+                x = self.blocks[i](x)
+                res.append(self.classifier[i](x))
+            return res

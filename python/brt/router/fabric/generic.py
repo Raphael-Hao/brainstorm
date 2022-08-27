@@ -21,6 +21,7 @@ class DispatchFabric(FabricBase):
         throttling=False,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
+        **kwargs,
     ):
         """dispatch fabric
 
@@ -29,7 +30,7 @@ class DispatchFabric(FabricBase):
                 route_logic (str): 1d or 2d, default is 1d, can be list of 1d or 2d
                 transform (bool): whether to transform input with the score, default is False, can be list of bool
         """
-        super().__init__(index_format="src_index", flow_num=flow_num)
+        super().__init__(flow_num=flow_num, index_format="src_index", **kwargs)
         self.throttling = throttling
         route_logics = route_logic
         if isinstance(route_logics, str):
@@ -168,8 +169,9 @@ class CombineFabric(FabricBase):
         reduction="add",
         sparse=False,
         granularity_padding=False,
+        **kwargs,
     ):
-        super().__init__(index_format="src_index", flow_num=flow_num)
+        super().__init__(flow_num=flow_num, index_format="src_index", **kwargs)
 
         self.sparse = sparse
         self.reduction = reduction
