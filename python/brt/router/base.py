@@ -54,6 +54,11 @@ cum for cumulative"
         """
         Coordinate the route index format between protocol and fabric.
         """
+        if protocol_index_fmt is None:
+            assert (
+                fabric_index_fmt is None
+            ), "The used fabric is not compatible with the protocol."
+            return route_indices
         new_route_indices = convert_index_format(
             route_indices, loads, protocol_index_fmt, fabric_index_fmt
         )

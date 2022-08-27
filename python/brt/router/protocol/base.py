@@ -17,8 +17,9 @@ __all__ = ["ProtocolBase", "ProtocolFactory"]
 class ProtocolBase(nn.Module):
     def __init__(
         self,
-        index_format: str,
+        index_format: str = None,
         index_gen_opt: bool = True,
+        **kwargs,
     ):
         """Base class for all protocols.
 
@@ -36,6 +37,7 @@ class ProtocolBase(nn.Module):
         assert self.index_format in [
             "dst_index",
             "src_index",
+            None,
         ], f"index_format should be dst_index or src_index, but got {index_format}"
 
     def forward(self, score: torch.Tensor, **kwargs):
