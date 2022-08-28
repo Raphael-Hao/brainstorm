@@ -33,6 +33,8 @@ class WeightLoader:
             if buf is not None:
                 m._buffers[key] = buf.pin_memory()
 
+        return m
+
     @classmethod
     def load(cls, m: nn.Module):
         for module in m.children():
