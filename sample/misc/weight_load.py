@@ -26,6 +26,13 @@ b.copy_(a, non_blocking=True)
 end_stamp = time.time()
 print(f"cpu time copy_-based non blocking to('cpu'): {(end_stamp - start_stamp) * 1000:.2f} ms")
 
+torch.cuda.synchronize()
+start_stamp = time.time()
+b.copy_(a)
+end_stamp = time.time()
+print(f"cpu time copy_-based blocking to('cpu'): {(end_stamp - start_stamp) * 1000:.2f} ms")
+
+
 
 torch.cuda.synchronize()
 start_event.record()
