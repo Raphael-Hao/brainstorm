@@ -7,13 +7,17 @@ from torch.nn.parameter import Parameter
 
 class WeightLoader:
     _stream: torch.cuda.Stream = None
+    _event: torch.cuda.Event = None
 
     @classmethod
     def init(cls, stream=None):
         if stream is None:
             cls._stream = torch.cuda.default_stream()
-        else:
+        elif isinstance(stream, torch.cuda.Stream):
             cls._stream = stream
+        else:
+            cls._stream = torch.cuda.Stream()
+        cls._event = torch.cuda.Event()
 
     @classmethod
     def pin_memory(cls, m: nn.Module):
@@ -36,9 +40,26 @@ class WeightLoader:
         return m
 
     @classmethod
+    def inject_placement_check(cls, m: nn.Module):
+        assert (
+            cls._stream is not None and cls._event is not None
+        ), "WeightLoader is used before initialization"
+
+        def check_placement(mod, input):
+            cls._event.wait(torch.cuda.current_stream())
+
+        m.register_forward_pre_hook(check_placement)
+
+    @classmethod
     def load(cls, m: nn.Module):
+        m = cls._load(m)
+        cls._event.record(cls._stream)
+        return m
+
+    @classmethod
+    def _load(cls, m: nn.Module):
         for module in m.children():
-            cls.load(module)
+            cls._load(module)
 
         for key, param in m._parameters.items():
             if param is None:
@@ -67,12 +88,20 @@ class WeightLoader:
                     m._buffers[key] = buf.cuda(non_blocking=True)
                 m._buffers[key].pin_cpu_data = buf
 
+        cls._event.record(cls._stream)
+
         return m
 
     @classmethod
     def unload(cls, m: nn.Module):
+        m = cls._unload(m)
+        cls._event.record(cls._stream)
+        return m
+
+    @classmethod
+    def _unload(cls, m: nn.Module):
         for module in m.children():
-            cls.unload(module)
+            cls._unload(module)
 
         for key, param in m._parameters.items():
             if param is None:
@@ -100,5 +129,4 @@ class WeightLoader:
                     buf_applied = buf.pin_cpu_data
                     buf_applied.copy_(buf, non_blocking=True)
                 m._buffers[key] = buf_applied
-
         return m
