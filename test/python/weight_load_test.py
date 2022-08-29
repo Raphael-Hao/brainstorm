@@ -23,13 +23,21 @@ class LoadTest(unittest.TestCase):
         simple_net =SimpleNet()
         in_data = torch.randn(1,3,10,10)
         origin_out_data = simple_net(in_data)
+        # init the weight loader
         WeightLoader.init()
         pinned_simple_net = WeightLoader.pin_memory(simple_net)
         pinned_out_data = pinned_simple_net(in_data)
+        # first load and unload
         cuda_simple_net = WeightLoader.load(pinned_simple_net)
         cuda_out_data = cuda_simple_net(in_data.cuda())
         unload_simple_net = WeightLoader.unload(cuda_simple_net)
         unload_out_data = unload_simple_net(in_data)
+        # second load and unload
+        cuda_simple_net = WeightLoader.load(pinned_simple_net)
+        cuda_out_data = cuda_simple_net(in_data.cuda())
+        unload_simple_net = WeightLoader.unload(cuda_simple_net)
+        unload_out_data = unload_simple_net(in_data)
+
         self.assertTrue(torch.allclose(origin_out_data, pinned_out_data))
         self.assertTrue(torch.allclose(origin_out_data, cuda_out_data.cpu()))
         self.assertTrue(torch.allclose(origin_out_data, unload_out_data))
