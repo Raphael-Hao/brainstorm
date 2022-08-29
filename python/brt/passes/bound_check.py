@@ -4,8 +4,10 @@
 from brt.passes.base import PassBase, register_pass
 
 
-@register_pass("bound_check")
-class BoundCheckPass(PassBase):
+@register_pass("dead_path_eliminate")
+class DeadPathEliminatePass(PassBase):
     @classmethod
     def run_on_graph(cls):
         pass
+
+
