@@ -2,22 +2,25 @@
 # Licensed under the MIT license.
 
 import torch
+from torch.fx.graph_module import GraphModule
 from brt.runtime import Registry
+from brt.trace import symbolic_trace
 
 
 class PassBase:
+    def __init__(self, m: torch.nn.Module):
+        self.graph_mod = symbolic_trace(m)
 
-    @classmethod
     def analyze(flow: torch.Tensor) -> None:
-        pass
+        raise NotImplementedError
 
-    @staticmethod
     def ru_on_graph(self, graph) -> None:
-        pass
+        raise NotImplementedError
 
-    @staticmethod
-    def finalize(self) -> None:
-        pass
+    def finalize(self) -> GraphModule:
+        self.graph_mod.graph.eliminate_dead_code()
+        self.graph_mod.recompile()
+        return self.graph_mod
 
 
 def register_pass(pass_class: type) -> None:

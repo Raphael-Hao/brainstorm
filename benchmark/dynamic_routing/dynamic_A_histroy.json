@@ -1,0 +1,511 @@
+{
+    "init_layer.residual_scatter": [
+        0,
+        500
+    ],
+    "init_layer.threeway_scatter": [
+        500,
+        500
+    ],
+    "all_cell_list.0.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.0.0.threeway_scatter": [
+        500,
+        500
+    ],
+    "all_cell_list.0.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.0.1.threeway_scatter": [
+        500,
+        500,
+        0
+    ],
+    "all_cell_list.1.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.1.0.threeway_scatter": [
+        500,
+        500
+    ],
+    "all_cell_list.1.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.1.1.threeway_scatter": [
+        500,
+        7,
+        0
+    ],
+    "all_cell_list.1.2.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.1.2.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.2.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.2.0.threeway_scatter": [
+        500,
+        500
+    ],
+    "all_cell_list.2.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.2.1.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.2.2.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.2.2.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.2.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.2.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.3.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.3.0.threeway_scatter": [
+        500,
+        500
+    ],
+    "all_cell_list.3.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.3.1.threeway_scatter": [
+        500,
+        190,
+        0
+    ],
+    "all_cell_list.3.2.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.3.2.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.3.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.3.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.4.0.residual_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.4.0.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.4.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.4.1.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.4.2.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.4.2.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.4.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.4.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.5.0.residual_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.5.0.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.5.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.5.1.threeway_scatter": [
+        500,
+        0,
+        500
+    ],
+    "all_cell_list.5.2.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.5.2.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.5.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.5.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.6.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.6.0.threeway_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.6.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.6.1.threeway_scatter": [
+        500,
+        0,
+        500
+    ],
+    "all_cell_list.6.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.6.2.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.6.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.6.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.7.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.7.0.threeway_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.7.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.7.1.threeway_scatter": [
+        500,
+        0,
+        500
+    ],
+    "all_cell_list.7.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.7.2.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.7.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.7.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.8.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.8.0.threeway_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.8.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.8.1.threeway_scatter": [
+        9,
+        500,
+        500
+    ],
+    "all_cell_list.8.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.8.2.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.8.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.8.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.9.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.9.0.threeway_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.9.1.residual_scatter": [
+        9,
+        0
+    ],
+    "all_cell_list.9.1.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.9.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.9.2.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.9.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.9.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.10.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.10.0.threeway_scatter": [
+        500,
+        500
+    ],
+    "all_cell_list.10.1.residual_scatter": [
+        9,
+        0
+    ],
+    "all_cell_list.10.1.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.10.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.10.2.threeway_scatter": [
+        500,
+        500,
+        0
+    ],
+    "all_cell_list.10.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.10.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.11.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.11.0.threeway_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.11.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.11.1.threeway_scatter": [
+        500,
+        500,
+        500
+    ],
+    "all_cell_list.11.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.11.2.threeway_scatter": [
+        500,
+        500,
+        0
+    ],
+    "all_cell_list.11.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.11.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.12.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.12.0.threeway_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.12.1.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.12.1.threeway_scatter": [
+        0,
+        500,
+        97
+    ],
+    "all_cell_list.12.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.12.2.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.12.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.12.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.13.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.13.0.threeway_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.13.1.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.13.1.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.13.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.13.2.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.13.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.13.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.14.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.14.0.threeway_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.14.1.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.14.1.threeway_scatter": [
+        0,
+        0,
+        0
+    ],
+    "all_cell_list.14.2.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.14.2.threeway_scatter": [
+        500,
+        0,
+        0
+    ],
+    "all_cell_list.14.3.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.14.3.threeway_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.15.0.residual_scatter": [
+        0,
+        500
+    ],
+    "all_cell_list.15.1.residual_scatter": [
+        0,
+        0
+    ],
+    "all_cell_list.15.2.residual_scatter": [
+        500,
+        0
+    ],
+    "all_cell_list.15.3.residual_scatter": [
+        0,
+        0
+    ]
+}
