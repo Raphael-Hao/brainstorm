@@ -26,10 +26,10 @@ class RouterBase(nn.Module):
                 "avg",
                 "max",
                 "cum",
-            ), f"Invalid capture mode: {capture_mode},valid options:\
-avg for average\
-max for maximum\
-cum for cumulative"
+            ), f"Invalid capture mode: {capture_mode},valid options:"
+            "avg for average"
+            "max for maximum"
+            "cum for cumulative"
             self.capture_mode = capture_mode
         else:
             self.capturing = False
@@ -74,23 +74,61 @@ cum for cumulative"
         self,
         fabric_type: str,
         in_flows: List[torch.Tensor],
-        loads: torch.Tensor,
+        loads: torch.Tensor = None,
         capacities: torch.Tensor = None,
     ) -> None:
         """
-        Capture the flow.
+        Capture the flow stats.
         """
-        assert "dispatch" in fabric_type, "Only dispatch fabric can capture flow stats."
-
         if not self.capturing:
             return
 
-        self.capture_flow_shape(in_flows)
-        self.capture_flow_laod(loads, capacities)
+        if "dispatch" in fabric_type:
+            self.capture_outbound_flows(in_flows, loads, capacities)
+        elif "combine" in fabric_type:
+            self.capture_inbound_flows(in_flows)
+        else:
+            return
 
         self.history_len += 1
 
-    def capture_flow_laod(self, loads, capacities):
+    def capture_inbound_flows(self, in_flows):
+        if isinstance(in_flows, List) and all(
+            isinstance(flow, List) for flow in in_flows
+        ):
+            in_flows = in_flows[0]
+            logger.warning(
+                "Only the first group of in_flows is captured, plz make sure the loads are the same for all groups."
+            )
+        self.capture_load_from_flows(in_flows)
+
+    def capture_outbound_flows(self, in_flows, loads, capacities):
+        self.capture_shape(in_flows)
+        self.capture_laod_from_protocol(loads, capacities)
+
+    def capture_load_from_flows(self, in_flows: List[torch.Tensor]) -> None:
+        path_num = len(in_flows)
+
+        if self.history_len == 0:
+            self.load_history = torch.zeros(
+                path_num, dtype=torch.float64, device="cpu"
+            )
+
+        current_load = torch.tensor(
+            [flow.size(0) for flow in in_flows], dtype=torch.float64, device="cpu"
+        )
+        if self.capture_mode == "avg":
+            self.load_history = (
+                self.load_history * self.history_len + current_load
+            ) / (self.history_len + 1.0)
+
+        elif self.capture_mode == "max":
+            self.load_history = torch.maximum(self.load_history, current_load)
+
+        elif self.capture_mode == "cum":
+            self.load_history = self.load_history + current_load
+
+    def capture_laod_from_protocol(self, loads, capacities):
 
         if self.history_len == 0:
             self.load_history = torch.zeros_like(
@@ -124,7 +162,7 @@ cum for cumulative"
             if capacities is not None:
                 self.capacity_history = self.capacity_history + capacities
 
-    def capture_flow_shape(self, flows) -> None:
+    def capture_shape(self, flows) -> None:
         """
         Capture the flow shape.
         """
