@@ -13,8 +13,8 @@ class DeadPathEliminatePass(PassBase):
         super().__init__(m)
 
     def run_on_graph(self):
-        sub_modules = self.graph_mod.named_modules()
-        for node in self.graph.nodes:
+        sub_modules = dict(self.graph_mod.named_modules())
+        for node in self.graph_mod.graph.nodes:
             if node.op == "call_module":
                 if isinstance(sub_modules[node.target], GatherRouter):
                     dead_paths = []
@@ -42,10 +42,11 @@ class DeadPathEliminatePass(PassBase):
 
 @register_pass("permanent_path_fold")
 class PermanentPathFoldPass(PassBase):
-    def __init__(self, m: nn.Module):
+    def __init__(self, permanent_target, m: nn.Module):
         super().__init__(m)
+        self.perm_target = permanent_target
 
-    def run_on_graph(self, permanent_target):
+    def run_on_graph(self):
         sub_modules = self.graph_mod.named_modules()
         for node in self.graph.nodes:
             if node.op == "call_module":

@@ -51,3 +51,7 @@ class LoadTest(unittest.TestCase):
         self.assertTrue(torch.allclose(origin_out_data, pinned_out_data))
         self.assertTrue(torch.allclose(origin_out_data, cuda_out_data.cpu()))
         self.assertTrue(torch.allclose(origin_out_data, unload_out_data))
+
+
+if __name__ == "__main__":
+    unittest.main()
