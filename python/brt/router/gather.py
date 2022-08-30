@@ -7,6 +7,7 @@ import torch
 from brt.runtime import log
 from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
+from brt.router.utils import empty_flows
 
 __all__ = [
     "GatherRouter",
@@ -59,10 +60,3 @@ class GatherRouter(RouterBase):
         return out_flow
 
 
-def empty_flows(in_flows):
-    if isinstance(in_flows, List):
-        if len(in_flows) == 0:
-            return True
-        else:
-            return empty_flows(in_flows[0])
-    return False
