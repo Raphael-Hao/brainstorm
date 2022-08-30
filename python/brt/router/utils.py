@@ -6,7 +6,14 @@ import torch
 import numpy as np
 import brt._C.router as C_router
 
-__all__ = ["generate_src_indices", "generate_dst_indices"]
+__all__ = [
+    "generate_src_indices",
+    "generate_dst_indices",
+    "generate_indices",
+    "convert_index_format",
+    "make_kwargs",
+    "empty_flows",
+]
 
 
 def generate_src_indices(
@@ -32,7 +39,7 @@ def generate_src_indices(
     else:
         src_indices = torch.zeros_like(hot_mask)
         # loads = [0 for _ in range(hot_mask.size(1))]
-        loads = torch.zeros(hot_mask.size(1),dtype=torch.int32, device="cpu")
+        loads = torch.zeros(hot_mask.size(1), dtype=torch.int32, device="cpu")
         torch.zeros((hot_mask.size(1),), dtype=torch.int64, device=hot_mask.device)
         hot_mask_t = hot_mask.t().contiguous()
         for i in range(hot_mask.size(1)):
@@ -153,3 +160,12 @@ def make_kwargs(kwargs):
         raise ValueError(
             "kwargs should be a dict of str to Any, but got {}".format(kwargs)
         )
+
+
+def empty_flows(in_flows):
+    if isinstance(in_flows, List):
+        if len(in_flows) == 0:
+            return True
+        else:
+            return empty_flows(in_flows[0])
+    return False
