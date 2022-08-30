@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from brt.passes.base import PassBase, register_pass
 from brt.router import GatherRouter, ScatterRouter
+from brt.router.fabric import make_fabric
 
 
 @register_pass("dead_path_eliminate")
@@ -14,6 +15,7 @@ class DeadPathEliminatePass(PassBase):
 
     def run_on_graph(self):
         sub_modules = dict(self.graph_mod.named_modules())
+        # eliminate dead path
         for node in self.graph_mod.graph.nodes:
             if node.op == "call_module":
                 if isinstance(sub_modules[node.target], GatherRouter):
@@ -37,6 +39,24 @@ class DeadPathEliminatePass(PassBase):
                     node.args = new_args
 
     def finalize(self):
+        # modify the dummy gather router with placeholder combine fabric
+        sub_modules = dict(self.graph_mod.named_modules())
+        for node in self.graph_mod.graph.nodes:
+            if node.op == "call_module":
+                if isinstance(sub_modules[node.target], GatherRouter):
+                    if node.args[0] == []:
+                        origin_fabric_kwargs = sub_modules[node.target].fabric_kwargs
+                        origin_fabric_kwargs["sparse"] = True
+                        new_kwargs = {
+                            "flow_shapes": sub_modules[node.target].shapes_history,
+                            "flow_dtypes": sub_modules[node.target].dtypes_history,
+                            "flow_devices": sub_modules[node.target].devices_history,
+                        }
+                        origin_fabric_kwargs.update(new_kwargs)
+                        sub_modules[node.target].fabric = make_fabric(
+                            "placeholder_combine", origin_fabric_kwargs
+                        )
+
         return super().finalize()
 
 
