@@ -10,6 +10,7 @@ from brt.trace.graph import GraphTracer
 from torch.fx.graph_module import GraphModule
 from torch.fx.passes.graph_drawer import FxGraphDrawer
 from brt.router import ScatterRouter, GatherRouter
+from brt.passes import get_pass
 
 """
 Detection Training Script.
@@ -163,11 +164,10 @@ def main(args):
     # print(outputs)
 
     if args.trace:
-        tracer = GraphTracer()
-        graph = tracer.trace(model.backbone)
-        graph_module = GraphModule(tracer.root, graph, cfg.ARCH_NAME)
-        modules = dict(graph_module.named_modules())
-
+        pass_cls = get_pass("dead_path_eliminate")
+        eliminate_pass = pass_cls(model.backbone)
+        eliminate_pass.run_on_graph()
+        new_backbone = eliminate_pass.finalize()
 
 if __name__ == "__main__":
     args = test_argument_parser().parse_args()
