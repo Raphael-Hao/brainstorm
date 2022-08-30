@@ -93,14 +93,21 @@ class RouterBase(nn.Module):
         self.history_len += 1
 
     def capture_inbound_flows(self, in_flows):
-        if isinstance(in_flows, List) and all(
-            isinstance(flow, List) for flow in in_flows
-        ):
-            in_flows = in_flows[0]
-            logger.warning(
-                "Only the first group of in_flows is captured, plz make sure the loads are the same for all groups."
-            )
+        if len(in_flows) == 0 and isinstance(in_flows, List):
+            return
+
+        if all(isinstance(flow, List) for flow in in_flows):
+            if all(len(flow) > 0 for flow in in_flows):
+                in_flows = in_flows[0]
+                logger.warning(
+                    "Only the first group of in_flows is captured, plz make sure the loads are the same for all groups."
+                )
+            else:
+                print(in_flows)
+                return
+
         self.capture_load_from_flows(in_flows)
+        self.capture_shape(in_flows)
 
     def capture_outbound_flows(self, in_flows, loads, capacities):
         self.capture_shape(in_flows)
@@ -110,9 +117,7 @@ class RouterBase(nn.Module):
         path_num = len(in_flows)
 
         if self.history_len == 0:
-            self.load_history = torch.zeros(
-                path_num, dtype=torch.float64, device="cpu"
-            )
+            self.load_history = torch.zeros(path_num, dtype=torch.float64, device="cpu")
 
         current_load = torch.tensor(
             [flow.size(0) for flow in in_flows], dtype=torch.float64, device="cpu"
@@ -172,6 +177,14 @@ class RouterBase(nn.Module):
         else:
             self.granularities = None
 
+    def capture(self, mode=True):
+        """Switch the capturing mode OFF or ON
+
+        Args:
+            mode (bool, optional): Defaults to True.
+        """
+        self.capturing = mode
+
     def check_granularity_consistency(self, flows) -> bool:
         if self.granularities is None:
             if self.history_len == 0:
@@ -224,3 +237,11 @@ def is_router(cls_or_instance) -> bool:
         router_cls = cls_or_instance
 
     return Registry.sub_cls_exists_and_registered(router_cls, RouterBase)
+
+
+def router_capture(m: nn.Module, mode=True):
+    for child_m in m.children():
+        router_capture(child_m)
+    if isinstance(m, RouterBase):
+        m.capture(mode)
+    return m

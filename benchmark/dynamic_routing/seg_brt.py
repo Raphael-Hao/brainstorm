@@ -35,6 +35,7 @@ class DynamicNet4Seg(nn.Module):
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
         self.budget_constrint = BudgetConstraint(cfg)
         self.to(self.device)
+        self.size_divisibility = self.backbone.size_divisibility
 
     def forward(self, batched_inputs):
         """
@@ -57,7 +58,7 @@ class DynamicNet4Seg(nn.Module):
         """
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [self.normalizer(x) for x in images]
-        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
+        images = ImageList.from_tensors(images, self.size_divisibility)
         # for _ in range(10):
         #     features = self.backbone(images.tensor)
         # torch.cuda.current_stream().synchronize()
@@ -81,7 +82,7 @@ class DynamicNet4Seg(nn.Module):
         if "sem_seg" in batched_inputs[0]:
             targets = [x["sem_seg"].to(self.device) for x in batched_inputs]
             targets = ImageList.from_tensors(
-                targets, self.backbone.size_divisibility, self.sem_seg_head.ignore_value
+                targets, self.size_divisibility, self.sem_seg_head.ignore_value
             ).tensor
         else:
             targets = None
