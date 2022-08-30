@@ -1,17 +1,17 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 # from dynamic_raw_config import config
-from dynamic_A_config import config
+# from dynamic_A_config import config
 
 # from dynamic_B_config import config
-# from dynamic_C_config import config
+from dynamic_C_config import config
 
 from brt.trace.graph import GraphTracer
 from torch.fx.graph_module import GraphModule
 from torch.fx.passes.graph_drawer import FxGraphDrawer
-from brt.router import ScatterRouter, GatherRouter
+from brt.router import router_capture
 from brt.passes import get_pass
-
+from brt.runtime.utils import GPUTimer
 """
 Detection Training Script.
 
@@ -158,6 +158,7 @@ def main(args):
     )
 
     res = Trainer.test(cfg, model)
+
     # model.eval()
     # input = torch.randn(1, 3, 1024, 2048).cuda()
     # outputs = model.backbone(input)
@@ -168,6 +169,25 @@ def main(args):
         eliminate_pass = pass_cls(model.backbone)
         eliminate_pass.run_on_graph()
         new_backbone = eliminate_pass.finalize()
+
+        # from torch.fx.passes.graph_drawer import FxGraphDrawer
+
+        # graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+        # with open("new_backbone.svg", "wb") as f:
+        #     f.write(graph_drawer.get_dot_graph().create_svg())
+
+        new_backbone = router_capture(new_backbone, False).eval()
+        in_data = torch.randn(1, 3, 1024, 2048).cuda()
+        for i in range(10):
+            out_data = new_backbone(in_data)
+        timer = GPUTimer()
+        timer.start()
+        for i in range(100):
+            out_data = new_backbone(in_data)
+        timer.stop()
+        timer.print("new_backbone", 100)
+        # new_res = Trainer.test(cfg, model)
+
 
 if __name__ == "__main__":
     args = test_argument_parser().parse_args()
