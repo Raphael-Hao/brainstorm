@@ -3,6 +3,7 @@
 from typing import Union, List, Dict, Any
 
 import torch
+from brt.router.utils import assert_compatibility
 from brt.router.fabric.generic import DispatchFabric, CombineFabric
 from brt.router.fabric.base import register_fabric
 from brt.runtime.proto_tensor import ProtoTensor, init_proto_tensor
@@ -18,11 +19,21 @@ class IndentityDispatchFabric(DispatchFabric):
         transform: Union[bool, List[bool]] = False,
         **kwargs
     ):
-        super().__init__(
-            flow_num=flow_num, route_logic=route_logic, transform=transform
-        )
         self.check_compatibility(kwargs)
+        super().__init__(
+            flow_num=flow_num,
+            route_logic=route_logic,
+            transform=transform,
+            index_format=None,
+            **kwargs
+        )
         self.path_num = path_num
+
+    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
+        throttling = kwargs.pop("throttling", False)
+        assert_compatibility(self, "throttling", False, throttling)
+        index_format = kwargs.pop("index_format", None)
+        assert_compatibility(self, "index_format", None, index_format)
 
     def forward(
         self,
@@ -74,27 +85,21 @@ class IndentityDispatchFabric(DispatchFabric):
                     )
                 else:
                     out_flow = dispatched_flow
-                out_flows.append(dispatched_flow)
+                out_flows.append(out_flow)
             all_out_flows.append(out_flows)
         return all_out_flows
-
-    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
-        throttling = kwargs.get("throttling", False)
-        if throttling:
-            self.assert_compatibility("throttling", False, True)
 
 
 @register_fabric("identity_combine")
 class IdentityCombineFabric(CombineFabric):
-    def __init__(
-        self, flow_num: int, reduction="add", granularity_padding=False, **kwargs
-    ):
+    def __init__(self, flow_num: int, granularity_padding=False, **kwargs):
         self.check_compatibility(kwargs)
         super().__init__(
             flow_num=flow_num,
-            reduction=reduction,
+            reduction="add",
             sparse=True,
             granularity_padding=granularity_padding,
+            **kwargs
         )
 
     def forward(
@@ -119,7 +124,8 @@ class IdentityCombineFabric(CombineFabric):
 
         return out_flows
 
-    def check_compatibility(self, kwargs) -> None:
-        sparse = kwargs.get("sparse", True)
-        if not sparse:
-            self.assert_compatibility("sparse", True, False)
+    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
+        sparse = kwargs.pop("sparse", True)
+        assert_compatibility(self, "sparse", True, sparse)
+        reduction = kwargs.pop("reduction", "add")
+        assert_compatibility(self, "reduction", "add", reduction)

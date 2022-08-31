@@ -30,7 +30,8 @@ class DispatchFabric(FabricBase):
                 route_logic (str): 1d or 2d, default is 1d, can be list of 1d or 2d
                 transform (bool): whether to transform input with the score, default is False, can be list of bool
         """
-        super().__init__(flow_num=flow_num, index_format="src_index", **kwargs)
+        index_format = kwargs.pop("index_format", "src_index")
+        super().__init__(flow_num=flow_num, index_format=index_format, **kwargs)
         self.throttling = throttling
         route_logics = route_logic
         if isinstance(route_logics, str):
@@ -59,6 +60,7 @@ class DispatchFabric(FabricBase):
         capacities: torch.Tensor = None,
         score: torch.Tensor = None,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
+        assert self.index_format == "src_index", "DispatchFabric only support src_index"
         in_flow = self.pack_invalid_flow(in_flow)
 
         if self.flow_num == 1:

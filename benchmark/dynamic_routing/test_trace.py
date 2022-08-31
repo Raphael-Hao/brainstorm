@@ -1,15 +1,15 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 # from dynamic_raw_config import config
-# from dynamic_A_config import config
+from dynamic_A_config import config
 
 # from dynamic_B_config import config
-from dynamic_C_config import config
+# from dynamic_C_config import config
 
 from brt.trace.graph import GraphTracer
 from torch.fx.graph_module import GraphModule
 from torch.fx.passes.graph_drawer import FxGraphDrawer
-from brt.router import router_capture
+from brt.router import switch_router_mode
 from brt.passes import get_pass
 from brt.runtime.utils import GPUTimer
 """
@@ -166,9 +166,14 @@ def main(args):
 
     if args.trace:
         pass_cls = get_pass("dead_path_eliminate")
-        eliminate_pass = pass_cls(model.backbone)
+        eliminate_pass = pass_cls(model.backbone, runtime_load=1)
         eliminate_pass.run_on_graph()
         new_backbone = eliminate_pass.finalize()
+
+        pass_cls = get_pass("permanent_path_fold")
+        permanent_pass = pass_cls(new_backbone, permanent_load=500)
+        permanent_pass.run_on_graph()
+        new_backbone = permanent_pass.finalize()
 
         # from torch.fx.passes.graph_drawer import FxGraphDrawer
 
@@ -176,7 +181,7 @@ def main(args):
         # with open("new_backbone.svg", "wb") as f:
         #     f.write(graph_drawer.get_dot_graph().create_svg())
 
-        new_backbone = router_capture(new_backbone, False).eval()
+        new_backbone = switch_router_mode(new_backbone, False).eval()
         in_data = torch.randn(1, 3, 1024, 2048).cuda()
         for i in range(10):
             out_data = new_backbone(in_data)

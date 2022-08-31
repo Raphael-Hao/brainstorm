@@ -1,16 +1,20 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Type, TypeVar
+from typing import Type, Union
 import torch
 from torch.fx.graph_module import GraphModule
 from brt.runtime import Registry
 from brt.trace.graph import symbolic_trace
 
 
-
 class PassBase:
-    def __init__(self, m: torch.nn.Module):
-        self.graph_mod = symbolic_trace(m)
+    def __init__(self, m: Union[torch.nn.Module, GraphModule]):
+        if isinstance(m, GraphModule):
+            m.graph.lint()
+            m.recompile()
+            self.graph_mod = m
+        else:
+            self.graph_mod = symbolic_trace(m)
 
     def analyze(flow: torch.Tensor) -> None:
         raise NotImplementedError
