@@ -77,6 +77,9 @@ class ProtocolBase(nn.Module):
         """
         raise NotImplementedError("Update has to be implemented by user")
 
+    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
+        pass
+
 
 def register_protocol(protocol_type: str) -> Callable:
     return Registry.register_sub_cls(protocol_type, ProtocolBase)

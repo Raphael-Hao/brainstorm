@@ -3,6 +3,7 @@
 from typing import Union, List, Dict, Any
 
 import torch
+from brt.router.utils import assert_compatibility
 from brt.router.fabric.generic import DispatchFabric, CombineFabric
 from brt.router.fabric.base import register_fabric
 from brt.runtime.proto_tensor import ProtoTensor, init_proto_tensor
@@ -17,10 +18,14 @@ class SinglePTUDispatchFabric(DispatchFabric):
         transform: Union[bool, List[bool]] = False,
         **kwargs
     ):
-        super().__init__(
-            flow_num=flow_num, route_logic=route_logic, transform=transform
-        )
         self.check_compatibility(kwargs)
+        super().__init__(
+            flow_num=flow_num, route_logic=route_logic, transform=transform, **kwargs
+        )
+
+    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
+        throttling = kwargs.pop("throttling", False)
+        assert_compatibility(self, "throttling", False, throttling)
 
     def forward(
         self,
@@ -107,11 +112,6 @@ class SinglePTUDispatchFabric(DispatchFabric):
             all_out_flows.append(out_flows)
         return all_out_flows
 
-    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
-        throttling = kwargs.get("throttling", False)
-        if throttling:
-            self.assert_compatibility("throttling", False, True)
-
 
 @register_fabric("single_ptu_combine")
 class SinglePTUCombineFabric(CombineFabric):
@@ -125,6 +125,10 @@ class SinglePTUCombineFabric(CombineFabric):
             sparse=True,
             granularity_padding=granularity_padding,
         )
+
+    def check_compatibility(self, kwargs: Dict[str,Any]) -> None:
+        sparse = kwargs.pop("sparse", True)
+        assert_compatibility(self, "sparse", True, sparse)
 
     def forward(
         self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]]
@@ -149,7 +153,3 @@ class SinglePTUCombineFabric(CombineFabric):
             out_flows.append(out_flow)
         return out_flows
 
-    def check_compatibility(self, kwargs) -> None:
-        sparse = kwargs.get("sparse", True)
-        if not sparse:
-            self.assert_compatibility("sparse", True, False)

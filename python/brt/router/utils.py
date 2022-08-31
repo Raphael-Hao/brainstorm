@@ -1,6 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List
 
 import torch
 import numpy as np
@@ -169,3 +169,10 @@ def empty_flows(in_flows):
         else:
             return empty_flows(in_flows[0])
     return False
+
+
+def assert_compatibility(instance, k, expected_v, given_v) -> None:
+    assert (
+        expected_v == given_v
+    ), f"compatibility check failed for {type(instance).__name__},\
+                caused by keyword argument{k}: expected {expected_v}, given {given_v}"
