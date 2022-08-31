@@ -45,6 +45,8 @@ class DeadPathEliminatePass(PassBase):
 
     def finalize(self):
         # modify the dummy gather router with placeholder combine fabric
+        super().finalize()
+
         sub_modules = dict(self.graph_mod.named_modules())
         for node in self.graph_mod.graph.nodes:
             if node.op == "call_module":
@@ -86,7 +88,7 @@ class PermanentPathFoldPass(PassBase):
                     for path_id, path_load in enumerate(load_histroy):
                         if path_load == self.permanent_load or path_load == 0:
                             permanent_paths.append(path_id)
-                    if len(permanent_paths) == len(load_histroy):
+                    if len(permanent_paths) == len(load_histroy) and len(permanent_paths) > 0:
                         if isinstance(node_m, ScatterRouter):
                             node_m.protocol = make_protocol(
                                 "identity", node_m.protocol_kwargs
@@ -104,7 +106,7 @@ class PermanentPathFoldPass(PassBase):
                     for path_id, path_load in enumerate(load_histroy):
                         if path_load == self.permanent_load:
                             permanent_paths.append(path_id)
-                    if len(permanent_paths) == len(load_histroy):
+                    if len(permanent_paths) == len(load_histroy) and len(permanent_paths) > 0:
                         node_m.fabric = make_fabric(
                             "identity_combine", node_m.fabric_kwargs
                         )

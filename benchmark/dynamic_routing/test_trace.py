@@ -182,16 +182,17 @@ def main(args):
         #     f.write(graph_drawer.get_dot_graph().create_svg())
 
         new_backbone = switch_router_mode(new_backbone, False).eval()
-        in_data = torch.randn(1, 3, 1024, 2048).cuda()
-        for i in range(10):
-            out_data = new_backbone(in_data)
-        timer = GPUTimer()
-        timer.start()
-        for i in range(100):
-            out_data = new_backbone(in_data)
-        timer.stop()
-        timer.print("new_backbone", 100)
-        # new_res = Trainer.test(cfg, model)
+        # in_data = torch.randn(1, 3, 1024, 2048).cuda()
+        # for i in range(10):
+        #     out_data = new_backbone(in_data)
+        # timer = GPUTimer()
+        # timer.start()
+        # for i in range(100):
+        #     out_data = new_backbone(in_data)
+        # timer.stop()
+        # timer.print("new_backbone", 100)
+        model.backbone = new_backbone
+        new_res = Trainer.test(cfg, model)
 
 
 if __name__ == "__main__":
