@@ -9,10 +9,11 @@ from brt.router.fabric.base import register_fabric
 from brt.runtime.proto_tensor import ProtoTensor, init_proto_tensor
 
 
-@register_fabric("single_ptu_dispatch")
-class SinglePTUDispatchFabric(DispatchFabric):
+@register_fabric("identity_dispatch")
+class IndentityDispatchFabric(DispatchFabric):
     def __init__(
         self,
+        path_num: int,
         flow_num: int,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
@@ -20,12 +21,19 @@ class SinglePTUDispatchFabric(DispatchFabric):
     ):
         self.check_compatibility(kwargs)
         super().__init__(
-            flow_num=flow_num, route_logic=route_logic, transform=transform, **kwargs
+            flow_num=flow_num,
+            route_logic=route_logic,
+            transform=transform,
+            index_format=None,
+            **kwargs
         )
+        self.path_num = path_num
 
     def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
         throttling = kwargs.pop("throttling", False)
         assert_compatibility(self, "throttling", False, throttling)
+        index_format = kwargs.pop("index_format", None)
+        assert_compatibility(self, "index_format", None, index_format)
 
     def forward(
         self,
@@ -54,81 +62,45 @@ class SinglePTUDispatchFabric(DispatchFabric):
         all_out_flows = []
         for flow_idx in range(self.flow_num):
             flow = in_flows[flow_idx]
-            if_proto_tensor = False
-            if isinstance(flow, ProtoTensor):
-                (
-                    flow_data,
-                    tag_stack,
-                    load_stack,
-                    extra_attr_stack_dict,
-                ) = flow.copy_stacks()
-                if_proto_tensor = True
-            else:
-                flow_data = flow
             if self.route_logics[flow_idx] == "1d":
-                route_shape = list(flow_data.shape[1:])
+                route_shape = list(flow.shape[1:])
             elif self.route_logics[flow_idx] == "2d":
-                route_shape = list(flow_data.shape[1:])
+                route_shape = list(flow.shape[1:])
                 route_shape[0] = 1
             else:
                 raise ValueError("route_logic must be 1d or 2d")
             out_flows = []
-            for path_id, load in enumerate(real_loads):
-                if load == 0:
-                    if if_proto_tensor:
-                        out_flow = init_proto_tensor(
-                            torch.zeros(
-                                0,
-                                *route_shape,
-                                dtype=flow_data.dtype,
-                                device=flow_data.device,
-                            ),
-                            tag_stack,
-                            load_stack,
-                            extra_attr_stack_dict,
-                        )
-                    else:
-                        out_flow = torch.zeros(
-                            0,
-                            *route_shape,
-                            dtype=flow_data.dtype,
-                            device=flow_data.device,
-                        )
-                else:
-                    if self.route_logics[flow_idx] == "1d":
-                        dispatched_flow = flow
-                    elif self.route_logics[flow_idx] == "2d":
-                        dispatched_flow = flow[:, path_id : path_id + 1].contiguous()
-                    else:
-                        raise ValueError("route_logic must be 1d or 2d")
+            for path_id in range(self.path_num):
 
-                    if self.transforms[flow_idx]:
-                        out_flow = dispatched_flow * score[:, path_id].view(
-                            (-1,) + (1,) * len(route_shape)
-                        )
-                    else:
-                        out_flow = dispatched_flow
+                if self.route_logics[flow_idx] == "1d":
+                    dispatched_flow = flow
+                elif self.route_logics[flow_idx] == "2d":
+                    dispatched_flow = flow[:, path_id : path_id + 1].contiguous()
+                else:
+                    raise ValueError("route_logic must be 1d or 2d")
+
+                if self.transforms[flow_idx]:
+                    out_flow = dispatched_flow * score[:, path_id].view(
+                        (-1,) + (1,) * len(route_shape)
+                    )
+                else:
+                    out_flow = dispatched_flow
                 out_flows.append(out_flow)
             all_out_flows.append(out_flows)
         return all_out_flows
 
 
-@register_fabric("single_ptu_combine")
-class SinglePTUCombineFabric(CombineFabric):
-    def __init__(
-        self, flow_num: int, reduction="add", granularity_padding=False, **kwargs
-    ):
+@register_fabric("identity_combine")
+class IdentityCombineFabric(CombineFabric):
+    def __init__(self, flow_num: int, granularity_padding=False, **kwargs):
         self.check_compatibility(kwargs)
         super().__init__(
             flow_num=flow_num,
-            reduction=reduction,
+            reduction="add",
             sparse=True,
             granularity_padding=granularity_padding,
+            **kwargs
         )
-
-    def check_compatibility(self, kwargs: Dict[str,Any]) -> None:
-        sparse = kwargs.pop("sparse", True)
-        assert_compatibility(self, "sparse", True, sparse)
 
     def forward(
         self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]]
@@ -147,9 +119,13 @@ class SinglePTUCombineFabric(CombineFabric):
         out_flows = []
 
         for flow_idx in range(self.flow_num):
-            out_flow = torch.cat(in_flows[flow_idx], dim=0)
-            if out_flow.numel() > 0:
-                out_flow = out_flow.sum(dim=0, keepdim=True)
+            out_flow = torch.stack(in_flows[flow_idx], dim=0).sum(dim=0)
             out_flows.append(out_flow)
+
         return out_flows
 
+    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
+        sparse = kwargs.pop("sparse", True)
+        assert_compatibility(self, "sparse", True, sparse)
+        reduction = kwargs.pop("reduction", "add")
+        assert_compatibility(self, "reduction", "add", reduction)

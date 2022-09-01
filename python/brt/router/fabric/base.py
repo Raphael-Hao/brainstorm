@@ -13,7 +13,7 @@ logger = log.get_logger(__file__)
 
 
 class FabricBase(nn.Module):
-    def __init__(self, index_format: str, flow_num: int) -> None:
+    def __init__(self, flow_num: int, index_format: str = None, **kwargs) -> None:
         super().__init__()
         self.flow_num = flow_num
         self.index_format = index_format
@@ -100,14 +100,9 @@ class FabricBase(nn.Module):
         self.start_event = torch.cuda.Event(enable_timing=True)
         self.end_event = torch.cuda.Event(enable_timing=True)
 
-    def check_compatibility(self, kwargs) -> None:
+    # @classmethod
+    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
         pass
-
-    def assert_compatibility(self, k, expected_v, given_v) -> None:
-        raise ValueError(
-            f"compatibility check failed for {type(self).__name__},\
-                caused by keyword argument{k}: expected {expected_v}, given {given_v}"
-        )
 
 
 def register_fabric(fabric_type: str) -> Callable:
