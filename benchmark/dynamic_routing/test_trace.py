@@ -12,6 +12,7 @@ from torch.fx.passes.graph_drawer import FxGraphDrawer
 from brt.router import switch_router_mode
 from brt.passes import get_pass
 from brt.runtime.utils import GPUTimer
+
 """
 Detection Training Script.
 
@@ -171,7 +172,7 @@ def main(args):
         new_backbone = eliminate_pass.finalize()
 
         pass_cls = get_pass("permanent_path_fold")
-        permanent_pass = pass_cls(new_backbone, permanent_load=500)
+        permanent_pass = pass_cls(new_backbone, upper_perm_load=500)
         permanent_pass.run_on_graph()
         new_backbone = permanent_pass.finalize()
 
