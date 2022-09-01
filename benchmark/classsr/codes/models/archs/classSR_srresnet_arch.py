@@ -23,9 +23,7 @@ class ClassSR(nn.Module):
         )
         self.gather_router = GatherRouter(fabric_type="combine")
 
-    def forward(self, x, is_train):
-        if is_train:
-            assert False, "This should only be excuted while training!"
+    def forward(self, x, is_train=False):
 
         weights = self.classifier(x)
         sr_x = self.scatter_router(x, weights)
@@ -73,6 +71,7 @@ class Classifier(nn.Module):
             nn.LeakyReLU(0.1, True),
             nn.Conv2d(128, 32, 1),
         )
+        self.avgPool2d = nn.AvgPool2d(8)
         arch_util.initialize_weights([self.CondNet], 0.1)
 
     def forward(self, x):
