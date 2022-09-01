@@ -1,18 +1,19 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 from typing import Union
+
 import torch
-import torch.nn as nn
+from torch.fx import GraphModule
 from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import is_scatter, is_gather
-from brt.router import RouterBase, ScatterRouter
+from brt.router import ScatterRouter
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
 
 
 @register_pass("dead_path_eliminate")
 class DeadPathEliminatePass(PassBase):
-    def __init__(self, m: nn.Module, dead_load: float = 0, runtime_load: int = 0):
+    def __init__(self, m: Union[torch.nn.Module, GraphModule], dead_load: float = 0, runtime_load: int = 0):
         super().__init__(m)
         self.dead_load = dead_load
         self.runtime_load = runtime_load
@@ -74,7 +75,7 @@ class DeadPathEliminatePass(PassBase):
 @register_pass("permanent_path_fold")
 class PermanentPathFoldPass(PassBase):
     def __init__(
-        self, m: nn.Module, upper_perm_load: float, lower_perm_load: float = 0
+        self, m: Union[torch.nn.Module, GraphModule], upper_perm_load: float, lower_perm_load: float = 0
     ):
         super().__init__(m)
         self.lower_perm_load = lower_perm_load
@@ -113,7 +114,7 @@ class PermanentPathFoldPass(PassBase):
                     permanent_paths = []
                     load_histroy = node_m.load_history
                     for path_id, path_load in enumerate(load_histroy):
-                        if path_load == self.permanent_load:
+                        if path_load == self.upper_perm_load:
                             permanent_paths.append(path_id)
                     if (
                         len(permanent_paths) == len(load_histroy)

@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-
+import time
 # from dynamic_raw_config import config
 from dynamic_A_config import config
 
@@ -157,7 +157,9 @@ def main(args):
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
         cfg.MODEL.WEIGHTS, resume=args.resume
     )
-
+    model.cuda()
+    torch.cuda.synchronize()
+    # time.sleep(100)
     res = Trainer.test(cfg, model)
 
     # model.eval()
@@ -166,15 +168,10 @@ def main(args):
     # print(outputs)
 
     if args.trace:
-        pass_cls = get_pass("dead_path_eliminate")
+        pass_cls = get_pass("weight_load")
         eliminate_pass = pass_cls(model.backbone, runtime_load=1)
         eliminate_pass.run_on_graph()
         new_backbone = eliminate_pass.finalize()
-
-        pass_cls = get_pass("permanent_path_fold")
-        permanent_pass = pass_cls(new_backbone, upper_perm_load=500)
-        permanent_pass.run_on_graph()
-        new_backbone = permanent_pass.finalize()
 
         # from torch.fx.passes.graph_drawer import FxGraphDrawer
 

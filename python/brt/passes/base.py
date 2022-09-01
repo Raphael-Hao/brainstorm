@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 from typing import Type, Union
 import torch
-from torch.fx.graph_module import GraphModule
+from torch.fx import GraphModule
 from brt.runtime import Registry
 from brt.trace.graph import symbolic_trace
 
