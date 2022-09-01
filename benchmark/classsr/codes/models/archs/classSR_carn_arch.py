@@ -29,9 +29,7 @@ class ClassSR(nn.Module):
         )
         self.gather_router = GatherRouter(fabric_type="combine")
 
-    def forward(self, x, is_train):
-        if is_train:
-            assert False, "This should only be excuted while training!"
+    def forward(self, x, is_train=False):
 
         weights = self.classifier(x)
         sr_x = self.scatter_router(x, weights)

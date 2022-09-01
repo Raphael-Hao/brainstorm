@@ -24,8 +24,6 @@ class classSR_3class_fsrcnn_net(nn.Module):
         self.gather_router = GatherRouter(fabric_type="combine")
 
     def forward(self, x, is_train=False):
-        # if is_train:
-        #     assert False, "This should only be excuted while training!"
 
         weights = self.classifier(x)
         sr_x = self.scatter_router(x, weights)
