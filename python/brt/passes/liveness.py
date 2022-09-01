@@ -8,13 +8,13 @@ from brt.passes.utils import is_scatter, is_gather
 from brt.router import RouterBase, ScatterRouter
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
-from brt.trace.initialize import get_init_arguments
 
 
 @register_pass("dead_path_eliminate")
 class DeadPathEliminatePass(PassBase):
-    def __init__(self, m: nn.Module, runtime_load=0):
+    def __init__(self, m: nn.Module, dead_load: float = 0, runtime_load: int = 0):
         super().__init__(m)
+        self.dead_load = dead_load
         self.runtime_load = runtime_load
 
     def run_on_graph(self):
@@ -27,7 +27,7 @@ class DeadPathEliminatePass(PassBase):
                     dead_paths = []
                     load_histroy = sub_modules[node.target].load_history
                     for path_id, path_load in enumerate(load_histroy):
-                        if path_load == 0:
+                        if path_load <= self.dead_load:
                             dead_paths.append(path_id)
                     live_paths = [
                         path_id
@@ -44,9 +44,9 @@ class DeadPathEliminatePass(PassBase):
                     node.args = new_args
 
     def finalize(self):
-        # modify the dummy gather router with placeholder combine fabric
         super().finalize()
 
+        # modify the dummy gather router with placeholder combine fabric
         sub_modules = dict(self.graph_mod.named_modules())
         for node in self.graph_mod.graph.nodes:
             if node.op == "call_module":
@@ -73,9 +73,12 @@ class DeadPathEliminatePass(PassBase):
 
 @register_pass("permanent_path_fold")
 class PermanentPathFoldPass(PassBase):
-    def __init__(self, m: nn.Module, permanent_load):
+    def __init__(
+        self, m: nn.Module, upper_perm_load: float, lower_perm_load: float = 0
+    ):
         super().__init__(m)
-        self.permanent_load = permanent_load
+        self.lower_perm_load = lower_perm_load
+        self.upper_perm_load = upper_perm_load
 
     def run_on_graph(self):
         sub_modules = dict(self.graph_mod.named_modules())
@@ -86,9 +89,15 @@ class PermanentPathFoldPass(PassBase):
                     permanent_paths = []
                     load_histroy = node_m.load_history
                     for path_id, path_load in enumerate(load_histroy):
-                        if path_load == self.permanent_load or path_load == 0:
+                        if (
+                            path_load >= self.upper_perm_load
+                            or path_load <= self.lower_perm_load
+                        ):
                             permanent_paths.append(path_id)
-                    if len(permanent_paths) == len(load_histroy) and len(permanent_paths) > 0:
+                    if (
+                        len(permanent_paths) == len(load_histroy)
+                        and len(permanent_paths) > 0
+                    ):
                         if isinstance(node_m, ScatterRouter):
                             node_m.protocol = make_protocol(
                                 "identity", node_m.protocol_kwargs
@@ -106,7 +115,10 @@ class PermanentPathFoldPass(PassBase):
                     for path_id, path_load in enumerate(load_histroy):
                         if path_load == self.permanent_load:
                             permanent_paths.append(path_id)
-                    if len(permanent_paths) == len(load_histroy) and len(permanent_paths) > 0:
+                    if (
+                        len(permanent_paths) == len(load_histroy)
+                        and len(permanent_paths) > 0
+                    ):
                         node_m.fabric = make_fabric(
                             "identity_combine", node_m.fabric_kwargs
                         )

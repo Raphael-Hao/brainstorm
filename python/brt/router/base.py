@@ -9,7 +9,7 @@ import torch.nn as nn
 
 from brt.runtime import log, Registry
 from brt.router.utils import convert_index_format, make_kwargs
-from brt.trace.initialize import trace_init
+from brt.trace.init_arg import trace_init
 
 __all__ = ["RouterBase"]
 
