@@ -14,14 +14,7 @@ total_latency.tsv
 !.cache/log/kernel_tune/
 !.cache/log/benchmark/
 
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
-!.vscode/c_cpp_properties.json
-
+.vscode
 
 # Local History for Visual Studio Code
 .history/

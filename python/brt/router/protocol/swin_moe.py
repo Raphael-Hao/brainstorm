@@ -46,8 +46,9 @@ class SwinMoEProtocol(ProtocolBase):
         alignment=1,
         index_format="dst_index",
         index_gen_opt=True,
+        **kwargs,
     ):
-        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
+        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt, **kwargs)
         self.top_k = top_k
         self.capacity_factor = capacity_factor
         self.gate_noise = gate_noise

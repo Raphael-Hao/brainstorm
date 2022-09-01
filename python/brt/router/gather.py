@@ -1,17 +1,20 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import  Dict, Any
+from typing import Dict, Any, List
 
+import torch
 from brt.runtime import log
 from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
+from brt.router.utils import empty_flows
 
 __all__ = [
     "GatherRouter",
 ]
 
 logger = log.get_logger(__file__)
+
 
 @register_router("gather")
 class GatherRouter(RouterBase):
@@ -50,5 +53,10 @@ class GatherRouter(RouterBase):
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flows):
+        self.capture_flow_stats(self.fabric_type, in_flows)
+        if empty_flows(in_flows):
+            return torch.zeros(0)
         out_flow = self.fabric(in_flows)
         return out_flow
+
+

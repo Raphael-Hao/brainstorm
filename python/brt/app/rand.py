@@ -22,7 +22,7 @@ class RandScatter(nn.Module):
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
         capturing=False,
-        capture_mode: str = "c",
+        capture_mode: str = "cum",
     ):
         """random scatter router
 
