@@ -34,20 +34,20 @@ pinned_out_data = pinned_simple_net(in_data)
 
 # first load and unload
 torch.cuda.synchronize()
-cuda_simple_net = WeightLoader.load(pinned_simple_net)
+cuda_simple_net = WeightLoader.load_module(pinned_simple_net)
 
 with torch.cuda.stream(new_cuda_stream):
     for i in range(100):
         cuda_out_data = cuda_simple_net(in_data.cuda(non_blocking=True))
 
 
-unload_simple_net = WeightLoader.unload(cuda_simple_net)
+unload_simple_net = WeightLoader.unload_module(cuda_simple_net)
 unload_out_data = unload_simple_net(in_data)
 # second load and unload
 torch.cuda.synchronize()
 
 start_time = time.time()
-cuda_simple_net = WeightLoader.load(unload_simple_net)
+cuda_simple_net = WeightLoader.load_module(unload_simple_net)
 end_time = time.time()
 print(f"cpu time of loading pinned model: {(end_time - start_time) * 1000} ms")
 
@@ -58,7 +58,7 @@ with torch.cuda.stream(new_cuda_stream):
 end_time = time.time()
 print(f"cpu time of forwarding a loaded model: {(end_time - start_time) * 1000} ms")
 
-unload_simple_net = WeightLoader.unload(cuda_simple_net)
+unload_simple_net = WeightLoader.unload_module(cuda_simple_net)
 unload_out_data = unload_simple_net(in_data)
 
 

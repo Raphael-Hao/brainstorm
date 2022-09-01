@@ -51,15 +51,15 @@ class WeightLoader:
         m.register_forward_pre_hook(check_placement)
 
     @classmethod
-    def load(cls, m: nn.Module):
-        m = cls._load(m)
+    def load_module(cls, m: nn.Module):
+        m = cls._load_module(m)
         cls._event.record(cls._stream)
         return m
 
     @classmethod
-    def _load(cls, m: nn.Module):
+    def _load_module(cls, m: nn.Module):
         for module in m.children():
-            cls._load(module)
+            cls._load_module(module)
 
         for key, param in m._parameters.items():
             if param is None:
@@ -93,15 +93,15 @@ class WeightLoader:
         return m
 
     @classmethod
-    def unload(cls, m: nn.Module):
-        m = cls._unload(m)
+    def unload_module(cls, m: nn.Module):
+        m = cls._unload_module(m)
         cls._event.record(cls._stream)
         return m
 
     @classmethod
-    def _unload(cls, m: nn.Module):
+    def _unload_module(cls, m: nn.Module, copy=False):
         for module in m.children():
-            cls._unload(module)
+            cls._unload_module(module, copy)
 
         for key, param in m._parameters.items():
             if param is None:
@@ -112,7 +112,8 @@ class WeightLoader:
             with torch.no_grad():
                 with torch.cuda.stream(cls._stream):
                     param_applied = param.pin_cpu_data
-                    param_applied.copy_(param.data, non_blocking=True)
+                    if copy:
+                        param_applied.copy_(param.data, non_blocking=True)
             param.data = param_applied
             out_param = param
 
@@ -120,13 +121,15 @@ class WeightLoader:
                 with torch.no_grad():
                     with torch.cuda.stream(cls._stream):
                         grad_applied = param.grad.pin_cpu_data
-                        grad_applied.copy_(param.grad.data, non_blocking=True)
+                        if copy:
+                            grad_applied.copy_(param.grad.data, non_blocking=True)
                 out_param.grad.data = grad_applied
 
         for key, buf in m._buffers.items():
             if buf is not None:
                 with torch.cuda.stream(cls._stream):
                     buf_applied = buf.pin_cpu_data
-                    buf_applied.copy_(buf, non_blocking=True)
+                    if copy:
+                        buf_applied.copy_(buf, non_blocking=True)
                 m._buffers[key] = buf_applied
         return m
