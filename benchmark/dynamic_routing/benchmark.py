@@ -1,17 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-import time
-# from dynamic_raw_config import config
-from dynamic_A_config import config
 
-# from dynamic_B_config import config
-# from dynamic_C_config import config
+from dynamic_raw_config import config as raw_config
+from dynamic_A_config import config as A_config
+from dynamic_B_config import config as B_config
+from dynamic_C_config import config as C_config
 
-from brt.trace.graph import GraphTracer
-from torch.fx.graph_module import GraphModule
-from torch.fx.passes.graph_drawer import FxGraphDrawer
 from brt.router import switch_router_mode
-from brt.passes import get_pass
-from brt.runtime.utils import GPUTimer
+from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass
+from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer
 
 """
 Detection Training Script.
@@ -133,18 +129,30 @@ class Trainer(CustomizedTrainer):
 def test_argument_parser():
     parser = default_argument_parser()
     parser.add_argument(
-        "--start-iter", type=int, default=0, help="start iter used to test"
-    )
-    parser.add_argument(
-        "--end-iter", type=int, default=None, help="end iter used to test"
+        "--arch",
+        choices=["raw", "A", "B", "C"],
+        default="raw",
+        help="choose model architecture",
     )
     parser.add_argument("--debug", action="store_true", help="use debug mode or not")
-    parser.add_argument("--trace", action="store_true", help="trace the model or not")
-
+    bench_arg_manager = BenchmarkArgumentManager(parser)
+    bench_arg_manager.add_item("liveness")
+    bench_arg_manager.add_item("preload")
     return parser
 
 
 def main(args):
+    if args.arch == "raw":
+        config = raw_config
+    elif args.arch == "A":
+        config = A_config
+    elif args.arch == "B":
+        config = B_config
+    elif args.arch == "C":
+        config = C_config
+    else:
+        raise ValueError("Invalid arch: {}".format(args.arch))
+
     config.merge_from_list(args.opts)
     cfg, logger = default_setup(config, args)
     if args.debug:
@@ -159,39 +167,56 @@ def main(args):
     )
     model.cuda()
     torch.cuda.synchronize()
-    # time.sleep(100)
+
     res = Trainer.test(cfg, model)
 
     # model.eval()
     # input = torch.randn(1, 3, 1024, 2048).cuda()
     # outputs = model.backbone(input)
     # print(outputs)
+    benchmarker = Benchmarker()
 
-    if args.trace:
-        pass_cls = get_pass("weight_load")
-        eliminate_pass = pass_cls(model.backbone, runtime_load=1)
+    def liveness_benchmark():
+        timer = CUDATimer()
+        timer.set_iterations(100)
+
+        backbone_input = model.backbone_input
+
+        naive_backbone = model.backbone
+
+        naive_backbone = switch_router_mode(naive_backbone, False).eval()
+
+        timer.execute(lambda: naive_backbone(backbone_input), "naive")
+
+        eliminate_pass = DeadPathEliminatePass(naive_backbone, runtime_load=1)
         eliminate_pass.run_on_graph()
         new_backbone = eliminate_pass.finalize()
 
-        # from torch.fx.passes.graph_drawer import FxGraphDrawer
+        timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
 
-        # graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-        # with open("new_backbone.svg", "wb") as f:
-        #     f.write(graph_drawer.get_dot_graph().create_svg())
+        permanent_pass = PermanentPathFoldPass(new_backbone, upper_perm_load=500)
+        permanent_pass.run_on_graph()
+        new_backbone = permanent_pass.finalize()
 
-        new_backbone = switch_router_mode(new_backbone, False).eval()
-        # in_data = torch.randn(1, 3, 1024, 2048).cuda()
-        # for i in range(10):
-        #     out_data = new_backbone(in_data)
-        # timer = GPUTimer()
-        # timer.start()
-        # for i in range(100):
-        #     out_data = new_backbone(in_data)
-        # timer.stop()
-        # timer.print("new_backbone", 100)
-        model.backbone = new_backbone
-        new_res = Trainer.test(cfg, model)
+        timer.execute(lambda: new_backbone(backbone_input), "all_liveness_pass")
 
+        if args.debug:
+            from torch.fx.passes.graph_drawer import FxGraphDrawer
+
+            graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+            with open("new_backbone.svg", "wb") as f:
+                f.write(graph_drawer.get_dot_graph().create_svg())
+
+            model.backbone = new_backbone
+            new_res = Trainer.test(cfg, model)
+
+    benchmarker.add_benchmark("liveness", liveness_benchmark)
+
+    def preload_benchmark():
+        pass
+    benchmarker.add_benchmark("preload", preload_benchmark)
+
+    benchmarker.benchmarking(args.benchmark)
 
 if __name__ == "__main__":
     args = test_argument_parser().parse_args()
