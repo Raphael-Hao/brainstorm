@@ -26,7 +26,7 @@ class DeadPathEliminatePass(PassBase):
                 node_m = sub_modules[node.target]
                 if is_gather(node_m):
                     dead_paths = []
-                    load_histroy = sub_modules[node.target].load_history
+                    load_histroy = node_m.load_history
                     for path_id, path_load in enumerate(load_histroy):
                         if path_load <= self.dead_load:
                             dead_paths.append(path_id)
@@ -37,11 +37,11 @@ class DeadPathEliminatePass(PassBase):
                     ]
                     new_args = ([node.args[0][path_id] for path_id in live_paths],)
                     new_load_history = torch.tensor(
-                        [load_histroy[path_id] for path_id in live_paths],
+                        [load_histroy[path_id].item() for path_id in live_paths],
                         dtype=torch.float64,
                         device="cpu",
                     )
-                    sub_modules[node.target].load_history = new_load_history
+                    node_m.load_history = new_load_history
                     node.args = new_args
 
     def finalize(self):
