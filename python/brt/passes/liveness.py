@@ -13,7 +13,7 @@ from brt.router.protocol import make_protocol
 
 @register_pass("dead_path_eliminate")
 class DeadPathEliminatePass(PassBase):
-    def __init__(self, m: Union[torch.nn.Module, GraphModule], dead_load: float = 0, runtime_load: int = 0):
+    def __init__(self, m: Union[torch.nn.Module, GraphModule], dead_load = 0.0, runtime_load: int = 0):
         super().__init__(m)
         self.dead_load = dead_load
         self.runtime_load = runtime_load
@@ -75,7 +75,7 @@ class DeadPathEliminatePass(PassBase):
 @register_pass("permanent_path_fold")
 class PermanentPathFoldPass(PassBase):
     def __init__(
-        self, m: Union[torch.nn.Module, GraphModule], upper_perm_load: float, lower_perm_load: float = 0
+        self, m: Union[torch.nn.Module, GraphModule], upper_perm_load: float, lower_perm_load = 0.0
     ):
         super().__init__(m)
         self.lower_perm_load = lower_perm_load

@@ -6,7 +6,7 @@ from dynamic_B_config import config as B_config
 from dynamic_C_config import config as C_config
 
 from brt.router import switch_router_mode
-from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass
+from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, PreloadPass
 from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer
 
 """
@@ -210,10 +210,22 @@ def main(args):
             model.backbone = new_backbone
             new_res = Trainer.test(cfg, model)
 
+
     benchmarker.add_benchmark("liveness", liveness_benchmark)
 
     def preload_benchmark():
-        pass
+        timer = CUDATimer()
+        timer.set_iterations(100)
+
+        backbone_input = model.backbone_input
+
+        naive_backbone = model.backbone
+
+        naive_backbone = switch_router_mode(naive_backbone, False).eval()
+
+        preload_pass =  PreloadPass(model.backbone)
+        preload_pass.run_on_graph()
+
     benchmarker.add_benchmark("preload", preload_benchmark)
 
     benchmarker.benchmarking(args.benchmark)
