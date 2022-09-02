@@ -52,7 +52,7 @@ from dl_lib.evaluation import (
     verify_results,
 )
 from dl_lib.modeling import SemanticSegmentorWithTTA
-from net_brt import build_model
+from net import build_model
 
 
 class Trainer(CustomizedTrainer):
