@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 
 
-class WeightLoader:
+class PreLoader:
     _stream: torch.cuda.Stream = None
     _event: torch.cuda.Event = None
 
