@@ -43,9 +43,17 @@ class PreloadPass(PassBase):
         """
         sub_modules = dict(self.graph_mod.named_modules())
         memo = set()
-        for node in self.graph_mod.graph.nodes:
-            if node.op == "call_module":
-                node_m = sub_modules[node.target]
+        start_nodes = self.find_all_input_placeholder()
+        filtered_start_nodes = self.remove_out_nodes(start_nodes)
+        while len(filtered_start_nodes) > 0:
+            goal_nodes, traveled_nodes, parameters_dict, buffers_dict = self.travel_to_goal(
+                start_nodes=filtered_start_nodes
+            )
+            for node in goal_nodes:
+                if node not in memo:
+                    memo.add(node)
+            filtered_start_nodes = self.remove_out_nodes(list(traveled_nodes))
+
 
     def find_all_input_placeholder(self) -> List[Node]:
         placeholder_nodes = []
