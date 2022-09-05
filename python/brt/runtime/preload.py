@@ -1,8 +1,9 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 import torch
 import torch.nn as nn
+import torch.fx as fx
 from torch.nn.parameter import Parameter
 from brt.trace.leaf_node import register_leaf_node
 
@@ -73,22 +74,34 @@ class PreLoader(nn.Module):
         super().__init__()
         self.collected_parameters = parameters
         self.collected_buffers = buffers
-        self.event_idx = 0
 
     def forward(self, event_idx):
         pass
 
-    def load_module(self, event_idx):
-        m = self._load_module(m)
-        PreLoader._events[event_idx].record(self._stream)
-        return m
+    def load_params_and_buffers(self, event_idx):
+        for pname, param in self.collected_parameters.items():
+            if pname is None:
+                continue
+            with torch.no_grad():
+                with torch.cuda.stream(PreLoader._stream):
+                    param_applied = param.cuda(non_blocking=True)
+            param.pin_cpu_data = param.data
+            param.data = param_applied
+            out_param = param
 
-    @classmethod
-    @classmethod
-    def unload_module(cls, m: nn.Module):
-        m = cls._unload_module(m)
-        cls._event.record(cls._stream)
-        return m
+            if param.grad is not None:
+                with torch.no_grad():
+                    with torch.cuda.stream(torch.cuda.current_stream()):
+                        grad_applied = param.grad.cuda(non_blocking=True)
+
+                out_param.grad.pin_cpu_data = param.grad.data
+                out_param.grad.data = grad_applied
+
+        for bname, (buffer, b_owner_m, b_tensor_name) in self.collected_buffers.items():
+            pass
+
+        PreLoader._events[event_idx].record(self._stream)
+        return event_idx
 
 
 def load_module(m: nn.Module):
