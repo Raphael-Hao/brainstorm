@@ -10,9 +10,9 @@ class PreLoader:
     _event: torch.cuda.Event = None
 
     @classmethod
-    def init(cls, stream=None):
+    def init(cls, event_num, stream=None):
         if stream is None:
-            cls._stream = torch.cuda.default_stream()
+            cls._stream = torch.cuda.stream()
         elif isinstance(stream, torch.cuda.Stream):
             cls._stream = stream
         else:
