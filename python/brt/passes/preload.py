@@ -30,11 +30,11 @@ class PreloadPass(PassBase):
         ), f"Max_depth is set to {self.max_load_depth}, greater than 0 is not supported yet."
 
     def _build_goal_classifiers(self) -> None:
-        self.goal_classifiers = [
-            is_router,
-            is_scatter,
-            is_gather,
-        ]
+        self.goal_classifiers = []
+        def is_output(node):
+            return node.op == "output"
+        self.goal_classifiers.append(is_output)
+        self.goal_classifiers.append(is_router)
 
     def run_on_graph(self) -> None:
         """TODO
@@ -46,8 +46,19 @@ class PreloadPass(PassBase):
         for node in self.graph_mod.graph.nodes:
             if node.op == "call_module":
                 node_m = sub_modules[node.target]
-                if is_scatter(node_m):
-                    print(next(iter(node.users)).users)
+
+    def find_all_input_placeholder(self) -> List[Node]:
+        placeholder_nodes = []
+        for node in self.graph_mod.graph.nodes:
+            if node.op == "placeholder":
+                placeholder_nodes.append(node)
+        return placeholder_nodes
+
+    def remove_out_nodes(self, out_nodes: List[Node]) -> List[Node]:
+        for node in out_nodes:
+            if node.op == "output":
+                out_nodes.remove(node)
+        return out_nodes
 
     def travel_to_goal(self, start_nodes: List[Node]) -> List[Node]:
         """TODO
