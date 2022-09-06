@@ -9,7 +9,7 @@ import torch.nn as nn
 
 from brt.runtime import log, Registry
 from brt.router.utils import convert_index_format, make_kwargs
-from brt.trace.initialize import trace_init
+from brt.trace.init_arg import trace_init
 
 __all__ = ["RouterBase"]
 
@@ -17,7 +17,7 @@ logger = log.get_logger(__file__)
 
 
 class RouterBase(nn.Module):
-    def __init__(self, capturing=False, capture_mode="avg"):
+    def __init__(self, capturing=False, capture_mode="cum"):
         super().__init__()
         env_capturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in ("true")
         if env_capturing or capturing:
@@ -33,13 +33,14 @@ class RouterBase(nn.Module):
             self.capture_mode = capture_mode
         else:
             self.capturing = False
-        if self.capturing:
-            self.history_len = 0
-            self.register_buffer("load_history", None)
-            self.register_buffer("capacity_history", None)
-            self.ptu_grain_history: List[torch.Size] = None
-            self.ptu_dtype_history: List[torch.dtype] = None
-            self.ptu_device_history: List[torch.device] = None
+
+        self.history_len = 0
+        self.register_buffer("load_history", None)
+        self.register_buffer("capacity_history", None)
+        self.ptu_grain_history: List[torch.Size] = None
+        self.ptu_dtype_history: List[torch.dtype] = None
+        self.ptu_device_history: List[torch.device] = None
+
         self.schedule_functions: List[Callable] = []
 
     def forward(self):
@@ -285,9 +286,9 @@ def switch_router_mode(m: nn.Module, capture=True):
     return m
 
 
-def reset_flow_stats(m: nn.Module):
+def reset_router_stats(m: nn.Module):
     for child_m in m.children():
-        reset_flow_stats(child_m)
+        reset_router_stats(child_m)
     if isinstance(m, RouterBase):
         m.reset_flow_stats()
     return m

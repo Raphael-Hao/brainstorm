@@ -54,8 +54,6 @@ class GatherRouter(RouterBase):
 
     def forward(self, in_flows):
         self.capture_flow_stats(self.fabric_type, in_flows)
-        if empty_flows(in_flows):
-            return torch.zeros(0)
         out_flow = self.fabric(in_flows)
         return out_flow
 

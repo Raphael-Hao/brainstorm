@@ -1,4 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from brt.passes import bound_check
-from brt.passes.base import register_pass, get_pass
+
+from brt.passes.liveness import DeadPathEliminatePass, PermanentPathFoldPass
+from brt.passes.preload import PreloadPass
+# from brt.passes.base import register_pass, get_pass
