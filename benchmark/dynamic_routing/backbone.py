@@ -3,14 +3,12 @@ import csv
 
 import torch.nn as nn
 import numpy as np
-import torch
+from brt.router import GatherRouter
 
 __all__ = ["Backbone"]
 
 from cell import Cell
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
-
-from brt.router import GatherRouter
 
 
 class Backbone(nn.Module):
@@ -210,7 +208,6 @@ class DynamicNetwork(Backbone):
         input_shape,
         cell_num_list,
         layer_num,
-        ext_layer=None,
         norm="",
         cal_flops=True,
         cell_type="",
@@ -221,7 +218,6 @@ class DynamicNetwork(Backbone):
         gate_bias=1.5,
         drop_prob=0.0,
         device=None,
-        gate_history_path=None,
     ):
         super(DynamicNetwork, self).__init__()
         self.device = device
@@ -310,12 +306,7 @@ class DynamicNetwork(Backbone):
                 )
                 # allow dim change in each aggregation
                 dim_up, dim_down, dim_keep = False, False, True
-                # gather router
-                self.gather_routers = [
-                    GatherRouter(1),
-                    GatherRouter(2),
-                    GatherRouter(3),
-                ]
+
                 # dim up and resolution down by 2
                 if cell_index > 0:
                     dim_up = True
@@ -344,113 +335,64 @@ class DynamicNetwork(Backbone):
                     self._out_features.append(name)
             self.all_cell_list.append(layer_cell_list)
             self.all_cell_type_list.append(layer_cell_type)
-        # prepare for gate history
-        self.gate_history_path = gate_history_path
-        if self.gate_history_path is not None:
-            header_row = [
-                "layer_0_cell_0_up",
-                "layer_0_cell_0_keep",
-                "layer_0_cell_0_down",
-            ]
-            for layer_index in range(len(self.cell_num_list)):
-                for cell_index in range(self.cell_num_list[layer_index]):
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_up"
-                    )
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_keep"
-                    )
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_down"
-                    )
-            self.gate_history_file = open(self.gate_history_path, mode="w")
-            self.writer = csv.writer(self.gate_history_file)
-            self.writer.writerow(header_row)
+        self.final_gathers = nn.ModuleList(
+            GatherRouter(
+                fabric_type="single_ptu_combine", fabric_kwargs={"sparse": True}
+                # fabric_type="combine", fabric_kwargs={"sparse": True}
+            )
+            for _ in range(self.cell_num_list[-1])
+        )
 
     @property
     def size_divisibility(self):
         return self._size_divisibility
 
-    def forward(self, x, step_rate=0.0, predict_mode=True):
-        if not predict_mode:
-            # print("Stem To Device: ", self.device)
-            self.stem.to(self.device)
+    def forward(self, x):
         h_l1 = self.stem(x)
+
         # the initial layer
-        if not predict_mode:
-            self.init_layer.to(self.device)
-        h_l1_list, h_beta_list = self.init_layer(h_l1=h_l1)
-        prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
+        h_l1_list = self.init_layer([h_l1])
+        prev_out_list = [h_l1_list]
         # build forward outputs
-        gate_history_list = [gate_w[0] if gate_w else 0 for gate_w in h_beta_list]
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
-            layer_rate = (layer_index + 1) / float(len(self.cell_num_list))
             # aggregate cell input
             for cell_index in range(len(self.all_cell_type_list[layer_index])):
                 cell_input = []
+
                 if self.all_cell_type_list[layer_index][cell_index][0]:
-                    cell_input.append(prev_out_list[cell_index - 1][2][0])
+                    cell_input.extend(prev_out_list[cell_index - 1][2])
                 if self.all_cell_type_list[layer_index][cell_index][1]:
-                    cell_input.append(prev_out_list[cell_index][1][0])
+                    cell_input.extend(prev_out_list[cell_index][1])
                 if self.all_cell_type_list[layer_index][cell_index][2]:
-                    cell_input.append(prev_out_list[cell_index + 1][0][0])
-                h_l1 = self.gather_routers[len(cell_input) - 1](cell_input)
-                # h_l1 = sum(cell_input)
-                # calculate input for gate
-                layer_input.append(h_l1)
+                    cell_input.extend(prev_out_list[cell_index + 1][0])
+
+                layer_input.append(cell_input)
 
             # calculate each cell
             for _cell_index in range(len(self.all_cell_type_list[layer_index])):
-                if not predict_mode:
-                    # print(f"layer index: {layer_index}, cell index: {_cell_index} to device: {self.device}")
-                    self.all_cell_list[layer_index][_cell_index].to(self.device)
-                (cell_output, gate_weights_beta,) = self.all_cell_list[layer_index][
-                    _cell_index
-                ](
-                    h_l1=layer_input[_cell_index],
-                    is_drop_path=self.drop_path,
-                    drop_prob=self.drop_prob,
-                    layer_rate=layer_rate,
-                    step_rate=step_rate,
+                cell_output = self.all_cell_list[layer_index][_cell_index](
+                    h_l1=layer_input[_cell_index]
                 )
 
                 layer_output.append(cell_output)
-                gate_history = [
-                    gate_w[0] if gate_w else 0 for gate_w in gate_weights_beta
-                ]
-                gate_history_list.extend(gate_history)
+
             # update layer output
             prev_out_list = layer_output
-
-        final_gate_history = []
-        # final_gate_history = np.array(
-        #     [
-        #         gate_w.squeeze().cpu().detach().numpy()
-        #         if isinstance(gate_w, torch.Tensor)
-        #         else gate_w
-        #         for gate_w in gate_history_list
-        #     ],
-        #     dtype=np.float32,
-        # )
-
-        self.write_gate_history(final_gate_history)
-        # print(gate_history_list)
-        final_out_list = [prev_out_list[_i][1][0] for _i in range(len(prev_out_list))]
-        final_out_dict = dict(zip(self._out_features, final_out_list))
-        return final_out_dict
+            # print(f"layer_index: {layer_index}, layer_output:")
+            # for cell_id, cell_output in enumerate(layer_output):  # cell index
+            #     for outputs in cell_output:
+            #         if outputs:
+            #             print(f"cell_id: {cell_id} [",end =" ")
+            #             for id, output in enumerate(outputs):
+            #                 print(f"output_{id}: {output.numel()},",end =" ")
+            #             print("]")
+            # print("")
+        final_out_list = []
+        for out_idx in range(len(prev_out_list)):
+            final_out = self.final_gathers[out_idx](prev_out_list[out_idx][1])
+            final_out_list.append(final_out)
+        return final_out_list
 
     def output_shape(self):
         return {
@@ -463,10 +405,8 @@ class DynamicNetwork(Backbone):
             for name in self._out_features
         }
 
-    def write_gate_history(self, gate_history_list):
-        if self.gate_history_path is not None:
-            self.writer.writerow(gate_history_list)
-            self.gate_history_file.flush()
+    def input_shape(self):
+        pass
 
 
 def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
@@ -494,7 +434,6 @@ def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
         gate_bias=cfg.MODEL.GATE.GATE_INIT_BIAS,
         drop_prob=cfg.MODEL.BACKBONE.DROP_PROB,
         device=cfg.MODEL.DEVICE,
-        gate_history_path=cfg.BRT.GATE_HISTORY_PATH,
     )
 
     return backbone

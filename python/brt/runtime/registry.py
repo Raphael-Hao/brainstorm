@@ -66,7 +66,7 @@ class Registry:
             if registered_cls in cls.cls_registries[cls_type]:
                 logger.warning(f"{cls_type} is already registered, overwrite it.")
 
-            cls.cls_registries[cls_type] = registered_cls
+            cls.cls_registries[cls_type].append(registered_cls)
 
             return registered_cls
 

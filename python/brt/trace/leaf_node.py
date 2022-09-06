@@ -6,19 +6,15 @@ import torch
 from brt.runtime import Registry
 
 
-def register_leaf_node():
+def register_leaf_node(leaf_node_cls):
+    if not issubclass(leaf_node_cls, torch.nn.Module):
+        raise ValueError(
+            f"{leaf_node_cls} is not a subclass of torch.nn.Module, it cannot be registered as a leaf node class."
+        )
     global_register_func = Registry.register_cls("leaf_node")
 
-    def local_register_func(leaf_node_cls):
+    return global_register_func(leaf_node_cls)
 
-        if not issubclass(leaf_node_cls, torch.nn.Module):
-            raise ValueError(
-                f"{leaf_node_cls} is not a subclass of torch.nn.Module, it cannot be registered as a leaf node class."
-            )
-
-        return global_register_func(leaf_node_cls)
-
-    return local_register_func
 
 
 def is_leaf_node(cls_or_instance) -> bool:

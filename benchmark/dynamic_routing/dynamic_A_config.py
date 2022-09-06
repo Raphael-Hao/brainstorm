@@ -1,11 +1,12 @@
 import os.path as osp
 
 from segm_config import SemanticSegmentationConfig
+from brt.runtime import BRT_CKPT_PATH, BRT_LOG_PATH
 
 _config_dict = dict(
     ARCH_NAME="dynamic_A",
     MODEL=dict(
-        WEIGHTS="/home/whcui/brainstorm_project/brainstorm/.cache/ckpt/pytorch/dynamic_A_miou73_9.pth",
+        WEIGHTS=str(BRT_CKPT_PATH / "dynamic_routing/dynamic_A_miou73_9.pth"),
         CAL_FLOPS=False,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],
