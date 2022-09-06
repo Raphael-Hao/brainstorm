@@ -1,0 +1,38 @@
+name: test_ClassSR_FSRCNN_AIC21_Track1
+suffix: ~  # add suffix to saved images
+model: ClassSR
+distortion: sr
+scale: 4
+patch_size: 32
+step: 28
+crop_border: ~  # crop border when evaluation. If None(~), crop the scale pixels
+gpu_ids: [0]
+add_mask: False
+
+datasets:
+  test_1:
+    name: AIC21_Track1_Cam1
+    mode: LQ
+    # dataroot_GT: /home/ouyang/project/brainstorm/benchmark/classsr/datasets/An225/
+    dataroot_LQ: /home/ouyang/project/brainstorm/benchmark/classsr/datasets_2/AIC21_Track1_Vehicle_Counting/Dataset_A_Images/cam1
+
+  test_2:
+    name: AIC21_Track1_Cam16
+    mode: LQ
+    # dataroot_GT: /home/ouyang/project/brainstorm/benchmark/classsr/datasets/An225/
+    dataroot_LQ: /home/ouyang/project/brainstorm/benchmark/classsr/datasets_2/AIC21_Track1_Vehicle_Counting/Dataset_A_Images/cam16
+
+network_G:
+  which_model_G: classSR_3class_fsrcnn_net
+  in_nc: 3
+  out_nc: 3
+
+#### path
+path:
+  pretrain_model_G: /home/ouyang/project/ClassSR/experiments/pre_trained_models/ClassSR_FSRCNN.pth
+  pretrain_model_classifier: ~
+  pretrain_model_G_branch1: ~
+  pretrain_model_G_branch2: ~
+  pretrain_model_G_branch3: ~
+
+

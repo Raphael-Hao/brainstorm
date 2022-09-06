@@ -30,7 +30,7 @@ class classSR_3class_fsrcnn_net(nn.Module):
         y = [self.net1(sr_x[0]), self.net2(sr_x[1]), self.net3(sr_x[2])]
         gr_x = self.gather_router(y)
         return gr_x, [yy.shape[0] for yy in y]
-
+        
         # for i in range(len(x)):
         #     type = self.classifier(x[i].unsqueeze(0))
 

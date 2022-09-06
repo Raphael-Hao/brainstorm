@@ -133,6 +133,7 @@ class ClassSR_Model(BaseModel):
             self.log_dict = OrderedDict()
 
     def feed_data(self, data, need_GT=True):
+        self.need_GT = need_GT
         self.var_L = data["LQ"].to(self.device)
         self.LQ_path = data["LQ_path"][0]
         if need_GT:
@@ -167,12 +168,14 @@ class ClassSR_Model(BaseModel):
     def test(self):
         self.netG.eval()
         self.var_L = cv2.imread(self.LQ_path, cv2.IMREAD_UNCHANGED)
-        self.real_H = cv2.imread(self.GT_path, cv2.IMREAD_UNCHANGED)
+        if self.need_GT:
+            self.real_H = cv2.imread(self.GT_path, cv2.IMREAD_UNCHANGED)
 
         lr_list, num_h, num_w, h, w = self.crop_cpu(
             self.var_L, self.patch_size, self.step
         )
-        gt_list = self.crop_cpu(self.real_H, self.patch_size * 4, self.step * 4)[0]
+        if self.need_GT:
+            gt_list = self.crop_cpu(self.real_H, self.patch_size * 4, self.step * 4)[0]
         sr_list = []
         index = 0
 
@@ -190,72 +193,24 @@ class ClassSR_Model(BaseModel):
             .permute((0, 3, 1, 2))
             .contiguous()
         )
-        torch.Tensor.__getitem__
-        brt_gt = (
-            torch.Tensor(np.array(gt_list))
-            .to(self.device)
-            .index_select(
-                dim=3,
-                index=torch.tensor([2, 1, 0], dtype=torch.int, device=self.device),
+        # WARNING: unknow code: torch.Tensor.__getitem__
+        if self.need_GT:
+            brt_gt = (
+                torch.Tensor(np.array(gt_list))
+                .to(self.device)
+                .index_select(
+                    dim=3,
+                    index=torch.tensor([2, 1, 0], dtype=torch.int, device=self.device),
+                )
+                .permute((0, 3, 1, 2))
+                .contiguous()
             )
-            .permute((0, 3, 1, 2))
-            .contiguous()
-        )
         if self.which_model != "classSR_3class_rcan":
             brt_lr = brt_lr.divide(255.0)
         assert brt_lr.shape[1:] == (3, 32, 32)
-        # if img.ndim == 2:
-        #     assert False,
-        #     img = np.expand_dims(img, axis=2)
-        # # some images have 4 channels
-        # if img.shape[2] > 3:
-        #     img = img[:, :, :3]
+
         with torch.no_grad():
             brt_srt, brt_type = self.netG(brt_lr, False)
-
-        # for LR_img, GT_img in zip(lr_list, gt_list):
-
-        #     if self.which_model == "classSR_3class_rcan":
-        #         img = LR_img.astype(np.float32)
-        #     else:
-        #         img = LR_img.astype(np.float32) / 255.0
-        #     if img.ndim == 2:
-        #         img = np.expand_dims(img, axis=2)
-        #     # some images have 4 channels
-        #     if img.shape[2] > 3:
-        #         img = img[:, :, :3]
-        #     img = img[:, :, [2, 1, 0]]
-        #     img = (
-        #         torch.from_numpy(np.ascontiguousarray(np.transpose(img, (2, 0, 1))))
-        #         .float()[None, ...]
-        #         .to(self.device)
-        #     )
-        #     with torch.no_grad():
-        #         srt, type = self.netG(img, False)
-
-        #     if self.which_model == "classSR_3class_rcan":
-        #         sr_img = util.tensor2img(
-        #             srt.detach()[0].float().cpu(), out_type=np.uint8, min_max=(0, 255)
-        #         )
-        #     else:
-        #         sr_img = util.tensor2img(srt.detach()[0].float().cpu())
-        #     sr_list.append(sr_img)
-
-        #     if index == 0:
-        #         type_res = type
-        #     else:
-        #         type_res = torch.cat((type_res, type), 0)
-
-        #     psnr = util.calculate_psnr(sr_img, GT_img)
-        #     flag = torch.max(type, 1)[1].data.squeeze()
-        #     if flag == 0:
-        #         psnr_type1 += psnr
-        #     if flag == 1:
-        #         psnr_type2 += psnr
-        #     if flag == 2:
-        #         psnr_type3 += psnr
-
-        #     index += 1
 
         sr_list = []
         for srt in brt_srt:
@@ -274,7 +229,8 @@ class ClassSR_Model(BaseModel):
             self.fake_H_mask = self.combine_addmask(
                 sr_list, num_h, num_w, h, w, self.patch_size, self.step, type_res
             )
-        self.real_H = self.real_H[0 : h * self.scale, 0 : w * self.scale, :]
+        if self.need_GT:
+            self.real_H = self.real_H[0 : h * self.scale, 0 : w * self.scale, :]
         # self.num_res = self.print_res(type_res)
         self.num_res = brt_type
         # self.psnr_res = [psnr_type1, psnr_type2, psnr_type3]
