@@ -31,8 +31,10 @@ class PreloadPass(PassBase):
 
     def _build_goal_classifiers(self) -> None:
         self.goal_classifiers = []
+
         def is_output(node):
             return node.op == "output"
+
         self.goal_classifiers.append(is_output)
         self.goal_classifiers.append(is_router)
 
@@ -41,19 +43,45 @@ class PreloadPass(PassBase):
         1. find the first part of parameters and buffers to be preloaded.
         2. insert preloading, guarding, unloading hook to enable the pipeline.
         """
-        sub_modules = dict(self.graph_mod.named_modules())
+        self.groups = []
         memo = set()
-        start_nodes = self.find_all_input_placeholder()
-        filtered_start_nodes = self.remove_out_nodes(start_nodes)
+        # first gropu will include the the placeholder and the first group of goal nodes (routers)
+        submodules = dict(self.graph_mod.named_modules())
+        # find all input placeholders
+        placeholder_nodes = self.find_all_input_placeholder()
+        goal_nodes, traveled_nodes, parameters_dict, buffers_dict = self.travel_to_goal(
+            placeholder_nodes
+        )
+        filter_goal_nodes = self.remove_out_nodes(goal_nodes)
+
+        for node in filter_goal_nodes:
+            assert node.op == "call_module", f"Goal node {node} is not a call_module."
+            node_m = submodules[node.target]
+            assert is_scatter(
+                node_m
+            ), f"The goal node collected in the first round should be scatter."
+            if is_scatter(node_m):
+                flow_num = node_m.fabric.flow_num
+                for i in range(flow_num):
+                    group = []
+                    group.append(node)
+                    group.append(node_m.fabric.flows[i])
+                    self.groups.append(group)
+
+            elif is_gather(node_m):
+                pass
+
         while len(filtered_start_nodes) > 0:
-            goal_nodes, traveled_nodes, parameters_dict, buffers_dict = self.travel_to_goal(
-                start_nodes=filtered_start_nodes
-            )
+            (
+                goal_nodes,
+                traveled_nodes,
+                parameters_dict,
+                buffers_dict,
+            ) = self.travel_to_goal(start_nodes=filtered_start_nodes)
             for node in goal_nodes:
                 if node not in memo:
                     memo.add(node)
             filtered_start_nodes = self.remove_out_nodes(list(traveled_nodes))
-
 
     def find_all_input_placeholder(self) -> List[Node]:
         placeholder_nodes = []
@@ -168,6 +196,9 @@ class PreloadPass(PassBase):
                 elif attr_name in attr_owner_module._buffers:
                     buffer_dict[in_node.target] = (attr_v, attr_owner_module, attr_name)
         return parameter_dict, buffer_dict
+
+    def process_loading(self):
+        pass
 
     def finalize(self) -> GraphModule:
         return super().finalize()

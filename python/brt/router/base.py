@@ -109,7 +109,7 @@ class RouterBase(nn.Module):
         if len(in_flows) == 0 and isinstance(in_flows, List):
             return
 
-        self.capture_ptu_grains_and_options(in_flows, if_dispatch=False)
+        self.capture_ptu_grains_and_options(in_flows, is_dispatch=False)
 
         if all(isinstance(flow, List) for flow in in_flows):
             if all(len(flow) > 0 for flow in in_flows):
@@ -123,7 +123,7 @@ class RouterBase(nn.Module):
         self.capture_load_from_flows(in_flows)
 
     def capture_dispatch_flows(self, in_flows, loads, capacities):
-        self.capture_ptu_grains_and_options(in_flows, if_dispatch=True)
+        self.capture_ptu_grains_and_options(in_flows, is_dispatch=True)
         self.capture_laod_from_protocol(loads, capacities)
 
     def capture_load_from_flows(self, in_flows: List[torch.Tensor]) -> None:
@@ -180,15 +180,15 @@ class RouterBase(nn.Module):
             if capacities is not None:
                 self.capacity_history = self.capacity_history + capacities
 
-    def capture_ptu_grains_and_options(self, flows, if_dispatch=True) -> None:
+    def capture_ptu_grains_and_options(self, flows, is_dispatch=True) -> None:
         """
         Capture the flow shape.
         """
-        flows = self.listing_flows(flows, if_dispatch)
+        flows = self.listing_flows(flows, is_dispatch)
 
-        if self.check_ptu_consistency(flows, if_dispatch):
+        if self.check_ptu_consistency(flows, is_dispatch):
             if self.ptu_grain_history is None:
-                if if_dispatch:
+                if is_dispatch:
                     self.ptu_grain_history = [flow.shape for flow in flows]
                     self.ptu_dtype_history = [flow.dtype for flow in flows]
                     self.ptu_device_history = [flow.device for flow in flows]
@@ -199,8 +199,8 @@ class RouterBase(nn.Module):
         else:
             self.ptu_grain_history = None
 
-    def listing_flows(self, flows, if_dispatch=True):
-        if if_dispatch:
+    def listing_flows(self, flows, is_dispatch=True):
+        if is_dispatch:
             if isinstance(flows, torch.Tensor):
                 return [flows]
             return flows
@@ -210,13 +210,13 @@ class RouterBase(nn.Module):
                 return [flows]
             return flows
 
-    def check_ptu_consistency(self, flows, if_dispatch=True) -> bool:
+    def check_ptu_consistency(self, flows, is_dispatch=True) -> bool:
         if self.ptu_grain_history is None:
             if self.history_len == 0:
                 return True
             else:
                 return False
-        if if_dispatch:
+        if is_dispatch:
             for flow_id, flow in enumerate(flows):
                 if (
                     flow.shape[1:] != self.ptu_grain_history[flow_id][1:]
