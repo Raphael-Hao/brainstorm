@@ -51,39 +51,56 @@ class EventCollector(nn.Module):
 
 @register_leaf_node
 class PreLoader(nn.Module):
-    _stream: torch.cuda.Stream = None
+    _memory_stream: torch.cuda.Stream = None
+    _compute_stream: torch.cuda.Stream = None
     _events: List[torch.cuda.Event] = None
     _initialized: bool = False
 
     @classmethod
-    def init(cls, event_num=1, stream=None):
-        if stream is None:
-            cls._stream = torch.cuda.stream()
-        elif isinstance(stream, torch.cuda.Stream):
-            cls._stream = stream
+    def init(cls, event_num=1, memory_stream=None, compute_stream=None):
+        if isinstance(memory_stream, torch.cuda.Stream):
+            cls._memory_stream = memory_stream
         else:
-            cls._stream = torch.cuda.Stream()
-        cls._events = [torch.cuda.Stream() for i in range(event_num)]
+            cls._memory_stream = torch.cuda.Stream()
+        if isinstance(compute_stream, torch.cuda.Stream):
+            cls._compute_stream = compute_stream
+        else:
+            cls._compute_stream = torch.cuda.current_stream()
+
+        cls._events = [torch.cuda.Event() for i in range(event_num)]
         cls._initialized = True
 
     def __init__(
         self,
-        parameters: Dict[str, Parameter] = None,
-        buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
+        mode="load",
+        collected_params: Dict[str, Parameter] = None,
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
     ) -> None:
         super().__init__()
-        self.collected_parameters = parameters
-        self.collected_buffers = buffers
+        assert (
+            PreLoader._initialized
+        ), "PreLoader is not initialized before creating a PreLoader instance"
+        assert mode in ["load", "unload", "guard"]
+        self.mode = mode
+        self.collected_params = collected_params
+        self.collected_bufffer = collected_buffers
 
     def forward(self, event_idx):
-        pass
+        if self.mode == "load":
+            self.load(event_idx)
+        elif self.mode == "unload":
+            self.unload(event_idx)
+        elif self.mode == "guard":
+            self.guard(event_idx)
+        else:
+            raise ValueError(f"Invalid mode {self.mode} for PreLoader")
 
-    def load_params_and_buffers(self, event_idx):
+    def load(self, event_idx):
         for pname, param in self.collected_parameters.items():
             if pname is None:
                 continue
             with torch.no_grad():
-                with torch.cuda.stream(PreLoader._stream):
+                with torch.cuda.stream(PreLoader._memory_stream):
                     param_applied = param.cuda(non_blocking=True)
             param.pin_cpu_data = param.data
             param.data = param_applied
@@ -91,16 +108,44 @@ class PreLoader(nn.Module):
 
             if param.grad is not None:
                 with torch.no_grad():
-                    with torch.cuda.stream(torch.cuda.current_stream()):
+                    with torch.cuda.stream(PreLoader._memory_stream):
                         grad_applied = param.grad.cuda(non_blocking=True)
 
                 out_param.grad.pin_cpu_data = param.grad.data
                 out_param.grad.data = grad_applied
 
-        for bname, (buffer, b_owner_m, b_tensor_name) in self.collected_buffers.items():
-            pass
+        for bname, (buf, b_owner_m, b_tensor_name) in self.collected_buffers.items():
+            if buf is not None:
+                with torch.cuda.stream(PreLoader._memory_stream):
+                    b_owner_m._buffers[b_tensor_name] = buf.cuda(non_blocking=True)
 
-        PreLoader._events[event_idx].record(self._stream)
+        PreLoader._events[event_idx].record(PreLoader._memory_stream)
+        return event_idx
+
+    def guard(self, event_idx):
+        PreLoader._events[event_idx].wait(PreLoader._compute_stream)
+
+    def unload(self, event_idx):
+        for pname, param in self.collected_parameters.items():
+            if param is None:
+                continue
+            with torch.no_grad():
+                param_applied = param.pin_cpu_data
+            param.data = param_applied
+            out_param = param
+
+            if param.grad is not None:
+                with torch.no_grad():
+                    grad_applied = param.grad.pin_cpu_data
+
+                out_param.grad.data = grad_applied
+
+        for bname, (buf, b_owner_m, b_tensor_name) in self.collected_buffers.items():
+            if buf is not None:
+                b_owner_m._buffers[b_tensor_name] = buf
+
+        PreLoader._events[event_idx].record(PreLoader._memory_stream)
+
         return event_idx
 
 
