@@ -54,7 +54,7 @@ class SinglePTUDispatchFabric(DispatchFabric):
         all_out_flows = []
         for flow_idx in range(self.flow_num):
             flow = in_flows[flow_idx]
-            if_proto_tensor = False
+            is_proto_tensor = False
             if isinstance(flow, ProtoTensor):
                 (
                     flow_data,
@@ -62,7 +62,7 @@ class SinglePTUDispatchFabric(DispatchFabric):
                     load_stack,
                     extra_attr_stack_dict,
                 ) = flow.copy_stacks()
-                if_proto_tensor = True
+                is_proto_tensor = True
             else:
                 flow_data = flow
             if self.route_logics[flow_idx] == "1d":
@@ -75,7 +75,7 @@ class SinglePTUDispatchFabric(DispatchFabric):
             out_flows = []
             for path_id, load in enumerate(real_loads):
                 if load == 0:
-                    if if_proto_tensor:
+                    if is_proto_tensor:
                         out_flow = init_proto_tensor(
                             torch.zeros(
                                 0,

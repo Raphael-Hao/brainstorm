@@ -5,7 +5,7 @@ import unittest
 
 import torch
 import torch.nn as nn
-from brt.runtime.preload import PreLoader
+from brt.runtime.mem_plan import PreLoader
 
 class SimpleNet(nn.Module):
     def __init__(self) -> None:
@@ -18,7 +18,7 @@ class SimpleNet(nn.Module):
         x = self.conv(x)
         return x
 
-class PreLoadTest(unittest.TestCase):
+class MemPlanTest(unittest.TestCase):
     def test_weight_loader(self):
         simple_net =SimpleNet()
         in_data = torch.randn(1,3,10,10)

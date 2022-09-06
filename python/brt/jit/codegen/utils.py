@@ -8,7 +8,7 @@ from typing import Dict, List, Union
 __all__ = [
     "remove_empty_lines",
     "remove_comments",
-    "check_if_pointer",
+    "check_is_pointer",
     "make_func_name",
     "make_identifier",
     "make_fused_identifier",
@@ -25,7 +25,7 @@ def remove_comments(code: str) -> str:
     return code
 
 
-def check_if_pointer(param_type: str) -> bool:
+def check_is_pointer(param_type: str) -> bool:
     return re.search(r"\w+\s*\*", param_type) is not None
 
 

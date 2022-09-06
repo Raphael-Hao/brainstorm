@@ -7,6 +7,16 @@ import torch.fx as fx
 from torch.nn.parameter import Parameter
 from brt.trace.leaf_node import register_leaf_node
 
+__all__ = [
+    "pin_memory",
+    "OndemandLoader",
+    "OndemandGuarder",
+    "OndemandUnloader",
+    "PredictLoader",
+    "PredictGuarder",
+    "PredictUnloader",
+]
+
 
 def pin_memory(m: nn.Module):
     for module in m.children():
@@ -49,58 +59,46 @@ class EventCollector(nn.Module):
         return output
 
 
-@register_leaf_node
-class PreLoader(nn.Module):
-    _memory_stream: torch.cuda.Stream = None
-    _compute_stream: torch.cuda.Stream = None
-    _events: List[torch.cuda.Event] = None
-    _initialized: bool = False
+class MemoryPlanContext:
+    MEMORY_STREAM: torch.cuda.Stream = None
+    COMPUTE_STREAM: torch.cuda.Stream = None
+    EVENTS: List[torch.cuda.Event] = None
+    INITIALIZED: bool = False
 
     @classmethod
     def init(cls, event_num=1, memory_stream=None, compute_stream=None):
         if isinstance(memory_stream, torch.cuda.Stream):
-            cls._memory_stream = memory_stream
+            cls.MEMORY_STREAM = memory_stream
         else:
-            cls._memory_stream = torch.cuda.Stream()
+            cls.MEMORY_STREAM = torch.cuda.Stream()
         if isinstance(compute_stream, torch.cuda.Stream):
-            cls._compute_stream = compute_stream
+            cls.COMPUTE_STREAM = compute_stream
         else:
-            cls._compute_stream = torch.cuda.current_stream()
+            cls.COMPUTE_STREAM = torch.cuda.current_stream()
 
-        cls._events = [torch.cuda.Event() for i in range(event_num)]
-        cls._initialized = True
+        cls.EVENTS = [torch.cuda.Event() for _ in range(event_num)]
+        cls.INITIALIZED = True
 
+
+class MemoryPlanner(nn.Module):
     def __init__(
         self,
-        mode="load",
         collected_params: Dict[str, Parameter] = None,
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
     ) -> None:
         super().__init__()
         assert (
-            PreLoader._initialized
-        ), "PreLoader is not initialized before creating a PreLoader instance"
-        assert mode in ["load", "unload", "guard"]
-        self.mode = mode
+            MemoryPlanContext.INITIALIZED
+        ), "MemPlanContext is not initialized before creating a PreLoader instance"
         self.collected_params = collected_params
         self.collected_bufffer = collected_buffers
-
-    def forward(self, event_idx):
-        if self.mode == "load":
-            self.load(event_idx)
-        elif self.mode == "unload":
-            self.unload(event_idx)
-        elif self.mode == "guard":
-            self.guard(event_idx)
-        else:
-            raise ValueError(f"Invalid mode {self.mode} for PreLoader")
 
     def load(self, event_idx):
         for pname, param in self.collected_parameters.items():
             if pname is None:
                 continue
             with torch.no_grad():
-                with torch.cuda.stream(PreLoader._memory_stream):
+                with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
                     param_applied = param.cuda(non_blocking=True)
             param.pin_cpu_data = param.data
             param.data = param_applied
@@ -108,7 +106,7 @@ class PreLoader(nn.Module):
 
             if param.grad is not None:
                 with torch.no_grad():
-                    with torch.cuda.stream(PreLoader._memory_stream):
+                    with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
                         grad_applied = param.grad.cuda(non_blocking=True)
 
                 out_param.grad.pin_cpu_data = param.grad.data
@@ -116,14 +114,14 @@ class PreLoader(nn.Module):
 
         for bname, (buf, b_owner_m, b_tensor_name) in self.collected_buffers.items():
             if buf is not None:
-                with torch.cuda.stream(PreLoader._memory_stream):
+                with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
                     b_owner_m._buffers[b_tensor_name] = buf.cuda(non_blocking=True)
 
-        PreLoader._events[event_idx].record(PreLoader._memory_stream)
+        MemoryPlanContext.EVENTS[event_idx].record(MemoryPlanContext.MEMORY_STREAM)
         return event_idx
 
     def guard(self, event_idx):
-        PreLoader._events[event_idx].wait(PreLoader._compute_stream)
+        MemoryPlanContext.EVENTS[event_idx].wait(MemoryPlanContext.COMPUTE_STREAM)
 
     def unload(self, event_idx):
         for pname, param in self.collected_parameters.items():
@@ -144,8 +142,105 @@ class PreLoader(nn.Module):
             if buf is not None:
                 b_owner_m._buffers[b_tensor_name] = buf
 
-        PreLoader._events[event_idx].record(PreLoader._memory_stream)
+        return event_idx
 
+
+@register_leaf_node
+class OndemandLoader(MemoryPlanner):
+    def __init__(
+        self,
+        collected_params: Dict[str, Parameter] = None,
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
+    ) -> None:
+        super().__init__(collected_params, collected_buffers)
+
+    def forward(self, input, event_idx):
+        if input.numel() > 0:
+            self.load(event_idx)
+        return event_idx
+
+
+@register_leaf_node
+class OndemandGuarder(MemoryPlanner):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+
+    def forward(self, input, event_idx):
+        if input.numel() > 0:
+            self.guard(event_idx)
+        return event_idx
+
+
+@register_leaf_node
+class OndemandUnloader(MemoryPlanner):
+    def __init__(
+        self,
+        collected_params: Dict[str, Parameter] = None,
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
+    ) -> None:
+        super().__init__(collected_params, collected_buffers)
+
+    def forward(self, input, event_idx):
+        if input.numel() > 0:
+            self.unload(event_idx)
+        return event_idx
+
+
+@register_leaf_node
+class PredictLoader(MemoryPlanner):
+    def __init__(
+        self,
+        mode="load",
+        collected_params: Dict[str, Parameter] = None,
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
+    ) -> None:
+        super().__init__()
+        assert (
+            MemoryPlanContext.INITIALIZED
+        ), "MemPlanContext is not initialized before creating a PreLoader instance"
+        assert mode in ["load", "unload", "guard"]
+        self.mode = mode
+        self.collected_params = collected_params
+        self.collected_bufffer = collected_buffers
+
+    def forward(self, event_idx):
+        self.load(event_idx)
+        return event_idx
+
+
+@register_leaf_node
+class PredictGuarder(MemoryPlanner):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+
+    def forward(self, input, event_idx):
+        self.guard(event_idx)
+        return event_idx
+
+
+@register_leaf_node
+class PredictUnloader(MemoryPlanner):
+    def __init__(
+        self,
+        mode="load",
+        collected_params: Dict[str, Parameter] = None,
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
+    ) -> None:
+        super().__init__()
+        assert (
+            MemoryPlanContext.INITIALIZED
+        ), "MemPlanContext is not initialized before creating a PreLoader instance"
+        assert mode in ["load", "unload", "guard"]
+        self.mode = mode
+        self.collected_params = collected_params
+        self.collected_bufffer = collected_buffers
+
+    def forward(self, event_idx):
+        self.unload(event_idx)
         return event_idx
 
 
