@@ -2,4 +2,4 @@
 # Licensed under the MIT license.
 
 from brt.passes.liveness import DeadPathEliminatePass, PermanentPathFoldPass
-from brt.passes.mem_plan import MemoryPlanPass
+from brt.passes.memory_plan import MemoryPlanPass

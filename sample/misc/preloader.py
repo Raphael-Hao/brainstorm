@@ -4,7 +4,7 @@ import time
 
 import torch
 import torch.nn as nn
-from brt.runtime.mem_plan import PreLoader
+from brt.runtime.memory_plan import PreLoader
 
 
 class SimpleNet(nn.Module):
