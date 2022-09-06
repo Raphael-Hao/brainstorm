@@ -7,8 +7,7 @@ import torch.nn as nn
 import numpy as np
 import torch
 import torch.nn.functional as F
-# TODO: differece?
-# from brt.frontend.nn import BatchNorm2d
+
 from torch.nn import BatchNorm2d
 
 from image_list import ImageList
@@ -16,6 +15,7 @@ from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 from postprocessing import sem_seg_postprocess
 
 from brt.router import GatherRouter
+
 
 class DynamicNet4Seg(nn.Module):
     """
@@ -35,8 +35,10 @@ class DynamicNet4Seg(nn.Module):
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
         self.budget_constrint = BudgetConstraint(cfg)
         self.to(self.device)
+        self.size_divisibility = self.backbone.size_divisibility
+        self.register_buffer("backbone_input", None)
 
-    def forward(self, batched_inputs, step_rate=0.0, predict_mode=True):
+    def forward(self, batched_inputs):
         """
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
@@ -57,37 +59,23 @@ class DynamicNet4Seg(nn.Module):
         """
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [self.normalizer(x) for x in images]
-        images = ImageList.from_tensors(images, self.backbone.size_divisibility)
-        # features, expt_flops, real_flops = self.backbone(
-        features = self.backbone(
-            images.tensor, step_rate, predict_mode
-        )
+        images = ImageList.from_tensors(images, self.size_divisibility)
+
+        # store a backbone input for evaluating the elapsed time of the backbone
+        if not self.training:
+            if self.backbone_input is None:
+                self.backbone_input = images.tensor
+
+        features = self.backbone(images.tensor)
 
         if "sem_seg" in batched_inputs[0]:
             targets = [x["sem_seg"].to(self.device) for x in batched_inputs]
             targets = ImageList.from_tensors(
-                targets, self.backbone.size_divisibility, self.sem_seg_head.ignore_value
+                targets, self.size_divisibility, self.sem_seg_head.ignore_value
             ).tensor
         else:
             targets = None
-        if not predict_mode:
-            self.sem_seg_head.to(self.device)
         results, losses = self.sem_seg_head(features, targets)
-        # calculate flops
-        if self.cal_flops:
-            real_flops += self.sem_seg_head.flops
-            flops = {"real_flops": real_flops, "expt_flops": expt_flops}
-        else:
-            flops = None
-        # use budget constraint for training
-        if self.training:
-            if self.constrain_on and step_rate >= self.unupdate_rate:
-                warm_up_rate = min(1.0, (step_rate - self.unupdate_rate) / 0.02)
-                loss_budget = self.budget_constrint(
-                    expt_flops, warm_up_rate=warm_up_rate
-                )
-                losses.update({"loss_budget": loss_budget})
-            return losses, flops
 
         processed_results = []
         for result, input_per_image, image_size in zip(
@@ -96,10 +84,7 @@ class DynamicNet4Seg(nn.Module):
             height = input_per_image.get("height")
             width = input_per_image.get("width")
             r = sem_seg_postprocess(result, image_size, height, width)
-            if self.cal_flops:
-                processed_results.append({"sem_seg": r, "flops": flops})
-            else:
-                processed_results.append({"sem_seg": r})
+            processed_results.append({"sem_seg": r})
         return processed_results
 
 
@@ -164,7 +149,12 @@ class SemSegDecoderHead(nn.Module):
             stride=1,
             padding=1,
         )
-        self.gather_router_2 = GatherRouter(2)
+        self.decoder_gathers = nn.ModuleList(
+            [
+                GatherRouter(fabric_kwargs={"sparse": True})
+                for _ in range(len(self.in_features) - 1)
+            ]
+        )
 
         # using Kaiming init
         kaiming_init_module(self.predictor, mode="fan_in")
@@ -173,15 +163,15 @@ class SemSegDecoderHead(nn.Module):
         pred, pred_output = None, None
         for _index in range(len(self.in_features)):
             out_index = len(self.in_features) - _index - 1
-            out_feat = features[self.in_features[out_index]]
+            out_feat = features[out_index]
 
             # if isinstance(out_feat, float): # TODO:
             # if out_feat.numel() == 0:
-                # continue
+            # continue
 
-            if out_index <= 2 and pred is not None:
+            if _index > 0:
                 # out_feat = pred + out_feat # TODO: GatherRouter
-                out_feat = self.gather_router_2((pred, out_feat))
+                out_feat = self.decoder_gathers[_index - 1]([pred, out_feat])
 
             pred = self.layer_decoder_list[out_index](out_feat)
             if out_index > 0:

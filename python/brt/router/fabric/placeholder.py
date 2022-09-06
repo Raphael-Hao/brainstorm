@@ -34,29 +34,30 @@ class PlaceholderCombineFabric(CombineFabric):
             and len(self.ptu_devices) == self.flow_num
         ), "ptu_grains/dtypes/devices must have the same elements as flow_num"
 
-    def check_compatibility(self, kwargs: Dict[str,Any]) -> None:
+    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
         sparse = kwargs.pop("sparse", True)
         assert_compatibility(self, "sparse", True, sparse)
 
     def forward(self, in_flows: List[torch.Tensor]) -> torch.Tensor:
         if self.runtime_load == 1:
             if self.flow_num == 1:
-                return torch.zeros(
+                out_flows = torch.zeros(
                     self.ptu_grains[0],
                     dtype=self.ptu_dtypes[0],
                     device=self.ptu_devices[0],
                 )
-            return [
-                torch.zeros(
-                    self.ptu_grains[i],
-                    dtype=self.ptu_dtypes[i],
-                    device=self.ptu_devices[i],
-                )
-                for i in range(self.flow_num)
-            ]
+            else:
+                out_flows = [
+                    torch.zeros(
+                        self.ptu_grains[i],
+                        dtype=self.ptu_dtypes[i],
+                        device=self.ptu_devices[i],
+                    )
+                    for i in range(self.flow_num)
+                ]
         else:
             if self.flow_num == 1:
-                return init_proto_tensor(
+                out_flows = init_proto_tensor(
                     torch.zeros(
                         self.ptu_grains[0],
                         dtype=self.ptu_dtypes[0],
@@ -65,15 +66,21 @@ class PlaceholderCombineFabric(CombineFabric):
                     [torch.zeros(0, 1, dtype=torch.int64, device=self.ptu_devices[0])],
                     [self.runtime_load],
                 )
-            return [
-                init_proto_tensor(
-                    torch.zeros(
-                        self.ptu_grains[i],
-                        dtype=self.ptu_dtypes[i],
-                        device=self.ptu_devices[i],
-                    ),
-                    [torch.zeros(0, 1, dtype=torch.int64, device=self.ptu_devices[i])],
-                    [self.runtime_load],
-                )
-                for i in range(self.flow_num)
-            ]
+            else:
+                out_flows = [
+                    init_proto_tensor(
+                        torch.zeros(
+                            self.ptu_grains[i],
+                            dtype=self.ptu_dtypes[i],
+                            device=self.ptu_devices[i],
+                        ),
+                        [
+                            torch.zeros(
+                                0, 1, dtype=torch.int64, device=self.ptu_devices[i]
+                            )
+                        ],
+                        [self.runtime_load],
+                    )
+                    for i in range(self.flow_num)
+                ]
+        return out_flows
