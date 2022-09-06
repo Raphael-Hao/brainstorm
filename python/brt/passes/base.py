@@ -47,7 +47,7 @@ class PassBase:
                 ), "The node is not a call_function of getitem"
                 item_id = int(node.args[1])
                 path_id = item_id if item_id >= 0 else item_id + path_num
-                start_nodes[path_id].update({node: None})
+                start_nodes[path_id].setdefault(node)
         else:
             for flow_node in scatter_node.users:
                 # NOTE current we check if the node is a call_function of getitem through its name
@@ -60,7 +60,7 @@ class PassBase:
                     ), "The node is not a call_function of getitem"
                     item_id = int(node.args[1])
                     path_id = item_id if item_id >= 0 else item_id + path_num
-                    start_nodes[path_id].update({node: None})
+                    start_nodes[path_id].setdefault(node)
         return start_nodes
 
 

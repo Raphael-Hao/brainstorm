@@ -7,7 +7,8 @@ import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 from brt.router import is_router
-from brt.passes.utils import is_scatter, is_gather
+from brt.passes.utils import is_scatter, is_gather, debug_node
+
 
 @register_pass("MemoryPlan")
 class MemoryPlanPass(PassBase):
@@ -30,18 +31,26 @@ class MemoryPlanPass(PassBase):
 
     def _build_goal_classifiers(self) -> None:
         self.goal_classifiers = []
+        submodules = dict(self.graph_mod.named_modules())
 
-        def is_output(node):
+        def is_output_node(node):
             return node.op == "output"
 
-        self.goal_classifiers.append(is_output)
-        self.goal_classifiers.append(is_router)
+        def is_router_node(node):
+            if node.op == "call_module":
+                node_m = submodules[node.target]
+                return is_router(node_m)
+            return False
+
+        self.goal_classifiers.append(is_router_node)
+        self.goal_classifiers.append(is_output_node)
 
     def run_on_graph(self) -> None:
         """TODO
         1. find the first part of parameters and buffers to be preloaded.
         2. insert preloading, guarding, unloading hook to enable the pipeline.
         """
+        self._build_goal_classifiers()
         self.groups = []
         memo = set()
         # first gropu will include the the placeholder and the first group of goal nodes (routers)
@@ -52,50 +61,54 @@ class MemoryPlanPass(PassBase):
             placeholder_nodes
         )
         filter_goal_nodes = self.remove_output(goal_nodes)
-
         for node in filter_goal_nodes:
-            assert node.op == "call_module", f"Goal node {node} is not a call_module."
-            node_m = submodules[node.target]
-            assert is_scatter(
-                node_m
-            ), f"The goal node collected in the first round should be scatter."
-            if is_scatter(node_m):
-                flow_num = node_m.fabric.flow_num
-                for i in range(flow_num):
-                    pass
+            debug_node(node)
+        # print(parameters_dict)
+        # print(buffers_dict)
+        # for node in filter_goal_nodes:
+        #     assert node.op == "call_module", f"Goal node {node} is not a call_module."
+        #     node_m = submodules[node.target]
+        #     assert is_scatter(
+        #         node_m
+        #     ), f"The goal node collected in the first round should be scatter."
+        #     if is_scatter(node_m):
+        #         flow_num = node_m.fabric.flow_num
+        #         for i in range(flow_num):
+        #             pass
 
-        while len(filtered_start_nodes) > 0:
-            (
-                goal_nodes,
-                traveled_nodes,
-                parameters_dict,
-                buffers_dict,
-            ) = self.travel_to_goal(start_nodes=filtered_start_nodes)
-            for node in goal_nodes:
-                if node not in memo:
-                    memo.add(node)
-            filtered_start_nodes = self.remove_output(list(traveled_nodes))
+        # while len(filtered_start_nodes) > 0:
+        #     (
+        #         goal_nodes,
+        #         traveled_nodes,
+        #         parameters_dict,
+        #         buffers_dict,
+        #     ) = self.travel_to_goal(start_nodes=filtered_start_nodes)
+        #     for node in goal_nodes:
+        #         if node not in memo:
+        #             memo.add(node)
+        #     filtered_start_nodes = self.remove_output(list(traveled_nodes))
 
-    def find_all_placeholders(self) -> List[Node]:
-        placeholder_nodes = []
+    def find_all_placeholders(self):
+        placeholder_nodes: Dict[Node, None] = {}
         for node in self.graph_mod.graph.nodes:
             if node.op == "placeholder":
-                placeholder_nodes.append(node)
+                placeholder_nodes.setdefault(node)
         return placeholder_nodes
 
-    def remove_output(self, out_nodes: List[Node]) -> List[Node]:
+    def remove_output(self, out_nodes: Dict[Node, None]):
+        new_out_nodes: Dict[Node, None] = {}
         for node in out_nodes:
-            if node.op == "output":
-                out_nodes.remove(node)
-        return out_nodes
+            if node.op != "output":
+                new_out_nodes.setdefault(node)
+        return new_out_nodes
 
-    def travel_to_goal(self, start_nodes: List[Node]) -> List[Node]:
+    def travel_to_goal(self, start_nodes: Dict[Node, None]) -> Dict[Node, None]:
         """TODO
         1. get the first module to insert preloading hook and weight ready guard.
         2. return the buffers and parameters to be preloaded.
         """
-        goal_nodes = set()
-        traveled_nodes = set()
+        goal_nodes: Dict[Node, None] = {}
+        traveled_nodes: Dict[Node, None] = {}
         parameters_dict, buffers_dict = self._travel_to_goal(
             start_nodes=start_nodes,
             goal_nodes=goal_nodes,
@@ -106,32 +119,32 @@ class MemoryPlanPass(PassBase):
 
     def _travel_to_goal(
         self,
-        start_nodes: List[Node],
-        goal_nodes: Set[Node] = None,
-        traveled_nodes: Set[Node] = None,
+        start_nodes: Dict[Node, None],
+        goal_nodes: Dict[Node, None] = None,
+        traveled_nodes: Dict[Node, None] = None,
         current_depth=0,
-    ) -> List[Node]:
+    ) -> Dict[Node, None]:
         """TODO
         1. check whether the parameters and buffers are already in the memo.
         2. add support to ignore call_function without computation: _operator.getitem
         """
         if goal_nodes is None:
-            goal_nodes = set()
+            goal_nodes: Dict[Node, None] = {}
         if traveled_nodes is None:
-            traveled_nodes = set()
-        nodes_to_travel: List[Node] = list()
+            traveled_nodes: Dict[Node, None] = {}
+        nodes_to_travel: Dict[Node, None] = {}
         parameters_dict, buffers_dict = {}, {}
 
         for node in start_nodes:
             if self.max_load_depth > 0 and current_depth >= self.max_load_depth:
-                goal_nodes.add(node)
+                goal_nodes.setdefault(node)
                 continue
             if any(goal_classifier(node) for goal_classifier in self.goal_classifiers):
-                goal_nodes.add(node)
+                goal_nodes.setdefault(node)
                 continue
             if node not in traveled_nodes:
                 if node.op in ["call_module", "call_function", "call_method"]:
-                    traveled_nodes.add(node)
+                    traveled_nodes.setdefault(node)
                     if node.op == "call_module":
                         (
                             collected_params,
@@ -148,7 +161,7 @@ class MemoryPlanPass(PassBase):
                         buffers_dict.update(collected_buffers)
                 for user in node.users:
                     if user not in traveled_nodes:
-                        nodes_to_travel.append(user)
+                        nodes_to_travel.setdefault(user)
 
         if len(nodes_to_travel) > 0:
             collected_params, collected_buffers = self._travel_to_goal(
