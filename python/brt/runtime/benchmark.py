@@ -97,5 +97,7 @@ class Benchmarker:
         setattr(self, name, func)
 
     def benchmarking(self, benchmark_items):
+        if benchmark_items is None:
+            return
         for item in benchmark_items:
             getattr(self, item)()

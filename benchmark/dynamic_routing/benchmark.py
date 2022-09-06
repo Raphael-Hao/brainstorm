@@ -6,8 +6,9 @@ from dynamic_B_config import config as B_config
 from dynamic_C_config import config as C_config
 
 from brt.router import switch_router_mode
-from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, PreloadPass
+from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, MemoryPlanPass
 from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer
+from brt.trace.graph import symbolic_trace
 
 """
 Detection Training Script.
@@ -155,11 +156,6 @@ def main(args):
 
     config.merge_from_list(args.opts)
     cfg, logger = default_setup(config, args)
-    if args.debug:
-        batches = int(cfg.SOLVER.IMS_PER_BATCH / 8 * args.num_gpus)
-        if cfg.SOLVER.IMS_PER_BATCH != batches:
-            cfg.SOLVER.IMS_PER_BATCH = batches
-            logger.warning("SOLVER.IMS_PER_BATCH is changed to {}".format(batches))
 
     model = build_model(cfg)
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
@@ -170,6 +166,13 @@ def main(args):
 
     res = Trainer.test(cfg, model)
 
+    if args.debug:
+        new_backbone = symbolic_trace(model.backbone)
+        print(f"node | node_op | node_target | node_users | node_args | node_all_input_nodes")
+        for node in new_backbone.graph.nodes:
+            print(
+                f"{node} | {node.op} | {node.target} | {node.users} | {node.args} | {node.all_input_nodes}"
+            )
     # model.eval()
     # input = torch.randn(1, 3, 1024, 2048).cuda()
     # outputs = model.backbone(input)
@@ -210,7 +213,6 @@ def main(args):
             model.backbone = new_backbone
             new_res = Trainer.test(cfg, model)
 
-
     benchmarker.add_benchmark("liveness", liveness_benchmark)
 
     def preload_benchmark():
@@ -223,12 +225,13 @@ def main(args):
 
         naive_backbone = switch_router_mode(naive_backbone, False).eval()
 
-        preload_pass =  PreloadPass(model.backbone)
+        preload_pass = MemoryPlanPass(model.backbone)
         preload_pass.run_on_graph()
 
     benchmarker.add_benchmark("preload", preload_benchmark)
 
     benchmarker.benchmarking(args.benchmark)
+
 
 if __name__ == "__main__":
     args = test_argument_parser().parse_args()

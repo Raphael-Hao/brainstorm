@@ -5,7 +5,7 @@ import unittest
 
 import torch
 import torch.nn as nn
-from brt.runtime.mem_plan import PreLoader
+from brt.runtime.mem_plan import MemoryPlanContext, MemoryPlanner
 
 class SimpleNet(nn.Module):
     def __init__(self) -> None:

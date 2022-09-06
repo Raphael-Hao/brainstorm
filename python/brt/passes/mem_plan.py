@@ -9,9 +9,8 @@ from brt.passes.base import PassBase, register_pass
 from brt.router import is_router
 from brt.passes.utils import is_scatter, is_gather
 
-
-@register_pass("preload")
-class PreloadPass(PassBase):
+@register_pass("MemoryPlan")
+class MemoryPlanPass(PassBase):
     def __init__(
         self,
         m: Union[torch.nn.Module, GraphModule],
@@ -48,11 +47,11 @@ class PreloadPass(PassBase):
         # first gropu will include the the placeholder and the first group of goal nodes (routers)
         submodules = dict(self.graph_mod.named_modules())
         # find all input placeholders
-        placeholder_nodes = self.find_all_input_placeholder()
+        placeholder_nodes = self.find_all_placeholders()
         goal_nodes, traveled_nodes, parameters_dict, buffers_dict = self.travel_to_goal(
             placeholder_nodes
         )
-        filter_goal_nodes = self.remove_out_nodes(goal_nodes)
+        filter_goal_nodes = self.remove_output(goal_nodes)
 
         for node in filter_goal_nodes:
             assert node.op == "call_module", f"Goal node {node} is not a call_module."
@@ -63,13 +62,7 @@ class PreloadPass(PassBase):
             if is_scatter(node_m):
                 flow_num = node_m.fabric.flow_num
                 for i in range(flow_num):
-                    group = []
-                    group.append(node)
-                    group.append(node_m.fabric.flows[i])
-                    self.groups.append(group)
-
-            elif is_gather(node_m):
-                pass
+                    pass
 
         while len(filtered_start_nodes) > 0:
             (
@@ -81,16 +74,16 @@ class PreloadPass(PassBase):
             for node in goal_nodes:
                 if node not in memo:
                     memo.add(node)
-            filtered_start_nodes = self.remove_out_nodes(list(traveled_nodes))
+            filtered_start_nodes = self.remove_output(list(traveled_nodes))
 
-    def find_all_input_placeholder(self) -> List[Node]:
+    def find_all_placeholders(self) -> List[Node]:
         placeholder_nodes = []
         for node in self.graph_mod.graph.nodes:
             if node.op == "placeholder":
                 placeholder_nodes.append(node)
         return placeholder_nodes
 
-    def remove_out_nodes(self, out_nodes: List[Node]) -> List[Node]:
+    def remove_output(self, out_nodes: List[Node]) -> List[Node]:
         for node in out_nodes:
             if node.op == "output":
                 out_nodes.remove(node)
