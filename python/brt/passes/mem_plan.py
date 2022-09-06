@@ -177,7 +177,7 @@ class MemoryPlanPass(PassBase):
         parameter_dict = {}
         buffer_dict = {}
         for in_node in node.all_input_nodes:
-            if in_node.op is "get_attr":
+            if in_node.op == "get_attr":
                 attr_module_name, _, attr_name = in_node.target.rpartition(".")
                 attr_owner_module = self.graph_mod.get_submodule(attr_module_name)
 
