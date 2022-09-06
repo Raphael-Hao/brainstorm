@@ -4,7 +4,6 @@
 import torch
 import torch.nn as nn
 import torch.fx as fx
-from torch.fx.graph_module import GraphModule
 from brt.router import is_router
 from brt.trace.leaf_node import is_leaf_node
 
@@ -18,11 +17,11 @@ class GraphTracer(fx.Tracer):
         return super().is_leaf_module(m, module_qualified_name)
 
 
-def symbolic_trace(m: nn.Module, name=None) -> GraphModule:
+def symbolic_trace(m: nn.Module, name=None) -> fx.GraphModule:
     assert isinstance(
         m, nn.Module
     ), "brt provided symbolic_trace only works on nn.Modules"
     tracer = GraphTracer()
     graph = tracer.trace(m)
     name = m.__class__.__name__ if name is None else name
-    return GraphModule(tracer.root, graph, name)
+    return fx.GraphModule(tracer.root, graph, name)

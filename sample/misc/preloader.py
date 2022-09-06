@@ -4,7 +4,7 @@ import time
 
 import torch
 import torch.nn as nn
-from brt.runtime.weight_load import WeightLoader
+from brt.runtime.preload import PreLoader
 
 
 class SimpleNet(nn.Module):
@@ -26,28 +26,28 @@ simple_net = SimpleNet()
 in_data = torch.randn(1, 10000)
 origin_out_data = simple_net(in_data)
 # init the weight loader
-WeightLoader.init()
+PreLoader.init()
 
-pinned_simple_net = WeightLoader.pin_memory(simple_net)
-WeightLoader.inject_placement_check(simple_net)
+pinned_simple_net = PreLoader.pin_memory(simple_net)
+PreLoader.inject_placement_check(simple_net)
 pinned_out_data = pinned_simple_net(in_data)
 
 # first load and unload
 torch.cuda.synchronize()
-cuda_simple_net = WeightLoader.load(pinned_simple_net)
+cuda_simple_net = PreLoader.load_module(pinned_simple_net)
 
 with torch.cuda.stream(new_cuda_stream):
     for i in range(100):
         cuda_out_data = cuda_simple_net(in_data.cuda(non_blocking=True))
 
 
-unload_simple_net = WeightLoader.unload(cuda_simple_net)
+unload_simple_net = PreLoader.unload_module(cuda_simple_net)
 unload_out_data = unload_simple_net(in_data)
 # second load and unload
 torch.cuda.synchronize()
 
 start_time = time.time()
-cuda_simple_net = WeightLoader.load(unload_simple_net)
+cuda_simple_net = PreLoader.load_module(unload_simple_net)
 end_time = time.time()
 print(f"cpu time of loading pinned model: {(end_time - start_time) * 1000} ms")
 
@@ -58,7 +58,7 @@ with torch.cuda.stream(new_cuda_stream):
 end_time = time.time()
 print(f"cpu time of forwarding a loaded model: {(end_time - start_time) * 1000} ms")
 
-unload_simple_net = WeightLoader.unload(cuda_simple_net)
+unload_simple_net = PreLoader.unload_module(cuda_simple_net)
 unload_out_data = unload_simple_net(in_data)
 
 
