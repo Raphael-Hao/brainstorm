@@ -9,6 +9,8 @@ from brt.trace.leaf_node import register_leaf_node
 
 __all__ = [
     "pin_memory",
+    "EventEmitter",
+    "EventCollector",
     "OndemandLoader",
     "OndemandGuarder",
     "OndemandUnloader",
@@ -57,6 +59,14 @@ class EventCollector(nn.Module):
 
     def forward(self, output, *events):
         return output
+
+
+def _get_target_input(inputs, path_id):
+    if isinstance(inputs, (tuple, list)):
+        if len(inputs) > path_id and isinstance(inputs[path_id], torch.Tensor):
+            return inputs[path_id]
+        else:
+            return _get_target_input(inputs[0], path_id)
 
 
 class MemoryPlanContext:
@@ -149,13 +159,16 @@ class MemoryPlanner(nn.Module):
 class OndemandLoader(MemoryPlanner):
     def __init__(
         self,
+        path_id,
         collected_params: Dict[str, Parameter] = None,
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
     ) -> None:
         super().__init__(collected_params, collected_buffers)
+        self.path_id = path_id
 
-    def forward(self, input, event_idx):
-        if input.numel() > 0:
+    def forward(self, inputs, event_idx):
+        target = _get_target_input(inputs, self.path_id)
+        if target.numel() > 0:
             self.load(event_idx)
         return event_idx
 
@@ -167,10 +180,10 @@ class OndemandGuarder(MemoryPlanner):
     ) -> None:
         super().__init__()
 
-    def forward(self, input, event_idx):
-        if input.numel() > 0:
+    def forward(self, inputs, event_idx):
+        if inputs.numel() > 0:
             self.guard(event_idx)
-        return event_idx
+        return (inputs, event_idx)
 
 
 @register_leaf_node
@@ -217,9 +230,9 @@ class PredictGuarder(MemoryPlanner):
     ) -> None:
         super().__init__()
 
-    def forward(self, input, event_idx):
+    def forward(self, inputs, event_idx):
         self.guard(event_idx)
-        return event_idx
+        return inputs, event_idx
 
 
 @register_leaf_node
