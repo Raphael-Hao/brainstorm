@@ -81,7 +81,7 @@ for test_loader in test_loaders:
 
     for data in test_loader:
 
-        need_GT = True
+        need_GT = 'GT' in  test_loader.dataset.opt['mode']
         model.feed_data(data, need_GT=need_GT)
         img_path = data["GT_path"][0] if need_GT else data["LQ_path"][0]
         img_name = osp.splitext(osp.basename(img_path))[0]
@@ -123,45 +123,37 @@ for test_loader in test_loaders:
             test_results["psnr"].append(psnr)
             # test_results['ssim'].append(ssim)
 
-            if gt_img.shape[2] == 3:  # RGB image
-                sr_img_y = bgr2ycbcr(sr_img / 255.0, only_y=True)
-                gt_img_y = bgr2ycbcr(gt_img / 255.0, only_y=True)
+        sr_img_y = bgr2ycbcr(sr_img / 255.0, only_y=True)
 
-                psnr_y = util.calculate_psnr(sr_img_y * 255, gt_img_y * 255)
-                # ssim_y = util.calculate_ssim(sr_img_y * 255, gt_img_y * 255)
-                test_results["psnr_y"].append(psnr_y)
-                # test_results['ssim_y'].append(ssim_y)
-                # logger.info(
-                #     '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.'.
-                #     format(img_name, psnr, ssim, psnr_y, ssim_y))
-                logger.info(
-                    "{:20s} - PSNR: {:.6f} dB;  PSNR_Y: {:.6f} dB; .".format(
-                        img_name, psnr, psnr_y
-                    )
+        if need_GT and gt_img.shape[2] == 3:  # RGB image
+            gt_img_y = bgr2ycbcr(gt_img / 255.0, only_y=True)
+
+            psnr_y = util.calculate_psnr(sr_img_y * 255, gt_img_y * 255)
+            # ssim_y = util.calculate_ssim(sr_img_y * 255, gt_img_y * 255)
+            test_results["psnr_y"].append(psnr_y)
+            # test_results['ssim_y'].append(ssim_y)
+            # logger.info(
+            #     '{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}.'.
+            #     format(img_name, psnr, ssim, psnr_y, ssim_y))
+            logger.info(
+                "{:20s} - PSNR: {:.6f} dB;  PSNR_Y: {:.6f} dB; .".format(
+                    img_name, psnr, psnr_y
                 )
-                # logger.info(
-                #     '{:.6f}'.
-                #         format(psnr_y))
-                num_ress[0] += num_res[0]
-                num_ress[1] += num_res[1]
-                num_ress[2] += num_res[2]
+            )
+            # logger.info(
+            #     '{:.6f}'.
+            #         format(psnr_y))
 
-                flops, percent = util.cal_FLOPs(which_model, num_res)
-                logger.info(
-                    "{0} - type1: {1} type2: {2} type3: {3} FLOPs: {4} Percent: {5}.".format(
-                        img_name, num_res[0], num_res[1], num_res[2], flops, percent
-                    )
-                )
+        num_ress[0] += num_res[0]
+        num_ress[1] += num_res[1]
+        num_ress[2] += num_res[2]
 
-            else:
-                logger.info(
-                    "{:20s} - PSNR: {:.6f} dB; SSIM: {:.6f}.".format(
-                        img_name, psnr, ssim
-                    )
-                )
-
-        else:
-            logger.info(img_name)
+        flops, percent = util.cal_FLOPs(which_model, num_res)
+        logger.info(
+            "{0} - type1: {1} type2: {2} type3: {3} FLOPs: {4} Percent: {5}.".format(
+                img_name, num_res[0], num_res[1], num_res[2], flops, percent
+            )
+        )
 
     if num_ress[0] == 0:
         num_ress[0] = 1
@@ -175,8 +167,8 @@ for test_loader in test_loaders:
         )
     )
 
+    flops, percent = util.cal_FLOPs(which_model, num_ress)
     if need_GT:  # metrics
-        flops, percent = util.cal_FLOPs(which_model, num_ress)
         logger.info("# FLOPs {:.4e} Percent {:.4e}".format(flops, percent))
         # Average PSNR/SSIM results
         ave_psnr = sum(test_results["psnr"]) / len(test_results["psnr"])
