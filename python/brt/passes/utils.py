@@ -7,5 +7,5 @@ __all__ = ["debug_node"]
 
 def debug_node(node: Node):
     print(
-        f"{node} | {node.op} | {node.target} | {node.users} | {node.args} | {node.all_input_nodes}"
+        f"node:{node}, op:{node.op}, target:{node.target}, users:{node.users}, args:{node.args}, input_nodes:{node.all_input_nodes}"
     )

@@ -29,31 +29,42 @@ class PassBase:
         self.graph_mod.recompile()
         return self.graph_mod
 
-    def is_placehoder_node(self, n: Node):
+    # common help function for node type check
+    def is_placeholder_node(self, n: Node):
         return n.op == "placeholder"
 
-    def is_output_node(self, n: Node):
-        return n.op == "output"
+    def is_get_attr_node(self, n: Node):
+        return n.op == "get_attr"
+
+    def is_function_node(self, n: Node):
+        return n.op == "call_function"
 
     def is_module_node(self, n: Node):
         return n.op == "call_module"
 
+    def is_method_node(self, n: Node):
+        return n.op == "call_method"
+
+    def is_output_node(self, n: Node):
+        return n.op == "output"
+
+    # brt-related help function for node type check
     def is_router_node(self, n: Node):
-        if n.op == "call_module":
+        if self.is_module_node(n):
             m = self.sub_modules[n.target]
             if is_router(m):
                 return True
         return False
 
     def is_scatter_node(self, n: Node):
-        if n.op == "call_module":
+        if self.is_module_node(n):
             m = self.sub_modules[n.target]
             if is_router(m) and "scatter" in m._router_type:
                 return True
         return False
 
     def is_gather_node(self, n: Node):
-        if n.op == "call_module":
+        if self.is_module_node(n):
             m = self.sub_modules[n.target]
             if is_router(m) and "gather" in m._router_type:
                 return True
@@ -62,13 +73,13 @@ class PassBase:
     def find_all_placeholders(self):
         placeholder_nodes: Dict[Node, None] = {}
         for node in self.graph_mod.graph.nodes:
-            if node.op == "placeholder":
+            if self.is_placeholder_node(node):
                 placeholder_nodes.setdefault(node)
         return placeholder_nodes
 
     def cluster_path_start_nodes(self, scatter_node: Node):
         scatter_m = self.sub_modules[scatter_node.target]
-        assert self.is_gather_node(scatter_node), (
+        assert self.is_scatter_node(scatter_node), (
             f"Node {scatter_node} is not a scatter node "
             "for clustering the start nodes of specific path."
         )
@@ -101,8 +112,6 @@ class PassBase:
         return start_nodes
 
     def find_first_and_last_node(self, nodes: Dict[Node, None]):
-        first_node = None
-        last_node = None
         for node in self.graph_mod.graph.nodes:
             if node in nodes:
                 first_node = node
