@@ -3,9 +3,9 @@
 from typing import Type, Union, List, Dict
 import torch
 from torch.fx import GraphModule, Node
+from brt.router import is_router
 from brt.runtime import Registry
 from brt.trace.graph import symbolic_trace
-from brt.passes.utils import is_scatter, is_gather
 
 
 class PassBase:
@@ -16,6 +16,7 @@ class PassBase:
             self.graph_mod = m
         else:
             self.graph_mod = symbolic_trace(m)
+        self.sub_modules = dict(self.graph_mod.named_modules())
 
     def analyze(flow: torch.Tensor) -> None:
         raise NotImplementedError
@@ -28,10 +29,30 @@ class PassBase:
         self.graph_mod.recompile()
         return self.graph_mod
 
+    def is_router_node(self, n: Node):
+        if n.op == "call_module":
+            m = self.sub_modules[n.target]
+            if is_router(m):
+                return True
+        return False
+
+    def is_scatter_node(self, n: Node):
+        if n.op == "call_module":
+            m = self.sub_modules[n.target]
+            if is_router(m) and "scatter" in m._router_type:
+                return True
+        return False
+
+    def is_gather_node(self, n: Node):
+        if n.op == "call_module":
+            m = self.sub_modules[n.target]
+            if is_router(m) and "gather" in m._router_type:
+                return True
+        return False
+
     def cluster_path_start_nodes(self, scatter_node: Node):
-        sub_modules = dict(self.graph_mod.named_modules())
-        scatter_m = sub_modules[scatter_node.target]
-        assert is_scatter(scatter_m), (
+        scatter_m = self.sub_modules[scatter_node.target]
+        assert self.is_gather_node(scatter_node), (
             f"Node {scatter_node} is not a scatter node "
             "for clustering the start nodes of specific path."
         )
