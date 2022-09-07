@@ -6,8 +6,7 @@ import torch
 import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
-from brt.router import is_router
-from brt.passes.utils import is_scatter, is_gather, debug_node
+from brt.passes.utils import debug_node
 
 
 @register_pass("MemoryPlan")
@@ -31,18 +30,11 @@ class MemoryPlanPass(PassBase):
 
     def _build_goal_classifiers(self) -> None:
         self.goal_classifiers = []
-        submodules = dict(self.graph_mod.named_modules())
 
         def is_output_node(node):
             return node.op == "output"
 
-        def is_router_node(node):
-            if node.op == "call_module":
-                node_m = submodules[node.target]
-                return is_router(node_m)
-            return False
-
-        self.goal_classifiers.append(is_router_node)
+        self.goal_classifiers.append(self.is_router_node)
         self.goal_classifiers.append(is_output_node)
 
     def run_on_graph(self) -> None:
@@ -102,13 +94,15 @@ class MemoryPlanPass(PassBase):
                 new_out_nodes.setdefault(node)
         return new_out_nodes
 
-    def travel_to_goal(self, start_nodes: Dict[Node, None]) -> Dict[Node, None]:
+    def travel_to_goal(
+        self, start_nodes: Dict[Node, None], traveled_nodes: Dict[Node, None] = None
+    ) -> Dict[Node, None]:
         """TODO
         1. get the first module to insert preloading hook and weight ready guard.
         2. return the buffers and parameters to be preloaded.
         """
         goal_nodes: Dict[Node, None] = {}
-        traveled_nodes: Dict[Node, None] = {}
+        traveled_nodes = {} if traveled_nodes is None else traveled_nodes
         parameters_dict, buffers_dict = self._travel_to_goal(
             start_nodes=start_nodes,
             goal_nodes=goal_nodes,
@@ -120,18 +114,14 @@ class MemoryPlanPass(PassBase):
     def _travel_to_goal(
         self,
         start_nodes: Dict[Node, None],
-        goal_nodes: Dict[Node, None] = None,
-        traveled_nodes: Dict[Node, None] = None,
+        goal_nodes: Dict[Node, None],
+        traveled_nodes: Dict[Node, None],
         current_depth=0,
     ) -> Dict[Node, None]:
         """TODO
         1. check whether the parameters and buffers are already in the memo.
         2. add support to ignore call_function without computation: _operator.getitem
         """
-        if goal_nodes is None:
-            goal_nodes: Dict[Node, None] = {}
-        if traveled_nodes is None:
-            traveled_nodes: Dict[Node, None] = {}
         nodes_to_travel: Dict[Node, None] = {}
         parameters_dict, buffers_dict = {}, {}
 
@@ -176,8 +166,7 @@ class MemoryPlanPass(PassBase):
         return parameters_dict, buffers_dict
 
     def _get_module_params_or_buffers(self, node: Node):
-        sub_modules = dict(self.graph_mod.named_modules())
-        node_m = sub_modules[node.target]
+        node_m = self.sub_modules[node.target]
         parameter_dict = dict(node_m.named_parameters(node.target))
         buffer_dict = {}
         for bname, btensor in node_m.named_buffers(node.target):
