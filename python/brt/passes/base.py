@@ -29,6 +29,15 @@ class PassBase:
         self.graph_mod.recompile()
         return self.graph_mod
 
+    def is_placehoder_node(self, n: Node):
+        return n.op == "placeholder"
+
+    def is_output_node(self, n: Node):
+        return n.op == "output"
+
+    def is_module_node(self, n: Node):
+        return n.op == "call_module"
+
     def is_router_node(self, n: Node):
         if n.op == "call_module":
             m = self.sub_modules[n.target]
@@ -49,6 +58,13 @@ class PassBase:
             if is_router(m) and "gather" in m._router_type:
                 return True
         return False
+
+    def find_all_placeholders(self):
+        placeholder_nodes: Dict[Node, None] = {}
+        for node in self.graph_mod.graph.nodes:
+            if node.op == "placeholder":
+                placeholder_nodes.setdefault(node)
+        return placeholder_nodes
 
     def cluster_path_start_nodes(self, scatter_node: Node):
         scatter_m = self.sub_modules[scatter_node.target]
@@ -83,6 +99,18 @@ class PassBase:
                     path_id = item_id if item_id >= 0 else item_id + path_num
                     start_nodes[path_id].setdefault(node)
         return start_nodes
+
+    def find_first_and_last_node(self, nodes: Dict[Node, None]):
+        first_node = None
+        last_node = None
+        for node in self.graph_mod.graph.nodes:
+            if node in nodes:
+                first_node = node
+                break
+        for node in reversed(self.graph_mod.graph.nodes):
+            if node in nodes:
+                last_node = node
+        return first_node, last_node
 
 
 def register_pass(pass_class: type) -> None:

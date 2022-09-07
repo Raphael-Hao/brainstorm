@@ -3,7 +3,6 @@
 from typing import Union, Dict, List, Callable, Set
 
 import torch
-import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node
@@ -28,7 +27,7 @@ class MemoryPlanPass(PassBase):
             self.max_load_depth == 0
         ), f"Max_depth is set to {self.max_load_depth}, greater than 0 is not supported yet."
 
-    def _build_goal_classifiers(self) -> None:
+    def _build_goal_classifiers(self, ) -> None:
         self.goal_classifiers = []
 
         def is_output_node(node):
@@ -46,8 +45,7 @@ class MemoryPlanPass(PassBase):
         self.groups = []
         memo = set()
         # first gropu will include the the placeholder and the first group of goal nodes (routers)
-        submodules = dict(self.graph_mod.named_modules())
-        # find all input placeholders
+
         placeholder_nodes = self.find_all_placeholders()
         goal_nodes, traveled_nodes, parameters_dict, buffers_dict = self.travel_to_goal(
             placeholder_nodes
@@ -79,13 +77,6 @@ class MemoryPlanPass(PassBase):
         #         if node not in memo:
         #             memo.add(node)
         #     filtered_start_nodes = self.remove_output(list(traveled_nodes))
-
-    def find_all_placeholders(self):
-        placeholder_nodes: Dict[Node, None] = {}
-        for node in self.graph_mod.graph.nodes:
-            if node.op == "placeholder":
-                placeholder_nodes.setdefault(node)
-        return placeholder_nodes
 
     def remove_output(self, out_nodes: Dict[Node, None]):
         new_out_nodes: Dict[Node, None] = {}
