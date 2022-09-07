@@ -11,6 +11,16 @@ import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node
+from brt.runtime.memory_plan import (
+    MemoryPlanContext,
+    EventCollector,
+    OnDemandLoader,
+    OnDemandUnloader,
+    OnDemandGuarder,
+    PredictLoader,
+    PredictGuarder,
+    PredictUnloader,
+)
 
 
 @register_pass("MemoryPlan")
@@ -32,7 +42,7 @@ class MemoryPlanPass(PassBase):
             str, Tuple[torch.Tensor, nn.Module, str]
         ] = dict()
 
-    def _build_goal_classifiers(
+    def build_goal_classifiers(
         self, node_types: List[str] = None, custom_check_fns: List[Callable] = None
     ) -> None:
         self.goal_classifiers = []
@@ -54,7 +64,7 @@ class MemoryPlanPass(PassBase):
         1. find the first part of parameters and buffers to be preloaded.
         2. insert preloading, guarding, unloading hook to enable the pipeline.
         """
-        self._build_goal_classifiers(node_types=["output", "scatter"])
+        self.build_goal_classifiers(node_types=["output", "scatter"])
         self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history"])
 
         memo = set()
@@ -71,12 +81,6 @@ class MemoryPlanPass(PassBase):
             traveled_nodes = self.remove_placeholder(traveled_nodes)
             self.add_new_plan_group(traveled_nodes, collected_params, collected_buffers)
             start_nodes = self.remove_output(goal_nodes)
-            # print("------------------- traveled nodes ------------------")
-            # for node in traveled_nodes:
-            #     debug_node(node)
-            # print("------------------- start nodes ------------------")
-            # for node in start_nodes:
-            #     debug_node(node)
         assert self.is_parame_and_buffer_all_collected()
 
     def add_new_plan_group(
@@ -86,14 +90,23 @@ class MemoryPlanPass(PassBase):
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
         head_node: Node = None,
     ):
-        first_node = self.find_first_and_last_node(traveled_nodes)[0]
+        first_node, last_node = self.find_first_and_last_node(traveled_nodes)
         head_node = first_node if head_node is None else head_node
-        print(head_node)
         self.plan_groups.setdefault(head_node, []).append(
-            (traveled_nodes, collected_params, collected_buffers)
+            (last_node, traveled_nodes, collected_params, collected_buffers)
         )
         self.all_collected_params.update(collected_params)
         self.all_collected_buffers.update(collected_buffers)
+
+    def sort_plan_groups(self):
+        orderred_plan_groups: typing.OrderedDict[Node, List[Any]] = OrderedDict()
+        for node in self.graph_mod.graph.nodes:
+            if node in self.plan_groups:
+                orderred_plan_groups[node] = self.plan_groups[node]
+        return orderred_plan_groups
+
+    def process_plan(self):
+        raise NotImplementedError
 
     def travel_to_goal(self, start_nodes: Dict[Node, None], memo: Set[Node] = None):
         """TODO
@@ -111,8 +124,6 @@ class MemoryPlanPass(PassBase):
             memo=memo,
             current_depth=0,
         )
-        print(start_nodes)
-        print(traveled_nodes)
         return goal_nodes, traveled_nodes, collected_params, collected_buffers
 
     def _travel_to_goal(
@@ -141,25 +152,25 @@ class MemoryPlanPass(PassBase):
                         collected_params.update(params)
                         collected_buffers.update(buffers)
                 else:
-                    (
-                        params,
-                        buffers,
-                    ) = self._get_function_method_params_or_buffers(node)
+                    (params, buffers,) = self._get_function_method_params_or_buffers(
+                        node, traveled_nodes, memo
+                    )
                     collected_params.update(params)
                     collected_buffers.update(buffers)
 
                 for user in node.users:
-                    if self.max_depth > 0 and current_depth >= self.max_depth:
-                        goal_nodes.setdefault(user)
-                        continue
-                    if any(
-                        goal_classifier(user)
-                        for goal_classifier in self.goal_classifiers
-                    ):
-                        goal_nodes.setdefault(user)
-                        continue
-                    if user not in traveled_nodes:
-                        nodes_to_travel.setdefault(user)
+                    if user not in memo:
+                        if self.max_depth > 0 and current_depth >= self.max_depth:
+                            goal_nodes.setdefault(user)
+                            continue
+                        if any(
+                            goal_classifier(user)
+                            for goal_classifier in self.goal_classifiers
+                        ):
+                            goal_nodes.setdefault(user)
+                            continue
+                        if user not in traveled_nodes:
+                            nodes_to_travel.setdefault(user)
 
         if len(nodes_to_travel) > 0:
             (
@@ -189,11 +200,15 @@ class MemoryPlanPass(PassBase):
             buffer_dict[bname] = (btensor, b_owner_m, b_tensor_name)
         return parameter_dict, buffer_dict
 
-    def _get_function_method_params_or_buffers(self, node: Node):
+    def _get_function_method_params_or_buffers(
+        self, node: Node, traveled_nodes: Dict[Node, None], memo: Set[Node]
+    ):
         parameter_dict = {}
         buffer_dict = {}
         for in_node in node.all_input_nodes:
-            if in_node.op == "get_attr":
+            if self.is_get_attr_node(in_node):
+                memo.add(in_node)
+                traveled_nodes.setdefault(in_node)
                 attr_module_name, _, attr_name = in_node.target.rpartition(".")
                 attr_owner_module = self.graph_mod.get_submodule(attr_module_name)
 
@@ -253,15 +268,12 @@ class MemoryPlanPass(PassBase):
     def set_ignore_buffers(self, patern: List[str]):
         self.ignored_buffers = patern
 
-    def process_plan(self):
-        pass
-
     def finalize(self) -> GraphModule:
         return super().finalize()
 
 
-@register_pass("OndemandMemoryPlan")
-class OndemandMemoryPlanPass(MemoryPlanPass):
+@register_pass("OnDemandMemoryPlan")
+class OnDemandMemoryPlanPass(MemoryPlanPass):
     def __init__(self, m: Union[torch.nn.Module, GraphModule], max_depth=0):
         super().__init__(m, max_depth=max_depth)
         assert (
@@ -273,7 +285,10 @@ class OndemandMemoryPlanPass(MemoryPlanPass):
         1. find the first part of parameters and buffers to be preloaded.
         2. insert preloading, guarding, unloading hook to enable the pipeline.
         """
-        self._build_goal_classifiers(node_types=["output", "scatter"])
+        # for node in self.graph_mod.graph.nodes:
+        #     debug_node(node)
+
+        self.build_goal_classifiers(node_types=["output", "scatter"])
         self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history"])
         memo = set()
         placeholder_nodes = self.find_all_placeholders()
@@ -283,11 +298,11 @@ class OndemandMemoryPlanPass(MemoryPlanPass):
             parameters_dict,
             buffers_dict,
         ) = self.travel_to_goal(start_nodes=placeholder_nodes, memo=memo)
-        traveled_nodes = self.remove_placeholder(traveled_nodes)
+        # traveled_nodes = self.remove_placeholder(traveled_nodes)
         self.add_new_plan_group(traveled_nodes, parameters_dict, buffers_dict)
         start_nodes = self.remove_output(goal_nodes)
 
-        self._build_goal_classifiers(node_types=["output", "router"])
+        self.build_goal_classifiers(node_types=["output", "router"])
 
         while start_nodes:
             new_goal_nodes: Dict[Node, None] = {}
@@ -302,7 +317,7 @@ class OndemandMemoryPlanPass(MemoryPlanPass):
                             buffers_dict,
                         ) = self.travel_to_goal(start_nodes=per_path_nodes, memo=memo)
                         new_goal_nodes.update(goal_nodes)
-                        traveled_nodes = self.remove_placeholder(traveled_nodes)
+                        # traveled_nodes = self.remove_placeholder(traveled_nodes)
                         self.add_new_plan_group(
                             traveled_nodes, parameters_dict, buffers_dict, node
                         )
@@ -314,19 +329,88 @@ class OndemandMemoryPlanPass(MemoryPlanPass):
                         buffers_dict,
                     ) = self.travel_to_goal(start_nodes=[node], memo=memo)
                     new_goal_nodes.update(goal_nodes)
-                    traveled_nodes = self.remove_placeholder(traveled_nodes)
+                    # traveled_nodes = self.remove_placeholder(traveled_nodes)
                     self.add_new_plan_group(
                         traveled_nodes, parameters_dict, buffers_dict, node
                     )
             start_nodes = self.remove_output(new_goal_nodes)
 
         assert self.is_parame_and_buffer_all_collected()
+        self.process_plan()
 
     def process_plan(self):
-        pass
+        orderred_plan_groups = self.sort_plan_groups()
+        event_num = 0
+        for plan_group in orderred_plan_groups.values():
+            event_num += len(plan_group)
+        MemoryPlanContext.init(event_num)
+        tail_node: Node
+        traveled_nodes: Dict[Node, None]
+        collected_params: Dict[str, nn.Parameter]
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]]
+        event_id = 0
+        for head_node, plan_group in orderred_plan_groups.items():
+            # if self.is_scatter_node(head_node):
+            for path_id, (
+                tail_node,
+                traveled_nodes,
+                collected_params,
+                collected_buffers,
+            ) in enumerate(plan_group):
+                on_demand_loader = OnDemandLoader(
+                    path_id, event_id, collected_params, collected_buffers
+                )
+                on_demand_guarder = OnDemandGuarder(path_id, event_id)
+                on_demand_unloader = OnDemandUnloader(
+                    event_id, collected_params, collected_buffers
+                )
+                setattr(
+                    self.graph_mod, f"on_demand_loader_{event_id}", on_demand_loader
+                )
+                setattr(
+                    self.graph_mod,
+                    f"on_demand_guarder_{event_id}",
+                    on_demand_guarder,
+                )
+                setattr(
+                    self.graph_mod,
+                    f"on_demand_unloader_{event_id}",
+                    on_demand_unloader,
+                )
+                event_id += 1
 
-    def sort_nodes(self, nodes: Dict[Node, None]):
-        raise NotImplementedError
+            for path_id in range(len(plan_group)):
+                tail_node = plan_group[-path_id - 1][0]
+                with self.graph_mod.graph.inserting_after(tail_node):
+                    unloader_node = self.graph_mod.graph.call_module(
+                        f"on_demand_unloader_{event_id - path_id -1}",
+                        args=(tail_node,),
+                    )
+                tail_node.replace_all_uses_with(
+                    unloader_node, lambda usr: usr != unloader_node
+                )
+
+            for path_id in range(len(plan_group)):
+                with self.graph_mod.graph.inserting_after(head_node):
+                    guarder_node = self.graph_mod.graph.call_module(
+                        f"on_demand_guarder_{event_id - path_id - 1}",
+                        args=(head_node,),
+                    )
+                    head_node.replace_all_uses_with(
+                        guarder_node, lambda usr: usr != guarder_node
+                    )
+
+            for path_id in range(len(plan_group)):
+                with self.graph_mod.graph.inserting_after(head_node):
+                    loader_node = self.graph_mod.graph.call_module(
+                        f"on_demand_loader_{event_id - path_id - 1}",
+                        args=(head_node,),
+                    )
+                    head_node.replace_all_uses_with(
+                        loader_node, lambda usr: usr != loader_node
+                    )
+
+        self.graph_mod.recompile()
 
     def finalize(self) -> GraphModule:
         return super().finalize()
@@ -348,7 +432,7 @@ class PredictMemoryPlanPass(MemoryPlanPass):
         1. find the first part of parameters and buffers to be preloaded.
         2. insert preloading, guarding, unloading hook to enable the pipeline.
         """
-        self._build_goal_classifiers(node_types=["output", "scatter"])
+        self.build_goal_classifiers(node_types=["output", "scatter"])
         self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history"])
         self.groups = []
         memo = set()
@@ -364,7 +448,7 @@ class PredictMemoryPlanPass(MemoryPlanPass):
 
         start_nodes = self.remove_output(goal_nodes)
 
-        self._build_goal_classifiers(node_types=["output", "router"])
+        self.build_goal_classifiers(node_types=["output", "router"])
 
         while start_nodes:
             (

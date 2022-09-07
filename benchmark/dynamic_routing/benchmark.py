@@ -6,7 +6,8 @@ from dynamic_B_config import config as B_config
 from dynamic_C_config import config as C_config
 
 from brt.router import switch_router_mode
-from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, MemoryPlanPass
+from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, MemoryPlanPass, OnDemandMemoryPlanPass, PredictMemoryPlanPass
+from brt.passes.base import PassBase
 from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer
 from brt.trace.graph import symbolic_trace
 
@@ -167,12 +168,16 @@ def main(args):
     res = Trainer.test(cfg, model)
 
     if args.debug:
-        new_backbone = symbolic_trace(model.backbone)
-        print(f"node | node_op | node_target | node_users | node_args | node_all_input_nodes")
-        for node in new_backbone.graph.nodes:
-            print(
-                f"{node} | {node.op} | {node.target} | {node.users} | {node.args} | {node.all_input_nodes}"
-            )
+        memory_plan_pass = OnDemandMemoryPlanPass(model.backbone)
+        # memory_plan_pass = MemoryPlanPass(model.backbone)
+        memory_plan_pass.run_on_graph()
+        # new_backbone = symbolic_trace(model.backbone)
+        # print(f"node | node_op | node_target | node_users | node_args | node_all_input_nodes")
+        # for node in new_backbone.graph.nodes:
+        #     print(
+        #         f"{node} | {node.op} | {node.target} | {node.users} | {node.args} | {node.all_input_nodes}"
+        #     )
+
     # model.eval()
     # input = torch.randn(1, 3, 1024, 2048).cuda()
     # outputs = model.backbone(input)
