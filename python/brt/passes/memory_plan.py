@@ -1,8 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Union, Dict, List, Callable, Set
+import typing
+from typing import Union, Dict, List, Callable, Set, Tuple, Any
+
+from collections import OrderedDict
+import re
 
 import torch
+import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node
@@ -13,148 +18,166 @@ class MemoryPlanPass(PassBase):
     def __init__(
         self,
         m: Union[torch.nn.Module, GraphModule],
-        lazy_load_threshold=0.0,
-        max_load_depth=0,
+        max_depth=0,
     ):
         super().__init__(m)
-        self.lazy_load_threshold = lazy_load_threshold
-        self.max_load_depth = max_load_depth
+        self.max_depth = max_depth
         self.goal_classifiers: List[Callable] = []
-        self.all_parameters_memo: Set[torch.nn.Parameter] = set()
-        self.all_buffers_memo: Set[torch.Tensor] = set()
-
         assert (
-            self.max_load_depth == 0
-        ), f"Max_depth is set to {self.max_load_depth}, greater than 0 is not supported yet."
+            self.max_depth == 0
+        ), f"Max_depth is set to {self.max_depth}, greater than 0 is not supported yet."
+        self.plan_groups: Dict[Node, List[Any]] = dict()
+        self.all_collected_params: Dict[str, torch.Tensor] = dict()
+        self.all_collected_buffers: Dict[
+            str, Tuple[torch.Tensor, nn.Module, str]
+        ] = dict()
 
-    def _build_goal_classifiers(self, ) -> None:
+    def _build_goal_classifiers(
+        self, node_types: List[str] = None, custom_check_fns: List[Callable] = None
+    ) -> None:
         self.goal_classifiers = []
-
-        def is_output_node(node):
-            return node.op == "output"
-
-        self.goal_classifiers.append(self.is_router_node)
-        self.goal_classifiers.append(is_output_node)
+        if node_types is None and custom_check_fns is None:
+            return
+        if node_types is not None:
+            for node_type in node_types:
+                node_type_check = "is_" + node_type + "_node"
+                assert hasattr(
+                    self, node_type_check
+                ), f"Node type check for {node_type} is not supported internally."
+                self.goal_classifiers.append(getattr(self, node_type_check))
+        if custom_check_fns is not None:
+            for custom_check_fn in custom_check_fns:
+                self.goal_classifiers.append(custom_check_fn)
 
     def run_on_graph(self) -> None:
         """TODO
         1. find the first part of parameters and buffers to be preloaded.
         2. insert preloading, guarding, unloading hook to enable the pipeline.
         """
-        self._build_goal_classifiers()
-        self.groups = []
+        self._build_goal_classifiers(node_types=["output", "scatter"])
+        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history"])
+
         memo = set()
         # first gropu will include the the placeholder and the first group of goal nodes (routers)
 
-        placeholder_nodes = self.find_all_placeholders()
-        goal_nodes, traveled_nodes, parameters_dict, buffers_dict = self.travel_to_goal(
-            placeholder_nodes
+        start_nodes = self.find_all_placeholders()
+        while start_nodes:
+            (
+                goal_nodes,
+                traveled_nodes,
+                collected_params,
+                collected_buffers,
+            ) = self.travel_to_goal(start_nodes=start_nodes, memo=memo)
+            traveled_nodes = self.remove_placeholder(traveled_nodes)
+            self.add_new_plan_group(traveled_nodes, collected_params, collected_buffers)
+            start_nodes = self.remove_output(goal_nodes)
+            # print("------------------- traveled nodes ------------------")
+            # for node in traveled_nodes:
+            #     debug_node(node)
+            # print("------------------- start nodes ------------------")
+            # for node in start_nodes:
+            #     debug_node(node)
+        assert self.is_parame_and_buffer_all_collected()
+
+    def add_new_plan_group(
+        self,
+        traveled_nodes: Dict[Node, None],
+        collected_params: Dict[str, nn.Parameter],
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
+        head_node: Node = None,
+    ):
+        first_node = self.find_first_and_last_node(traveled_nodes)[0]
+        head_node = first_node if head_node is None else head_node
+        print(head_node)
+        self.plan_groups.setdefault(head_node, []).append(
+            (traveled_nodes, collected_params, collected_buffers)
         )
-        filter_goal_nodes = self.remove_output(goal_nodes)
-        for node in filter_goal_nodes:
-            debug_node(node)
-        # print(parameters_dict)
-        # print(buffers_dict)
-        # for node in filter_goal_nodes:
-        #     assert node.op == "call_module", f"Goal node {node} is not a call_module."
-        #     node_m = submodules[node.target]
-        #     assert is_scatter(
-        #         node_m
-        #     ), f"The goal node collected in the first round should be scatter."
-        #     if is_scatter(node_m):
-        #         flow_num = node_m.fabric.flow_num
-        #         for i in range(flow_num):
-        #             pass
+        self.all_collected_params.update(collected_params)
+        self.all_collected_buffers.update(collected_buffers)
 
-        # while len(filtered_start_nodes) > 0:
-        #     (
-        #         goal_nodes,
-        #         traveled_nodes,
-        #         parameters_dict,
-        #         buffers_dict,
-        #     ) = self.travel_to_goal(start_nodes=filtered_start_nodes)
-        #     for node in goal_nodes:
-        #         if node not in memo:
-        #             memo.add(node)
-        #     filtered_start_nodes = self.remove_output(list(traveled_nodes))
-
-    def remove_output(self, out_nodes: Dict[Node, None]):
-        new_out_nodes: Dict[Node, None] = {}
-        for node in out_nodes:
-            if node.op != "output":
-                new_out_nodes.setdefault(node)
-        return new_out_nodes
-
-    def travel_to_goal(
-        self, start_nodes: Dict[Node, None], traveled_nodes: Dict[Node, None] = None
-    ) -> Dict[Node, None]:
+    def travel_to_goal(self, start_nodes: Dict[Node, None], memo: Set[Node] = None):
         """TODO
         1. get the first module to insert preloading hook and weight ready guard.
         2. return the buffers and parameters to be preloaded.
         """
-        goal_nodes: Dict[Node, None] = {}
-        traveled_nodes = {} if traveled_nodes is None else traveled_nodes
-        parameters_dict, buffers_dict = self._travel_to_goal(
+        memo = set() if memo is None else memo
+        (
+            goal_nodes,
+            traveled_nodes,
+            collected_params,
+            collected_buffers,
+        ) = self._travel_to_goal(
             start_nodes=start_nodes,
-            goal_nodes=goal_nodes,
-            traveled_nodes=traveled_nodes,
+            memo=memo,
             current_depth=0,
         )
-        return goal_nodes, traveled_nodes, parameters_dict, buffers_dict
+        print(start_nodes)
+        print(traveled_nodes)
+        return goal_nodes, traveled_nodes, collected_params, collected_buffers
 
     def _travel_to_goal(
-        self,
-        start_nodes: Dict[Node, None],
-        goal_nodes: Dict[Node, None],
-        traveled_nodes: Dict[Node, None],
-        current_depth=0,
-    ) -> Dict[Node, None]:
+        self, start_nodes: Dict[Node, None], memo: Set[Node], current_depth=0
+    ):
         """TODO
         1. check whether the parameters and buffers are already in the memo.
         2. add support to ignore call_function without computation: _operator.getitem
         """
         nodes_to_travel: Dict[Node, None] = {}
-        parameters_dict, buffers_dict = {}, {}
+        goal_nodes: Dict[Node, None] = {}
+        traveled_nodes: Dict[Node, None] = {}
+        collected_params: Dict[str, nn.Parameter] = {}
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = {}
 
         for node in start_nodes:
-            if self.max_load_depth > 0 and current_depth >= self.max_load_depth:
-                goal_nodes.setdefault(node)
-                continue
-            if any(goal_classifier(node) for goal_classifier in self.goal_classifiers):
-                goal_nodes.setdefault(node)
-                continue
-            if node not in traveled_nodes:
-                if node.op in ["call_module", "call_function", "call_method"]:
-                    traveled_nodes.setdefault(node)
-                    if node.op == "call_module":
+            if node not in memo:
+                memo.add(node)
+                traveled_nodes.setdefault(node)
+                if self.is_module_node(node):
+                    if not self.is_router_node(node):
                         (
-                            collected_params,
-                            collected_buffers,
+                            params,
+                            buffers,
                         ) = self._get_module_params_or_buffers(node)
-                        parameters_dict.update(collected_params)
-                        buffers_dict.update(collected_buffers)
-                    else:
-                        (
-                            collected_params,
-                            collected_buffers,
-                        ) = self._get_function_method_params_or_buffers(node)
-                        parameters_dict.update(collected_params)
-                        buffers_dict.update(collected_buffers)
+                        collected_params.update(params)
+                        collected_buffers.update(buffers)
+                else:
+                    (
+                        params,
+                        buffers,
+                    ) = self._get_function_method_params_or_buffers(node)
+                    collected_params.update(params)
+                    collected_buffers.update(buffers)
+
                 for user in node.users:
+                    if self.max_depth > 0 and current_depth >= self.max_depth:
+                        goal_nodes.setdefault(user)
+                        continue
+                    if any(
+                        goal_classifier(user)
+                        for goal_classifier in self.goal_classifiers
+                    ):
+                        goal_nodes.setdefault(user)
+                        continue
                     if user not in traveled_nodes:
                         nodes_to_travel.setdefault(user)
 
         if len(nodes_to_travel) > 0:
-            collected_params, collected_buffers = self._travel_to_goal(
+            (
+                _goal_nodes,
+                _traveled_nodes,
+                _collected_params,
+                _collected_buffers,
+            ) = self._travel_to_goal(
                 start_nodes=nodes_to_travel,
-                goal_nodes=goal_nodes,
-                traveled_nodes=traveled_nodes,
+                memo=memo,
                 current_depth=current_depth + 1,
             )
-            parameters_dict.update(collected_params)
-            buffers_dict.update(collected_buffers)
+            goal_nodes.update(_goal_nodes)
+            traveled_nodes.update(_traveled_nodes)
+            collected_params.update(_collected_params)
+            collected_buffers.update(_collected_buffers)
 
-        return parameters_dict, buffers_dict
+        return goal_nodes, traveled_nodes, collected_params, collected_buffers
 
     def _get_module_params_or_buffers(self, node: Node):
         node_m = self.sub_modules[node.target]
@@ -183,7 +206,181 @@ class MemoryPlanPass(PassBase):
                     buffer_dict[in_node.target] = (attr_v, attr_owner_module, attr_name)
         return parameter_dict, buffer_dict
 
-    def process_loading(self):
+    def remove_output(self, nodes: Dict[Node, None]):
+        new_nodes: Dict[Node, None] = {}
+        for node in nodes:
+            if not self.is_output_node(node):
+                new_nodes.setdefault(node)
+        return new_nodes
+
+    def remove_placeholder(self, nodes: Dict[Node, None]):
+        new_nodes: Dict[Node, None] = {}
+        for node in nodes:
+            if not self.is_placeholder_node(node):
+                new_nodes.setdefault(node)
+        return new_nodes
+
+    def is_parame_and_buffer_all_collected(self):
+        origin_all_params = dict(self.graph_mod.named_parameters())
+        for k, v in origin_all_params.items():
+            if k not in self.all_collected_params:
+                print(f"Parameter {k} is not collected.")
+                return False
+        origin_all_buffers = dict(self.graph_mod.named_buffers())
+        for k, v in origin_all_buffers.items():
+            if k not in self.all_collected_buffers and not self.is_ignored_buffer(k):
+                print(f"Buffer {k} is not collected.")
+                return False
+        return True
+
+    def is_ignored_param(self, k: str):
+        if hasattr(self, "ignored_params"):
+            for ignored_pattern in self.ignored_params:
+                if re.search(ignored_pattern, k):
+                    return True
+        return False
+
+    def is_ignored_buffer(self, k: str):
+        if hasattr(self, "ignored_buffers"):
+            for ignored_pattern in self.ignored_buffers:
+                if re.search(ignored_pattern, k):
+                    return True
+        return False
+
+    def set_ignored_params(self, patern: List[str]):
+        self.ignored_params = patern
+
+    def set_ignore_buffers(self, patern: List[str]):
+        self.ignored_buffers = patern
+
+    def process_plan(self):
+        pass
+
+    def finalize(self) -> GraphModule:
+        return super().finalize()
+
+
+@register_pass("OndemandMemoryPlan")
+class OndemandMemoryPlanPass(MemoryPlanPass):
+    def __init__(self, m: Union[torch.nn.Module, GraphModule], max_depth=0):
+        super().__init__(m, max_depth=max_depth)
+        assert (
+            self.max_depth == 0
+        ), f"Max_depth is set to {self.max_depth}, greater than 0 is not supported yet."
+
+    def run_on_graph(self) -> None:
+        """TODO
+        1. find the first part of parameters and buffers to be preloaded.
+        2. insert preloading, guarding, unloading hook to enable the pipeline.
+        """
+        self._build_goal_classifiers(node_types=["output", "scatter"])
+        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history"])
+        memo = set()
+        placeholder_nodes = self.find_all_placeholders()
+        (
+            goal_nodes,
+            traveled_nodes,
+            parameters_dict,
+            buffers_dict,
+        ) = self.travel_to_goal(start_nodes=placeholder_nodes, memo=memo)
+        traveled_nodes = self.remove_placeholder(traveled_nodes)
+        self.add_new_plan_group(traveled_nodes, parameters_dict, buffers_dict)
+        start_nodes = self.remove_output(goal_nodes)
+
+        self._build_goal_classifiers(node_types=["output", "router"])
+
+        while start_nodes:
+            new_goal_nodes: Dict[Node, None] = {}
+            for node in start_nodes:
+                if self.is_scatter_node(node):
+                    path_nodes = self.cluster_path_start_nodes(node)
+                    for per_path_nodes in path_nodes:
+                        (
+                            goal_nodes,
+                            traveled_nodes,
+                            parameters_dict,
+                            buffers_dict,
+                        ) = self.travel_to_goal(start_nodes=per_path_nodes, memo=memo)
+                        new_goal_nodes.update(goal_nodes)
+                        traveled_nodes = self.remove_placeholder(traveled_nodes)
+                        self.add_new_plan_group(
+                            traveled_nodes, parameters_dict, buffers_dict, node
+                        )
+                elif self.is_gather_node(node):
+                    (
+                        goal_nodes,
+                        traveled_nodes,
+                        parameters_dict,
+                        buffers_dict,
+                    ) = self.travel_to_goal(start_nodes=[node], memo=memo)
+                    new_goal_nodes.update(goal_nodes)
+                    traveled_nodes = self.remove_placeholder(traveled_nodes)
+                    self.add_new_plan_group(
+                        traveled_nodes, parameters_dict, buffers_dict, node
+                    )
+            start_nodes = self.remove_output(new_goal_nodes)
+
+        assert self.is_parame_and_buffer_all_collected()
+
+    def process_plan(self):
+        pass
+
+    def sort_nodes(self, nodes: Dict[Node, None]):
+        raise NotImplementedError
+
+    def finalize(self) -> GraphModule:
+        return super().finalize()
+
+
+@register_pass("PredictMemoryPlan")
+class PredictMemoryPlanPass(MemoryPlanPass):
+    def __init__(
+        self, m: Union[torch.nn.Module, GraphModule], lazy_load_threshold, max_depth=0
+    ):
+        super().__init__(m, max_depth=max_depth)
+        self.lazy_load_threshold = lazy_load_threshold
+        assert (
+            self.max_depth == 0
+        ), f"Max_depth is set to {self.max_depth}, greater than 0 is not supported yet."
+
+    def run_on_graph(self) -> None:
+        """TODO
+        1. find the first part of parameters and buffers to be preloaded.
+        2. insert preloading, guarding, unloading hook to enable the pipeline.
+        """
+        self._build_goal_classifiers(node_types=["output", "scatter"])
+        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history"])
+        self.groups = []
+        memo = set()
+        placeholder_nodes = self.find_all_placeholders()
+        (
+            goal_nodes,
+            traveled_nodes,
+            parameters_dict,
+            buffers_dict,
+        ) = self.travel_to_goal(start_nodes=placeholder_nodes, memo=memo)
+
+        self.groups.append((goal_nodes, traveled_nodes, parameters_dict, buffers_dict))
+
+        start_nodes = self.remove_output(goal_nodes)
+
+        self._build_goal_classifiers(node_types=["output", "router"])
+
+        while start_nodes:
+            (
+                goal_nodes,
+                traveled_nodes,
+                parameters_dict,
+                buffers_dict,
+            ) = self.travel_to_goal(start_nodes=start_nodes, memo=memo)
+            self.groups.append(
+                (goal_nodes, traveled_nodes, parameters_dict, buffers_dict)
+            )
+            start_nodes = self.remove_output(goal_nodes)
+
+        assert self.is_parame_and_buffer_all_collected()
+
+    def process_plan(self):
         pass
 
     def finalize(self) -> GraphModule:

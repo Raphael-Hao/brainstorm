@@ -9,7 +9,6 @@ from brt.router import ScatterRouter
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
 
-
 @register_pass("dead_path_eliminate")
 class DeadPathEliminatePass(PassBase):
     def __init__(
