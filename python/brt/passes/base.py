@@ -1,6 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 from typing import Type, Union, List, Dict
+import operator
 import torch
 from torch.fx import GraphModule, Node
 from brt.router import is_router
@@ -90,8 +91,8 @@ class PassBase:
         if flow_num == 1:
             for node in scatter_node.users:
                 # NOTE current we check if the node is a call_function of getitem through its name
-                assert "getitem" in str(
-                    node.target
+                assert (
+                    operator.getitem == node.target
                 ), "The node is not a call_function of getitem"
                 item_id = int(node.args[1])
                 path_id = item_id if item_id >= 0 else item_id + path_num
@@ -99,13 +100,13 @@ class PassBase:
         else:
             for flow_node in scatter_node.users:
                 # NOTE current we check if the node is a call_function of getitem through its name
-                assert "getitem" in str(
-                    flow_node.target
-                ), "The node is not a call_function of getitem"
+                assert (
+                    operator.getitem == flow_node.target
+                ), f"The node {flow_node} is not a call_function of getitem"
                 for node in flow_node.users:
-                    assert "getitem" in str(
-                        node.target
-                    ), "The node is not a call_function of getitem"
+                    assert (
+                        operator.getitem == node.target
+                    ), f"The node {node} is not a call_function of getitem"
                     item_id = int(node.args[1])
                     path_id = item_id if item_id >= 0 else item_id + path_num
                     start_nodes[path_id].setdefault(node)
@@ -119,6 +120,7 @@ class PassBase:
         for node in reversed(self.graph_mod.graph.nodes):
             if node in nodes:
                 last_node = node
+                break
         return first_node, last_node
 
 

@@ -11,9 +11,9 @@ __all__ = [
     "pin_memory",
     "EventEmitter",
     "EventCollector",
-    "OndemandLoader",
-    "OndemandGuarder",
-    "OndemandUnloader",
+    "OnDemandLoader",
+    "OnDemandGuarder",
+    "OnDemandUnloader",
     "PredictLoader",
     "PredictGuarder",
     "PredictUnloader",
@@ -48,7 +48,7 @@ class EventEmitter(nn.Module):
         self.events = tuple(i for i in range(self.event_num))
 
     def forward(self, input):
-        return (input,) + self.events
+        return (input, self.events)
 
 
 @register_leaf_node
@@ -67,6 +67,11 @@ def _get_target_input(inputs, path_id):
             return inputs[path_id]
         else:
             return _get_target_input(inputs[0], path_id)
+
+    if isinstance(inputs, torch.Tensor) and path_id == 0:
+        return inputs
+
+    raise ValueError("Invalid input type: {}".format(type(inputs)))
 
 
 class MemoryPlanContext:
@@ -156,56 +161,59 @@ class MemoryPlanner(nn.Module):
 
 
 @register_leaf_node
-class OndemandLoader(MemoryPlanner):
+class OnDemandLoader(MemoryPlanner):
     def __init__(
         self,
-        path_id,
+        path_id: int,
+        event_id: int,
         collected_params: Dict[str, Parameter] = None,
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
     ) -> None:
         super().__init__(collected_params, collected_buffers)
         self.path_id = path_id
+        self.event_id = event_id
 
-    def forward(self, inputs, event_idx):
+    def forward(self, inputs):
         target = _get_target_input(inputs, self.path_id)
         if target.numel() > 0:
-            self.load(event_idx)
-        return event_idx
+            self.load(self.event_id)
+        return inputs
 
 
 @register_leaf_node
-class OndemandGuarder(MemoryPlanner):
-    def __init__(
-        self,
-    ) -> None:
+class OnDemandGuarder(MemoryPlanner):
+    def __init__(self, path_id: int, event_id: int) -> None:
         super().__init__()
+        self.path_id = path_id
+        self.event_id = event_id
 
-    def forward(self, inputs, event_idx):
-        if inputs.numel() > 0:
-            self.guard(event_idx)
-        return (inputs, event_idx)
+    def forward(self, inputs):
+        target = _get_target_input(inputs, self.path_id)
+        if target.numel() > 0:
+            self.guard(self.event_id)
+        return inputs
 
 
 @register_leaf_node
-class OndemandUnloader(MemoryPlanner):
+class OnDemandUnloader(MemoryPlanner):
     def __init__(
         self,
+        event_id: int,
         collected_params: Dict[str, Parameter] = None,
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
     ) -> None:
         super().__init__(collected_params, collected_buffers)
+        self.event_id = event_id
 
-    def forward(self, input, event_idx):
-        if input.numel() > 0:
-            self.unload(event_idx)
-        return event_idx
+    def forward(self, inputs):
+        self.unload(self.event_id)
+        return inputs
 
 
 @register_leaf_node
 class PredictLoader(MemoryPlanner):
     def __init__(
         self,
-        mode="load",
         collected_params: Dict[str, Parameter] = None,
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
     ) -> None:
@@ -213,8 +221,6 @@ class PredictLoader(MemoryPlanner):
         assert (
             MemoryPlanContext.INITIALIZED
         ), "MemPlanContext is not initialized before creating a PreLoader instance"
-        assert mode in ["load", "unload", "guard"]
-        self.mode = mode
         self.collected_params = collected_params
         self.collected_bufffer = collected_buffers
 
@@ -239,7 +245,6 @@ class PredictGuarder(MemoryPlanner):
 class PredictUnloader(MemoryPlanner):
     def __init__(
         self,
-        mode="load",
         collected_params: Dict[str, Parameter] = None,
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
     ) -> None:
@@ -247,8 +252,6 @@ class PredictUnloader(MemoryPlanner):
         assert (
             MemoryPlanContext.INITIALIZED
         ), "MemPlanContext is not initialized before creating a PreLoader instance"
-        assert mode in ["load", "unload", "guard"]
-        self.mode = mode
         self.collected_params = collected_params
         self.collected_bufffer = collected_buffers
 
