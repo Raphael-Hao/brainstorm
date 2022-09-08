@@ -29,7 +29,7 @@ make install -j
 # build brt
 cd ../../../
 mkdir build && cd build || exit
-cmake .. -DCMAKE_INSTALL_PREFIX=~/brainstorm_project/install -DCMAKE_CUDA_COMPILER="/usr/local/cuda/bin/nvcc"
+cmake .. -DCMAKE_INSTALL_PREFIX=~/brainstorm_project/install -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
 make brt_torchscript -j
 cd ../
 pip install -r requirements.txt
