@@ -246,6 +246,7 @@ def main():
             # )
             # template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
             # template_file_loaded.write_text(module_function.get_code()[0])
+    print('Done!')
 
 
 if __name__ == "__main__":
