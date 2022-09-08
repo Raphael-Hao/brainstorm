@@ -6,9 +6,20 @@ from dynamic_B_config import config as B_config
 from dynamic_C_config import config as C_config
 
 from brt.router import switch_router_mode
-from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, MemoryPlanPass, OnDemandMemoryPlanPass, PredictMemoryPlanPass
-from brt.runtime.memory_plan import pin_memory
-from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer, profile
+from brt.passes import (
+    DeadPathEliminatePass,
+    PermanentPathFoldPass,
+    MemoryPlanPass,
+    OnDemandMemoryPlanPass,
+    PredictMemoryPlanPass,
+)
+from brt.runtime.memory_planner import pin_memory
+from brt.runtime.benchmark import (
+    BenchmarkArgumentManager,
+    Benchmarker,
+    CUDATimer,
+    profile,
+)
 
 """
 Detection Training Script.
@@ -188,7 +199,8 @@ def main(args):
         new_backbone = memory_plan_pass.finalize()
         print(torch.cuda.memory_summary(abbreviated=True))
 
-        backbone_output = new_backbone(backbone_input); backbone_output = None
+        backbone_output = new_backbone(backbone_input)
+        backbone_output = None
         torch.cuda.empty_cache()
         print(torch.cuda.memory_summary(abbreviated=True))
 
