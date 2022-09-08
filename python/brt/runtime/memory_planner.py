@@ -90,7 +90,7 @@ class MemoryPlanner(nn.Module):
         self.collected_params = collected_params
         self.collected_buffers = collected_buffers
 
-    def load(self, event_idx):
+    def load(self, event_id):
         with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
             for pname, param in self.collected_params.items():
                 # print(f"load param: {pname}")
@@ -120,13 +120,12 @@ class MemoryPlanner(nn.Module):
                 if buf is not None:
                     b_owner_m._buffers[b_tensor_name] = buf.cuda(non_blocking=True)
 
-        MemoryPlanContext.EVENTS[event_idx].record(MemoryPlanContext.MEMORY_STREAM)
-        return event_idx
+        MemoryPlanContext.EVENTS[event_id].record(MemoryPlanContext.MEMORY_STREAM)
 
-    def guard(self, event_idx):
-        MemoryPlanContext.EVENTS[event_idx].wait(MemoryPlanContext.COMPUTE_STREAM)
+    def guard(self, event_id):
+        MemoryPlanContext.EVENTS[event_id].wait(MemoryPlanContext.COMPUTE_STREAM)
 
-    def unload(self, event_idx):
+    def unload(self, event_id):
         for pname, param in self.collected_params.items():
             if param is None:
                 continue
@@ -153,9 +152,6 @@ class MemoryPlanner(nn.Module):
                 cuda_buffer = b_owner_m._buffers[b_tensor_name]
                 b_owner_m._buffers[b_tensor_name] = buf
                 del cuda_buffer
-
-        return event_idx
-
 
 @register_leaf_node
 class OnDemandLoader(MemoryPlanner):
@@ -214,9 +210,9 @@ class PredictLoader(MemoryPlanner):
     ) -> None:
         super().__init__(event_id, collected_params, collected_buffers)
 
-    def forward(self, event_idx):
-        self.load(event_idx)
-        return event_idx
+    def forward(self, inupts):
+        self.load(self.event_id)
+        return inupts
 
 
 @register_leaf_node
@@ -224,9 +220,9 @@ class PredictGuarder(MemoryPlanner):
     def __init__(self, event_id: int) -> None:
         super().__init__(event_id)
 
-    def forward(self, inputs, event_idx):
-        self.guard(event_idx)
-        return inputs, event_idx
+    def forward(self, inputs):
+        self.guard(self.event_id)
+        return inputs
 
 
 @register_leaf_node
@@ -239,9 +235,9 @@ class PredictUnloader(MemoryPlanner):
     ) -> None:
         super().__init__(event_id, collected_params, collected_buffers)
 
-    def forward(self, event_idx):
-        self.unload(event_idx)
-        return event_idx
+    def forward(self, inputs):
+        self.unload(self.event_id)
+        return inputs
 
 
 def load_module(m: nn.Module):

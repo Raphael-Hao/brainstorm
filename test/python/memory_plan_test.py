@@ -5,7 +5,7 @@ import unittest
 
 import torch
 import torch.nn as nn
-from brt.runtime.memory_plan import (
+from brt.runtime.memory_planner import (
     MemoryPlanContext,
     MemoryPlanner,
     pin_memory,
