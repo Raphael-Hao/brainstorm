@@ -7,9 +7,8 @@ from dynamic_C_config import config as C_config
 
 from brt.router import switch_router_mode
 from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, MemoryPlanPass, OnDemandMemoryPlanPass, PredictMemoryPlanPass
-from brt.passes.base import PassBase
+from brt.runtime.memory_plan import pin_memory
 from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer
-from brt.trace.graph import symbolic_trace
 
 """
 Detection Training Script.
@@ -168,9 +167,18 @@ def main(args):
     res = Trainer.test(cfg, model)
 
     if args.debug:
-        memory_plan_pass = OnDemandMemoryPlanPass(model.backbone)
-        # memory_plan_pass = MemoryPlanPass(model.backbone)
+        backbone_input = model.backbone_input.detach().cuda()
+        backbone = model.backbone
+        backbone = pin_memory(backbone.eval().cpu())
+
+        memory_plan_pass = OnDemandMemoryPlanPass(backbone)
         memory_plan_pass.run_on_graph()
+        new_backbone = memory_plan_pass.finalize()
+
+        timer = CUDATimer()
+        timer.set_iterations(100)
+        timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
+
         # new_backbone = symbolic_trace(model.backbone)
         # print(f"node | node_op | node_target | node_users | node_args | node_all_input_nodes")
         # for node in new_backbone.graph.nodes:

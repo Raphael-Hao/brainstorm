@@ -410,8 +410,6 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                         loader_node, lambda usr: usr != loader_node
                     )
 
-        self.graph_mod.recompile()
-
     def finalize(self) -> GraphModule:
         return super().finalize()
 
