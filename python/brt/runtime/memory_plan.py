@@ -9,8 +9,6 @@ from brt.trace.leaf_node import register_leaf_node
 
 __all__ = [
     "pin_memory",
-    "EventEmitter",
-    "EventCollector",
     "OnDemandLoader",
     "OnDemandGuarder",
     "OnDemandUnloader",
@@ -38,30 +36,9 @@ def pin_memory(m: nn.Module):
     for key, buf in m._buffers.items():
         if buf is not None:
             m._buffers[key] = buf.pin_memory()
-            m._buffers[key].pin_cpu_data = buf
+            m._buffers[key].pin_cpu_data = m._buffers[key]
 
     return m
-
-
-@register_leaf_node
-class EventEmitter(nn.Module):
-    def __init__(self, event_num) -> None:
-        super().__init__()
-        self.event_num = event_num
-        self.events = tuple(i for i in range(self.event_num))
-
-    def forward(self, input):
-        return (input, self.events)
-
-
-@register_leaf_node
-class EventCollector(nn.Module):
-    def __init__(self, event_num) -> None:
-        super().__init__()
-        self.event_num = event_num
-
-    def forward(self, output, *events):
-        return output
 
 
 def _get_target_input(inputs, path_id):
@@ -114,29 +91,33 @@ class MemoryPlanner(nn.Module):
         self.collected_buffers = collected_buffers
 
     def load(self, event_idx):
-        for pname, param in self.collected_params.items():
-            # print(f"load param: {pname}")
-            if pname is None:
-                continue
-            with torch.no_grad():
-                with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
-                    param_applied = param.cuda(non_blocking=True)
-            param.pin_cpu_data = param.data
-            param.data = param_applied
-            out_param = param
-
-            if param.grad is not None:
+        with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
+            for pname, param in self.collected_params.items():
+                # print(f"load param: {pname}")
+                if pname is None:
+                    continue
                 with torch.no_grad():
-                    with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
+                    # print(f"before load param device: {param.device}")
+                    param_applied = param.cuda(non_blocking=True)
+                param.pin_cpu_data = param.data
+                param.data = param_applied
+                out_param = param
+                # print(f"after load param device: {param.device}")
+
+                if param.grad is not None:
+                    with torch.no_grad():
                         grad_applied = param.grad.cuda(non_blocking=True)
 
-                out_param.grad.pin_cpu_data = param.grad.data
-                out_param.grad.data = grad_applied
+                    out_param.grad.pin_cpu_data = param.grad.data
+                    out_param.grad.data = grad_applied
 
-        for bname, (buf, b_owner_m, b_tensor_name) in self.collected_buffers.items():
-            # print(f"load buffer: {bname}")
-            if buf is not None:
-                with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
+            for bname, (
+                buf,
+                b_owner_m,
+                b_tensor_name,
+            ) in self.collected_buffers.items():
+                # print(f"load buffer: {bname}")
+                if buf is not None:
                     b_owner_m._buffers[b_tensor_name] = buf.cuda(non_blocking=True)
 
         MemoryPlanContext.EVENTS[event_idx].record(MemoryPlanContext.MEMORY_STREAM)
@@ -150,19 +131,28 @@ class MemoryPlanner(nn.Module):
             if param is None:
                 continue
             with torch.no_grad():
+                # print(f"before unload param device: {param.device}")
                 param_applied = param.pin_cpu_data
+            cuda_param = param.data
             param.data = param_applied
+            del cuda_param
             out_param = param
+            # print(f"after unload param device: {param.device}")
 
             if param.grad is not None:
                 with torch.no_grad():
+                    # print(f"before unload param.grad device: {param.grad.device}")
                     grad_applied = param.grad.pin_cpu_data
-
+                cuda_grad = out_param.grad.data
                 out_param.grad.data = grad_applied
+                del cuda_grad
+                # print(f"After unload param.grad device: {out_param.grad.device}")
 
         for bname, (buf, b_owner_m, b_tensor_name) in self.collected_buffers.items():
             if buf is not None:
+                cuda_buffer = b_owner_m._buffers[b_tensor_name]
                 b_owner_m._buffers[b_tensor_name] = buf
+                del cuda_buffer
 
         return event_idx
 

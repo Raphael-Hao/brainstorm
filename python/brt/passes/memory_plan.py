@@ -13,7 +13,6 @@ from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node
 from brt.runtime.memory_plan import (
     MemoryPlanContext,
-    EventCollector,
     OnDemandLoader,
     OnDemandUnloader,
     OnDemandGuarder,

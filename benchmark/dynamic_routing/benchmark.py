@@ -8,7 +8,7 @@ from dynamic_C_config import config as C_config
 from brt.router import switch_router_mode
 from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, MemoryPlanPass, OnDemandMemoryPlanPass, PredictMemoryPlanPass
 from brt.runtime.memory_plan import pin_memory
-from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer
+from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer, profile
 
 """
 Detection Training Script.
@@ -165,26 +165,35 @@ def main(args):
     torch.cuda.synchronize()
 
     res = Trainer.test(cfg, model)
+    torch.cuda.empty_cache()
+    print(torch.cuda.memory_summary(abbreviated=True))
 
     if args.debug:
+        timer = CUDATimer()
+        timer.set_iterations(100)
         backbone_input = model.backbone_input.detach().cuda()
-        backbone = model.backbone
-        backbone = pin_memory(backbone.eval().cpu())
+
+        backbone = switch_router_mode(model.backbone, False).eval()
+
+        timer.execute(lambda: backbone(backbone_input), "naive")
+        # def origin_forward():
+        #     with torch.inference_mode():
+        #         backbone(backbone_input)
+        # profile(origin_forward)
+
+        backbone = pin_memory(backbone.cpu())
 
         memory_plan_pass = OnDemandMemoryPlanPass(backbone)
         memory_plan_pass.run_on_graph()
         new_backbone = memory_plan_pass.finalize()
+        print(torch.cuda.memory_summary(abbreviated=True))
 
-        timer = CUDATimer()
-        timer.set_iterations(100)
+        backbone_output = new_backbone(backbone_input); backbone_output = None
+        torch.cuda.empty_cache()
+        print(torch.cuda.memory_summary(abbreviated=True))
+
         timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
-
-        # new_backbone = symbolic_trace(model.backbone)
-        # print(f"node | node_op | node_target | node_users | node_args | node_all_input_nodes")
-        # for node in new_backbone.graph.nodes:
-        #     print(
-        #         f"{node} | {node.op} | {node.target} | {node.users} | {node.args} | {node.all_input_nodes}"
-        #     )
+        print(torch.cuda.memory_summary(abbreviated=True))
 
     # model.eval()
     # input = torch.randn(1, 3, 1024, 2048).cuda()
