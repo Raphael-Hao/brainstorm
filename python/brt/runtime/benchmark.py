@@ -8,6 +8,26 @@ import argparse
 __all__ = ["BenchmarkArgumentManager", "Benchmarker"]
 
 
+
+def profile(func):
+    profiler = torch.profiler.profile(
+        schedule=torch.profiler.schedule(wait=2, warmup=2, active=1, repeat=2),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(
+            "/home/whcui/brainstorm_project/brainstorm/.cache/log/model_logs/brt_dr"
+        ),
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True,
+    )
+    torch.cuda.synchronize()
+    with torch.inference_mode():
+        profiler.start()
+        for i in range(12):
+            func()
+            profiler.step()
+        profiler.stop()
+
+
 class Timer:
     def __init__(self, itrations: int = 0) -> None:
         self.iterations = itrations
@@ -25,11 +45,12 @@ class Timer:
         raise NotImplementedError
 
     def execute(self, func, msg):
-        self.start()
-        for _ in range(self.iterations):
-            func()
-        self.stop()
-        self.print(msg)
+        with torch.inference_mode():
+            self.start()
+            for _ in range(self.iterations):
+                func()
+            self.stop()
+            self.print(msg)
 
 
 class CPUTimer(Timer):
