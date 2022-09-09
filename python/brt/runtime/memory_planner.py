@@ -1,9 +1,9 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import List, Dict, Tuple, Union
+
+from typing import List, Dict, Tuple
 import torch
 import torch.nn as nn
-import torch.fx as fx
 from torch.nn.parameter import Parameter
 from brt.trace.leaf_node import register_leaf_node
 
