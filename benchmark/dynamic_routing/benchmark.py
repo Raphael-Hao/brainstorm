@@ -180,32 +180,23 @@ def main(args):
     print(torch.cuda.memory_summary(abbreviated=True))
 
     if args.debug:
-        timer = CUDATimer()
-        timer.set_iterations(100)
+        timer = CUDATimer(repeat=5)
         backbone_input = model.backbone_input.detach().cuda()
 
         backbone = switch_router_mode(model.backbone, False).eval()
 
         timer.execute(lambda: backbone(backbone_input), "naive")
-        # def origin_forward():
-        #     with torch.inference_mode():
-        #         backbone(backbone_input)
-        # profile(origin_forward)
 
         backbone = pin_memory(backbone.cpu())
 
-        memory_plan_pass = OnDemandMemoryPlanPass(backbone)
+        # memory_plan_pass = OnDemandMemoryPlanPass(backbone)
+        memory_plan_pass = PredictMemoryPlanPass(backbone, 1)
         memory_plan_pass.run_on_graph()
         new_backbone = memory_plan_pass.finalize()
-        print(torch.cuda.memory_summary(abbreviated=True))
+        print(new_backbone.code)
+        # print(torch.cuda.memory_summary(abbreviated=True))
 
-        backbone_output = new_backbone(backbone_input)
-        backbone_output = None
-        torch.cuda.empty_cache()
-        print(torch.cuda.memory_summary(abbreviated=True))
-
-        timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
-        print(torch.cuda.memory_summary(abbreviated=True))
+        # timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
 
     # model.eval()
     # input = torch.randn(1, 3, 1024, 2048).cuda()

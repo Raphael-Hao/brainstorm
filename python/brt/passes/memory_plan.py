@@ -21,6 +21,15 @@ from brt.runtime.memory_planner import (
     PredictUnloader,
 )
 
+PLGT = List[
+    Tuple[
+        Node,
+        Dict[Node, None],
+        Dict[str, nn.Parameter],
+        Dict[str, Tuple[nn.Module, str]],
+    ]
+]
+
 
 @register_pass("MemoryPlan")
 class MemoryPlanPass(PassBase):
@@ -35,7 +44,7 @@ class MemoryPlanPass(PassBase):
         assert (
             self.max_depth == 0
         ), f"Max_depth is set to {self.max_depth}, greater than 0 is not supported yet."
-        self.plan_groups: Dict[Node, List[Any]] = dict()
+        self.plan_groups: Dict[Node, PLGT] = dict()
         self.all_collected_params: Dict[str, torch.Tensor] = dict()
         self.all_collected_buffers: Dict[
             str, Tuple[torch.Tensor, nn.Module, str]
@@ -101,7 +110,7 @@ class MemoryPlanPass(PassBase):
         self.all_collected_buffers.update(collected_buffers)
 
     def sort_plan_groups(self):
-        orderred_plan_groups: typing.OrderedDict[Node, List[Any]] = OrderedDict()
+        orderred_plan_groups: typing.OrderedDict[Node, PLGT] = OrderedDict()
         for node in self.graph_mod.graph.nodes:
             if node in self.plan_groups:
                 orderred_plan_groups[node] = self.plan_groups[node]
@@ -337,10 +346,6 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
         for plan_group in orderred_plan_groups.values():
             event_num += len(plan_group)
         MemoryPlanContext.init(event_num)
-        tail_node: Node
-        traveled_nodes: Dict[Node, None]
-        collected_params: Dict[str, nn.Parameter]
-        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]]
         event_id = 0
         for head_node, plan_group in orderred_plan_groups.items():
             for path_id, (
@@ -365,6 +370,7 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                 )
                 event_id += 1
 
+        for head_node, plan_group in reversed(orderred_plan_groups.items()):
             for path_id in range(len(plan_group)):
                 tail_node = plan_group[-path_id - 1][0]
                 with self.graph_mod.graph.inserting_after(tail_node):
@@ -421,10 +427,6 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
             event_num += len(plan_group)
         MemoryPlanContext.init(event_num)
         prev_head_node: Node = None
-        tail_node: Node
-        traveled_nodes: Dict[Node, None]
-        collected_params: Dict[str, nn.Parameter]
-        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]]
         event_id = 0
         for head_node, plan_group in orderred_plan_groups.items():
             for path_id, (
@@ -445,9 +447,9 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                         )
                     if path_load_history >= self.lazy_load_threshold:
                         memory_loader = PredictLoader(
-                            path_id, event_id, collected_params, collected_buffers
+                            event_id, collected_params, collected_buffers
                         )
-                        memory_guarder = PredictGuarder(path_id, event_id)
+                        memory_guarder = PredictGuarder(event_id)
                         memory_unloader = PredictUnloader(
                             event_id, collected_params, collected_buffers
                         )
@@ -461,9 +463,9 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                         )
                 else:
                     memory_loader = PredictLoader(
-                        path_id, event_id, collected_params, collected_buffers
+                        event_id, collected_params, collected_buffers
                     )
-                    memory_guarder = PredictGuarder(path_id, event_id)
+                    memory_guarder = PredictGuarder(event_id)
                     memory_unloader = PredictUnloader(
                         event_id, collected_params, collected_buffers
                     )
@@ -476,6 +478,7 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                 )
                 event_id += 1
 
+        for head_node, plan_group in orderred_plan_groups.items():
             for path_id in range(len(plan_group)):
                 tail_node = plan_group[-path_id - 1][0]
                 with self.graph_mod.graph.inserting_after(tail_node):
@@ -498,11 +501,14 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                     )
 
             for path_id in range(len(plan_group)):
-                memory_loader = getattr(self.graph_mod, f"brt_memory_loader_{event_id - path_id - 1}")
+                memory_loader = getattr(
+                    self.graph_mod, f"brt_memory_loader_{event_id - path_id - 1}"
+                )
                 if isinstance(memory_loader, OnDemandLoader) or prev_head_node is None:
                     with self.graph_mod.graph.inserting_after(head_node):
                         loader_node = self.graph_mod.graph.call_module(
-                            f"brt_memory_loader_{event_id - path_id - 1}", args=(head_node,)
+                            f"brt_memory_loader_{event_id - path_id - 1}",
+                            args=(head_node,),
                         )
                         head_node.replace_all_uses_with(
                             loader_node, lambda usr: usr != loader_node
@@ -510,13 +516,16 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                 elif isinstance(memory_loader, PredictLoader):
                     with self.graph_mod.graph.inserting_after(prev_head_node):
                         loader_node = self.graph_mod.graph.call_module(
-                            f"brt_memory_loader_{event_id - path_id - 1}", args=(prev_head_node,)
+                            f"brt_memory_loader_{event_id - path_id - 1}",
+                            args=(prev_head_node,),
                         )
                         prev_head_node.replace_all_uses_with(
                             loader_node, lambda usr: usr != loader_node
                         )
                 else:
-                    raise RuntimeError(f"Unknown loader kind: {memory_loader.__class__}")
+                    raise RuntimeError(
+                        f"Unknown loader kind: {memory_loader.__class__}"
+                    )
             prev_head_node = head_node
 
     def finalize(self) -> GraphModule:
