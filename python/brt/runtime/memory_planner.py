@@ -6,6 +6,9 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 from brt.trace.leaf_node import register_leaf_node
+from brt.runtime import log
+
+logger = log.get_logger(__file__)
 
 __all__ = [
     "pin_memory",
@@ -44,11 +47,15 @@ def pin_memory(m: nn.Module):
 def _get_target_input(inputs, path_id):
     if isinstance(inputs, (tuple, list)):
         if len(inputs) > path_id and isinstance(inputs[path_id], torch.Tensor):
+            logger.debug(
+                f"scatter outputs: {list(inputs[path_id].shape)}, {inputs[path_id].device}, path id: {path_id}"
+            )
             return inputs[path_id]
         else:
             return _get_target_input(inputs[0], path_id)
 
     if isinstance(inputs, torch.Tensor) and path_id == 0:
+        logger.debug(f"gather outputs: {list(inputs.shape)}, {inputs.device}")
         return inputs
 
     raise ValueError("Invalid input type: {}".format(type(inputs)))
@@ -74,6 +81,13 @@ class MemoryPlanContext:
         cls.EVENTS = [torch.cuda.Event() for _ in range(event_num)]
         cls.INITIALIZED = True
 
+    @classmethod
+    def set_memory_stream(cls, stream: torch.cuda.Stream):
+        cls.MEMORY_STREAM = stream
+
+    @classmethod
+    def set_compute_stream(cls, stream: torch.cuda.Stream):
+        cls.COMPUTE_STREAM = stream
 
 class MemoryPlanner(nn.Module):
     def __init__(
@@ -90,10 +104,10 @@ class MemoryPlanner(nn.Module):
         self.collected_params = collected_params
         self.collected_buffers = collected_buffers
 
-    def load(self, event_id):
+    def load(self, event_id: int):
         with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
             for pname, param in self.collected_params.items():
-                # print(f"load param: {pname}")
+                logger.debug(f"load param: {pname}")
                 if pname is None:
                     continue
                 with torch.no_grad():
@@ -122,10 +136,10 @@ class MemoryPlanner(nn.Module):
 
         MemoryPlanContext.EVENTS[event_id].record(MemoryPlanContext.MEMORY_STREAM)
 
-    def guard(self, event_id):
+    def guard(self, event_id: int):
         MemoryPlanContext.EVENTS[event_id].wait(MemoryPlanContext.COMPUTE_STREAM)
 
-    def unload(self, event_id):
+    def unload(self, event_id: int):
         for pname, param in self.collected_params.items():
             if param is None:
                 continue
@@ -153,6 +167,16 @@ class MemoryPlanner(nn.Module):
                 b_owner_m._buffers[b_tensor_name] = buf
                 del cuda_buffer
 
+
+class InitialLoader(MemoryPlanner):
+    def __init__(self, collected_params, collected_buffers):
+        super().__init__(0, collected_params, collected_buffers)
+
+    def forward(self):
+        self.load(self.event_id)
+        self.guard(self.event_id)
+
+
 @register_leaf_node
 class OnDemandLoader(MemoryPlanner):
     def __init__(
@@ -169,6 +193,7 @@ class OnDemandLoader(MemoryPlanner):
         target = _get_target_input(inputs, self.path_id)
         if target.numel() > 0:
             self.load(self.event_id)
+
         return inputs
 
 

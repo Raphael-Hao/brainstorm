@@ -116,6 +116,15 @@ class CUDATimer(Timer):
         super().step_stop()
 
 
+class MemoryStats:
+    @staticmethod
+    def reset_cuda_stats():
+        torch.cuda.reset_accumulated_memory_stats()
+        torch.cuda.reset_peak_memory_stats()
+    @staticmethod
+    def print_cuda_stats():
+        print(torch.cuda.memory_summary())
+
 class BenchmarkArgumentManager:
     def __init__(self, argparser: argparse.ArgumentParser = None) -> None:
         if argparser is None:

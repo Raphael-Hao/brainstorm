@@ -41,11 +41,6 @@ class RouterBase(nn.Module):
         self.ptu_dtype_history: List[torch.dtype] = None
         self.ptu_device_history: List[torch.device] = None
 
-        self.schedule_functions: List[Callable] = []
-
-    def forward(self):
-        self.run_schedule()
-
     def coordinate_index_format(
         self,
         route_indices: torch.Tensor,
@@ -235,12 +230,11 @@ class RouterBase(nn.Module):
 
         return True
 
-    def inject_schedule(self, schedule_function):
-        self.schedule_functions.append(schedule_function)
-
-    def run_schedule(self):
-        for func in self.schedule_functions:
-            func()
+    def placement(self, route_indices, loads, capacities):
+        route_indices = route_indices[:, self.placement_index]
+        loads = loads[:, self.placement_index]
+        capacities = capacities[:, self.placement_index]
+        return route_indices, loads, capacities
 
 
 def register_router(router_type: str) -> Callable:
