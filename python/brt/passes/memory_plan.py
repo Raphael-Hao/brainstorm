@@ -11,6 +11,7 @@ import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node
+from brt.runtime import log
 from brt.runtime.memory_planner import (
     MemoryPlanContext,
     OnDemandLoader,
@@ -21,14 +22,15 @@ from brt.runtime.memory_planner import (
     PredictUnloader,
 )
 
-PLGT = List[
-    Tuple[
-        Node,
-        Dict[Node, None],
-        Dict[str, nn.Parameter],
-        Dict[str, Tuple[nn.Module, str]],
-    ]
+PLGT = Tuple[
+    List[Node],
+    Dict[str, nn.Parameter],
+    Dict[str, Tuple[nn.Module, str]],
 ]
+
+logger = log.get_logger(__file__)
+
+__all__ = ["OnDemandMemoryPlan", "PredictMemoryPlan"]
 
 
 @register_pass("MemoryPlan")
@@ -44,7 +46,7 @@ class MemoryPlanPass(PassBase):
         assert (
             self.max_depth == 0
         ), f"Max_depth is set to {self.max_depth}, greater than 0 is not supported yet."
-        self.plan_groups: Dict[Node, PLGT] = dict()
+        self.plan_groups: Dict[Node, List[PLGT]] = dict()
         self.all_collected_params: Dict[str, torch.Tensor] = dict()
         self.all_collected_buffers: Dict[
             str, Tuple[torch.Tensor, nn.Module, str]
@@ -100,17 +102,24 @@ class MemoryPlanPass(PassBase):
         collected_params: Dict[str, nn.Parameter],
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
         head_node: Node = None,
+        head_node_include=True,
     ):
-        first_node, last_node = self.find_first_and_last_node(traveled_nodes)
-        head_node = first_node if head_node is None else head_node
+        sorted_traveled_nodes = self.sort_nodes(traveled_nodes)
+        first_node, last_node = sorted_traveled_nodes[0], sorted_traveled_nodes[-1]
+        if head_node is None:
+            if head_node_include:
+                head_node = first_node
+            else:
+                head_node = first_node.prev
+
         self.plan_groups.setdefault(head_node, []).append(
-            (last_node, traveled_nodes, collected_params, collected_buffers)
+            (sorted_traveled_nodes, collected_params, collected_buffers)
         )
         self.all_collected_params.update(collected_params)
         self.all_collected_buffers.update(collected_buffers)
 
     def sort_plan_groups(self):
-        orderred_plan_groups: typing.OrderedDict[Node, PLGT] = OrderedDict()
+        orderred_plan_groups: typing.OrderedDict[Node, List[PLGT]] = OrderedDict()
         for node in self.graph_mod.graph.nodes:
             if node in self.plan_groups:
                 orderred_plan_groups[node] = self.plan_groups[node]
@@ -247,12 +256,12 @@ class MemoryPlanPass(PassBase):
         origin_all_params = dict(self.graph_mod.named_parameters())
         for k, v in origin_all_params.items():
             if k not in self.all_collected_params:
-                print(f"Parameter {k} is not collected.")
+                logger.debug(f"Parameter {k} is not collected.")
                 return False
         origin_all_buffers = dict(self.graph_mod.named_buffers())
         for k, v in origin_all_buffers.items():
             if k not in self.all_collected_buffers and not self.is_ignored_buffer(k):
-                print(f"Buffer {k} is not collected.")
+                logger.debug(f"Buffer {k} is not collected.")
                 return False
         return True
 
@@ -349,8 +358,7 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
         event_id = 0
         for head_node, plan_group in orderred_plan_groups.items():
             for path_id, (
-                tail_node,
-                traveled_nodes,
+                _traveled_nodes,
                 collected_params,
                 collected_buffers,
             ) in enumerate(plan_group):
@@ -370,12 +378,15 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                 )
                 event_id += 1
 
+        event_id -= 1
+
         for head_node, plan_group in reversed(orderred_plan_groups.items()):
             for path_id in range(len(plan_group)):
-                tail_node = plan_group[-path_id - 1][0]
+                traveled_nodes = plan_group[-path_id - 1][0]
+                tail_node = traveled_nodes[-1]
                 with self.graph_mod.graph.inserting_after(tail_node):
                     unloader_node = self.graph_mod.graph.call_module(
-                        f"brt_memory_unloader_{event_id - path_id -1}",
+                        f"brt_memory_unloader_{event_id - path_id}",
                         args=(tail_node,),
                     )
                 tail_node.replace_all_uses_with(
@@ -385,7 +396,7 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
             for path_id in range(len(plan_group)):
                 with self.graph_mod.graph.inserting_after(head_node):
                     guarder_node = self.graph_mod.graph.call_module(
-                        f"brt_memory_guarder_{event_id - path_id - 1}",
+                        f"brt_memory_guarder_{event_id - path_id}",
                         args=(head_node,),
                     )
                     head_node.replace_all_uses_with(
@@ -395,11 +406,12 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
             for path_id in range(len(plan_group)):
                 with self.graph_mod.graph.inserting_after(head_node):
                     loader_node = self.graph_mod.graph.call_module(
-                        f"brt_memory_loader_{event_id - path_id - 1}", args=(head_node,)
+                        f"brt_memory_loader_{event_id - path_id}", args=(head_node,)
                     )
                     head_node.replace_all_uses_with(
                         loader_node, lambda usr: usr != loader_node
                     )
+            event_id -= len(plan_group)
 
     def finalize(self) -> GraphModule:
         return super().finalize()

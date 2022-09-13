@@ -18,6 +18,7 @@ from brt.runtime.benchmark import (
     BenchmarkArgumentManager,
     Benchmarker,
     CUDATimer,
+    MemoryStats,
     profile,
 )
 
@@ -177,7 +178,6 @@ def main(args):
 
     res = Trainer.test(cfg, model)
     torch.cuda.empty_cache()
-    print(torch.cuda.memory_summary(abbreviated=True))
 
     if args.debug:
         timer = CUDATimer(repeat=5)
@@ -185,18 +185,25 @@ def main(args):
 
         backbone = switch_router_mode(model.backbone, False).eval()
 
+        MemoryStats.reset_cuda_stats()
+
         timer.execute(lambda: backbone(backbone_input), "naive")
+
+        MemoryStats.print_cuda_stats()
 
         backbone = pin_memory(backbone.cpu())
 
-        # memory_plan_pass = OnDemandMemoryPlanPass(backbone)
-        memory_plan_pass = PredictMemoryPlanPass(backbone, 1)
+        memory_plan_pass = OnDemandMemoryPlanPass(backbone)
+        # memory_plan_pass = PredictMemoryPlanPass(backbone, 1)
         memory_plan_pass.run_on_graph()
         new_backbone = memory_plan_pass.finalize()
         print(new_backbone.code)
-        # print(torch.cuda.memory_summary(abbreviated=True))
-
-        # timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
+        torch.cuda.reset_accumulated_memory_stats()
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.synchronize()
+        MemoryStats.reset_cuda_stats()
+        timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
+        MemoryStats.print_cuda_stats()
 
     # model.eval()
     # input = torch.randn(1, 3, 1024, 2048).cuda()
@@ -240,7 +247,7 @@ def main(args):
 
     benchmarker.add_benchmark("liveness", liveness_benchmark)
 
-    def preload_benchmark():
+    def memroy_plan_benchmark():
         timer = CUDATimer()
         timer.set_iterations(100)
 
@@ -253,7 +260,7 @@ def main(args):
         preload_pass = MemoryPlanPass(model.backbone)
         preload_pass.run_on_graph()
 
-    benchmarker.add_benchmark("preload", preload_benchmark)
+    benchmarker.add_benchmark("memory_plan", memroy_plan_benchmark)
 
     benchmarker.benchmarking(args.benchmark)
 

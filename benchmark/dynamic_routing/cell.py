@@ -254,9 +254,7 @@ class Cell(nn.Module):
             gate_weights_beta.shape[0], self.gate_num
         )
 
-        residuals  = self.residual_scatter(
-            [h_l1, gate_weights_beta], gate_weights_beta
-        )
+        residuals = self.residual_scatter([h_l1, gate_weights_beta], gate_weights_beta)
 
         h_l = self.cell_ops(residuals[0][1])
         if self.allow_up or self.allow_down:

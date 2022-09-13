@@ -1,6 +1,9 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+import typing
 from typing import Type, Union, List, Dict
+
+from collections import OrderedDict
 import operator
 import torch
 from torch.fx import GraphModule, Node
@@ -112,16 +115,44 @@ class PassBase:
                     start_nodes[path_id].setdefault(node)
         return start_nodes
 
-    def find_first_and_last_node(self, nodes: Dict[Node, None]):
+    def find_first_node(self, nodes: Dict[Node, None]) -> Node:
         for node in self.graph_mod.graph.nodes:
             if node in nodes:
-                first_node = node
-                break
+                return node
+        raise RuntimeError("All nodes are not in the graph.")
+
+    def find_last_node(self, nodes: Dict[Node, None]) -> Node:
         for node in reversed(self.graph_mod.graph.nodes):
             if node in nodes:
-                last_node = node
-                break
-        return first_node, last_node
+                return node
+        raise RuntimeError("All nodes are not in the graph.")
+
+    def find_first_and_last_node(self, nodes: Dict[Node, None]):
+        return self.find_first_node(nodes), self.find_last_node(nodes)
+
+    def topo_compare(self, n1: Node, n2: Node):
+        """compare the topo order of two nodes in the graph
+        Args:
+            n1 (Node): first node
+            n2 (Node): sencond node
+        """
+        first_node = self.find_first_node({n1: None, n2: None})
+        if first_node == n1:
+            return True
+        return False
+
+    def sort_nodes(self, nodes: Dict[Node, None]):
+        """sort the nodes in the graph by their topo order
+        Args:
+            nodes (Dict[Node, None]): the nodes to be sorted
+        """
+        sorted_nodes: List[Node] = []
+
+        while nodes:
+            first_node = self.find_first_node(nodes)
+            sorted_nodes.append(first_node)
+            nodes.pop(first_node)
+        return sorted_nodes
 
 
 def register_pass(pass_class: type) -> None:
