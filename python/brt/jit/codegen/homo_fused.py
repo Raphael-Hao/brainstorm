@@ -10,7 +10,7 @@ from brt.runtime import log
 
 from brt.jit.codegen.horiz_fused import HorizFusedKernel
 from brt.jit.codegen.module import ModuleKernel
-from brt.jit.codegen.utils import check_if_pointer
+from brt.jit.codegen.utils import check_is_pointer
 
 logger = log.get_logger(__file__)
 
@@ -76,7 +76,7 @@ class HomoFusedKernel(HorizFusedKernel):
                 assert func.arg_decorators == self.base_arg_decorators
                 assert func.arg_names == self.base_arg_names
             for arg_types in self.base_arg_types:
-                assert check_if_pointer(arg_types)
+                assert check_is_pointer(arg_types)
         except AssertionError as e:
             logger.exception(e)
 

@@ -254,21 +254,19 @@ class Cell(nn.Module):
             gate_weights_beta.shape[0], self.gate_num
         )
 
-        residual_h_l, residual_w_beta = self.residual_scatter(
-            [h_l1, gate_weights_beta], gate_weights_beta
-        )
+        residuals = self.residual_scatter([h_l1, gate_weights_beta], gate_weights_beta)
 
-        h_l = self.cell_ops(residual_h_l[1])
+        h_l = self.cell_ops(residuals[0][1])
         if self.allow_up or self.allow_down:
             route_h_l, route_weight = self.threeway_scatter(
-                h_l, residual_w_beta[1].view(h_l.size(0), self.gate_num)
+                h_l, residuals[1][1].view(h_l.size(0), self.gate_num)
             )
             route_h_l_keep = self.res_keep(route_h_l[0])
 
             route_result_keep = (route_weight[0].view(-1, 1, 1, 1)) * route_h_l_keep
         else:
             route_h_l_keep = self.res_keep(h_l)
-            route_result_keep = (residual_w_beta[1].view(-1, 1, 1, 1)) * route_h_l_keep
+            route_result_keep = (residuals[1][1].view(-1, 1, 1, 1)) * route_h_l_keep
 
         if self.allow_up:
             route_h_l_up = self.res_up(route_h_l[1])
@@ -288,12 +286,12 @@ class Cell(nn.Module):
         if self.allow_up and self.allow_down:
             return [
                 [route_result_up],
-                [route_result_keep, residual_h_l[0]],
+                [route_result_keep, residuals[0][0]],
                 [route_result_down],
             ]
         elif self.allow_up:
-            return [[route_result_up], [route_result_keep, residual_h_l[0]], []]
+            return [[route_result_up], [route_result_keep, residuals[0][0]], []]
         elif self.allow_down:
-            return [[], [route_result_keep, residual_h_l[0]], [route_result_down]]
+            return [[], [route_result_keep, residuals[0][0]], [route_result_down]]
         else:
-            return [[], [route_result_keep, residual_h_l[0]], []]
+            return [[], [route_result_keep, residuals[0][0]], []]

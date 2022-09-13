@@ -6,6 +6,7 @@ core
 total_latency.tsv
 *.qdrep
 *.svg
+*.csv
 
 .cache/*
 !.cache/kernel_db.sqlite
