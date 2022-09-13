@@ -6,8 +6,21 @@ from dynamic_B_config import config as B_config
 from dynamic_C_config import config as C_config
 
 from brt.router import switch_router_mode
-from brt.passes import DeadPathEliminatePass, PermanentPathFoldPass, PreloadPass
-from brt.runtime.benchmark import BenchmarkArgumentManager, Benchmarker, CUDATimer
+from brt.passes import (
+    DeadPathEliminatePass,
+    PermanentPathFoldPass,
+    MemoryPlanPass,
+    OnDemandMemoryPlanPass,
+    PredictMemoryPlanPass,
+)
+from brt.runtime.memory_planner import pin_memory
+from brt.runtime.benchmark import (
+    BenchmarkArgumentManager,
+    Benchmarker,
+    CUDATimer,
+    MemoryStats,
+    profile,
+)
 
 """
 Detection Training Script.
@@ -155,11 +168,6 @@ def main(args):
 
     config.merge_from_list(args.opts)
     cfg, logger = default_setup(config, args)
-    if args.debug:
-        batches = int(cfg.SOLVER.IMS_PER_BATCH / 8 * args.num_gpus)
-        if cfg.SOLVER.IMS_PER_BATCH != batches:
-            cfg.SOLVER.IMS_PER_BATCH = batches
-            logger.warning("SOLVER.IMS_PER_BATCH is changed to {}".format(batches))
 
     model = build_model(cfg)
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
@@ -169,6 +177,33 @@ def main(args):
     torch.cuda.synchronize()
 
     res = Trainer.test(cfg, model)
+    torch.cuda.empty_cache()
+
+    if args.debug:
+        timer = CUDATimer(repeat=5)
+        backbone_input = model.backbone_input.detach().cuda()
+
+        backbone = switch_router_mode(model.backbone, False).eval()
+
+        MemoryStats.reset_cuda_stats()
+
+        timer.execute(lambda: backbone(backbone_input), "naive")
+
+        MemoryStats.print_cuda_stats()
+
+        backbone = pin_memory(backbone.cpu())
+
+        memory_plan_pass = OnDemandMemoryPlanPass(backbone)
+        # memory_plan_pass = PredictMemoryPlanPass(backbone, 1)
+        memory_plan_pass.run_on_graph()
+        new_backbone = memory_plan_pass.finalize()
+        print(new_backbone.code)
+        torch.cuda.reset_accumulated_memory_stats()
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.synchronize()
+        MemoryStats.reset_cuda_stats()
+        timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
+        MemoryStats.print_cuda_stats()
 
     # model.eval()
     # input = torch.randn(1, 3, 1024, 2048).cuda()
@@ -210,10 +245,9 @@ def main(args):
             model.backbone = new_backbone
             new_res = Trainer.test(cfg, model)
 
-
     benchmarker.add_benchmark("liveness", liveness_benchmark)
 
-    def preload_benchmark():
+    def memroy_plan_benchmark():
         timer = CUDATimer()
         timer.set_iterations(100)
 
@@ -223,12 +257,13 @@ def main(args):
 
         naive_backbone = switch_router_mode(naive_backbone, False).eval()
 
-        preload_pass =  PreloadPass(model.backbone)
+        preload_pass = MemoryPlanPass(model.backbone)
         preload_pass.run_on_graph()
 
-    benchmarker.add_benchmark("preload", preload_benchmark)
+    benchmarker.add_benchmark("memory_plan", memroy_plan_benchmark)
 
     benchmarker.benchmarking(args.benchmark)
+
 
 if __name__ == "__main__":
     args = test_argument_parser().parse_args()

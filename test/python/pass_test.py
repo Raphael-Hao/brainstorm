@@ -2,7 +2,6 @@
 # Licensed under the MIT license.
 
 import unittest
-from brt.passes import get_pass
 
 
 class PassTest(unittest.TestCase):

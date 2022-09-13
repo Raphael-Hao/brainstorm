@@ -18,7 +18,7 @@ in_data = torch.randn(1,3,10,10)
 with torch.inference_mode():
     origin_out_data = simple_net(in_data)
 
-from brt.runtime.preload import load_module, pin_memory, unload_module
+from brt.runtime.memory_planner import load_module, pin_memory, unload_module
 
 print(f"Allocated: {torch.cuda.memory_allocated()}")
 print(f"Reserved: {torch.cuda.memory_reserved()}")

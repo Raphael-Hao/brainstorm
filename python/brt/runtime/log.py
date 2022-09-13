@@ -11,10 +11,10 @@ _BRT_MODULES = [
     "user",
     "app",
     "jit",
+    "passes",
     "router",
     "runtime",
     "trace",
-    "transform",
 ]
 
 
