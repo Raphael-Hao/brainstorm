@@ -224,7 +224,6 @@ class DynamicNetwork(Backbone):
         gate_bias=1.5,
         drop_prob=0.0,
         device=None,
-        gate_history_path=None,
     ):
         super(DynamicNetwork, self).__init__()
         self.device = device
@@ -342,64 +341,22 @@ class DynamicNetwork(Backbone):
                     self._out_features.append(name)
             self.all_cell_list.append(layer_cell_list)
             self.all_cell_type_list.append(layer_cell_type)
-        # prepare for gate history
-        self.gate_history_path = gate_history_path
-        if self.gate_history_path is not None:
-            header_row = [
-                "layer_0_cell_0_up",
-                "layer_0_cell_0_keep",
-                "layer_0_cell_0_down",
-            ]
-            for layer_index in range(len(self.cell_num_list)):
-                for cell_index in range(self.cell_num_list[layer_index]):
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_up"
-                    )
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_keep"
-                    )
-                    header_row.append(
-                        "layer_"
-                        + str(layer_index + 1)
-                        + "_cell_"
-                        + str(cell_index)
-                        + "_down"
-                    )
-            self.gate_history_file = open(self.gate_history_path, mode="w")
-            self.writer = csv.writer(self.gate_history_file)
-            self.writer.writerow(header_row)
 
     @property
     def size_divisibility(self):
         return self._size_divisibility
 
     def forward(self, x, step_rate=0.0, predict_mode=True):
-        if not predict_mode:
-            # print("Stem To Device: ", self.device)
-            self.stem.to(self.device)
+
         h_l1 = self.stem(x)
         # the initial layer
-        if not predict_mode:
-            self.init_layer.to(self.device)
         h_l1_list, h_beta_list, trans_flops, trans_flops_real = self.init_layer(
             h_l1=h_l1
         )
         prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
         prev_trans_flops, prev_trans_flops_real = [trans_flops], [trans_flops_real]
         # build forward outputs
-        cell_flops_list, cell_flops_real_list, gate_history_list = (
-            [],
-            [],
-            [gate_w[0] if gate_w else 0 for gate_w in h_beta_list],
-        )
+        cell_flops_list, cell_flops_real_list = ([], [])
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
             layer_trans_flops, layer_trans_flops_real = [], []
@@ -485,24 +442,10 @@ class DynamicNetwork(Backbone):
                 # update trans flops output
                 layer_trans_flops.append(trans_flops)
                 layer_trans_flops_real.append(trans_flops_real)
-                gate_history = [
-                    gate_w[0] if gate_w else 0 for gate_w in gate_weights_beta
-                ]
-                gate_history_list.extend(gate_history)
             # update layer output
             prev_out_list = layer_output
             prev_trans_flops = layer_trans_flops
             prev_trans_flops_real = layer_trans_flops_real
-        final_gate_history = np.array(
-            [
-                gate_w.squeeze().cpu().detach().numpy()
-                if isinstance(gate_w, torch.Tensor)
-                else gate_w
-                for gate_w in gate_history_list
-            ],
-            dtype=np.float32,
-        )
-        self.write_gate_history(final_gate_history)
         # print(gate_history_list)
         final_out_list = [prev_out_list[_i][1][0] for _i in range(len(prev_out_list))]
         final_out_dict = dict(zip(self._out_features, final_out_list))
@@ -523,11 +466,6 @@ class DynamicNetwork(Backbone):
             )
             for name in self._out_features
         }
-
-    def write_gate_history(self, gate_history_list):
-        if self.gate_history_path is not None:
-            self.writer.writerow(gate_history_list)
-            self.gate_history_file.flush()
 
 
 def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
@@ -555,7 +493,6 @@ def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
         gate_bias=cfg.MODEL.GATE.GATE_INIT_BIAS,
         drop_prob=cfg.MODEL.BACKBONE.DROP_PROB,
         device=cfg.MODEL.DEVICE,
-        gate_history_path=cfg.BRT.GATE_HISTORY_PATH,
     )
 
     return backbone

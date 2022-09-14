@@ -37,6 +37,7 @@ class RouterBase(nn.Module):
         self.history_len = 0
         self.register_buffer("load_history", None)
         self.register_buffer("capacity_history", None)
+        self.register_buffer("ptu_path_history", None)
         self.ptu_grain_history: List[torch.Size] = None
         self.ptu_dtype_history: List[torch.dtype] = None
         self.ptu_device_history: List[torch.device] = None
@@ -193,6 +194,16 @@ class RouterBase(nn.Module):
                     self.ptu_device_history = [flow[0].device for flow in flows]
         else:
             self.ptu_grain_history = None
+
+    def capture_correlations(self, indices):
+        assert hasattr(
+            self, "protocol"
+        ), "Correlation capturing is only supported for Router with protocol!"
+        if self.history_len == 0:
+            self.correlation_history = torch.zeros_like(
+                indices, dtype=torch.float64, device="cpu"
+            )
+        pass
 
     def listing_flows(self, flows, is_dispatch=True):
         if is_dispatch:

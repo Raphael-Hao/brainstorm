@@ -75,7 +75,7 @@ class MemoryPlanPass(PassBase):
 
     def collect_params_and_buffers(self):
         self.build_goal_classifiers(node_types=["output", "scatter"])
-        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history"])
+        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history", r"\.ptu\_path\_history"])
 
         memo = set()
         # first gropu will include the the placeholder and the first group of goal nodes (routers)
@@ -304,7 +304,7 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
 
     def collect_params_and_buffers(self):
         self.build_goal_classifiers(node_types=["output", "scatter"])
-        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history"])
+        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history", r"\.ptu\_path\_history"])
         memo = set()
         placeholder_nodes = self.find_all_placeholders()
         (

@@ -2,10 +2,11 @@ import os.path as osp
 
 import dl_lib
 from dl_lib.configs.segm_config import SemanticSegmentationConfig
+from brt.runtime import BRT_CKPT_PATH, BRT_LOG_PATH
 
 _config_dict = dict(
     MODEL=dict(
-        WEIGHTS="/home/whcui/checkpoints/dynamic_A_miou73_9.pth",
+        WEIGHTS=str(BRT_CKPT_PATH / "dynamic_routing/dynamic_A_miou73_9.pth"),
         CAL_FLOPS=False,
         BACKBONE=dict(
             CELL_TYPE=["sep_conv_3x3", "skip_connect"],
@@ -75,14 +76,10 @@ _config_dict = dict(
         ),
     ),
     OUTPUT_DIR=osp.join(
-        "/home/whcui/model_logs/dl_lib_playground",
+        str(BRT_LOG_PATH / "model_logs/dl_lib_playground"),
         osp.split(osp.realpath(__file__))[0].split("playground/")[-1],
     ),
     SEED=0,
-    BRT=dict(
-        PREDICT_MODE=True,
-        GATE_HISTORY_PATH="/home/whcui/model_logs/dl_lib_playground/Dynamic/Seg.Layer16.SmallGate.Dynamic_A/gate_history.csv",
-    ),
 )
 
 
