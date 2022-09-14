@@ -91,15 +91,7 @@ _config_dict = dict(
         ),
         PRECISE_BN=dict(ENABLED=True),
     ),
-    OUTPUT_DIR=osp.join(
-        "/home/whcui/model_logs/dl_lib_playground",
-        osp.split(osp.realpath(__file__))[0].split("playground/")[-1],
-    ),
     SEED=0,
-    BRT=dict(
-        PREDICT_MODE=True,
-        GATE_HISTORY_PATH="/home/whcui/model_logs/dl_lib_playground/Dynamic/Seg.Layer16.ImageNet/gate_history.csv",
-    ),
 )
 
 

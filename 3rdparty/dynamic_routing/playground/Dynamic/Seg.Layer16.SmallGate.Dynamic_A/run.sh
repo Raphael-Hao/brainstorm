@@ -5,4 +5,4 @@
 export BRT_CACHE_PATH=$HOME/brainstorm_project/brainstorm/.cache
 export BRT_CAPTURE_STATS=True
 
-python benchmark.py --arch raw --debug
+dl_test --num-gpus 0

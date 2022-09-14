@@ -5,6 +5,7 @@ import time
 import torch
 import argparse
 import numpy as np
+from brt.runtime import BRT_LOG_PATH
 
 __all__ = [
     "profile",
@@ -20,7 +21,7 @@ def profile(func):
     profiler = torch.profiler.profile(
         schedule=torch.profiler.schedule(wait=2, warmup=2, active=1, repeat=2),
         on_trace_ready=torch.profiler.tensorboard_trace_handler(
-            "/home/whcui/brainstorm_project/brainstorm/.cache/log/model_logs/brt_dr"
+            str(BRT_LOG_PATH / "model_logs/brt_dr")
         ),
         record_shapes=True,
         profile_memory=True,
@@ -121,9 +122,11 @@ class MemoryStats:
     def reset_cuda_stats():
         torch.cuda.reset_accumulated_memory_stats()
         torch.cuda.reset_peak_memory_stats()
+
     @staticmethod
     def print_cuda_stats():
         print(torch.cuda.memory_summary())
+
 
 class BenchmarkArgumentManager:
     def __init__(self, argparser: argparse.ArgumentParser = None) -> None:
