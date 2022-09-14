@@ -24,15 +24,13 @@ class SinglePTUDispatchFabric(DispatchFabric):
         )
 
     def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
-        throttling = kwargs.pop("throttling", False)
-        assert_compatibility(self, "throttling", False, throttling)
+        pass
 
     def forward(
         self,
         in_flow: Union[torch.Tensor, List[torch.Tensor]],
         route_indices: torch.Tensor,
-        loads: torch.Tensor,
-        capacities: torch.Tensor = None,
+        real_loads: torch.Tensor,
         score: torch.Tensor = None,
     ) -> Union[List[torch.Tensor], List[List[torch.Tensor]]]:
         if self.flow_num == 1:

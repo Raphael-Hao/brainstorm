@@ -25,7 +25,7 @@ class SkipCheckDispatchFabric(DispatchFabric):
         self,
         in_flow: Union[ProtoTensor, List[ProtoTensor]],
         route_indices: torch.Tensor,
-        loads: torch.Tensor,
+        real_loads: torch.Tensor,
         capacities: torch.Tensor,
         score: torch.Tensor,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
@@ -37,11 +37,6 @@ class SkipCheckDispatchFabric(DispatchFabric):
             in_flows = in_flow
         else:
             raise ValueError("in_flow must be ProtoTensor or list of ProtoTensor")
-
-        if self.throttling:
-            real_loads = torch.minimum(loads, capacities)
-        else:
-            real_loads = loads
 
         all_out_flows = []
 
