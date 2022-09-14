@@ -110,12 +110,18 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
     const ::torch::Tensor& origin_indices /*[sample_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/, const int& target_index_fmt_id) {
   CHECK_ON_CUDA(origin_indices);
-  CHECK_ON_CUDA(loads);
+  ::torch::Tensor cuda_loads;
+  if (!loads.is_cuda() && target_index_fmt_id == 1) {
+    cuda_loads = loads.cuda();
+  }
+  else{
+    cuda_loads = loads;
+  }
   ::torch::Tensor new_indices = ::at::zeros_like(origin_indices, origin_indices.options());
   auto sample_num = origin_indices.size(0);
   auto path_num = origin_indices.size(1);
   router::ConvertIndexFormat(origin_indices.data_ptr<int>(), new_indices.data_ptr<int>(),
-                             loads.data_ptr<int>(), sample_num, path_num, target_index_fmt_id,
+                             cuda_loads.data_ptr<int>(), sample_num, path_num, target_index_fmt_id,
                              at::cuda::getDefaultCUDAStream().stream());
   return new_indices;
 }

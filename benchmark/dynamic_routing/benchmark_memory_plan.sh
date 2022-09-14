@@ -4,4 +4,4 @@
 
 export BRT_CACHE_PATH=$HOME/brainstorm_project/brainstorm/.cache
 # export BRT_CAPTURE_STATS=True
-python benchmark.py --benchmark preload
+python benchmark.py --benchmark memory_plan

@@ -29,13 +29,12 @@ class HomoFusedDispatchFabric(DispatchFabric):
     def __init__(
         self,
         capacity_padding=False,
-        throttling=False,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
     ):
         self.capacity_padding = capacity_padding
         super().__init__(
-            throttling=throttling, route_logic=route_logic, transform=transform
+            route_logic=route_logic, transform=transform
         )
 
     def dispatch(

@@ -26,6 +26,7 @@ class ScatterRouter(RouterBase):
         fabric_type: str = "dispatch",
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
+        throttling=False,
         capturing=False,
         capture_mode: str = "cum",
     ):
@@ -84,7 +85,6 @@ class ScatterRouter(RouterBase):
         if "dispatch" in self.fabric_type:
             built_in_fabric_kwargs = {
                 "flow_num": 1,
-                "throttling": False,
                 "route_logic": "1d",
                 "transform": False,
             }
@@ -100,6 +100,8 @@ class ScatterRouter(RouterBase):
 
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
+        self.throttling = throttling
+
     def forward(self, in_flows, score: torch.Tensor):
         route_indices, loads, capacities = self.protocol(score)
 
@@ -112,8 +114,15 @@ class ScatterRouter(RouterBase):
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
-        self.capture_flow_stats(self.fabric_type, in_flows, loads, capacities)
-        out_flows = self.fabric(in_flows, route_indices, loads, capacities, score)
+
+        if self.throttling:
+            real_loads = torch.minimum(loads, capacities)
+        else:
+            real_loads = loads
+
+        self.capture_flow_stats(self.fabric_type, in_flows, route_indices, loads)
+
+        out_flows = self.fabric(in_flows, route_indices, real_loads, score)
         return out_flows
 
     def update_protocol(self, **kwargs):
@@ -130,6 +139,7 @@ class SwinMoEScatterRouter(RouterBase):
         fabric_type: str = "dispatch",
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
+        throttling=False,
         capturing=True,
         capture_mode: str = "c",
     ):
@@ -159,7 +169,6 @@ class SwinMoEScatterRouter(RouterBase):
         self.fabric_kwargs = {}
         built_in_fabric_kwargs = {
             "flow_num": 2,
-            "throttling": True,
             "route_logic": ["1d", "2d"],
             "transform": [False, False],
         }
@@ -168,6 +177,8 @@ class SwinMoEScatterRouter(RouterBase):
         if fabric_kwargs is not None:
             self.fabric_kwargs.update(fabric_kwargs)
         self.fabric = make_fabric(self.fabric_type, self.fabric_kwargs)
+
+        self.throttling = throttling
 
     def forward(self, in_flows, score, logits_wo_noise, logits):
         route_indices, loads, capacities, new_score, loss = self.protocol(

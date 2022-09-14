@@ -18,7 +18,6 @@ class DispatchFabric(FabricBase):
     def __init__(
         self,
         flow_num: int,
-        throttling=False,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
         **kwargs,
@@ -32,7 +31,6 @@ class DispatchFabric(FabricBase):
         """
         index_format = kwargs.pop("index_format", "src_index")
         super().__init__(flow_num=flow_num, index_format=index_format, **kwargs)
-        self.throttling = throttling
         route_logics = route_logic
         if isinstance(route_logics, str):
             assert route_logics in ["1d", "2d"]
@@ -56,8 +54,7 @@ class DispatchFabric(FabricBase):
         self,
         in_flow: Union[ProtoTensor, List[ProtoTensor]],
         route_indices: torch.Tensor,
-        loads: torch.Tensor,
-        capacities: torch.Tensor = None,
+        real_loads: torch.Tensor,
         score: torch.Tensor = None,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
         assert self.index_format == "src_index", "DispatchFabric only support src_index"
@@ -68,10 +65,6 @@ class DispatchFabric(FabricBase):
         else:
             in_flows = in_flow
 
-        if self.throttling:
-            real_loads = torch.minimum(loads, capacities)
-        else:
-            real_loads = loads
         all_out_flows = self.dispatch(in_flows, route_indices, real_loads, score)
         if self.flow_num == 1:
             return self.remove_needless_pack(all_out_flows[0])

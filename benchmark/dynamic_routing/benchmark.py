@@ -150,7 +150,7 @@ def test_argument_parser():
     parser.add_argument("--debug", action="store_true", help="use debug mode or not")
     bench_arg_manager = BenchmarkArgumentManager(parser)
     bench_arg_manager.add_item("liveness")
-    bench_arg_manager.add_item("preload")
+    bench_arg_manager.add_item("memory_plan")
     return parser
 
 

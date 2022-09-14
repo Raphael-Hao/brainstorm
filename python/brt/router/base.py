@@ -6,6 +6,7 @@ from typing import Callable, Dict, List, Any
 import os
 import torch
 import torch.nn as nn
+import numpy as np
 
 from brt.runtime import log, Registry
 from brt.router.utils import convert_index_format, make_kwargs
@@ -35,9 +36,9 @@ class RouterBase(nn.Module):
             self.capturing = False
 
         self.history_len = 0
-        self.register_buffer("load_history", None)
-        self.register_buffer("capacity_history", None)
-        self.register_buffer("ptu_path_history", None)
+        self.load_history: np.ndarray = None
+        self.ptu_decision_history: List[np.ndarray] = None
+        self.ptu_tag_base = 0
         self.ptu_grain_history: List[torch.Size] = None
         self.ptu_dtype_history: List[torch.dtype] = None
         self.ptu_device_history: List[torch.device] = None
@@ -64,8 +65,9 @@ class RouterBase(nn.Module):
 
     def reset_flow_stats(self):
         self.history_len = 0
+        self.ptu_tag_base = 0
         self.load_history = None
-        self.capacity_history = None
+        self.ptu_decision_history = None
         self.ptu_grain_history = None
         self.ptu_device_history = None
         self.ptu_dtype_history = None
@@ -82,8 +84,8 @@ class RouterBase(nn.Module):
         self,
         fabric_type: str,
         in_flows: List[torch.Tensor],
+        route_indices: torch.Tensor = None,
         loads: torch.Tensor = None,
-        capacities: torch.Tensor = None,
     ) -> None:
         """
         Capture the flow stats.
@@ -92,7 +94,7 @@ class RouterBase(nn.Module):
             return
 
         if "dispatch" in fabric_type:
-            self.capture_dispatch_flows(in_flows, loads, capacities)
+            self.capture_dispatch_flows(in_flows, route_indices, loads)
         elif "combine" in fabric_type:
             self.capture_combine_flows(in_flows)
         else:
@@ -118,18 +120,19 @@ class RouterBase(nn.Module):
 
         self.capture_load_from_flows(in_flows)
 
-    def capture_dispatch_flows(self, in_flows, loads, capacities):
+    def capture_dispatch_flows(self, in_flows, route_indices, loads):
+        self.capture_correlations(route_indices, loads)
         self.capture_ptu_grains_and_options(in_flows, is_dispatch=True)
-        self.capture_laod_from_protocol(loads, capacities)
+        self.capture_laod_from_protocol(loads)
 
     def capture_load_from_flows(self, in_flows: List[torch.Tensor]) -> None:
         path_num = len(in_flows)
 
         if self.history_len == 0:
-            self.load_history = torch.zeros(path_num, dtype=torch.float64, device="cpu")
+            self.load_history = np.zeros(path_num, dtype=np.float64)
 
-        current_load = torch.tensor(
-            [flow.size(0) for flow in in_flows], dtype=torch.float64, device="cpu"
+        current_load = np.ndarray(
+            [flow.size(0) for flow in in_flows], dtype=torch.float64
         )
         if self.capture_mode == "avg":
             self.load_history = (
@@ -137,44 +140,27 @@ class RouterBase(nn.Module):
             ) / (self.history_len + 1.0)
 
         elif self.capture_mode == "max":
-            self.load_history = torch.maximum(self.load_history, current_load)
+            self.load_history = np.maximum(self.load_history, current_load)
 
         elif self.capture_mode == "cum":
             self.load_history = self.load_history + current_load
 
-    def capture_laod_from_protocol(self, loads, capacities):
+    def capture_laod_from_protocol(self, loads: torch.Tensor):
 
+        loads_np = loads.numpy()
         if self.history_len == 0:
-            self.load_history = torch.zeros_like(
-                loads, dtype=torch.float64, device="cpu"
-            )
-            self.capacity_history = (
-                torch.zeros_like(capacities, dtype=torch.float64, device="cpu")
-                if capacities is not None
-                else None
-            )
+            self.load_history = np.zeros_like(loads_np, dtype=np.float64)
 
         if self.capture_mode == "avg":
-            self.load_history = (self.load_history * self.history_len + loads) / (
+            self.load_history = (self.load_history * self.history_len + loads_np) / (
                 self.history_len + 1.0
             )
 
-            if capacities is not None:
-                self.capacity_history = (
-                    self.capacity_history * self.history_len + capacities
-                ) / (self.history_len + 1.0)
-
         elif self.capture_mode == "max":
-            self.load_history = torch.maximum(self.load_history, loads)
-
-            if capacities is not None:
-                self.capacity_history = torch.maximum(self.capacity_history, capacities)
+            self.load_history = np.maximum(self.load_history, loads_np)
 
         elif self.capture_mode == "cum":
-            self.load_history = self.load_history + loads
-
-            if capacities is not None:
-                self.capacity_history = self.capacity_history + capacities
+            self.load_history = self.load_history + loads_np
 
     def capture_ptu_grains_and_options(self, flows, is_dispatch=True) -> None:
         """
@@ -195,15 +181,28 @@ class RouterBase(nn.Module):
         else:
             self.ptu_grain_history = None
 
-    def capture_correlations(self, indices):
+    def capture_correlations(self, indices: torch.Tensor, loads: torch.Tensor):
         assert hasattr(
             self, "protocol"
         ), "Correlation capturing is only supported for Router with protocol!"
+        path_num = len(loads)
+        src_indices = convert_index_format(
+            indices, loads, self.protocol.index_format, "src_index"
+        )
+        current_ptu_path = [
+            src_indices[: loads[i], i].numpy() + self.ptu_tag_base
+            for i in range(path_num)
+        ]
         if self.history_len == 0:
-            self.correlation_history = torch.zeros_like(
-                indices, dtype=torch.float64, device="cpu"
-            )
-        pass
+            self.ptu_decision_history = current_ptu_path
+        else:
+            self.ptu_decision_history = [
+                np.concatenate(
+                    (self.ptu_decision_history[i], current_ptu_path[i]), axis=None
+                )
+                for i in range(path_num)
+            ]
+        self.ptu_tag_base += loads.sum().item()
 
     def listing_flows(self, flows, is_dispatch=True):
         if is_dispatch:

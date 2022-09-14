@@ -4,10 +4,12 @@ from typing import Union
 
 import torch
 from torch.fx import GraphModule
+import numpy as np
 from brt.passes.base import PassBase, register_pass
 from brt.router import ScatterRouter
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
+
 
 @register_pass("dead_path_eliminate")
 class DeadPathEliminatePass(PassBase):
@@ -37,10 +39,9 @@ class DeadPathEliminatePass(PassBase):
                     if path_id not in dead_paths
                 ]
                 new_args = ([node.args[0][path_id] for path_id in live_paths],)
-                new_load_history = torch.tensor(
-                    [load_histroy[path_id].item() for path_id in live_paths],
-                    dtype=torch.float64,
-                    device="cpu",
+                new_load_history = np.array(
+                    [load_histroy[path_id] for path_id in live_paths],
+                    dtype=np.float64,
                 )
                 node_m.load_history = new_load_history
                 node.args = new_args

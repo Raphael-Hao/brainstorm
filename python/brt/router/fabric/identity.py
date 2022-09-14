@@ -30,8 +30,6 @@ class IndentityDispatchFabric(DispatchFabric):
         self.path_num = path_num
 
     def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
-        throttling = kwargs.pop("throttling", False)
-        assert_compatibility(self, "throttling", False, throttling)
         index_format = kwargs.pop("index_format", None)
         assert_compatibility(self, "index_format", None, index_format)
 
@@ -39,15 +37,14 @@ class IndentityDispatchFabric(DispatchFabric):
         self,
         in_flow: Union[torch.Tensor, List[torch.Tensor]],
         route_indices: torch.Tensor,
-        loads: torch.Tensor,
-        capacities: torch.Tensor = None,
+        real_loads: torch.Tensor,
         score: torch.Tensor = None,
     ) -> Union[List[torch.Tensor], List[List[torch.Tensor]]]:
         if self.flow_num == 1:
             in_flows = [in_flow]
         else:
             in_flows = in_flow
-        all_out_flows = self.dispatch(in_flows, route_indices, loads, score)
+        all_out_flows = self.dispatch(in_flows, route_indices, real_loads, score)
         if self.flow_num == 1:
             return all_out_flows[0]
         return all_out_flows
