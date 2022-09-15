@@ -9,7 +9,6 @@ from brt.router import switch_router_mode
 from brt.passes import (
     DeadPathEliminatePass,
     PermanentPathFoldPass,
-    MemoryPlanPass,
     OnDemandMemoryPlanPass,
     PredictMemoryPlanPass,
 )
@@ -179,36 +178,6 @@ def main(args):
     res = Trainer.test(cfg, model)
     torch.cuda.empty_cache()
 
-    if args.debug:
-        timer = CUDATimer(repeat=5)
-        backbone_input = model.backbone_input.detach().cuda()
-
-        backbone = switch_router_mode(model.backbone, False).eval()
-
-        MemoryStats.reset_cuda_stats()
-
-        timer.execute(lambda: backbone(backbone_input), "naive")
-
-        MemoryStats.print_cuda_stats()
-
-        backbone = pin_memory(backbone.cpu())
-
-        memory_plan_pass = OnDemandMemoryPlanPass(backbone)
-        # memory_plan_pass = PredictMemoryPlanPass(backbone, 1)
-        memory_plan_pass.run_on_graph()
-        new_backbone = memory_plan_pass.finalize()
-        print(new_backbone.code)
-        torch.cuda.reset_accumulated_memory_stats()
-        torch.cuda.reset_peak_memory_stats()
-        torch.cuda.synchronize()
-        MemoryStats.reset_cuda_stats()
-        timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
-        MemoryStats.print_cuda_stats()
-
-    # model.eval()
-    # input = torch.randn(1, 3, 1024, 2048).cuda()
-    # outputs = model.backbone(input)
-    # print(outputs)
     benchmarker = Benchmarker()
 
     def liveness_benchmark():
@@ -247,17 +216,31 @@ def main(args):
     benchmarker.add_benchmark("liveness", liveness_benchmark)
 
     def memroy_plan_benchmark():
-        timer = CUDATimer()
-        timer.set_iterations(100)
+        timer = CUDATimer(repeat=5)
+        backbone_input = model.backbone_input.detach().cuda()
 
-        backbone_input = model.backbone_input
+        backbone = switch_router_mode(model.backbone, False).eval()
 
-        naive_backbone = model.backbone
+        MemoryStats.reset_cuda_stats()
 
-        naive_backbone = switch_router_mode(naive_backbone, False).eval()
+        timer.execute(lambda: backbone(backbone_input), "naive")
 
-        preload_pass = MemoryPlanPass(model.backbone)
-        preload_pass.run_on_graph()
+        MemoryStats.print_cuda_stats()
+
+        backbone = pin_memory(backbone.cpu())
+
+        # memory_plan_pass = OnDemandMemoryPlanPass(backbone)
+        memory_plan_pass = PredictMemoryPlanPass(backbone, 500)
+        memory_plan_pass.run_on_graph()
+        new_backbone = memory_plan_pass.finalize()
+        print(new_backbone.code)
+        torch.cuda.reset_accumulated_memory_stats()
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.synchronize()
+        MemoryStats.reset_cuda_stats()
+        # profile(lambda: new_backbone(backbone_input))
+        timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
+        MemoryStats.print_cuda_stats()
 
     benchmarker.add_benchmark("memory_plan", memroy_plan_benchmark)
 
