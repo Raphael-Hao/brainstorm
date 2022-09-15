@@ -37,7 +37,7 @@ class SinglePTUDispatchFabric(DispatchFabric):
             in_flows = [in_flow]
         else:
             in_flows = in_flow
-        all_out_flows = self.dispatch(in_flows, route_indices, loads, score)
+        all_out_flows = self.dispatch(in_flows, route_indices, real_loads, score)
         if self.flow_num == 1:
             return all_out_flows[0]
         return all_out_flows

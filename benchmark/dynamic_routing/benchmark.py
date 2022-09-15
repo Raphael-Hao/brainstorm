@@ -212,8 +212,7 @@ def main(args):
     benchmarker = Benchmarker()
 
     def liveness_benchmark():
-        timer = CUDATimer()
-        timer.set_iterations(100)
+        timer = CUDATimer(repeat=5)
 
         backbone_input = model.backbone_input
 
