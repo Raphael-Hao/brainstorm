@@ -13,23 +13,23 @@ datasets:
   test_1:
     name: DIV2K_valid_LR_bicubic_X4
     mode: LQGT
-    dataroot_GT: /home/ouyang/project/ClassSR/datasets/DIV2K_HR/DIV2K_valid_HR
-    dataroot_LQ: /home/ouyang/project/ClassSR/datasets/DIV2K_LR_v2017/DIV2K_valid_LR_bicubic/X4
+    dataroot_GT: /home/v-louyang/brainstorm_project/datasets/DIV2K/DIV2K_HR/DIV2K_valid_HR
+    dataroot_LQ: /home/v-louyang/brainstorm_project/datasets/DIV2K/DIV2K_LR_v2017/DIV2K_valid_LR_bicubic/X4
   test_2:
     name: DIV2K_valid_LR_unknown_X4
     mode: LQGT
-    dataroot_GT: /home/ouyang/project/ClassSR/datasets/DIV2K_HR/DIV2K_valid_HR
-    dataroot_LQ: /home/ouyang/project/ClassSR/datasets/DIV2K_LR_v2017/DIV2K_valid_LR_unknown/X4
+    dataroot_GT: /home/v-louyang/brainstorm_project/datasets/DIV2K/DIV2K_HR/DIV2K_valid_HR
+    dataroot_LQ: /home/v-louyang/brainstorm_project/datasets/DIV2K/DIV2K_LR_v2017/DIV2K_valid_LR_unknown/X4
   test_3:
     name: DIV2K_train_LR_bicubic_X4
     mode: LQGT
-    dataroot_GT: /home/ouyang/project/ClassSR/datasets/DIV2K_HR/DIV2K_train_HR
-    dataroot_LQ: /home/ouyang/project/ClassSR/datasets/DIV2K_LR_v2017/DIV2K_train_LR_bicubic/X4
+    dataroot_GT: /home/v-louyang/brainstorm_project/datasets/DIV2K/DIV2K_HR/DIV2K_train_HR
+    dataroot_LQ: /home/v-louyang/brainstorm_project/datasets/DIV2K/DIV2K_LR_v2017/DIV2K_train_LR_bicubic/X4
   test_4:
     name: DIV2K_train_LR_unknown_X4
     mode: LQGT
-    dataroot_GT: /home/ouyang/project/ClassSR/datasets/DIV2K_HR/DIV2K_train_HR
-    dataroot_LQ: /home/ouyang/project/ClassSR/datasets/DIV2K_LR_v2017/DIV2K_train_LR_unknown/X4
+    dataroot_GT: /home/v-louyang/brainstorm_project/datasets/DIV2K/DIV2K_HR/DIV2K_train_HR
+    dataroot_LQ: /home/v-louyang/brainstorm_project/datasets/DIV2K/DIV2K_LR_v2017/DIV2K_train_LR_unknown/X4
 
 
 #### network structures
@@ -41,7 +41,7 @@ network_G:
 
 #### path
 path:
-  pretrain_model_G: /home/ouyang/project/ClassSR/experiments/pre_trained_models/ClassSR_RCAN.pth
+  pretrain_model_G: /home/v-louyang/brainstorm_project/experiments/pre_trained_models/ClassSR_RCAN.pth
   pretrain_model_classifier: ~
   pretrain_model_G_branch1: ~
   pretrain_model_G_branch2: ~

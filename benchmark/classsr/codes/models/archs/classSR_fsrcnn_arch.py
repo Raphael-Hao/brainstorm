@@ -31,28 +31,6 @@ class classSR_3class_fsrcnn_net(nn.Module):
         gr_x = self.gather_router(y)
         return gr_x, [yy.shape[0] for yy in y]
         
-        # for i in range(len(x)):
-        #     type = self.classifier(x[i].unsqueeze(0))
-
-        #     flag = torch.max(type, 1)[1].data.squeeze()
-        #     p = F.softmax(type, dim=1)
-        #     # flag=np.random.randint(0,2)
-        #     # flag=2
-        #     if flag == 0:
-        #         out = self.net1(x[i].unsqueeze(0))
-        #     elif flag == 1:
-        #         out = self.net2(x[i].unsqueeze(0))
-        #     elif flag == 2:
-        #         out = self.net3(x[i].unsqueeze(0))
-        #     if i == 0:
-        #         out_res = out
-        #         type_res = p
-        #     else:
-        #         out_res = torch.cat((out_res, out), 0)
-        #         type_res = torch.cat((type_res, p), 0)
-
-        # return out_res, type_res
-
 
 class Classifier(nn.Module):
     def __init__(self):
