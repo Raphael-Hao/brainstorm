@@ -9,8 +9,15 @@ from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
 logger = log.get_logger(__file__)
 
 
-class Conv2dBNActInfo(ModuleInfo):
-    _involved_module_cls = [torch.nn.Conv2d, torch.nn.BatchNorm2d, torch.nn.ReLU]
+class Conv2dPReLUInfo(ModuleInfo):
+    _involved_module_cls = [torch.nn.Conv2d, torch.nn.PReLU]
+
+    # 0: float* __restrict__ placeholder,  Input
+    # 1: float* __restrict__ placeholder1, Conv2d.weight
+    # 2: float* __restrict__ T_prelu,      Output
+    # 3: float* __restrict__ placeholder2, Conv2d.bias
+    # 4: float* __restrict__ placeholder3, PReLU.weight
+
     _input_arg_indices = {"forward": [0]}
     _parameter_arg_indices = {"forward": [1]}
     _output_arg_indices = {"forward": [2]}
@@ -20,20 +27,11 @@ class Conv2dBNActInfo(ModuleInfo):
     def ismodule(cls, module: torch.nn.Module):
         if not isinstance(module, torch.nn.Sequential):
             module = torch.nn.Sequential(module)
-        if len(module) == 1 and isinstance(module[0], cls._involved_module_cls[0]):
-            return True
-        if len(module) == 2 and isinstance(module[0], cls._involved_module_cls[0]):
-            if isinstance(module[1], cls._involved_module_cls[1]) or isinstance(
-                module[1], cls._involved_module_cls[2]
+        if isinstance(module[0], cls._involved_module_cls[0]):
+            if len(module) == 1 or (
+                len(module) == 2 and isinstance(module[1], cls._involved_module_cls[1])
             ):
                 return True
-        if (
-            len(module) == 3
-            and isinstance(module[0], cls._involved_module_cls[0])
-            and isinstance(module[1], cls._involved_module_cls[1])
-            and isinstance(module[2], cls._involved_module_cls[2])
-        ):
-            return True
         return False
 
     @classmethod
@@ -52,6 +50,8 @@ class Conv2dBNActInfo(ModuleInfo):
         parameters["padding"] = module[0].padding
         parameters["dilation"] = module[0].dilation
         parameters["groups"] = module[0].groups
+        # TODO: full support of PReLU, see `_parameter_arg_indices`
+        # parameters['num_parameters'] = module[1].num_parameters
 
         sample_output = module(sample_input)
         input_infos = {"input_0": list(sample_input.shape)}
@@ -94,10 +94,11 @@ parameters: {parameters}
         if not isinstance(module, torch.nn.Sequential):
             module = torch.nn.Sequential(module)
         module_name = cls.get_module_name(module)
-        if module_name == "Conv2d" or module_name == "Conv2dReLU":
-            input_arg_num = 2
-        else:
-            input_arg_num = 3
+        input_arg_num = 2
+        if 'Bias' in module_name:
+            input_arg_num += 1
+        if 'PReLU' in module_name:
+            input_arg_num += 1
         total_arg_num = input_arg_num + 1
 
         return (
@@ -112,7 +113,7 @@ parameters: {parameters}
         conv_module = module[0] if isinstance(module, torch.nn.Sequential) else module
         assert isinstance(
             conv_module, torch.nn.Conv2d
-        ), f"An instance of Conv2d is expected"
+        ), "An instance of Conv2d is expected"
         if method == "forward":
 
             def init_output(input):
@@ -152,11 +153,8 @@ parameters: {parameters}
     @classmethod
     def get_module_name(cls, modules) -> str:
         module_name = "Conv2d"
-        module_name += "Bias" if modules[0].bias is not None else ""
+        if modules[0].bias is not None:
+            module_name += "Bias"
         if len(modules) == 2:
-            module_name += (
-                "BatchNorm" if isinstance(modules[1], torch.nn.BatchNorm2d) else "ReLU"
-            )
-        elif len(modules) == 3:
-            module_name += "BatchNormReLU"
+            module_name += "PReLU"
         return module_name
