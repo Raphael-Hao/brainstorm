@@ -12,7 +12,6 @@ logger = log.get_logger(__file__)
 class Conv2dBatchNorm2dReLUInfo(ModuleInfo):
     _involved_module_cls = [torch.nn.Conv2d, torch.nn.BatchNorm2d, torch.nn.ReLU]
     _input_arg_indices = {"forward": [0]}
-    _parameter_arg_indices = {"forward": [1]}
     _output_arg_indices = {"forward": [2]}
     _shared_arg_indices = {"forward": [0, 2]}
 

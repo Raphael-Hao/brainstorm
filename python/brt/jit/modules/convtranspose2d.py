@@ -12,7 +12,6 @@ logger = log.get_logger(__file__)
 class ConvTranspose2dInfo(ModuleInfo):
     _involved_module_cls = torch.nn.ConvTranspose2d
 #     _input_arg_indices = {"forward": [0]}
-#     _parameter_arg_indices = {"forward": [1]}
 #     _output_arg_indices = {"forward": [2]}
 #     _shared_arg_indices = {"forward": [0, 2]}
 

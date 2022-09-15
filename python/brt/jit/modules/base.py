@@ -15,7 +15,6 @@ __all__ = ["ModuleInfo"]
 class ModuleInfo:
     _involved_module_cls = None
     _input_arg_indices = None
-    _parameter_arg_indices = None
     _output_arg_indices = None
     _shared_arg_indices = None
 

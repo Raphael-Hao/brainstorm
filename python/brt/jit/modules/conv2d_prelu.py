@@ -19,7 +19,6 @@ class Conv2dPReLUInfo(ModuleInfo):
     # 4: float* __restrict__ placeholder3, PReLU.weight
 
     _input_arg_indices = {"forward": [0]}
-    _parameter_arg_indices = {"forward": [1]}
     _output_arg_indices = {"forward": [2]}
     _shared_arg_indices = {"forward": [0, 2]}
 
@@ -50,7 +49,7 @@ class Conv2dPReLUInfo(ModuleInfo):
         parameters["padding"] = module[0].padding
         parameters["dilation"] = module[0].dilation
         parameters["groups"] = module[0].groups
-        # TODO: full support of PReLU, see `_parameter_arg_indices`
+        # TODO: full support of PReLU
         # parameters['num_parameters'] = module[1].num_parameters
 
         sample_output = module(sample_input)
