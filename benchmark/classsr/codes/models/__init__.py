@@ -10,6 +10,8 @@ def create_model(opt):
         from .SR_model import SRModel as M
     elif model == "ClassSR":
         from .ClassSR_model import ClassSR_Model as M
+    elif model == "FusedClassSR":
+        from .FusedClassSR import FusedClassSR as M
     else:
         raise NotImplementedError("Model [{:s}] not recognized.".format(model))
     m = M(opt)

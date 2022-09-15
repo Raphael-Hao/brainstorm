@@ -158,7 +158,7 @@ def make_log_fname(
 def main():
     tvm_tuner = TVMTuner()
     conv_params_log_file = (
-        BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_AIC21_Track1_Cam1.json"
+        BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_AIC21_Track1_Cam16.json"
     )
     conv_params_log_file_nodup = (
         BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_nodup.json"
