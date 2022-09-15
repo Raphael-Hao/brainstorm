@@ -12,6 +12,8 @@ logger = log.get_logger(__file__)
 
 __all__ = [
     "pin_memory",
+    "MemoryPlanContext",
+    "InitialLoader",
     "OnDemandLoader",
     "OnDemandGuarder",
     "OnDemandUnloader",

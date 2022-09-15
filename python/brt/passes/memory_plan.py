@@ -75,7 +75,9 @@ class MemoryPlanPass(PassBase):
 
     def collect_params_and_buffers(self):
         self.build_goal_classifiers(node_types=["output", "scatter"])
-        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history", r"\.ptu\_path\_history"])
+        self.set_ignore_buffers(
+            [r"\.load\_history", r"\.capacity\_history", r"\.ptu\_path\_history"]
+        )
 
         memo = set()
         # first gropu will include the the placeholder and the first group of goal nodes (routers)
@@ -123,6 +125,13 @@ class MemoryPlanPass(PassBase):
         for node in self.graph_mod.graph.nodes:
             if node in self.plan_groups:
                 orderred_plan_groups[node] = self.plan_groups[node]
+        return orderred_plan_groups
+
+    def sort_plan_groups_in_tuple(self):
+        orderred_plan_groups: List[Tuple[Node, List[PLGT]]] = list()
+        for node in self.graph_mod.graph.nodes:
+            if node in self.plan_groups:
+                orderred_plan_groups.append((node, self.plan_groups[node]))
         return orderred_plan_groups
 
     def travel_to_goal(self, start_nodes: Dict[Node, None], memo: Set[Node] = None):
@@ -304,7 +313,9 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
 
     def collect_params_and_buffers(self):
         self.build_goal_classifiers(node_types=["output", "scatter"])
-        self.set_ignore_buffers([r"\.load\_history", r"\.capacity\_history", r"\.ptu\_path\_history"])
+        self.set_ignore_buffers(
+            [r"\.load\_history", r"\.capacity\_history", r"\.ptu\_decision\_history"]
+        )
         memo = set()
         placeholder_nodes = self.find_all_placeholders()
         (
@@ -350,18 +361,20 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
         assert self.is_params_and_buffer_all_collected()
 
     def process_plan(self):
-        orderred_plan_groups = self.sort_plan_groups()
+        orderred_plan_groups = self.sort_plan_groups_in_tuple()
         event_num = 0
-        for plan_group in orderred_plan_groups.values():
-            event_num += len(plan_group)
+        for _, plan_groups in orderred_plan_groups:
+            event_num += len(plan_groups)
+
         MemoryPlanContext.init(event_num)
         event_id = 0
-        for head_node, plan_group in orderred_plan_groups.items():
+
+        for head_node, plan_groups in orderred_plan_groups:
             for path_id, (
                 _traveled_nodes,
                 collected_params,
                 collected_buffers,
-            ) in enumerate(plan_group):
+            ) in enumerate(plan_groups):
                 memory_loader = OnDemandLoader(
                     path_id, event_id, collected_params, collected_buffers
                 )
@@ -380,20 +393,20 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
 
         event_id -= 1
 
-        for head_node, plan_group in reversed(orderred_plan_groups.items()):
-            for path_id in range(len(plan_group)):
-                traveled_nodes = plan_group[-path_id - 1][0]
+        for head_node, plan_groups in reversed(orderred_plan_groups):
+            for path_id in range(len(plan_groups)):
+                traveled_nodes = plan_groups[-path_id - 1][0]
                 tail_node = traveled_nodes[-1]
                 with self.graph_mod.graph.inserting_after(tail_node):
                     unloader_node = self.graph_mod.graph.call_module(
                         f"brt_memory_unloader_{event_id - path_id}",
                         args=(tail_node,),
                     )
-                tail_node.replace_all_uses_with(
-                    unloader_node, lambda usr: usr != unloader_node
-                )
+                    tail_node.replace_all_uses_with(
+                        unloader_node, lambda usr: usr != unloader_node
+                    )
 
-            for path_id in range(len(plan_group)):
+            for path_id in range(len(plan_groups)):
                 with self.graph_mod.graph.inserting_after(head_node):
                     guarder_node = self.graph_mod.graph.call_module(
                         f"brt_memory_guarder_{event_id - path_id}",
@@ -403,7 +416,7 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                         guarder_node, lambda usr: usr != guarder_node
                     )
 
-            for path_id in range(len(plan_group)):
+            for path_id in range(len(plan_groups)):
                 with self.graph_mod.graph.inserting_after(head_node):
                     loader_node = self.graph_mod.graph.call_module(
                         f"brt_memory_loader_{event_id - path_id}", args=(head_node,)
@@ -411,7 +424,7 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                     head_node.replace_all_uses_with(
                         loader_node, lambda usr: usr != loader_node
                     )
-            event_id -= len(plan_group)
+            event_id -= len(plan_groups)
 
     def finalize(self) -> GraphModule:
         return super().finalize()
@@ -433,26 +446,26 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
         self.process_plan()
 
     def process_plan(self):
-        orderred_plan_groups = self.sort_plan_groups()
+        orderred_plan_groups = self.sort_plan_groups_in_tuple()
         event_num = 0
-        for plan_group in orderred_plan_groups.values():
-            event_num += len(plan_group)
+        for plan_groups in orderred_plan_groups:
+            event_num += len(plan_groups)
+
         MemoryPlanContext.init(event_num)
-        prev_head_node: Node = None
+
         event_id = 0
-        for head_node, plan_group in orderred_plan_groups.items():
+        for head_node, plan_groups in orderred_plan_groups:
             for path_id, (
-                tail_node,
                 traveled_nodes,
                 collected_params,
                 collected_buffers,
-            ) in enumerate(plan_group):
+            ) in enumerate(plan_groups):
                 if self.is_router_node(head_node):
                     head_node_m = self.sub_modules[head_node.target]
                     if self.is_scatter_node(head_node):
-                        path_load_history = head_node_m.load_history[path_id].item()
+                        path_load_history = head_node_m.load_history[path_id]
                     elif self.is_gather_node(head_node):
-                        path_load_history = head_node_m.load_history.mean().item()
+                        path_load_history = head_node_m.load_history.max()
                     else:
                         raise RuntimeError(
                             f"Unknown router kind: {head_node_m.__class__}"
@@ -490,45 +503,49 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                 )
                 event_id += 1
 
-        for head_node, plan_group in orderred_plan_groups.items():
-            for path_id in range(len(plan_group)):
-                tail_node = plan_group[-path_id - 1][0]
+        orderred_plan_groups.reverse()
+        event_id -= 1
+
+        for g_id, (head_node, plan_groups) in enumerate(orderred_plan_groups):
+            for path_id in range(len(plan_groups)):
+                traveled_nodes = plan_groups[-path_id - 1][0]
+                tail_node = traveled_nodes[-1]
                 with self.graph_mod.graph.inserting_after(tail_node):
                     unloader_node = self.graph_mod.graph.call_module(
-                        f"brt_memory_unloader_{event_id - path_id -1}",
-                        args=(tail_node,),
+                        f"brt_memory_unloader_{event_id - path_id}", args=(tail_node,)
                     )
-                tail_node.replace_all_uses_with(
-                    unloader_node, lambda usr: usr != unloader_node
-                )
+                    tail_node.replace_all_uses_with(
+                        unloader_node, lambda usr: usr != unloader_node
+                    )
 
-            for path_id in range(len(plan_group)):
+            for path_id in range(len(plan_groups)):
                 with self.graph_mod.graph.inserting_after(head_node):
                     guarder_node = self.graph_mod.graph.call_module(
-                        f"brt_memory_guarder_{event_id - path_id - 1}",
-                        args=(head_node,),
+                        f"brt_memory_guarder_{event_id - path_id}", args=(head_node,)
                     )
                     head_node.replace_all_uses_with(
                         guarder_node, lambda usr: usr != guarder_node
                     )
 
-            for path_id in range(len(plan_group)):
+            for path_id in range(len(plan_groups)):
                 memory_loader = getattr(
-                    self.graph_mod, f"brt_memory_loader_{event_id - path_id - 1}"
+                    self.graph_mod, f"brt_memory_loader_{event_id - path_id}"
                 )
-                if isinstance(memory_loader, OnDemandLoader) or prev_head_node is None:
+                if isinstance(memory_loader, OnDemandLoader) or (g_id + 1) == len(
+                    orderred_plan_groups
+                ):
                     with self.graph_mod.graph.inserting_after(head_node):
                         loader_node = self.graph_mod.graph.call_module(
-                            f"brt_memory_loader_{event_id - path_id - 1}",
-                            args=(head_node,),
+                            f"brt_memory_loader_{event_id - path_id}", args=(head_node,)
                         )
                         head_node.replace_all_uses_with(
                             loader_node, lambda usr: usr != loader_node
                         )
                 elif isinstance(memory_loader, PredictLoader):
+                    prev_head_node = orderred_plan_groups[g_id + 1][0]
                     with self.graph_mod.graph.inserting_after(prev_head_node):
                         loader_node = self.graph_mod.graph.call_module(
-                            f"brt_memory_loader_{event_id - path_id - 1}",
+                            f"brt_memory_loader_{event_id - path_id}",
                             args=(prev_head_node,),
                         )
                         prev_head_node.replace_all_uses_with(
@@ -538,7 +555,7 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                     raise RuntimeError(
                         f"Unknown loader kind: {memory_loader.__class__}"
                     )
-            prev_head_node = head_node
+            event_id -= len(plan_groups)
 
     def finalize(self) -> GraphModule:
         return super().finalize()
