@@ -1,9 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-import typing
 from typing import Type, Union, List, Dict
 
-from collections import OrderedDict
 import operator
 import torch
 from torch.fx import GraphModule, Node
@@ -88,7 +86,7 @@ class PassBase:
             "for clustering the start nodes of specific path."
         )
         flow_num = scatter_m.fabric.flow_num
-        path_num = scatter_m.load_history.numel()
+        path_num = scatter_m.load_history.size
         start_nodes: List[Dict[Node, None]] = [{} for _ in range(path_num)]
 
         if flow_num == 1:
