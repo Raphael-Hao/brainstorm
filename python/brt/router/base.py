@@ -131,8 +131,8 @@ class RouterBase(nn.Module):
         if self.history_len == 0:
             self.load_history = np.zeros(path_num, dtype=np.float64)
 
-        current_load = np.ndarray(
-            [flow.size(0) for flow in in_flows], dtype=torch.float64
+        current_load = np.array(
+            [flow.size(0) for flow in in_flows], dtype=np.float64
         )
         if self.capture_mode == "avg":
             self.load_history = (
@@ -190,7 +190,7 @@ class RouterBase(nn.Module):
             indices, loads, self.protocol.index_format, "src_index"
         )
         current_ptu_path = [
-            src_indices[: loads[i], i].numpy() + self.ptu_tag_base
+            src_indices[: loads[i], i].cpu().numpy() + self.ptu_tag_base
             for i in range(path_num)
         ]
         if self.history_len == 0:
