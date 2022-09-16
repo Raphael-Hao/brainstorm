@@ -279,7 +279,7 @@ NET_CONV_META = {
                 "norm": None,
                 "activation": None,
                 "input_shape": [-1, 56, 32, 32],
-                "output_shape": [-1, 3, 32, 32],
+                "output_shape": [-1, 3, 128, 128],
             },
         ],
     ]
