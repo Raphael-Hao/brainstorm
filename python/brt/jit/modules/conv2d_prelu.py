@@ -10,14 +10,18 @@ logger = log.get_logger(__file__)
 
 
 class Conv2dPReLUInfo(ModuleInfo):
+    """Info for fused torch.nn.Conv2d & torch.nn.PReLU kernel
+
+    Method Args:
+        forward:
+            [0]: float* __restrict__ placeholder,  Input
+            [1]: float* __restrict__ placeholder1, Conv2d.weight
+            [2]: float* __restrict__ T_prelu,      Output
+            [3]: float* __restrict__ placeholder2, Conv2d.bias
+            [4]: float* __restrict__ placeholder3, PReLU.weight
+    """
+
     _involved_module_cls = [torch.nn.Conv2d, torch.nn.PReLU]
-
-    # 0: float* __restrict__ placeholder,  Input
-    # 1: float* __restrict__ placeholder1, Conv2d.weight
-    # 2: float* __restrict__ T_prelu,      Output
-    # 3: float* __restrict__ placeholder2, Conv2d.bias
-    # 4: float* __restrict__ placeholder3, PReLU.weight
-
     _input_arg_indices = {"forward": [0]}
     _output_arg_indices = {"forward": [2]}
     _shared_arg_indices = {"forward": [0, 2]}
