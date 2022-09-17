@@ -177,6 +177,7 @@ class InitialLoader(MemoryPlanner):
     def forward(self):
         self.load(self.event_id)
         self.guard(self.event_id)
+        MemoryPlanContext.MEMORY_STREAM.synchronize()
 
 
 @register_leaf_node
