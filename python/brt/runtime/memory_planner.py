@@ -20,6 +20,12 @@ __all__ = [
     "PredictLoader",
     "PredictGuarder",
     "PredictUnloader",
+    "GroupedOnDemandLoader",
+    "GroupedOnDemandGuarder",
+    "GroupedOnDemandUnloader",
+    "GroupedPredictLoader",
+    "GroupedPredictGuarder",
+    "GroupedPredictUnloader",
 ]
 
 

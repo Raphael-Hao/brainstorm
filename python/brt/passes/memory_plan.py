@@ -13,15 +13,7 @@ from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node
 from brt.runtime import log
 from brt.runtime.tensor_group import group_params_buffers
-from brt.runtime.memory_planner import (
-    MemoryPlanContext,
-    OnDemandLoader,
-    OnDemandUnloader,
-    OnDemandGuarder,
-    PredictLoader,
-    PredictGuarder,
-    PredictUnloader,
-)
+from brt.runtime.memory_planner import *
 
 PLGT = Tuple[
     List[Node],
@@ -37,9 +29,7 @@ __all__ = ["OnDemandMemoryPlan", "PredictMemoryPlan"]
 @register_pass("MemoryPlan")
 class MemoryPlanPass(PassBase):
     def __init__(
-        self,
-        m: Union[torch.nn.Module, GraphModule],
-        max_depth=0,
+        self, m: Union[torch.nn.Module, GraphModule], max_depth=0, is_grouping=False
     ):
         super().__init__(m)
         self.max_depth = max_depth
@@ -98,6 +88,64 @@ class MemoryPlanPass(PassBase):
 
     def process_plan(self):
         raise NotImplementedError
+
+    def inject_planners(
+        self,
+        mode: str,
+        path_id: int,
+        event_id: int,
+        params: Dict[str, nn.Parameter],
+        buffers: Dict[str, Tuple[nn.Module, str]],
+    ):
+        """Inject planners into the graph module so that the memory planners
+        can be called like a normal nn.Module during inference.
+
+        Args:
+            mode (str): planer mode
+            path_id (int): path id for scatter router
+            event_id (int): event id for recording cuda events
+            params (Dict[str, nn.Parameter]): collected parameters
+            buffers (Dict[str, Tuple[nn.Module, str]]): collected buffers
+
+        Raises:
+            ValueError: Unsupported planner mode
+        """
+        if self.is_grouping:
+            grouped_tensor_pin, grouped_tensor_cuda = group_params_buffers(
+                params, buffers
+            )
+            if mode == "on_demand":
+                memory_loader = GroupedOnDemandLoader(
+                    path_id, event_id, grouped_tensor_pin, grouped_tensor_cuda
+                )
+                memory_guarder = GroupedOnDemandGuarder(path_id, event_id)
+                memory_unloader = GroupedOnDemandUnloader(
+                    event_id, grouped_tensor_pin, grouped_tensor_cuda
+                )
+            elif mode == "predict":
+                memory_loader = GroupedPredictLoader(
+                    event_id, grouped_tensor_pin, grouped_tensor_cuda
+                )
+                memory_guarder = GroupedPredictGuarder(event_id)
+                memory_unloader = GroupedPredictUnloader(
+                    event_id, grouped_tensor_pin, grouped_tensor_cuda
+                )
+            else:
+                raise ValueError(f"Mode {mode} is not supported.")
+        else:
+            if mode == "on_demand":
+                memory_loader = OnDemandLoader(path_id, event_id, params, buffers)
+                memory_guarder = OnDemandGuarder(path_id, event_id)
+                memory_unloader = OnDemandUnloader(event_id, params, buffers)
+            elif mode == "predict":
+                memory_loader = PredictLoader(event_id, params, buffers)
+                memory_guarder = PredictGuarder(event_id)
+                memory_unloader = PredictUnloader(event_id, params, buffers)
+            else:
+                raise ValueError(f"Mode {mode} is not supported.")
+        setattr(self.graph_mod, f"brt_memory_loader_{event_id}", memory_loader)
+        setattr(self.graph_mod, f"brt_memory_guarder_{event_id}", memory_guarder)
+        setattr(self.graph_mod, f"brt_memory_unloader_{event_id}", memory_unloader)
 
     def add_new_plan_group(
         self,
@@ -301,8 +349,10 @@ class MemoryPlanPass(PassBase):
 
 @register_pass("OnDemandMemoryPlan")
 class OnDemandMemoryPlanPass(MemoryPlanPass):
-    def __init__(self, m: Union[torch.nn.Module, GraphModule], max_depth=0):
-        super().__init__(m, max_depth=max_depth)
+    def __init__(
+        self, m: Union[torch.nn.Module, GraphModule], max_depth=0, is_grouping=False
+    ):
+        super().__init__(m, max_depth=max_depth, is_grouping=is_grouping)
 
     def run_on_graph(self) -> None:
         """TODO
@@ -376,19 +426,8 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                 collected_params,
                 collected_buffers,
             ) in enumerate(plan_groups):
-                memory_loader = OnDemandLoader(
-                    path_id, event_id, collected_params, collected_buffers
-                )
-                memory_guarder = OnDemandGuarder(path_id, event_id)
-                memory_unloader = OnDemandUnloader(
-                    event_id, collected_params, collected_buffers
-                )
-                setattr(self.graph_mod, f"brt_memory_loader_{event_id}", memory_loader)
-                setattr(
-                    self.graph_mod, f"brt_memory_guarder_{event_id}", memory_guarder
-                )
-                setattr(
-                    self.graph_mod, f"brt_memory_unloader_{event_id}", memory_unloader
+                self.inject_planners(
+                    "on_demand", path_id, event_id, collected_params, collected_buffers
                 )
                 event_id += 1
 
@@ -438,8 +477,9 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
         m: Union[torch.nn.Module, GraphModule],
         lazy_load_threshold: float = 0.0,
         max_depth=0,
+        is_grouping=False,
     ):
-        super().__init__(m, max_depth=max_depth)
+        super().__init__(m, max_depth=max_depth, is_grouping=is_grouping)
         self.lazy_load_threshold = lazy_load_threshold
 
     def run_on_graph(self) -> None:
@@ -461,12 +501,6 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                 collected_params,
                 collected_buffers,
             ) in enumerate(plan_groups):
-                grouped_pb_tensor_pin = _group_params_buffers(
-                    collected_buffers, collected_buffers
-                )
-                grouped_pb_tensor_cuda = torch.empty_like(
-                    grouped_pb_tensor_pin, device="cuda"
-                )
                 if self.is_router_node(head_node):
                     head_node_m = self.sub_modules[head_node.target]
                     if self.is_scatter_node(head_node):
@@ -478,36 +512,29 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                             f"Unknown router kind: {head_node_m.__class__}"
                         )
                     if path_load_history >= self.lazy_load_threshold:
-                        memory_loader = PredictLoader(
-                            event_id, collected_params, collected_buffers
-                        )
-                        memory_guarder = PredictGuarder(event_id)
-                        memory_unloader = PredictUnloader(
-                            event_id, collected_params, collected_buffers
+                        self.inject_planners(
+                            "predict",
+                            path_id,
+                            event_id,
+                            collected_params,
+                            collected_buffers,
                         )
                     else:
-                        memory_loader = OnDemandLoader(
-                            path_id, event_id, collected_params, collected_buffers
-                        )
-                        memory_guarder = OnDemandGuarder(path_id, event_id)
-                        memory_unloader = OnDemandUnloader(
-                            event_id, collected_params, collected_buffers
+                        self.inject_planners(
+                            "on_demand",
+                            path_id,
+                            event_id,
+                            collected_params,
+                            collected_buffers,
                         )
                 else:
-                    memory_loader = PredictLoader(
-                        event_id, collected_params, collected_buffers
+                    self.inject_planners(
+                        "predict",
+                        path_id,
+                        event_id,
+                        collected_params,
+                        collected_buffers,
                     )
-                    memory_guarder = PredictGuarder(event_id)
-                    memory_unloader = PredictUnloader(
-                        event_id, collected_params, collected_buffers
-                    )
-                setattr(self.graph_mod, f"brt_memory_loader_{event_id}", memory_loader)
-                setattr(
-                    self.graph_mod, f"brt_memory_guarder_{event_id}", memory_guarder
-                )
-                setattr(
-                    self.graph_mod, f"brt_memory_unloader_{event_id}", memory_unloader
-                )
                 event_id += 1
 
         orderred_plan_groups.reverse()
@@ -563,6 +590,3 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                         f"Unknown loader kind: {memory_loader.__class__}"
                     )
             event_id -= len(plan_groups)
-
-    def finalize(self) -> GraphModule:
-        return super().finalize()
