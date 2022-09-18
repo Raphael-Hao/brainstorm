@@ -24,7 +24,7 @@ def group_params_buffers(
         buffers (Dict[str, nn.Parameter]): collected buffers
 
     Returns:
-        torch.Tensor: single tensor containing all params and buffers
+        Tuple[torch.Tensor, torch.Tensor]: single pin memory and cuda tensor containing all params and buffers
 
 
     """
