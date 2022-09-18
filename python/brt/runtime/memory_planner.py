@@ -91,6 +91,7 @@ class MemoryPlanContext:
     def set_compute_stream(cls, stream: torch.cuda.Stream):
         cls.COMPUTE_STREAM = stream
 
+
 class MemoryPlanner(nn.Module):
     def __init__(
         self,
@@ -177,6 +178,7 @@ class InitialLoader(MemoryPlanner):
     def forward(self):
         self.load(self.event_id)
         self.guard(self.event_id)
+        MemoryPlanContext.MEMORY_STREAM.synchronize()
 
 
 @register_leaf_node
@@ -261,6 +263,136 @@ class PredictUnloader(MemoryPlanner):
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
     ) -> None:
         super().__init__(event_id, collected_params, collected_buffers)
+
+    def forward(self, inputs):
+        self.unload(self.event_id)
+        return inputs
+
+
+class GroupedMemoryPlanner(nn.Module):
+    def __init__(
+        self,
+        event_id: int,
+        grouped_tensor_pin: torch.Tensor = None,
+        grouped_tensor_cuda: torch.Tensor = None,
+    ) -> None:
+        super().__init__()
+        assert (
+            MemoryPlanContext.INITIALIZED
+        ), "MemPlanContext is not initialized before creating a PreLoader instance"
+        self.event_id = event_id
+        self.grouped_tensor_pin = grouped_tensor_pin
+        self.grouped_tensor_cuda = grouped_tensor_cuda
+
+    def load(self, event_id: int):
+        # Currently we only copy the memory from CPU to GPU, the GPU memory are always
+        # occupied. In the future, we will use a flag to indicate the memory is occupied
+        # after load
+        with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
+            with torch.no_grad():
+                self.grouped_tensor_cuda.copy_(
+                    self.grouped_tensor_pin, non_blocking=True
+                )
+        MemoryPlanContext.EVENTS[event_id].record(MemoryPlanContext.MEMORY_STREAM)
+
+    def guard(self, event_id: int):
+        MemoryPlanContext.EVENTS[event_id].wait(MemoryPlanContext.COMPUTE_STREAM)
+
+    def unload(self, event_id: int, copy_back=False):
+        # Currently we do nothing execept recording the event when unloading the grouped tensor.
+        # In the future, we will release the flag in "load" to allow other procees to reuse the
+        # underlying device memory.
+        if copy_back:
+            with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
+                with torch.no_grad():
+                    self.grouped_tensor_pin.copy_(
+                        self.grouped_tensor_cuda, non_blocking=True
+                    )
+        MemoryPlanContext.EVENTS[event_id].record(MemoryPlanContext.MEMORY_STREAM)
+
+
+@register_leaf_node
+class GroupedOnDemandLoader(GroupedMemoryPlanner):
+    def __init__(
+        self,
+        path_id: int,
+        event_id: int,
+        grouped_tensor_pin: torch.Tensor = None,
+        grouped_tensor_cuda: torch.Tensor = None,
+    ) -> None:
+        super().__init__(event_id, grouped_tensor_pin, grouped_tensor_cuda)
+        self.path_id = path_id
+
+    def forward(self, inputs):
+        target = _get_target_input(inputs, self.path_id)
+        if target.numel() > 0:
+            self.load(self.event_id)
+
+        return inputs
+
+
+@register_leaf_node
+class GroupedOnDemandGuarder(GroupedMemoryPlanner):
+    def __init__(self, path_id: int, event_id: int) -> None:
+        super().__init__(event_id)
+        self.path_id = path_id
+
+    def forward(self, inputs):
+        target = _get_target_input(inputs, self.path_id)
+        if target.numel() > 0:
+            self.guard(self.event_id)
+        return inputs
+
+
+@register_leaf_node
+class GroupedOnDemandUnloader(GroupedMemoryPlanner):
+    def __init__(
+        self,
+        event_id: int,
+        grouped_tensor_pin: torch.Tensor = None,
+        grouped_tensor_cuda: torch.Tensor = None,
+    ) -> None:
+        super().__init__(event_id, grouped_tensor_pin, grouped_tensor_cuda)
+
+    def forward(self, inputs):
+        self.unload(self.event_id)
+        return inputs
+
+
+@register_leaf_node
+class GroupedPredictLoader(GroupedMemoryPlanner):
+    def __init__(
+        self,
+        event_id: int,
+        grouped_tensor_pin: torch.Tensor = None,
+        grouped_tensor_cuda: torch.Tensor = None,
+    ) -> None:
+        super().__init__(event_id, grouped_tensor_pin, grouped_tensor_cuda)
+
+    def forward(self, inupts):
+        self.load(self.event_id)
+        return inupts
+
+
+@register_leaf_node
+class GroupedPredictGuarder(GroupedMemoryPlanner):
+    def __init__(self, event_id: int) -> None:
+        super().__init__(event_id)
+
+    def forward(self, inputs):
+        self.guard(self.event_id)
+        return inputs
+
+
+@register_leaf_node
+class GroupedPredictUnloader(GroupedMemoryPlanner):
+    def __init__(
+        self,
+        event_id: int,
+        grouped_tensor_pin: torch.Tensor = None,
+        grouped_tensor_cuda: torch.Tensor = None,
+    ) -> None:
+        super().__init__(event_id, grouped_tensor_pin, grouped_tensor_cuda)
 
     def forward(self, inputs):
         self.unload(self.event_id)
