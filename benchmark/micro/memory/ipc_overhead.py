@@ -47,3 +47,5 @@ for r_i in range(repeat):
 barrier.wait()
 receiver.join()
 sender_conn.close()
+
+datas[0].storage()

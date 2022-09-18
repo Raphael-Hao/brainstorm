@@ -15,12 +15,13 @@ def async_copy(
     torch.cuda.current_stream().wait_event(event)
 
 
-timer = CUDATimer(loop=100, repeat=5)
-
+cuda_timer = CUDATimer(loop=100, repeat=5)
+cpu_timer = CPUTimer(loop=100, repeat=5)
 
 for i in range(0, 11):
     data_num = int(1024 / (2**i))
     datas = [torch.randn(2**i, 1024, 1024) for _ in range(data_num)]
     copy_stream = torch.cuda.Stream()
     copy_event = torch.cuda.Event()
-    timer.execute(lambda: async_copy(datas, copy_stream, copy_event), msg=f"{data_num}x{2**i}x1024")
+    cuda_timer.execute(lambda: async_copy(datas, copy_stream, copy_event), msg=f"cudatimer:{data_num}x{2**i}x1024")
+    cpu_timer.execute(lambda: async_copy(datas, copy_stream, copy_event), msg=f"cputimer: {data_num}x{2**i}x1024")

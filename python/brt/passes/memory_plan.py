@@ -12,6 +12,7 @@ from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node
 from brt.runtime import log
+from brt.runtime.tensor_group import group_params_buffers
 from brt.runtime.memory_planner import (
     MemoryPlanContext,
     OnDemandLoader,
@@ -460,6 +461,12 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                 collected_params,
                 collected_buffers,
             ) in enumerate(plan_groups):
+                grouped_pb_tensor_pin = _group_params_buffers(
+                    collected_buffers, collected_buffers
+                )
+                grouped_pb_tensor_cuda = torch.empty_like(
+                    grouped_pb_tensor_pin, device="cuda"
+                )
                 if self.is_router_node(head_node):
                     head_node_m = self.sub_modules[head_node.target]
                     if self.is_scatter_node(head_node):
