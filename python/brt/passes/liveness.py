@@ -101,10 +101,9 @@ class PermanentPathFoldPass(PassBase):
                         len(permanent_paths) == len(load_histroy)
                         and len(permanent_paths) > 0
                     ):
-                        if isinstance(node_m, ScatterRouter):
-                            node_m.protocol = make_protocol(
-                                "identity", node_m.protocol_kwargs
-                            )
+                        node_m.protocol = make_protocol(
+                            "identity", node_m.protocol_kwargs
+                        )
                         new_fabric_kwargs = {
                             "path_num": len(permanent_paths),
                         }
@@ -116,7 +115,7 @@ class PermanentPathFoldPass(PassBase):
                     permanent_paths = []
                     load_histroy = node_m.load_history
                     for path_id, path_load in enumerate(load_histroy):
-                        if path_load == self.upper_perm_load:
+                        if path_load >= self.upper_perm_load:
                             permanent_paths.append(path_id)
                     if (
                         len(permanent_paths) == len(load_histroy)
