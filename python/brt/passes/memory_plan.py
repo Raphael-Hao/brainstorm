@@ -12,7 +12,7 @@ from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node
 from brt.runtime import log
-from brt.runtime.tensor_group import group_params_buffers
+from brt.runtime.tensor_group import TensorGroupManager, TensorGroup
 from brt.runtime.memory_planner import *
 
 PLGT = Tuple[
@@ -111,9 +111,7 @@ class MemoryPlanPass(PassBase):
             ValueError: Unsupported planner mode
         """
         if self.is_grouping:
-            grouped_tensor_pin, grouped_tensor_cuda = group_params_buffers(
-                params, buffers
-            )
+            tensor_group = group_params_buffers(params, buffers)
             if mode == "on_demand":
                 memory_loader = GroupedOnDemandLoader(
                     path_id, event_id, grouped_tensor_pin, grouped_tensor_cuda
@@ -590,3 +588,46 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                         f"Unknown loader kind: {memory_loader.__class__}"
                     )
             event_id -= len(plan_groups)
+
+
+def group_params_buffers(
+    params: Dict[str, nn.Parameter],
+    buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
+    target_device=None,
+) -> TensorGroup:
+    """Group params and buffers into a single tensor.
+
+    Args:
+        params (Dict[str, nn.Parameter]): collected params
+        buffers (Dict[str, nn.Parameter]): collected buffers
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: single pin memory and cuda tensor containing all params and buffers
+    """
+    total_size_in_bytes = 0
+
+    for p in params.values():
+        if p is not None:
+            total_size_in_bytes += p.data.numel() * p.data.element_size()
+            total_size_in_bytes += p.grad.data.numel() * p.grad.data.element_size()
+    for b_t, b_mod, b_name in buffers.values():
+        if b_mod._buffers[b_name] is not None:
+            total_size_in_bytes += b_t.numel() * b_t.element_size()
+
+    tenosr_group = TensorGroupManager.acquire_tensor_group(
+        total_size_in_bytes, target_device
+    )
+
+    for p in params.values():
+        if p is None:
+            continue
+        tenosr_group.include_tensor(p)
+        if p.grad is not None:
+            tenosr_group.include_tensor(p.grad)
+
+    for b_t, b_mod, b_name in buffers.values():
+        if b_mod._buffers[b_name] is None:
+            continue
+        tenosr_group.include_tensor(b_t)
+
+    return tenosr_group
