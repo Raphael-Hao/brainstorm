@@ -6,7 +6,9 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 from brt.trace.leaf_node import register_leaf_node
+from brt.runtime.tensor_group import TensorGroup
 from brt.runtime import log
+
 
 logger = log.get_logger(__file__)
 
@@ -279,16 +281,14 @@ class GroupedMemoryPlanner(nn.Module):
     def __init__(
         self,
         event_id: int,
-        grouped_tensor_pin: torch.Tensor = None,
-        grouped_tensor_cuda: torch.Tensor = None,
+        tensor_group: TensorGroup= None
     ) -> None:
         super().__init__()
         assert (
             MemoryPlanContext.INITIALIZED
         ), "MemPlanContext is not initialized before creating a PreLoader instance"
         self.event_id = event_id
-        self.grouped_tensor_pin = grouped_tensor_pin
-        self.grouped_tensor_cuda = grouped_tensor_cuda
+        self.tensor_group = tensor_group
 
     def load(self, event_id: int):
         # Currently we only copy the memory from CPU to GPU, the GPU memory are always
