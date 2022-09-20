@@ -36,13 +36,16 @@ class ConvTranspose2dInfo(ModuleInfo):
         assert method in cls._shared_arg_indices, f"{method} is not supported"
         module_name = cls.get_module_name(module)
         parameters = {
-            "in_channels": module[0].in_channels,
-            "out_channels": module[0].out_channels,
-            "kernel_size": module[0].kernel_size,
-            "stride": module[0].stride,
-            "padding": module[0].padding,
-            "dilation": module[0].dilation,
-            "groups": module[0].groups,
+            "in_channels": module.in_channels,
+            "out_channels": module.out_channels,
+            "kernel_size": module.kernel_size,
+            "stride": module.stride,
+            "padding": module.padding,
+            "dilation": module.dilation,
+            "groups": module.groups,
+            "output_padding": module.output_padding[0]
+            if module.output_padding[0] == module.output_padding[1]
+            else module.output_padding[0],
         }
         sample_output = module(sample_input)
         input_infos = {"input_0": list(sample_input.shape)}
@@ -98,7 +101,6 @@ parameters: {parameters}
     @classmethod
     def get_output_init_func(cls, module: torch.nn.ConvTranspose2d, method: str):
         raise NotImplementedError("TODO")
-
 
     @classmethod
     def get_module_name(cls, modules: torch.nn.ConvTranspose2d) -> str:

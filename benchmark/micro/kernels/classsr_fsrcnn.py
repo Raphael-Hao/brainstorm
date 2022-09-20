@@ -70,7 +70,8 @@ def parse_conv2d_bn_act_params(json_params: Dict[str, Any]):
     input_infos = {"input_0": json_params.pop("input_shape")}
     output_infos = {"output_0": json_params.pop("output_shape")}
     module_name = json_params["module_name"]
-    parameters = json_params.pop("module_name")
+    json_params.pop("module_name")
+    parameters = json_params
     return (
         module_name,
         input_infos,
@@ -159,7 +160,7 @@ def make_log_fname(
 def main():
     tvm_tuner = TVMTuner()
     conv_params_log_file = (
-        BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_AIC21_Track1_Cam16.json"
+        BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_AIC21_Track1_Cam1_no_PReLU.json"
     )
     conv_params_log_file_nodup = (
         BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_nodup.json"
