@@ -225,16 +225,16 @@ def main(args):
 
         timer.execute(lambda: backbone(backbone_input), "naive")
 
-        MemoryStats.print_cuda_stats()
+        # MemoryStats.print_cuda_stats()
 
         backbone = pin_memory(backbone.cpu())
-        pass_name = "OnDemandMemoryPlanPass"
-        memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
-        # pass_name = "PredictorMemoryPlanPass"
-        # memory_plan_pass = PredictMemoryPlanPass(backbone, 1, is_grouping=True)
+        # pass_name = "OnDemandMemoryPlanPass"
+        # memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
+        pass_name = "PredictorMemoryPlanPass"
+        memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
         memory_plan_pass.run_on_graph()
         initial_loaders, new_backbone = memory_plan_pass.finalize()
-        print(new_backbone.code)
+        # print(new_backbone.code)
         torch.cuda.reset_accumulated_memory_stats()
         torch.cuda.reset_peak_memory_stats()
 
@@ -244,7 +244,7 @@ def main(args):
         MemoryStats.reset_cuda_stats()
         # profile(lambda: new_backbone(backbone_input))
         timer.execute(lambda: new_backbone(backbone_input), pass_name)
-        MemoryStats.print_cuda_stats()
+        # MemoryStats.print_cuda_stats()
 
     benchmarker.add_benchmark("memory_plan", memroy_plan_benchmark)
 
