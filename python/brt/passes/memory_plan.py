@@ -101,7 +101,7 @@ class MemoryPlanPass(PassBase):
         can be called like a normal nn.Module during inference.
 
         Args:
-            mode (str): planer mode
+            mode (str): planer mode, can be "predict", "on_demand", "inital"
             path_id (int): path id for scatter router
             event_id (int): event id for recording cuda events
             params (Dict[str, nn.Parameter]): collected parameters
@@ -111,23 +111,17 @@ class MemoryPlanPass(PassBase):
             ValueError: Unsupported planner mode
         """
         if self.is_grouping:
-            tensor_group = group_params_buffers(params, buffers)
+            tensor_group = _group_params_buffers(params, buffers)
             if mode == "on_demand":
-                memory_loader = GroupedOnDemandLoader(
-                    path_id, event_id, grouped_tensor_pin, grouped_tensor_cuda
-                )
+                memory_loader = GroupedOnDemandLoader(path_id, event_id, tensor_group)
                 memory_guarder = GroupedOnDemandGuarder(path_id, event_id)
-                memory_unloader = GroupedOnDemandUnloader(
-                    event_id, grouped_tensor_pin, grouped_tensor_cuda
-                )
+                memory_unloader = GroupedOnDemandUnloader(event_id, tensor_group)
             elif mode == "predict":
-                memory_loader = GroupedPredictLoader(
-                    event_id, grouped_tensor_pin, grouped_tensor_cuda
-                )
+                memory_loader = GroupedPredictLoader(event_id, tensor_group)
                 memory_guarder = GroupedPredictGuarder(event_id)
-                memory_unloader = GroupedPredictUnloader(
-                    event_id, grouped_tensor_pin, grouped_tensor_cuda
-                )
+                memory_unloader = GroupedPredictUnloader(event_id, tensor_group)
+            elif mode == "initial":
+                memory_loader = GroupedInitialLoader(tensor_group)
             else:
                 raise ValueError(f"Mode {mode} is not supported.")
         else:
@@ -139,6 +133,8 @@ class MemoryPlanPass(PassBase):
                 memory_loader = PredictLoader(event_id, params, buffers)
                 memory_guarder = PredictGuarder(event_id)
                 memory_unloader = PredictUnloader(event_id, params, buffers)
+            elif mode == "initial":
+                memory_loader = InitialLoader(params, buffers)
             else:
                 raise ValueError(f"Mode {mode} is not supported.")
         setattr(self.graph_mod, f"brt_memory_loader_{event_id}", memory_loader)
@@ -590,7 +586,7 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
             event_id -= len(plan_groups)
 
 
-def group_params_buffers(
+def _group_params_buffers(
     params: Dict[str, nn.Parameter],
     buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
     target_device=None,
