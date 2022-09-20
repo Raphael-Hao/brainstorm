@@ -8,18 +8,25 @@ import torch
 import numpy as np
 import time
 
-from typing import Type, List
+from typing import Type, List, Union, Tuple
 
 from brt.router import ScatterRouter, GatherRouter
-from brt.jit import make_jit_kernel 
+from brt.runtime.proto_tensor import (
+    collect_proto_attr_stack,
+    init_proto_tensor,
+    make_proto_tensor_from,
+    to_torch_tensor,
+)
+from brt.jit import make_jit_kernel
 
 from .classSR_fsrcnn_arch import classSR_3class_fsrcnn_net
 
 
 class classSR_3class_fused_fsrcnn_net(nn.Module):
-    def __init__(self, raw: classSR_3class_fsrcnn_net, subnet_bs: List[int]):
+    def __init__(self, raw: classSR_3class_fsrcnn_net, subnet_bs: Tuple[int]=(34, 38, 29)):
         super(classSR_3class_fused_fsrcnn_net, self).__init__()
         self.upscale = 4
+        self.subnet_bs = subnet_bs
         self.classifier = raw.classifier
         self.scatter_router = ScatterRouter(
             protocol_type="topk", protocol_kwargs={"top_k": 1}
@@ -28,22 +35,35 @@ class classSR_3class_fused_fsrcnn_net(nn.Module):
         self.fused_head = FusedLayer(
             [subnet.head_conv for subnet in subnets],
             [[bs, 3, 32, 32] for bs in subnet_bs],
+            [
+                [subnet_bs[0], 16, 32, 32],
+                [subnet_bs[1], 36, 32, 32],
+                [subnet_bs[2], 56, 32, 32],
+            ],
         )
-        self.fused_bodys = [
+        self.fused_bodys = nn.Sequential(
             FusedLayer(
                 [subnet.body_conv[0] for subnet in subnets],
-                [[bs, 16, 32, 32] for bs in subnet_bs],
+                [
+                    [subnet_bs[0], 16, 32, 32],
+                    [subnet_bs[1], 36, 32, 32],
+                    [subnet_bs[2], 56, 32, 32],
+                ],
+                [[bs, 12, 32, 32] for bs in subnet_bs],
             ),
             FusedLayer(
                 [subnet.body_conv[1] for subnet in subnets],
+                [[bs, 12, 32, 32] for bs in subnet_bs],
                 [[bs, 12, 32, 32] for bs in subnet_bs],
             ),
             FusedLayer(
                 [subnet.body_conv[2] for subnet in subnets],
                 [[bs, 12, 32, 32] for bs in subnet_bs],
+                [[bs, 12, 32, 32] for bs in subnet_bs],
             ),
             FusedLayer(
                 [subnet.body_conv[3] for subnet in subnets],
+                [[bs, 12, 32, 32] for bs in subnet_bs],
                 [[bs, 12, 32, 32] for bs in subnet_bs],
             ),
             FusedLayer(
@@ -52,26 +72,45 @@ class classSR_3class_fused_fsrcnn_net(nn.Module):
                     for subnet in subnets
                 ],
                 [[bs, 12, 32, 32] for bs in subnet_bs],
+                [[bs, 12, 32, 32] for bs in subnet_bs],
             ),
             FusedLayer(
                 [subnet.body_conv[6] for subnet in subnets],
                 [[bs, 12, 32, 32] for bs in subnet_bs],
+                [
+                    [subnet_bs[0], 16, 32, 32],
+                    [subnet_bs[1], 36, 32, 32],
+                    [subnet_bs[2], 56, 32, 32],
+                ],
             ),
-        ]
+        )
         self.fused_tail = FusedLayer(
-            [subnet.tail_conv for subnet in subnets], [[bs, 16, 32, 32] for bs in subnet_bs],
+            [subnet.tail_conv for subnet in subnets],
+            [
+                [subnet_bs[0], 16, 32, 32],
+                [subnet_bs[1], 36, 32, 32],
+                [subnet_bs[2], 56, 32, 32],
+            ],
+            [[bs, 3, 128, 128] for bs in subnet_bs],
         )
         self.gather_router = GatherRouter(fabric_type="combine")
 
     def forward(self, x, is_train=False):
 
         weights = self.classifier(x)
-        sr_x = self.scatter_router(x, weights)
-        # xs = self.fused_head(sr_x)
-        # xs = self.fused_bodys(xs)
-        # xs = self.fused_tail(xs)
-        # gr_x = self.gather_router(xs)
-        # return gr_x, [yy.shape[0] for yy in xs]
+        sr_xs = self.scatter_router(x, weights)
+        real_bs = [srx.shape[0] for srx in sr_xs] 
+        sr_xs_padding = [
+            torch.cat((to_torch_tensor(srx), torch.zeros(bs - srx.shape[0], *srx.shape[1:]).to(srx.device)), 0)
+            for bs, srx in zip(self.subnet_bs, sr_xs)
+        ]
+        xs = self.fused_head(sr_xs_padding)
+        xs = self.fused_bodys(xs)
+        xs = self.fused_tail(xs)
+        for i, srx in enumerate(sr_xs):
+            xs[i] = make_proto_tensor_from(xs[i][: real_bs[i]], srx)
+        gr_x = self.gather_router(xs)
+        return gr_x, [yy.shape[0] for yy in xs]
 
 
 class Classifier(nn.Module):
@@ -104,25 +143,105 @@ class Classifier(nn.Module):
 
 
 class FusedLayer(nn.Module):
-    def __init__(self, models: List[nn.Module], input_shapes: List[torch.Size]):
+    def __init__(
+        self,
+        models: Union[List[nn.Module], List[nn.Sequential]],
+        input_shapes: List[torch.Size],
+        output_shapes: List[torch.Size],
+    ):
         super().__init__()
-        for model in models:
-            for name, tensor in model.named_parameters():
+        models = nn.ModuleList(models)
+        # print(models)
+        self.num_submodels = len(models)
+        assert len(input_shapes) == self.num_submodels
+        assert len(output_shapes) == self.num_submodels
+        for i, model in enumerate(models):
+            for name, tensor in model.named_parameters(f"m{i}"):
                 self.register_parameter(name.replace(".", "_"), tensor)
-            for name, tensor in model.named_buffers():
+            for name, tensor in model.named_buffers(f"m{i}"):
                 self.register_buffer(name.replace(".", "_"), tensor)
+        self.input_shapes = input_shapes
+        self.output_shapes = output_shapes
         sample_inputs = [torch.randn(shp).cuda() for shp in input_shapes]
         self.fused_kernel = make_jit_kernel(
             models, sample_inputs, opt_level="hetero_fuse"
         )
-        self.ACTIVE_BLOCKS = [1, 1, 1]
-        # self.inputs = [
-        #     [[], self]
-        # ]
-        # elif type == 'body'
-        # sample_inputs = [torch.randn((batch_sizes[i], model[i]., 32, 32)) for i in range(models)]
+        print([[n, t.shape] for n, t in self.named_parameters()])
+        self.ACTIVE_BLOCKS = [1] * self.num_submodels
+        # Conv2dBiasPReLU or Conv2dBias or ConvTranspose2dBias
+        if isinstance(models[0], nn.Sequential):
+            conv2d = models[0][0]
+            prelu = models[0][1]
+            if (
+                isinstance(conv2d, nn.Conv2d)
+                and conv2d.bias is not None
+                and isinstance(prelu, nn.PReLU)
+            ):
+                self.module_name = "Conv2dBiasPReLU"
+            else:
+                raise NotImplementedError(f"{models}")
+        elif isinstance(models[0], nn.Conv2d) and models[0].bias is not None:
+            self.module_name = "Conv2dBias"
+        elif isinstance(models[0], nn.ConvTranspose2d) and models[0].bias is not None:
+            self.module_name = "ConvTranspose2dBias"
+        else:
+            self.module_name = "ERROR"
+            raise NotImplementedError(f"{models}")
 
-    def forward():
-        pass
-        # output = ...
+        self.inputs_templete = {}
+        self.inputs_templete["forward"] = []
+        if self.module_name == "Conv2dBiasPReLU":
+            for i in range(len(models)):
+                self.inputs_templete["forward"].extend(
+                    [
+                        None,
+                        self.get_parameter(f"m{i}_0_weight"),
+                        None,
+                        self.get_parameter(f"m{i}_0_bias"),
+                        self.get_parameter(f"m{i}_1_weight"),
+                    ]
+                )
+            self.input_indices = [i * 5 for i in range(self.num_submodels)]
+            self.output_indices = [i * 5 + 2 for i in range(self.num_submodels)]
+        elif (
+            self.module_name == "Conv2dBias"
+            or self.module_name == "ConvTranspose2dBias"
+        ):
+            for i in range(len(models)):
+                self.inputs_templete["forward"].extend(
+                    [
+                        None,
+                        self.get_parameter(f"m{i}_weight"),
+                        None,
+                        self.get_parameter(f"m{i}_bias"),
+                    ]
+                )
+            self.input_indices = [i * 4 for i in range(self.num_submodels)]
+            self.output_indices = [i * 4 + 2 for i in range(self.num_submodels)]
+        # elif self.module_name == "ConvTranspose2dBias":
+        else:
+            raise NotImplementedError(f"{self.module_name}")
+        # self.forward(sample_inputs)
+
+    def forward(self, inputs: List[torch.Tensor]):
+        for i in range(self.num_submodels):
+            self.inputs_templete["forward"][self.input_indices[i]] = inputs[i]
+            self.inputs_templete["forward"][self.output_indices[i]] = torch.empty(
+                self.output_shapes[i], device="cuda"
+            )
+        self.fused_kernel(
+            *self.inputs_templete["forward"], active_blocks=self.ACTIVE_BLOCKS
+        )
+        torch.cuda.synchronize()
+        outputs = [
+            self.inputs_templete["forward"][index] for index in self.output_indices
+        ]
+        for i in range(self.num_submodels):
+            self.inputs_templete["forward"][self.input_indices[i]] = None
+            self.inputs_templete["forward"][self.output_indices[i]] = None
+        return outputs
+
         # hetero_fused_kernel(*hetero_fused_inputs, active_blocks=active_blocks)
+
+    def extra_repr(self):
+        return self.module_name
