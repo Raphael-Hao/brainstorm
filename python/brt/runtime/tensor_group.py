@@ -9,8 +9,13 @@ import torch.nn as nn
 
 __all__ = ["group_params_buffers"]
 
+
 class TensorGroupManager:
-    """Manage a group of tensors."""
+    """Manage the TensorGroups.
+    Right now, it only supports the case where all the TensorGroups are
+    pre-defined at compilation time. In the future, we will support
+    runtime tensor group management.
+    """
 
     tensor_groups: List[TensorGroup] = []
 
@@ -33,6 +38,7 @@ class TensorGroupManager:
     def release_tensor_group(cls, tensor_group: TensorGroup):
         """Release a tensor group."""
         tensor_group.release()
+
 
 class TensorGroup:
     def __init__(self, size_in_byte: int, target=None) -> None:
@@ -83,15 +89,11 @@ class TensorGroup:
         self.used_in_byte += t_size_in_byte
         assert self.used_in_byte <= self.size_in_byte, "TensorGroup is full"
 
-    def load(self, stream):
-        with torch.cuda.stream(stream):
-            with torch.no_grad():
-                self.targe_tensor.copy_(self.cpu_pin_tensor, non_blocking=True)
+    def load(self):
+        with torch.no_grad():
+            self.targe_tensor.copy_(self.cpu_pin_tensor, non_blocking=True)
 
-    def unload(self, stream, copy_back=True):
+    def unload(self, copy_back=False):
         if copy_back:
-            with torch.cuda.stream(stream):
-                with torch.no_grad():
-                    self.cpu_pin_tensor.copy_(self.targe_tensor, non_blocking=True)
-
-
+            with torch.no_grad():
+                self.cpu_pin_tensor.copy_(self.targe_tensor, non_blocking=True)

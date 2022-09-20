@@ -22,6 +22,7 @@ __all__ = [
     "PredictLoader",
     "PredictGuarder",
     "PredictUnloader",
+    "GroupedInitialLoader",
     "GroupedOnDemandLoader",
     "GroupedOnDemandGuarder",
     "GroupedOnDemandUnloader",
@@ -52,23 +53,6 @@ def pin_memory(m: nn.Module):
             m._buffers[key].pin_cpu_data = m._buffers[key]
 
     return m
-
-
-def _get_target_input(inputs, path_id):
-    if isinstance(inputs, (tuple, list)):
-        if len(inputs) > path_id and isinstance(inputs[path_id], torch.Tensor):
-            logger.debug(
-                f"scatter outputs: {list(inputs[path_id].shape)}, {inputs[path_id].device}, path id: {path_id}"
-            )
-            return inputs[path_id]
-        else:
-            return _get_target_input(inputs[0], path_id)
-
-    if isinstance(inputs, torch.Tensor) and path_id == 0:
-        logger.debug(f"gather outputs: {list(inputs.shape)}, {inputs.device}")
-        return inputs
-
-    raise ValueError("Invalid input type: {}".format(type(inputs)))
 
 
 class MemoryPlanContext:
@@ -106,7 +90,7 @@ class MemoryPlanner(nn.Module):
         event_id: int,
         collected_params: Dict[str, Parameter] = None,
         collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
-    ) -> None:
+    ):
         super().__init__()
         assert (
             MemoryPlanContext.INITIALIZED
@@ -195,8 +179,8 @@ class OnDemandLoader(MemoryPlanner):
         self,
         path_id: int,
         event_id: int,
-        collected_params: Dict[str, Parameter] = None,
-        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
+        collected_params: Dict[str, Parameter],
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
     ) -> None:
         super().__init__(event_id, collected_params, collected_buffers)
         self.path_id = path_id
@@ -211,7 +195,7 @@ class OnDemandLoader(MemoryPlanner):
 
 @register_leaf_node
 class OnDemandGuarder(MemoryPlanner):
-    def __init__(self, path_id: int, event_id: int) -> None:
+    def __init__(self, path_id: int, event_id: int):
         super().__init__(event_id)
         self.path_id = path_id
 
@@ -227,9 +211,9 @@ class OnDemandUnloader(MemoryPlanner):
     def __init__(
         self,
         event_id: int,
-        collected_params: Dict[str, Parameter] = None,
-        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
-    ) -> None:
+        collected_params: Dict[str, Parameter],
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
+    ):
         super().__init__(event_id, collected_params, collected_buffers)
 
     def forward(self, inputs):
@@ -242,9 +226,9 @@ class PredictLoader(MemoryPlanner):
     def __init__(
         self,
         event_id: int,
-        collected_params: Dict[str, Parameter] = None,
-        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
-    ) -> None:
+        collected_params: Dict[str, Parameter],
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
+    ):
         super().__init__(event_id, collected_params, collected_buffers)
 
     def forward(self, inupts):
@@ -254,7 +238,7 @@ class PredictLoader(MemoryPlanner):
 
 @register_leaf_node
 class PredictGuarder(MemoryPlanner):
-    def __init__(self, event_id: int) -> None:
+    def __init__(self, event_id: int):
         super().__init__(event_id)
 
     def forward(self, inputs):
@@ -267,8 +251,8 @@ class PredictUnloader(MemoryPlanner):
     def __init__(
         self,
         event_id: int,
-        collected_params: Dict[str, Parameter] = None,
-        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]] = None,
+        collected_params: Dict[str, Parameter],
+        collected_buffers: Dict[str, Tuple[torch.Tensor, nn.Module, str]],
     ) -> None:
         super().__init__(event_id, collected_params, collected_buffers)
 
@@ -278,11 +262,7 @@ class PredictUnloader(MemoryPlanner):
 
 
 class GroupedMemoryPlanner(nn.Module):
-    def __init__(
-        self,
-        event_id: int,
-        tensor_group: TensorGroup= None
-    ) -> None:
+    def __init__(self, event_id: int, tensor_group: TensorGroup = None):
         super().__init__()
         assert (
             MemoryPlanContext.INITIALIZED
@@ -295,10 +275,7 @@ class GroupedMemoryPlanner(nn.Module):
         # occupied. In the future, we will use a flag to indicate the memory is occupied
         # after load
         with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
-            with torch.no_grad():
-                self.grouped_tensor_cuda.copy_(
-                    self.grouped_tensor_pin, non_blocking=True
-                )
+            self.tensor_group.load()
         MemoryPlanContext.EVENTS[event_id].record(MemoryPlanContext.MEMORY_STREAM)
 
     def guard(self, event_id: int):
@@ -308,25 +285,23 @@ class GroupedMemoryPlanner(nn.Module):
         # Currently we do nothing execept recording the event when unloading the grouped tensor.
         # In the future, we will release the flag in "load" to allow other procees to reuse the
         # underlying device memory.
-        if copy_back:
-            with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
-                with torch.no_grad():
-                    self.grouped_tensor_pin.copy_(
-                        self.grouped_tensor_cuda, non_blocking=True
-                    )
+        with torch.cuda.stream(MemoryPlanContext.MEMORY_STREAM):
+            self.tensor_group.unload(copy_back=copy_back)
         MemoryPlanContext.EVENTS[event_id].record(MemoryPlanContext.MEMORY_STREAM)
 
+class GroupedInitialLoader(GroupedMemoryPlanner):
+    def __init__(self, tensor_group: TensorGroup):
+        super().__init__(0, tensor_group)
+
+    def forward(self):
+        self.load(self.event_id)
+        self.guard(self.event_id)
+        MemoryPlanContext.MEMORY_STREAM.synchronize()
 
 @register_leaf_node
 class GroupedOnDemandLoader(GroupedMemoryPlanner):
-    def __init__(
-        self,
-        path_id: int,
-        event_id: int,
-        grouped_tensor_pin: torch.Tensor = None,
-        grouped_tensor_cuda: torch.Tensor = None,
-    ) -> None:
-        super().__init__(event_id, grouped_tensor_pin, grouped_tensor_cuda)
+    def __init__(self, path_id: int, event_id: int, tensor_group: TensorGroup):
+        super().__init__(event_id, tensor_group)
         self.path_id = path_id
 
     def forward(self, inputs):
@@ -339,7 +314,7 @@ class GroupedOnDemandLoader(GroupedMemoryPlanner):
 
 @register_leaf_node
 class GroupedOnDemandGuarder(GroupedMemoryPlanner):
-    def __init__(self, path_id: int, event_id: int) -> None:
+    def __init__(self, path_id: int, event_id: int):
         super().__init__(event_id)
         self.path_id = path_id
 
@@ -352,13 +327,8 @@ class GroupedOnDemandGuarder(GroupedMemoryPlanner):
 
 @register_leaf_node
 class GroupedOnDemandUnloader(GroupedMemoryPlanner):
-    def __init__(
-        self,
-        event_id: int,
-        grouped_tensor_pin: torch.Tensor = None,
-        grouped_tensor_cuda: torch.Tensor = None,
-    ) -> None:
-        super().__init__(event_id, grouped_tensor_pin, grouped_tensor_cuda)
+    def __init__(self, event_id: int, tensor_group: TensorGroup):
+        super().__init__(event_id, tensor_group)
 
     def forward(self, inputs):
         self.unload(self.event_id)
@@ -367,13 +337,8 @@ class GroupedOnDemandUnloader(GroupedMemoryPlanner):
 
 @register_leaf_node
 class GroupedPredictLoader(GroupedMemoryPlanner):
-    def __init__(
-        self,
-        event_id: int,
-        grouped_tensor_pin: torch.Tensor = None,
-        grouped_tensor_cuda: torch.Tensor = None,
-    ) -> None:
-        super().__init__(event_id, grouped_tensor_pin, grouped_tensor_cuda)
+    def __init__(self, event_id: int, tensor_group: TensorGroup):
+        super().__init__(event_id, tensor_group)
 
     def forward(self, inupts):
         self.load(self.event_id)
@@ -392,17 +357,29 @@ class GroupedPredictGuarder(GroupedMemoryPlanner):
 
 @register_leaf_node
 class GroupedPredictUnloader(GroupedMemoryPlanner):
-    def __init__(
-        self,
-        event_id: int,
-        grouped_tensor_pin: torch.Tensor = None,
-        grouped_tensor_cuda: torch.Tensor = None,
-    ) -> None:
-        super().__init__(event_id, grouped_tensor_pin, grouped_tensor_cuda)
+    def __init__(self, event_id: int, tensor_group: TensorGroup):
+        super().__init__(event_id, tensor_group)
 
     def forward(self, inputs):
         self.unload(self.event_id)
         return inputs
+
+
+def _get_target_input(inputs, path_id):
+    if isinstance(inputs, (tuple, list)):
+        if len(inputs) > path_id and isinstance(inputs[path_id], torch.Tensor):
+            logger.debug(
+                f"scatter outputs: {list(inputs[path_id].shape)}, {inputs[path_id].device}, path id: {path_id}"
+            )
+            return inputs[path_id]
+        else:
+            return _get_target_input(inputs[0], path_id)
+
+    if isinstance(inputs, torch.Tensor) and path_id == 0:
+        logger.debug(f"gather outputs: {list(inputs.shape)}, {inputs.device}")
+        return inputs
+
+    raise ValueError("Invalid input type: {}".format(type(inputs)))
 
 
 def load_module(m: nn.Module):
