@@ -44,12 +44,12 @@ class TensorGroup:
     def __init__(self, size_in_byte: int, target=None) -> None:
         self.size_in_byte = size_in_byte
         self.target = "cuda" if target is None else target
-        self.cpu_pin_tensor = torch.empty(
-            self.size_in_byte, dtype=torch.uint8
-        ).pin_memory()
-        self.cpu_pin_storage = self.cpu_pin_tensor.storage()._untyped()
-        self.targe_tensor = torch.empty_like(self.cpu_pin_tensor, device=self.target)
-        self.targe_storage = self.targe_tensor.storage()._untyped()
+        self.pin_tensor = torch.empty(
+            self.size_in_byte, dtype=torch.uint8, device="cpu", pin_memory=True
+        )
+        self.pin_storage = self.pin_tensor.storage()._untyped()
+        self.target_tensor = torch.empty_like(self.pin_tensor, device=self.target)
+        self.target_storage = self.target_tensor.storage()._untyped()
         self.used_in_byte = 0
         self.use_count = 0
 
@@ -73,7 +73,7 @@ class TensorGroup:
             t_data_pin = torch.tensor([], dtype=t.dtype, device="cpu")
             t_data_target = torch.tensor([], dtype=t.dtype, device=self.target)
             t_data_pin.set_(
-                self.cpu_pin_storage,
+                self.pin_storage,
                 int(self.used_in_byte / t_data_pin.element_size()),
                 t.size(),
                 t.stride(),
@@ -81,7 +81,7 @@ class TensorGroup:
             t_data_pin.copy_(t)
             t_data_target.set_(
                 self.target_storage,
-                int(self.targe_storage / t_data_target.element_size()),
+                int(self.used_in_byte / t_data_target.element_size()),
                 t.size(),
                 t.stride(),
             )
@@ -91,9 +91,9 @@ class TensorGroup:
 
     def load(self):
         with torch.no_grad():
-            self.targe_tensor.copy_(self.cpu_pin_tensor, non_blocking=True)
+            self.target_tensor.copy_(self.pin_tensor, non_blocking=True)
 
     def unload(self, copy_back=False):
         if copy_back:
             with torch.no_grad():
-                self.cpu_pin_tensor.copy_(self.targe_tensor, non_blocking=True)
+                self.pin_tensor.copy_(self.target_tensor, non_blocking=True)

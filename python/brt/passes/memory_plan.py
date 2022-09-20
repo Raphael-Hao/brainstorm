@@ -33,6 +33,7 @@ class MemoryPlanPass(PassBase):
     ):
         super().__init__(m)
         self.max_depth = max_depth
+        self.is_grouping = is_grouping
         self.goal_classifiers: List[Callable] = []
         assert (
             self.max_depth == 0
@@ -42,6 +43,8 @@ class MemoryPlanPass(PassBase):
         self.all_collected_buffers: Dict[
             str, Tuple[torch.Tensor, nn.Module, str]
         ] = dict()
+        self.initial_loaders: List[nn.Module] = []
+
 
     def build_goal_classifiers(
         self, node_types: List[str] = None, custom_check_fns: List[Callable] = None
@@ -121,7 +124,7 @@ class MemoryPlanPass(PassBase):
                 memory_guarder = GroupedPredictGuarder(event_id)
                 memory_unloader = GroupedPredictUnloader(event_id, tensor_group)
             elif mode == "initial":
-                memory_loader = GroupedInitialLoader(tensor_group)
+                memory_loader = GroupedInitialLoader(event_id, tensor_group)
             else:
                 raise ValueError(f"Mode {mode} is not supported.")
         else:
@@ -134,12 +137,28 @@ class MemoryPlanPass(PassBase):
                 memory_guarder = PredictGuarder(event_id)
                 memory_unloader = PredictUnloader(event_id, params, buffers)
             elif mode == "initial":
-                memory_loader = InitialLoader(params, buffers)
+                memory_loader = InitialLoader(event_id, params, buffers)
             else:
                 raise ValueError(f"Mode {mode} is not supported.")
-        setattr(self.graph_mod, f"brt_memory_loader_{event_id}", memory_loader)
-        setattr(self.graph_mod, f"brt_memory_guarder_{event_id}", memory_guarder)
-        setattr(self.graph_mod, f"brt_memory_unloader_{event_id}", memory_unloader)
+        if mode == "initial":
+            setattr(self.graph_mod, f"brt_initial_loader_{event_id}", memory_loader)
+            self.initial_loaders.append(memory_loader)
+        else:
+            setattr(self.graph_mod, f"brt_memory_loader_{event_id}", memory_loader)
+            setattr(self.graph_mod, f"brt_memory_guarder_{event_id}", memory_guarder)
+            setattr(self.graph_mod, f"brt_memory_unloader_{event_id}", memory_unloader)
+
+    def inspect_planner_mode(self, event_id: int) -> str:
+        loader = getattr(self.graph_mod, f"brt_initial_loader_{event_id}", None)
+        if loader is not None:
+            return "initial"
+        loader = getattr(self.graph_mod, f"brt_memory_loader_{event_id}", None)
+        if isinstance(loader, (PredictLoader, GroupedPredictLoader)):
+            return "predict"
+        elif isinstance(loader, (OnDemandLoader, GroupedOnDemandLoader)):
+            return "on_demand"
+        else:
+            raise ValueError(f"Unrecognized mode for planner with event id {event_id}")
 
     def add_new_plan_group(
         self,
@@ -413,22 +432,29 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
 
         MemoryPlanContext.init(event_num)
         event_id = 0
-
+        initial_loader_injected = False
         for head_node, plan_groups in orderred_plan_groups:
             for path_id, (
                 _traveled_nodes,
                 collected_params,
                 collected_buffers,
             ) in enumerate(plan_groups):
+                if not initial_loader_injected:
+                    mode = "initial"
+                    initial_loader_injected = True
+                else:
+                    mode = "on_demand"
                 self.inject_planners(
-                    "on_demand", path_id, event_id, collected_params, collected_buffers
+                    mode, path_id, event_id, collected_params, collected_buffers
                 )
                 event_id += 1
 
         event_id -= 1
-
         for head_node, plan_groups in reversed(orderred_plan_groups):
             for path_id in range(len(plan_groups)):
+                planner_mode = self.inspect_planner_mode(event_id - path_id)
+                if planner_mode == "initial":
+                    continue
                 traveled_nodes = plan_groups[-path_id - 1][0]
                 tail_node = traveled_nodes[-1]
                 with self.graph_mod.graph.inserting_after(tail_node):
@@ -441,6 +467,9 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                     )
 
             for path_id in range(len(plan_groups)):
+                planner_mode = self.inspect_planner_mode(event_id - path_id)
+                if planner_mode == "initial":
+                    continue
                 with self.graph_mod.graph.inserting_after(head_node):
                     guarder_node = self.graph_mod.graph.call_module(
                         f"brt_memory_guarder_{event_id - path_id}",
@@ -451,6 +480,9 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                     )
 
             for path_id in range(len(plan_groups)):
+                planner_mode = self.inspect_planner_mode(event_id - path_id)
+                if planner_mode == "initial":
+                    continue
                 with self.graph_mod.graph.inserting_after(head_node):
                     loader_node = self.graph_mod.graph.call_module(
                         f"brt_memory_loader_{event_id - path_id}", args=(head_node,)
@@ -460,8 +492,8 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                     )
             event_id -= len(plan_groups)
 
-    def finalize(self) -> GraphModule:
-        return super().finalize()
+    def finalize(self) -> Tuple[List[nn.Module], GraphModule]:
+        return self.initial_loaders, super().finalize()
 
 
 @register_pass("PredictMemoryPlan")
@@ -489,6 +521,7 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
         MemoryPlanContext.init(event_num)
 
         event_id = 0
+        prev_head_node = None
         for head_node, plan_groups in orderred_plan_groups:
             for path_id, (
                 traveled_nodes,
@@ -506,6 +539,10 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                             f"Unknown router kind: {head_node_m.__class__}"
                         )
                     if path_load_history >= self.lazy_load_threshold:
+                        if prev_head_node is None:
+                            mode = "initial"
+                        else:
+                            mode = "predict"
                         self.inject_planners(
                             "predict",
                             path_id,
@@ -522,20 +559,29 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                             collected_buffers,
                         )
                 else:
+                    if prev_head_node is None:
+                        mode = "initial"
+                    else:
+                        mode = "predict"
                     self.inject_planners(
-                        "predict",
+                        mode,
                         path_id,
                         event_id,
                         collected_params,
                         collected_buffers,
                     )
                 event_id += 1
+            prev_head_node = head_node
 
         orderred_plan_groups.reverse()
         event_id -= 1
+        self.initial_loaders: List[nn.Module] = []
 
         for g_id, (head_node, plan_groups) in enumerate(orderred_plan_groups):
             for path_id in range(len(plan_groups)):
+                planner_mode = self.inspect_planner_mode(event_id - path_id)
+                if planner_mode == "initial":
+                    continue
                 traveled_nodes = plan_groups[-path_id - 1][0]
                 tail_node = traveled_nodes[-1]
                 with self.graph_mod.graph.inserting_after(tail_node):
@@ -547,6 +593,9 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                     )
 
             for path_id in range(len(plan_groups)):
+                planner_mode = self.inspect_planner_mode(event_id - path_id)
+                if planner_mode == "initial":
+                    continue
                 with self.graph_mod.graph.inserting_after(head_node):
                     guarder_node = self.graph_mod.graph.call_module(
                         f"brt_memory_guarder_{event_id - path_id}", args=(head_node,)
@@ -556,12 +605,15 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                     )
 
             for path_id in range(len(plan_groups)):
+                planner_mode = self.inspect_planner_mode(event_id - path_id)
+                if planner_mode == "initial":
+                    continue
                 memory_loader = getattr(
                     self.graph_mod, f"brt_memory_loader_{event_id - path_id}"
                 )
-                if isinstance(memory_loader, OnDemandLoader) or (g_id + 1) == len(
-                    orderred_plan_groups
-                ):
+                if isinstance(
+                    memory_loader, (OnDemandLoader, GroupedOnDemandLoader)
+                ) or (g_id + 1) == len(orderred_plan_groups):
                     with self.graph_mod.graph.inserting_after(head_node):
                         loader_node = self.graph_mod.graph.call_module(
                             f"brt_memory_loader_{event_id - path_id}", args=(head_node,)
@@ -569,7 +621,7 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                         head_node.replace_all_uses_with(
                             loader_node, lambda usr: usr != loader_node
                         )
-                elif isinstance(memory_loader, PredictLoader):
+                elif isinstance(memory_loader, (PredictLoader, GroupedPredictLoader)):
                     prev_head_node = orderred_plan_groups[g_id + 1][0]
                     with self.graph_mod.graph.inserting_after(prev_head_node):
                         loader_node = self.graph_mod.graph.call_module(
@@ -605,6 +657,7 @@ def _group_params_buffers(
     for p in params.values():
         if p is not None:
             total_size_in_bytes += p.data.numel() * p.data.element_size()
+        if p.grad is not None:
             total_size_in_bytes += p.grad.data.numel() * p.grad.data.element_size()
     for b_t, b_mod, b_name in buffers.values():
         if b_mod._buffers[b_name] is not None:

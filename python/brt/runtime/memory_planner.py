@@ -164,8 +164,8 @@ class MemoryPlanner(nn.Module):
 
 
 class InitialLoader(MemoryPlanner):
-    def __init__(self, collected_params, collected_buffers):
-        super().__init__(0, collected_params, collected_buffers)
+    def __init__(self, event_id, collected_params, collected_buffers):
+        super().__init__(event_id, collected_params, collected_buffers)
 
     def forward(self):
         self.load(self.event_id)
@@ -289,14 +289,16 @@ class GroupedMemoryPlanner(nn.Module):
             self.tensor_group.unload(copy_back=copy_back)
         MemoryPlanContext.EVENTS[event_id].record(MemoryPlanContext.MEMORY_STREAM)
 
+
 class GroupedInitialLoader(GroupedMemoryPlanner):
-    def __init__(self, tensor_group: TensorGroup):
-        super().__init__(0, tensor_group)
+    def __init__(self, event_id, tensor_group: TensorGroup):
+        super().__init__(event_id, tensor_group)
 
     def forward(self):
         self.load(self.event_id)
         self.guard(self.event_id)
         MemoryPlanContext.MEMORY_STREAM.synchronize()
+
 
 @register_leaf_node
 class GroupedOnDemandLoader(GroupedMemoryPlanner):
