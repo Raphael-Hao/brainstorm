@@ -84,15 +84,16 @@ class classSR_3class_fused_fsrcnn_net(nn.Module):
                 ],
             ),
         )
-        self.fused_tail = FusedLayer(
-            [subnet.tail_conv for subnet in subnets],
-            [
-                [subnet_bs[0], 16, 32, 32],
-                [subnet_bs[1], 36, 32, 32],
-                [subnet_bs[2], 56, 32, 32],
-            ],
-            [[bs, 3, 128, 128] for bs in subnet_bs],
-        )
+        self.tail_convs = [subnet.tail_conv for subnet in subnets]
+        # self.fused_tail = FusedLayer(
+        #     [subnet.tail_conv for subnet in subnets],
+        #     [
+        #         [subnet_bs[0], 16, 32, 32],
+        #         [subnet_bs[1], 36, 32, 32],
+        #         [subnet_bs[2], 56, 32, 32],
+        #     ],
+        #     [[bs, 3, 128, 128] for bs in subnet_bs],
+        # )
         self.gather_router = GatherRouter(fabric_type="combine")
 
     def forward(self, x, is_train=False):
@@ -106,7 +107,8 @@ class classSR_3class_fused_fsrcnn_net(nn.Module):
         ]
         xs = self.fused_head(sr_xs_padding)
         xs = self.fused_bodys(xs)
-        xs = self.fused_tail(xs)
+        # xs = self.fused_tail(xs)
+        xs = [self.tail_convs[i](xs[i]) for i in range(3)]
         for i, srx in enumerate(sr_xs):
             xs[i] = make_proto_tensor_from(xs[i][: real_bs[i]], srx)
         gr_x = self.gather_router(xs)
