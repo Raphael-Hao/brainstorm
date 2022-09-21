@@ -474,22 +474,22 @@ void DispatchWithDstIndices1D(float* src_data /*[sample_num x sample_size]*/,
     if (gates == nullptr) {
       dispatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, route_indices, loads, sample_num, sample_size, path_num);
-      CUDA_CHECK(cudaDeviceSynchronize());
+      // CUDA_CHECK(cudaDeviceSynchronize());
     } else {
       weighted_dipatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, gates, route_indices, loads, sample_num, sample_size, path_num);
-      CUDA_CHECK(cudaDeviceSynchronize());
+      // CUDA_CHECK(cudaDeviceSynchronize());
     }
   } else {
     if (gates == nullptr) {
       padded_dispatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, route_indices, loads, capacity, sample_num, sample_size, path_num);
-      CUDA_CHECK(cudaDeviceSynchronize());
+      // CUDA_CHECK(cudaDeviceSynchronize());
     } else {
       padded_weighted_dipatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, gates, route_indices, loads, capacity, sample_num, sample_size,
           path_num);
-      CUDA_CHECK(cudaDeviceSynchronize());
+      // CUDA_CHECK(cudaDeviceSynchronize());
     }
   }
 }
