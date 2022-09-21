@@ -176,7 +176,6 @@ class ClassSR_Model(BaseModel):
         )
         if self.need_GT:
             gt_list = self.crop_cpu(self.real_H, self.patch_size * 4, self.step * 4)[0]
-        sr_list = []
         index = 0
 
         psnr_type1 = 0
