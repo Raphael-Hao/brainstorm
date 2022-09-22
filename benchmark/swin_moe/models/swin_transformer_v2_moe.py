@@ -18,7 +18,7 @@ from typing import Union, List
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import numpy as np
 from tutel import moe as tutel_moe
-from tutel.moe import router_exporter
+from tutel.impls import moe_layer_brt as brt_moe
 
 _shape_t = Union[int, List[int], Size]
 
@@ -104,7 +104,7 @@ class MoEMlp(nn.Module):
 
         self.dist_rank = dist.get_rank()
 
-        self._moe_layer = tutel_moe.moe_layer(
+        self._moe_layer = brt_moe.moe_layer(
             # gate_type='Top%dGate' % top_value,
             gate_type={'type': 'top', 'k': top_value},
             model_dim=model_dim,
@@ -1095,8 +1095,6 @@ class BasicLayer(nn.Module):
                 x, cur_l_aux = checkpoint.checkpoint(blk, x)
                 ckpt_block += 1
             else:
-                if router_exporter.is_enabled():
-                    router_exporter.set_block_id(idx)
                 x, cur_l_aux = blk(x)
             l_aux = cur_l_aux * self.aux_loss_scale[idx] + l_aux
         if self.downsample is not None:
@@ -1480,8 +1478,6 @@ class SwinV2TransformerMoE(nn.Module):
         x = self.pos_drop(x)
         l_aux = 0.0
         for i_layer, layer in enumerate(self.layers):
-            if router_exporter.is_enabled():
-                router_exporter.set_layer_id(i_layer)
             x, cur_l_aux = layer(x)
             l_aux = cur_l_aux + l_aux
 

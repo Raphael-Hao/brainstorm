@@ -7,6 +7,7 @@ total_latency.tsv
 *.qdrep
 *.svg
 *.csv
+benchmark/swin_moe/results
 
 .cache/*
 !.cache/kernel_db.sqlite

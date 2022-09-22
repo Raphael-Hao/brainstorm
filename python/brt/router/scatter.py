@@ -120,7 +120,7 @@ class ScatterRouter(RouterBase):
         else:
             real_loads = loads
 
-        self.capture_flow_stats(self.fabric_type, in_flows, route_indices, loads)
+        self.capture_flow_stats(self.fabric_type, in_flows, route_indices, real_loads)
 
         out_flows = self.fabric(in_flows, route_indices, real_loads, score)
         return out_flows
@@ -141,7 +141,7 @@ class SwinMoEScatterRouter(RouterBase):
         fabric_kwargs: Dict[str, Any] = None,
         throttling=False,
         capturing=True,
-        capture_mode: str = "c",
+        capture_mode: str = "cum",
     ):
         super().__init__(capturing=capturing, capture_mode=capture_mode)
         assert (
@@ -168,9 +168,9 @@ class SwinMoEScatterRouter(RouterBase):
         self.fabric_type = fabric_type
         self.fabric_kwargs = {}
         built_in_fabric_kwargs = {
-            "flow_num": 2,
-            "route_logic": ["1d", "2d"],
-            "transform": [False, False],
+            "flow_num": 1,
+            "route_logic": ["1d"],
+            "transform": [False],
         }
         self.fabric_kwargs.update(built_in_fabric_kwargs)
 
@@ -185,14 +185,20 @@ class SwinMoEScatterRouter(RouterBase):
             score, logits_wo_noise, logits
         )
 
-        if isinstance(in_flows, List):
-            in_flows = in_flows.append(new_score)
-        else:
-            in_flows = [in_flows, new_score]
+        # if isinstance(in_flows, List):
+        #     in_flows = in_flows.append(new_score)
+        # else:
+        #     in_flows = [in_flows, new_score]
 
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
-        self.capture_flow_stats(self.fabric_type, in_flows, loads, capacities)
-        out_flows = self.fabric(in_flows, route_indices, loads, capacities, score)
+
+        if self.throttling:
+            real_loads = torch.minimum(loads, capacities)
+        else:
+            real_loads = loads
+
+        self.capture_flow_stats(self.fabric_type, in_flows, route_indices, real_loads)
+        out_flows = self.fabric(in_flows, route_indices, real_loads, score)
         return out_flows, loss
