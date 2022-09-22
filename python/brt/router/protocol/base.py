@@ -40,8 +40,8 @@ class ProtocolBase(nn.Module):
             None,
         ], f"index_format should be dst_index or src_index, but got {index_format}"
 
-    def forward(self, score: torch.Tensor, **kwargs):
-        decisions = self.make_route_decision(score, **kwargs)
+    def forward(self, score: torch.Tensor, *args, **kwargs):
+        decisions = self.make_route_decision(score, *args, **kwargs)
         if self.debug:
             self.check_decision(decisions, score)
         return decisions

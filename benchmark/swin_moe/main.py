@@ -384,7 +384,8 @@ def validate(config, data_loader, model):
                 router_exporter.new_entry()
                 # router_exporter.set_input(images)
             output, l_aux = model(images)
-            router_exporter.set_output(output)
+            if router_exporter.is_enabled():
+                router_exporter.set_output(output)
             # measure accuracy and record loss
             loss = criterion(output, target)
 
@@ -418,7 +419,7 @@ def validate(config, data_loader, model):
                 f'Mem {memory_used:.0f}MB')
     logger.info(f' * Acc@1 {acc1_meter.avg:.3f} Acc@5 {acc5_meter.avg:.3f}')
     if expert_export_path:
-        router_exporter.dump() 
+        router_exporter.dump()
         exit()
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
