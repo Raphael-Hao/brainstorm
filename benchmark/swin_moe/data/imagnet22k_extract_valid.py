@@ -13,6 +13,8 @@ def _load_image(path):
 
 
 def _save_image(im: Image, base_path: pathlib.Path, name: str):
+    im_path = base_path / name
+    im_path.parent.mkdir(parents=True, exist_ok=True)
     im.save(base_path / name)
     return im
 
