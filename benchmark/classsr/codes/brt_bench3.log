@@ -1,0 +1,16 @@
+* Start timeit: Run 1 times
+Raw model:              0.08313466887921095s in 1 runs (0.08313466887921095s/run)
+Vertical Fused model:   0.002539790701121092s in 1 runs (0.002539790701121092s/run)
+Horizontal Fused model: 0.004589851014316082s in 1 runs (0.004589851014316082s/run)
+* Start timeit: Run 100 times
+Raw model:              0.5558971436694264s in 100 runs (0.005558971436694264s/run)
+Vertical Fused model:   0.24330297810956836s in 100 runs (0.0024330297810956835s/run)
+Horizontal Fused model: 0.2333342400379479s in 100 runs (0.002333342400379479s/run)
+* Start timeit: Run 1000 times
+Raw model:              5.488112264778465s in 1000 runs (0.005488112264778465s/run)
+Vertical Fused model:   2.4379038200713694s in 1000 runs (0.0024379038200713693s/run)
+Horizontal Fused model: 2.3368798047304153s in 1000 runs (0.002336879804730415s/run)
+* Start timeit: Run 10000 times
+Raw model:              54.31063046492636s in 10000 runs (0.005431063046492636s/run)
+Vertical Fused model:   23.791253638919443s in 10000 runs (0.002379125363891944s/run)
+Horizontal Fused model: 22.799950934946537s in 10000 runs (0.002279995093494654s/run)
