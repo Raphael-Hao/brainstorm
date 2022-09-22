@@ -28,14 +28,13 @@ __all__ = [
 class HomoFusedDispatchFabric(DispatchFabric):
     def __init__(
         self,
+        flow_num: int,
         capacity_padding=False,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
     ):
         self.capacity_padding = capacity_padding
-        super().__init__(
-            route_logic=route_logic, transform=transform
-        )
+        super().__init__(flow_num, route_logic=route_logic, transform=transform)
 
     def dispatch(
         self,
@@ -45,7 +44,6 @@ class HomoFusedDispatchFabric(DispatchFabric):
         score: torch.Tensor,
     ) -> List[ProtoTensor]:
         all_out_flows = []
-
         for flow_idx, flow in enumerate(in_flows):
             (
                 in_flow_data,
@@ -111,18 +109,19 @@ class HomoFusedDispatchFabric(DispatchFabric):
 
 @register_fabric("homo_fused_combine")
 class HomoFusedCombineFabric(CombineFabric):
-    def __init__(self, flow_num, sparse, reduction) -> None:
+    def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
+        assert granularity_padding == False
         super().__init__(
             flow_num=flow_num,
             reduction=reduction,
             sparse=sparse,
             granularity_padding=False,
         )
+        self.transform = False
 
-    def dispatch(self, in_flows: List[ProtoTensor]) -> List[ProtoTensor]:
+    def combine(self, in_flows: List[ProtoTensor]) -> List[ProtoTensor]:
         out_flows = []
-        for flow_idx in self.flow_num:
-            in_flow = in_flows[flow_idx]
+        for flow_idx, in_flow in enumerate(in_flows):
             (
                 in_flow_data,
                 in_flow_tag_stack,
@@ -148,11 +147,13 @@ class HomoFusedCombineFabric(CombineFabric):
                     in_flow_data, local_indices, loads, None
                 )
 
-            # self.end_timer("route_back_with_local_indices")
-
             out_flow = init_proto_tensor(
                 out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack
             )
             out_flows.append(out_flow)
 
         return out_flows
+
+    def pack_invalid_flow(self, in_flow):
+
+        return in_flow
