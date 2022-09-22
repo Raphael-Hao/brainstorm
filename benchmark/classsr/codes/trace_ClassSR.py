@@ -5,7 +5,7 @@ from models.archs.classSR_fsrcnn_arch import classSR_3class_fsrcnn_net
 from models.archs.classSR_carn_arch import ClassSR as classSR_3class_carn_net
 from models.archs.classSR_srresnet_arch import ClassSR as classSR_3class_srresnet_net
 from models.archs.classSR_rcan_arch import classSR_3class_rcan as classSR_3class_rcan_net
-from models.archs.classSR_fused_fsrcnn_arch import classSR_3class_fused_fsrcnn_net
+from models.archs.classSR_fused_fsrcnn_arch import fused_classSR_3class_fsrcnn_net
 
 import torch
 import torch.nn as nn
@@ -23,7 +23,7 @@ if __name__ == "__main__":
         'classsr_carn': classSR_3class_carn_net,
         'classsr_srresnet': classSR_3class_srresnet_net,
         'classsr_rcan': classSR_3class_rcan_net,
-        'fused_classsr_fsrcnn': classSR_3class_fused_fsrcnn_net,
+        'fused_classsr_fsrcnn': fused_classSR_3class_fsrcnn_net,
     }
     for model_name in models:
         if 'fused' in model_name:

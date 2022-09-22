@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import timeit
 
-from models.archs.classSR_fused_fsrcnn_arch import classSR_3class_fused_fsrcnn_net
+from models.archs.classSR_fused_fsrcnn_arch import fused_classSR_3class_fsrcnn_net
 from models.archs.classSR_fsrcnn_arch import classSR_3class_fsrcnn_net
 
 from brt.runtime.benchmark import profile
@@ -63,7 +63,7 @@ raw_model = classSR_3class_fsrcnn_net().cuda().eval()
 # print([x for x, _ in raw_model.named_parameters()])
 raw_model.load_state_dict(full_state_dict)
 
-fused_model = classSR_3class_fused_fsrcnn_net(raw_model, (34, 38, 29)).cuda().eval()
+fused_model = fused_classSR_3class_fsrcnn_net(raw_model, (34, 38, 29)).cuda().eval()
 
 profile(lambda :print(raw_model(input_tensor)[1]))
 profile(lambda :print(fused_model(input_tensor)[1]))

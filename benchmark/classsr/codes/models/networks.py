@@ -8,6 +8,7 @@ import models.archs.RCAN_arch as RCAN_arch
 import models.archs.FSRCNN_arch as FSRCNN_arch
 import models.archs.CARN_arch as CARN_arch
 
+import models.archs.fused_classSR_fsrcnn_arch as fused_classSR_3class_fsrcnn_net
 import models.archs.classSR_fused_fsrcnn_arch as classSR_3class_fused_fsrcnn_net
 
 # Generator
@@ -71,6 +72,14 @@ def define_G(opt):
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
 
+    elif (
+        which_model == "classSR_3class_fused_fsrcnn_net"
+        or which_model == "fused_classSR_3class_fsrcnn_net"
+    ):
+        netG = classSR_3class_arch.classSR_3class_fsrcnn_net(
+            in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
+        )
+
     else:
         raise NotImplementedError(
             "Generator model [{:s}] not recognized".format(which_model)
@@ -81,11 +90,17 @@ def define_G(opt):
 
 def fuse_G(opt, raw):
     which_model = opt["network_G"]["which_model_G"]
-    input_bs = opt['network_G']['in_bs']
+    input_bs = opt["network_G"]["in_bs"]
 
     # image restoration
-    if which_model == "classSR_3class_fsrcnn_net":
-        netG = classSR_3class_fused_fsrcnn_net.classSR_3class_fused_fsrcnn_net(raw, input_bs)
+    if which_model == "fused_classSR_3class_fsrcnn_net":
+        netG = fused_classSR_3class_fsrcnn_net.fused_classSR_3class_fsrcnn_net(
+            raw, input_bs
+        )
+    elif which_model == "classSR_3class_fused_fsrcnn_net":
+        netG = classSR_3class_fused_fsrcnn_net.classSR_3class_fused_fsrcnn_net(
+            raw, input_bs
+        )
     else:
         raise NotImplementedError(
             "Generator model [{:s}] not recognized".format(which_model)
