@@ -45,7 +45,7 @@ class FusedClassSR(BaseModel):
         # else:
         #     self.netG = DataParallel(self.netG)
         self.load()
-        self.netG = networks.fuse_G(opt, self.netG)
+        self.netG = networks.fuse_G(opt, self.netG).to(self.device)
         # print network
         self.print_network()
 

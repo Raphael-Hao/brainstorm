@@ -8,6 +8,8 @@ import torch
 class FSRCNN_net(torch.nn.Module):
     def __init__(self, input_channels, upscale, d=64, s=12, m=4):
         super(FSRCNN_net, self).__init__()
+        self.d = d
+        self.s = s
         self.head_conv = nn.Sequential(
             nn.Conv2d(
                 in_channels=input_channels,

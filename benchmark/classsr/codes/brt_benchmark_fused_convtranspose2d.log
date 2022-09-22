@@ -1,0 +1,12 @@
+* Start timeit: Run 1 times
+Raw model:   0.012669835239648819s in 1 runs (0.012669835239648819s/run)
+Fused model: 9.272971543017775s in 1 runs (9.272971543017775s/run)
+* Start timeit: Run 100 times
+Raw model:   0.46414776518940926s in 100 runs (0.004641477651894092s/run)
+Fused model: 0.3474250310100615s in 100 runs (0.0034742503101006152s/run)
+* Start timeit: Run 1000 times
+Raw model:   4.590865910053253s in 1000 runs (0.004590865910053253s/run)
+Fused model: 3.482213203329593s in 1000 runs (0.003482213203329593s/run)
+* Start timeit: Run 10000 times
+Raw model:   45.8551516472362s in 10000 runs (0.00458551516472362s/run)
+Fused model: 34.8677215971984s in 10000 runs (0.0034867721597198397s/run_benchmark
