@@ -96,11 +96,11 @@ def fuse_G(opt, raw):
     if which_model == "fused_classSR_3class_fsrcnn_net":
         netG = fused_classSR_3class_fsrcnn_net.fused_classSR_3class_fsrcnn_net(
             raw, input_bs
-        )
+        ).cuda()
     elif which_model == "classSR_3class_fused_fsrcnn_net":
         netG = classSR_3class_fused_fsrcnn_net.classSR_3class_fused_fsrcnn_net(
             raw, input_bs
-        )
+        ).cuda()
     else:
         raise NotImplementedError(
             "Generator model [{:s}] not recognized".format(which_model)
