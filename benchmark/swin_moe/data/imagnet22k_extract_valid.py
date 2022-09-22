@@ -32,9 +32,12 @@ class Extractor(mp.Process):
     def run(self):
         self.database = json.load(open(self.ann_path))
         for i in range(self.start_id, self.end_id):
-            idb = database[i]
-            images = _load_image(self.origin_path / idb[0])
-            _save_image(images, self.new_path, idb[0])
+            idb = self.database[i]
+            try:
+                images = _load_image(self.origin_path / idb[0])
+                _save_image(images, self.new_path, idb[0])
+            except Exception as e:
+                print(f"failing to load {idb[0]} due to {e}")
 
 
 if __name__ == "__main__":
