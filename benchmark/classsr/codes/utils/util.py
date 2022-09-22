@@ -42,6 +42,8 @@ def cal_FLOPs(which_model, num_ress):
             num_ress
         )
         percent = flops / 32.60
+    else:
+        return 0, 0
     return flops, percent
 
 
