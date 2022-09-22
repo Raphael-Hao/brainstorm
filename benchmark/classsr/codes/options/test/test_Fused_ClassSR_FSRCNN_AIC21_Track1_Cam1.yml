@@ -16,7 +16,7 @@ datasets:
     dataroot_LQ: /home/ouyang/project/brainstorm/benchmark/classsr/datasets_2/AIC21_Track1_Vehicle_Counting/Dataset_A_Images/cam1
 
 network_G:
-  which_model_G: classSR_3class_fused_fsrcnn_net
+  which_model_G: fused_classSR_3class_fsrcnn_net
   in_nc: 3
   out_nc: 3
   in_bs: [34, 38, 29]
