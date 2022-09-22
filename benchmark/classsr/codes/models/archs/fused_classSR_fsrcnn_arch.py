@@ -14,6 +14,8 @@ from brt.router import ScatterRouter, GatherRouter
 from brt.runtime.proto_tensor import (
     make_proto_tensor_from,
     to_torch_tensor,
+    collect_proto_attr_stack,
+    init_proto_tensor,
 )
 from brt.jit import make_jit_kernel
 
@@ -98,17 +100,18 @@ class fused_classSR_3class_fsrcnn_net(nn.Module):
 
         weights = self.classifier(x)
         sr_xs = self.scatter_router(x, weights)
-        real_bs = [srx.shape[0] for srx in sr_xs] 
+        real_bs = [srx.shape[0] for srx in sr_xs]
+        proto_info = [collect_proto_attr_stack(srx) for srx in sr_xs]
         sr_xs_padding = [
-            torch.cat((to_torch_tensor(srx), torch.zeros(bs - srx.shape[0], *srx.shape[1:]).to(srx.device)), 0)
+            srx.resize_([bs, *srx.shape[1:]])
             for bs, srx in zip(self.subnet_bs, sr_xs)
         ]
         xs = self.fused_head(sr_xs_padding)
         xs = self.fused_bodys(xs)
         # xs = self.fused_tail(xs)
         xs = [self.tail_convs[i](xs[i]) for i in range(3)]
-        for i, srx in enumerate(sr_xs):
-            xs[i] = make_proto_tensor_from(xs[i][: real_bs[i]], srx)
+        for i in range(3):
+            xs[i] = init_proto_tensor(xs[i][:real_bs[i]], *proto_info[i])
         gr_x = self.gather_router(xs)
         return gr_x, [yy.shape[0] for yy in xs]
 

@@ -3,7 +3,8 @@ import cv2
 import numpy as np
 import timeit
 
-from models.archs.classSR_fused_fsrcnn_arch import fused_classSR_3class_fsrcnn_net
+from models.archs.fused_classSR_fsrcnn_arch import fused_classSR_3class_fsrcnn_net
+from models.archs.classSR_fused_fsrcnn_arch import classSR_3class_fused_fsrcnn_net
 from models.archs.classSR_fsrcnn_arch import classSR_3class_fsrcnn_net
 
 from brt.runtime.benchmark import profile
@@ -63,26 +64,37 @@ raw_model = classSR_3class_fsrcnn_net().cuda().eval()
 # print([x for x, _ in raw_model.named_parameters()])
 raw_model.load_state_dict(full_state_dict)
 
-fused_model = fused_classSR_3class_fsrcnn_net(raw_model, (34, 38, 29)).cuda().eval()
+horiz_fused_model = fused_classSR_3class_fsrcnn_net(raw_model, (34, 38, 29)).cuda().eval()
 
-profile(lambda :print(raw_model(input_tensor)[1]))
-profile(lambda :print(fused_model(input_tensor)[1]))
+verti_fused_model = classSR_3class_fused_fsrcnn_net(raw_model, (34, 38, 29)).cuda().eval()
 
-# for n in [1, 100, 1000, 10000]:
-#     print(f"* Start timeit: Run {n} times")
-#     raw_time = timeit.timeit(
-#         "x = raw_model(input_tensor)",
-#         setup="from __main__ import raw_model, input_tensor; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
-#         number=n,
-#         )
-#     print(
-#         f"Raw model:   {raw_time}s in {n} runs ({raw_time/n}s/run)"
-#     )
-#     fused_time = timeit.timeit(
-#                 "x = fused_model(input_tensor)",
-#                 setup="from __main__ import fused_model, input_tensor; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
-#                 number=n,
-#             )
-#     print(
-#         f"Fused model: {fused_time}s in {n} runs ({fused_time/n}s/run)"
-#     )
+profile(lambda :raw_model(input_tensor))
+profile(lambda :horiz_fused_model(input_tensor))
+profile(lambda :verti_fused_model(input_tensor))
+
+for n in [1, 100, 1000, 10000]:
+    print(f"* Start timeit: Run {n} times")
+    raw_time = timeit.timeit(
+        "x = raw_model(input_tensor)",
+        setup="from __main__ import raw_model, input_tensor; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
+        number=n,
+        )
+    print(
+        f"Raw model:              {raw_time}s in {n} runs ({raw_time/n}s/run)"
+    )
+    verti_time = timeit.timeit(
+                "x = verti_fused_model(input_tensor)",
+                setup="from __main__ import verti_fused_model, input_tensor; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
+                number=n,
+            )
+    print(
+        f"Vertical Fused model:   {verti_time}s in {n} runs ({verti_time/n}s/run)"
+    )
+    horiz_time = timeit.timeit(
+                "x = horiz_fused_model(input_tensor)",
+                setup="from __main__ import horiz_fused_model, input_tensor; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
+                number=n,
+            )
+    print(
+        f"Horizontal Fused model: {horiz_time}s in {n} runs ({horiz_time/n}s/run)"
+    )

@@ -13,7 +13,7 @@ datasets:
   test_1:
     name: AIC21_Track1_Cam1
     mode: LQ
-    dataroot_LQ: /home/ouyang/project/brainstorm/benchmark/classsr/datasets_2/AIC21_Track1_Vehicle_Counting/Dataset_A_Images/cam1
+    dataroot_LQ: /home/v-louyang/brainstorm_project/brainstorm/benchmark/classsr/datasets_2/AIC21_Track1_Vehicle_Counting/Dataset_A_Images/cam1
 
 network_G:
   which_model_G: classSR_3class_fused_fsrcnn_net
@@ -23,7 +23,7 @@ network_G:
 
 #### path
 path:
-  pretrain_model_G: /home/ouyang/project/brainstorm/benchmark/classsr/experiments/pre_trained_models/ClassSR_FSRCNN.pth
+  pretrain_model_G: /home/v-louyang/brainstorm_project/brainstorm/benchmark/classsr/experiments/pre_trained_models/ClassSR_FSRCNN.pth
   pretrain_model_classifier: ~
   pretrain_model_G_branch1: ~
   pretrain_model_G_branch2: ~
