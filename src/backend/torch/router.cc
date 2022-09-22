@@ -133,7 +133,6 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
     const ::c10::optional<::torch::Tensor>& gates = {} /*[sample_num x path_num]*/) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
-  CHECK_ON_CUDA(loads);
 
   int sample_num = in_data.size(0);
   int sample_size = in_data.numel() / sample_num;
@@ -146,6 +145,13 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
     total_load = capacity * path_num;
   } else {
     total_load = loads.sum().item<int>();
+  }
+  ::torch::Tensor cuda_loads;
+  if (!loads.is_cuda()) {
+    cuda_loads = loads.cuda();
+  }
+  else{
+    cuda_loads = loads;
   }
 
   float* gates_data_ptr = nullptr;
@@ -161,7 +167,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
 
   router::DispatchWithDstIndices1D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
                                    gates_data_ptr, route_indices.data_ptr<int>(),
-                                   loads.data_ptr<int>(), capacity, sample_num, sample_size,
+                                   cuda_loads.data_ptr<int>(), capacity, sample_num, sample_size,
                                    path_num, at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
@@ -206,7 +212,13 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
     const ::c10::optional<::torch::Tensor>& gates = {} /*[sample_num x path_num]*/) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
-  CHECK_ON_CUDA(loads);
+  ::torch::Tensor cuda_loads;
+  if (!loads.is_cuda()) {
+    cuda_loads = loads.cuda();
+  }
+  else{
+    cuda_loads = loads;
+  }
 
   int sample_num = route_indices.size(0);
   int sample_size = in_data.numel() / in_data.size(0);
@@ -231,7 +243,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
 
   router::CombineWithSrcIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
                                 gates_data_ptr, route_indices.data_ptr<int>(),
-                                loads.data_ptr<int>(), capacity, sample_num, sample_size, path_num,
+                                cuda_loads.data_ptr<int>(), capacity, sample_num, sample_size, path_num,
                                 at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }

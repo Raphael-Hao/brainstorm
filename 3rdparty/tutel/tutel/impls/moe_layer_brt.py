@@ -17,81 +17,11 @@ import torch.distributed as dist
 from torch.nn import ModuleList
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
+from brt.router import SwinMoEScatterRouter, GatherRouter
 
-from ..impls.fast_dispatch import fast_dispatcher
+from .fast_dispatch import fast_dispatcher
 from ..jit_kernels.gating import fast_cumsum_sub_one
-from ..impls import communicate as C
-
-
-class router_exporter:
-    @staticmethod
-    def set_path(path):
-        global router_export_path
-        global router_result
-        global dump_id
-        dump_id = 0
-        router_export_path = path
-        router_result = []
-
-    @staticmethod
-    def get_path():
-        return router_export_path
-
-    @staticmethod
-    def is_enabled():
-        return "router_export_path" in globals()
-
-    @staticmethod
-    def new_entry():
-        global router_result
-        if len(router_result) >= 500:
-            router_exporter.dump()
-            router_result = []
-        router_result.append({"expert": {}, "input": None, "output": None})
-
-    @staticmethod
-    def set_input(input_tensor):
-        assert len(router_result) > 0
-        router_result[-1]["input"] = input_tensor.cpu()
-
-    @staticmethod
-    def set_output(output_tensor):
-        assert len(router_result) > 0
-        router_result[-1]["output"] = output_tensor.cpu()
-
-    @staticmethod
-    def set_layer_id(layer_id):
-        global _layer_id
-        _layer_id = layer_id
-
-    @staticmethod
-    def set_block_id(block_id):
-        global _block_id
-        _block_id = block_id
-
-    @staticmethod
-    def get_entry():
-        return (_layer_id, _block_id)
-
-    @staticmethod
-    def add_indices(indices):
-        assert len(router_result) > 0
-        router_result[-1]["expert"][router_exporter.get_entry()] = [
-            _.cpu() for _ in indices
-        ]
-
-    @staticmethod
-    def get_router_result():
-        return router_result
-
-    @staticmethod
-    def dump():
-        global dump_id
-        pickle.dump(
-            router_exporter.get_router_result(),
-            open(router_exporter.get_path() + f".{dump_id}", "wb"),
-        )
-        dump_id += 1
+from . import communicate as C
 
 
 class PrimFwdAllgather(torch.autograd.Function):
@@ -230,12 +160,29 @@ class TopKGate(torch.nn.Module):
 
         self.a2a_ffn_overlap_degree = a2a_ffn_overlap_degree
 
+        self.scatter = SwinMoEScatterRouter(
+            fabric_type="homo_fused_dispatch",
+            protocol_kwargs={
+                "top_k": self.top_k,
+                "capacity_factor": self.capacity_factor,
+                "gate_noise": self.use_noise,
+                "group": None,
+                "normalize_gate": self.normalize_gate,
+                "batch_prioritized_routing": self.batch_prioritized_routing,
+            },
+            fabric_kwargs={"capacity_padding": True},
+            throttling=True,
+        )
+
+        self.gather = GatherRouter(fabric_type="homo_fused_combine")
+
     def compute_sorted_location(self, x, importance_scores):
         sorted_x = x[importance_scores.argsort(dim=0)]
         sorted_cumsum = fast_cumsum_sub_one(sorted_x) * sorted_x
         return sorted_cumsum[importance_scores.argsort(dim=0).argsort(dim=0)]
 
     def apply_on_expert_fn(self, input, expert_fn, group, sharded_count):
+        M = input.size(1)
         if self.input_dropout:
             input = self.input_dropout(input)
 
@@ -245,172 +192,14 @@ class TopKGate(torch.nn.Module):
         if self.training and self.use_noise:
             logits = logits + torch.randn_like(logits) / self.num_global_experts
 
-        topk_logits, topk_indices = torch.topk(logits, self.top_k, dim=1)
-
-        indices_s = [x.view(-1) for x in topk_indices.chunk(self.top_k, dim=1)]
-        if router_exporter.is_enabled():
-            router_exporter.add_indices(indices_s)
-        masks_se = [
-            one_hot_with_dtype(x, num_classes=self.num_global_experts, dtype=x.dtype)
-            for x in indices_s
-        ]
-
         gates = F.softmax(logits, dim=1)
-        gates_s = [(gates * x).sum(dim=1) for x in masks_se]
-
-        with torch.cuda.amp.autocast(enabled=False):
-            if self.num_global_experts <= 1:
-                l_loss = torch.sum(logits_wo_noise) * 0.0
-            elif self.vitmoe_loss:
-                gates_wo_noise = F.softmax(logits_wo_noise, dim=1)
-                l_loss = vitmoe_loss(
-                    gates_wo_noise,
-                    topk_logits,
-                    self.num_global_experts,
-                    self.use_global_loss,
-                )
-            else:
-                l_loss = load_balance(
-                    gates, masks_se[0], self.num_global_experts, self.fp32_gate
-                )
-
-        if self.batch_prioritized_routing:
-            importance_scores = -1 * gates.max(dim=1)[0]
-            self.compute_location = lambda x: self.compute_sorted_location(
-                x, importance_scores
-            )
-        else:
-            self.compute_location = fast_cumsum_sub_one
-
-        locations1 = self.compute_location(masks_se[0])
-
-        locations_s = [torch.sum(locations1 * masks_se[0], dim=1).to(torch.int32)]
-
-        if self.top_k > 1:
-            acc_base = None
-
-            for k in range(1, self.top_k):
-                acc_base = (
-                    torch.sum(masks_se[k - 1], dim=0, keepdim=True)
-                    if acc_base is None
-                    else acc_base + torch.sum(masks_se[k - 1], dim=0, keepdim=True)
-                )
-                locations2 = self.compute_location(masks_se[k])
-                locations2 += acc_base
-                locations_s.append(
-                    torch.sum(locations2 * masks_se[k], dim=1).to(torch.int32)
-                )
-
-            # Normalize Gate
-            if self.normalize_gate:
-                denom_s = torch.clamp(
-                    sum(gates_s), min=torch.finfo(gates_s[0].dtype).eps
-                )
-                gates_s = [x / denom_s for x in gates_s]
-
-        indices_s = [x.to(torch.int32) for x in indices_s]
-
-        S, M, GE = input.size(0), input.size(1), self.num_global_experts
-        world_size = C.get_world_size(group)
-
-        if not hasattr(self, "_fdr"):
-            capacity = self.top_k * int(
-                self.capacity_factor
-                * ((S + self.num_global_experts - 1) // self.num_global_experts)
-            )
-            self._fdr = fast_dispatcher(
-                num_global_experts=GE,
-                capacity=capacity,
-                model_dim=M,
-                dispatch_dtype=input.dtype,
-            )
-        else:
-            capacity = self._fdr.capacity
-
-        if self.is_ones_gate:
-            gates_s = [torch.ones_like(x) for x in gates_s]
-        self._fdr.update(
-            indices_s,
-            locations_s,
-            gates_s,
-            capacity=capacity,
-            is_postscore=self.is_postscore,
-        )
-
-        dispatched_input = self._fdr.encode(input)
-        if sharded_count > 1:
-            dispatched_input = dispatched_input.reshape(world_size, 1, -1, M)
-        else:
-            dispatched_input = dispatched_input.reshape(world_size, -1, capacity, M)
-
-        if self.a2a_ffn_overlap_degree == -1:
-            expert_output = expert_fn(dispatched_input)
-            expert_output = expert_output.to(input.dtype)
-        elif self.a2a_ffn_overlap_degree == 1:
-            _dispatched_input = C.AllToAll.apply(group, dispatched_input)
-            expert_output = expert_fn(_dispatched_input)
-            expert_output = expert_output.to(input.dtype)
-            expert_output = C.AllToAll.apply(group, expert_output)
-        else:
-            split_dim = 2
-
-            C.AllToAllStatus.init(
-                group, self.a2a_ffn_overlap_degree, split_dim, dispatched_input
-            )
-
-            # Implicit x.contiguous() in C.CurrentStreamRelease.forward() and C.CurrentStreamAcquire.backward()
-            dispatched_input_ready = C.CurrentStreamRelease.apply(dispatched_input, 0)
-            dispatched_input_scattered_after_a2a = C.AllToAllScatterAsync.apply(
-                dispatched_input_ready
-            )
-
-            expert_output_scattered = [
-                C.CurrentStreamRelease.apply(
-                    expert_fn(C.CurrentStreamAcquire.apply(x, i)).to(input.dtype), i
-                )
-                for i, x in enumerate(dispatched_input_scattered_after_a2a)
-            ]
-            expert_output_gathered_after_a2a = C.AllToAllGatherAsync.apply(
-                *expert_output_scattered
-            )
-            expert_output = C.CurrentStreamAcquire.apply(
-                expert_output_gathered_after_a2a, 0
-            )
-
-        expert_output = expert_output.reshape(-1, GE, capacity, M)
-
-        if expert_output.size(0) > 1:
-            with torch.cuda.amp.autocast(enabled=False):
-                expert_output = torch.sum(expert_output, dim=0)
-        expert_output = expert_output.view(GE * self._fdr.capacity, M)
-
-        result_output = self._fdr.decode(expert_output)
-        return result_output, l_loss
-
-
-class MegatronLMGate(torch.nn.Module):
-    """Megatron-LM Tensor Parallel over MoE Gate Type"""
-
-    def __init__(
-        self,
-        **kwargs,
-    ):
-        self.l_zero = None
-        self._modules = dict()
-        self._parameters = dict()
-        self._buffers = dict()
-
-    def named_parameters(self):
-        return []
-
-    def apply_on_expert_fn(self, input, expert_fn, group, sharded_count):
-        if self.l_zero is None:
-            self.l_zero = torch.tensor(0, dtype=input.dtype, device=input.device)
-        assert sharded_count == 1
-        gathered_input = C.PreAllreduceSum.apply(group, input)
-        result_output = expert_fn(gathered_input)
-        result_output = C.PostAllreduceSum.apply(group, result_output)
-        return result_output, self.l_zero
+        dispatched_input, l_loss = self.scatter(input, gates, logits_wo_noise, logits)
+        dispatched_input = dispatched_input.reshape(1, self.num_global_experts, -1, M)
+        expert_output = expert_fn(dispatched_input)
+        expert_output = expert_output.to(input.dtype)
+        expert_output = expert_output.view(-1, M)
+        result_output = self.gather(expert_output)
+        return result_output, 0
 
 
 class MOELayer(torch.nn.Module):
@@ -811,17 +600,6 @@ class MOELayer(torch.nn.Module):
                         **single_gate_type,
                     )
                 ]
-            elif single_gate_type["type"] == "megatron":
-                self.gates += [MegatronLMGate(**single_gate_type)]
-                assert isinstance(
-                    experts, dict
-                ), "Gate type `megatron` requires dict-type expert description."
-                assert (
-                    self.num_local_experts == 1
-                ), "Gate type `megatron` requires `count_per_node` == 1 in expert attributions."
-                assert (
-                    experts["type"] == "ffn"
-                ), "Gate type `megatron` requires `type` == `ffn` in expert attributions."
             else:
                 raise Exception("Unrecognized gate_type: %s" % single_gate_type)
 
