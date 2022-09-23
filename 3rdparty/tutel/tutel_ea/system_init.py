@@ -25,7 +25,7 @@ def init_affinity_at_program_beginning():
             logging.warning('Failed to set NUMA status: %s' % ex)
 
 def init_data_model_parallel(group_count=1, backend='nccl'):
-    from tutel.impls.communicate import create_groups_from_world
+    from tutel_ea.impls.communicate import create_groups_from_world
     result = create_groups_from_world(group_count=group_count, include_init=backend)
 
     # Temp work around for: https://github.com/pytorch/pytorch/issues/56390

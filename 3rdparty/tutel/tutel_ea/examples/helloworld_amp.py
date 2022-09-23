@@ -4,7 +4,7 @@
 # Licensed under the MIT license.
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
-from tutel import system_init
+from tutel_ea import system_init
 system_init.init_affinity_at_program_beginning()
 
 import os
@@ -14,9 +14,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.distributed as dist
 from torch import nn
+from torch.cuda.amp import autocast
 import argparse
 
-from tutel import moe as tutel_moe
+from tutel_ea import moe as tutel_moe
 
 parser = argparse.ArgumentParser()
 
@@ -30,17 +31,13 @@ parser.add_argument('--dtype', type=str, default='float32')
 parser.add_argument('--fp32_gate', default=False, action='store_true')
 parser.add_argument('--top', type=int, default=2)
 parser.add_argument('--l_aux_wt', type=float, default=0.0)
-parser.add_argument('--group_count', type=int, default=1)
 parser.add_argument('--a2a_ffn_overlap_degree', type=int, default=1)
 parser.add_argument('--num_steps', type=int, default=100)
 args = parser.parse_args()
 
-parallel_env = system_init.init_data_model_parallel(group_count=args.group_count)
+parallel_env = system_init.init_data_model_parallel()
 dist_rank, dist_world_size, dist_print = parallel_env.global_rank, parallel_env.global_size, parallel_env.dist_print
 args.local_rank = parallel_env.local_device.index
-
-if not parallel_env.is_distributed:
-  raise RuntimeError("\nThe current session is not launched in distributed mode. Please run the program with: python3 -m torch.distributed.launch ..")
 
 batch_size = args.batch_size
 num_tokens = args.num_tokens
@@ -49,7 +46,7 @@ hidden_size = args.hidden_size
 num_local_experts = args.num_local_experts
 top_value = args.top
 a2a_ffn_overlap_degree = args.a2a_ffn_overlap_degree
-device = torch.device('cuda', args.local_rank)
+device = parallel_env.local_device
 
 if args.dtype == 'float32':
     torch.set_default_dtype(torch.float32)
@@ -72,8 +69,7 @@ class ExampleModel(torch.nn.Module):
             experts = {'type': 'ffn', 'count_per_node': num_local_experts, 'hidden_size_per_expert': hidden_size, 'activation_fn': lambda x: F.relu(x)},
             model_dim = model_dim,
             scan_expert_func = lambda name, param: setattr(param, 'skip_allreduce', True),
-            seeds = (1, parallel_env.model_rank + 1, 1),
-            group = parallel_env.model_group,
+            seeds = (1, dist_rank + 1, 1),
             a2a_ffn_overlap_degree = a2a_ffn_overlap_degree,
         ).to(device)
 
@@ -81,7 +77,7 @@ class ExampleModel(torch.nn.Module):
         local_count = sum([torch.numel(param) for name, param in self._moe_layer.get_parameter_iterator(param_type='local_experts')])
         shared_count = sum([torch.numel(param) for name, param in self._moe_layer.get_parameter_iterator(param_type='gate')])
         dist_print('[Statistics] param count for MoE local_experts = %s, param count for MoE gate = %s.\n' % (local_count, shared_count))
-
+    @autocast()
     def forward(self, input):
         result = self._moe_layer(input)
         result = F.log_softmax(torch.sum(result, dim=2), dim=1)
@@ -92,37 +88,32 @@ dist_print(model)
 
 optimizer = torch.optim.SGD(model.parameters(), lr=1e-5)
 
-torch.manual_seed(parallel_env.global_rank)
+torch.manual_seed(0)
 x = torch.tensor(torch.randn([batch_size, num_tokens, model_dim], dtype=torch.float32, device='cpu').detach().numpy(), dtype=torch.get_default_dtype(), requires_grad=True, device=device)
 y = torch.LongTensor(batch_size).random_(1).to(device)
 
-tuples = (parallel_env.global_size, args.dtype, model_dim, hidden_size, batch_size * num_tokens, num_local_experts, top_value, a2a_ffn_overlap_degree, device, parallel_env.group_count)
-dist_print('[Benchmark] world_size = %s, dtype = %s, model_dim = %s, hidden_size = %s, samples = %s, num_local_experts = %s, topK = %s, a2a_ffn_overlap_degree = %s, device = `%s`, group_count = %s' % tuples)
+tuples = (dist_world_size, args.dtype, model_dim, hidden_size, batch_size * num_tokens, num_local_experts, top_value, a2a_ffn_overlap_degree, device)
+dist_print('[Benchmark] world_size = %s, dtype = %s, model_dim = %s, hidden_size = %s, samples = %s, num_local_experts = %s, topK = %s, a2a_ffn_overlap_degree = %s, device = `%s`' % tuples)
 
 average_time, num_steps = 0, args.num_steps
 
 params_for_all_reduce = [p for p in model.parameters() if not hasattr(p, 'skip_allreduce') and getattr(p, 'requires_grad', False) and p.grad is not None]
-params_for_replicas_all_reduce = [p for p in model.parameters() if not (not hasattr(p, 'skip_allreduce') and getattr(p, 'requires_grad', False) and p.grad is not None)]
 
 for i in range(num_steps):
 
     torch.cuda.synchronize()
     t_start = time.time()
     optimizer.zero_grad()
-
-    output = model(x)
-    loss = F.nll_loss(output, y)
+    with autocast():
+        output = model(x)
+        loss = F.nll_loss(output, y)
     if args.l_aux_wt:
         loss += args.l_aux_wt * model._moe_layer.l_aux
     loss.backward()
-    if parallel_env.global_size > 1:
+    if dist_world_size > 1:
         for p in params_for_all_reduce:
-            p.grad /= parallel_env.global_size
-            dist.all_reduce(p.grad, group=parallel_env.global_group)
-    if parallel_env.group_count > 1:
-        for p in params_for_replicas_all_reduce:
-            p.grad /= parallel_env.group_count
-            dist.all_reduce(p.grad, group=parallel_env.data_group)
+            p.grad /= dist_world_size
+            dist.all_reduce(p.grad)
     optimizer.step()
 
     torch.cuda.synchronize()

@@ -4,7 +4,7 @@
 # Licensed under the MIT license.
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
-from tutel import system_init
+from tutel_ea import system_init
 system_init.init_affinity_at_program_beginning()
 
 import os
@@ -16,9 +16,7 @@ import torch.distributed as dist
 from torch import nn
 import argparse
 
-from tutel import moe as tutel_moe
-
-assert torch.__version__ >= '1.8.0', "DDP-based MoE requires Pytorch >= 1.8.0"
+from tutel_ea import moe as tutel_moe
 
 parser = argparse.ArgumentParser()
 
@@ -31,8 +29,10 @@ parser.add_argument('--num_local_experts', type=int, default=2)
 parser.add_argument('--dtype', type=str, default='float32')
 parser.add_argument('--fp32_gate', default=False, action='store_true')
 parser.add_argument('--top', type=int, default=2)
+parser.add_argument('--l_aux_wt', type=float, default=0.0)
 parser.add_argument('--a2a_ffn_overlap_degree', type=int, default=1)
 parser.add_argument('--num_steps', type=int, default=100)
+parser.add_argument('--save_load_checkpoint', default=False, action='store_true')
 args = parser.parse_args()
 
 parallel_env = system_init.init_data_model_parallel()
@@ -63,7 +63,6 @@ else:
 class ExampleModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self._ddp_params_and_buffers_to_ignore = list()
 
         self._moe_layer = tutel_moe.moe_layer(
             gate_type = {'type': 'top', 'k': top_value, 'fp32_gate': args.fp32_gate},
@@ -84,19 +83,15 @@ class ExampleModel(torch.nn.Module):
         result = F.log_softmax(torch.sum(result, dim=2), dim=1)
         return result
 
-    def add_param_to_skip_allreduce(self, param_name):
-        self._ddp_params_and_buffers_to_ignore.append(param_name)
-
-
 model = ExampleModel()
-
-for name, param in model.named_parameters():
-    if hasattr(param, 'skip_allreduce'):
-        model.add_param_to_skip_allreduce(name)
-if torch.distributed.is_initialized():
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank])
-
 dist_print(model)
+
+if args.save_load_checkpoint:
+    checkpoint_path = './distributed-hellworld-%d-in-%d.ckpt' % (parallel_env.global_rank, parallel_env.global_size)
+    if os.path.exists(checkpoint_path):
+        model.load_state_dict(torch.load(checkpoint_path))
+    else:
+        print('Checkpoint not loaded: file `%s` is not found' % checkpoint_path)
 
 optimizer = torch.optim.SGD(model.parameters(), lr=1e-5)
 
@@ -109,6 +104,8 @@ dist_print('[Benchmark] world_size = %s, dtype = %s, model_dim = %s, hidden_size
 
 average_time, num_steps = 0, args.num_steps
 
+params_for_all_reduce = [p for p in model.parameters() if not hasattr(p, 'skip_allreduce') and getattr(p, 'requires_grad', False) and p.grad is not None]
+
 for i in range(num_steps):
 
     torch.cuda.synchronize()
@@ -117,7 +114,13 @@ for i in range(num_steps):
 
     output = model(x)
     loss = F.nll_loss(output, y)
+    if args.l_aux_wt:
+        loss += args.l_aux_wt * model._moe_layer.l_aux
     loss.backward()
+    if dist_world_size > 1:
+        for p in params_for_all_reduce:
+            p.grad /= dist_world_size
+            dist.all_reduce(p.grad)
     optimizer.step()
 
     torch.cuda.synchronize()
@@ -129,3 +132,6 @@ for i in range(num_steps):
 
 average_time /= 10
 dist_print('\n[Summary] Average synchronized step_time = %s sec.' % average_time)
+
+if args.save_load_checkpoint:
+    torch.save(model.state_dict(), checkpoint_path)

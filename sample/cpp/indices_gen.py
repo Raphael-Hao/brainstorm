@@ -1,5 +1,5 @@
 from brt._C.router import generate_dst_indices, generate_src_indices
-from tutel.jit_kernels.gating import fast_cumsum_sub_one
+from tutel_ea.jit_kernels.gating import fast_cumsum_sub_one
 import torch
 
 dst_num = 4

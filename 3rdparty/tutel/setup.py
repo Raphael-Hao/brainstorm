@@ -61,7 +61,7 @@ def install(use_nccl):
         ext_args['cxx'] += ['-DUSE_NCCL']
 
     setup(
-        name='tutel',
+        name='tutel_ea',
         version='0.1',
         description='An Optimized Mixture-of-Experts Implementation.',
         url='https://github.com/microsoft/Tutel',
@@ -102,7 +102,7 @@ def install(use_nccl):
         },
         ext_modules=[
             CUDAExtension('tutel_custom_kernel', [
-                './tutel/custom/custom_kernel.cpp',
+                './tutel_ea/custom/custom_kernel.cpp',
             ],
             library_dirs=['/usr/local/cuda/lib64/stubs'],
             libraries=ext_libs,

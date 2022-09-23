@@ -17,8 +17,8 @@ from typing import Union, List
 
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import numpy as np
-from tutel import moe as tutel_moe
-from tutel.impls import moe_layer_brt as brt_moe
+from tutel_ea import moe as tutel_moe
+from tutel_ea.impls import moe_layer_brt as brt_moe
 
 _shape_t = Union[int, List[int], Size]
 
