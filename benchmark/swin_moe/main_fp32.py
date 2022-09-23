@@ -6,7 +6,7 @@
 # --------------------------------------------------------
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
-from tutel import system_init
+from tutel_ea import system_init
 
 system_init.init_affinity_at_program_beginning()
 

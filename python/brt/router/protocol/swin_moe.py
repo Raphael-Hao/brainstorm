@@ -4,7 +4,7 @@ import os
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
-from tutel.impls import communicate
+from tutel_ea.impls import communicate
 
 from brt.runtime import log
 from brt.router.protocol.base import ProtocolBase, register_protocol

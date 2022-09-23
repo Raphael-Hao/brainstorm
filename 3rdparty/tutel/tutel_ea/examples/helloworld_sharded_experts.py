@@ -4,7 +4,7 @@
 # Licensed under the MIT license.
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
-from tutel import system_init
+from tutel_ea import system_init
 system_init.init_affinity_at_program_beginning()
 
 import os
@@ -16,7 +16,7 @@ import torch.distributed as dist
 from torch import nn
 import argparse
 
-from tutel import moe as tutel_moe
+from tutel_ea import moe as tutel_moe
 
 parser = argparse.ArgumentParser()
 
@@ -25,11 +25,13 @@ parser.add_argument('--batch_size', type=int, default=16)
 parser.add_argument('--num_tokens', type=int, default=1024)
 parser.add_argument('--model_dim', type=int, default=2048)
 parser.add_argument('--hidden_size', type=int, default=2048)
-parser.add_argument('--num_local_experts', type=int, default=2)
+parser.add_argument('--num_device_per_expert', type=int, required=True)
 parser.add_argument('--dtype', type=str, default='float32')
 parser.add_argument('--l_aux_wt', type=float, default=0.0)
 parser.add_argument('--num_steps', type=int, default=100)
 args = parser.parse_args()
+
+assert args.num_device_per_expert > 0, "You are required to set a positive integer representing the number of devices to manage for one expert, got: %d" % args.num_device_per_expert
 
 parallel_env = system_init.init_data_model_parallel()
 dist_rank, dist_world_size, dist_print = parallel_env.global_rank, parallel_env.global_size, parallel_env.dist_print
@@ -39,7 +41,7 @@ batch_size = args.batch_size
 num_tokens = args.num_tokens
 model_dim = args.model_dim
 hidden_size = args.hidden_size
-num_local_experts = args.num_local_experts
+num_local_experts = -args.num_device_per_expert
 device = parallel_env.local_device
 
 if args.dtype == 'float32':
@@ -59,8 +61,8 @@ class ExampleModel(torch.nn.Module):
         super().__init__()
 
         self._moe_layer = tutel_moe.moe_layer(
-            gate_type = {'type': 'top', 'k': 1},
-            experts = {'type': 'ffn', 'count_per_node': -parallel_env.global_size, 'hidden_size_per_expert': hidden_size * num_local_experts * parallel_env.global_size, 'activation_fn': lambda x: F.relu(x)},
+            gate_type = {'type': 'top', 'k': 2},
+            experts = {'type': 'ffn', 'count_per_node': num_local_experts, 'hidden_size_per_expert': hidden_size, 'activation_fn': lambda x: F.relu(x)},
             model_dim = model_dim,
             scan_expert_func = lambda name, param: setattr(param, 'skip_allreduce', True),
             seeds = (1, dist_rank + 1, 1),
