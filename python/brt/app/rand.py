@@ -11,6 +11,7 @@ __all__ = ["RandScatter"]
 
 @torch.fx.wrap
 def rand_gate(x: torch.Tensor, path_num: int):
+    print(x.size(0))
     return torch.randn((x.size(0), path_num), device=x.device)
 
 
@@ -35,6 +36,7 @@ class RandScatter(nn.Module):
         """
 
         super().__init__()
+        print("Starting scatter_router_1")
         self.path_num = path_num
         self.scatter_router = ScatterRouter(
             protocol_type="topk",
@@ -46,6 +48,9 @@ class RandScatter(nn.Module):
         )
 
     def forward(self, inputs):
+        print("forwarding input: ", inputs)
         score = rand_gate(inputs, self.path_num)
+        print("score: ", score)
         route_results = self.scatter_router(inputs, score)
+        print("route_results: ", route_results)
         return route_results

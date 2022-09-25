@@ -75,4 +75,5 @@ venv.bak/
 .nfs*
 benchmark/dynamic_routing/inference/*
 benchmark/dynamic_routing/log.txt
+3rdparty/dynamic_routing/datasets
 *.nsys-rep

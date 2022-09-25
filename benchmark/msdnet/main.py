@@ -14,10 +14,10 @@ sys.path.insert(0, ".")  # noqa: E402
 
 from dataloader import get_dataloaders
 from args import arg_parser
-from adaptive_inference import dynamic_evaluate
-from theshold_inference import threshold_evaluate
+from adaptive_inference import dynamic_evaluate 
+from theshold_inference import threshold_dynamic_evaluate
 from msdnet import MSDNet
-
+from op_counter import measure_model
 args = arg_parser.parse_args()
 
 if args.gpu:
@@ -62,6 +62,10 @@ def main():
         IM_SIZE = 224
 
     model = MSDNet(args)
+    n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)    
+    torch.save(n_flops, os.path.join(args.save, 'flops.pth'))
+    del(model)
+    model = MSDNet(args)
 
     if args.arch.startswith("alexnet") or args.arch.startswith("vgg"):
         model.features = torch.nn.DataParallel(model.features)
@@ -99,7 +103,7 @@ def main():
         elif args.evalmode == "dynamic":
             dynamic_evaluate(model, test_loader, val_loader, args)
         else:
-            threshold_evaluate(model, val_loader, args)
+            threshold_dynamic_evaluate(model, val_loader, args)
         return
 
     scores = [
@@ -403,4 +407,5 @@ def adjust_learning_rate(
 
 
 if __name__ == "__main__":
+    print("Running")
     main()
