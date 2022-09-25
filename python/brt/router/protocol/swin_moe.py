@@ -4,13 +4,28 @@ import os
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
-from tutel_ea.impls import communicate
 
 from brt.runtime import log
 from brt.router.protocol.base import ProtocolBase, register_protocol
 from brt.router.utils import generate_dst_indices
 
 logger = log.get_logger(__file__)
+
+
+def _get_world_size(group=None):
+    try:
+        return dist.get_world_size(group)
+    except:
+        return 1
+
+
+def _simple_all_reduce(input, group=None, op=torch.distributed.ReduceOp.SUM):
+    world_size = _get_world_size(group)
+    if world_size == 1:
+        return input
+    output = torch.clone(input, memory_format=torch.contiguous_format)
+    dist.all_reduce(output, op=op, group=group)
+    return output
 
 
 def get_compute_location_func(sorted=False, score=None):
@@ -30,10 +45,12 @@ def get_compute_location_func(sorted=False, score=None):
 
     return compute_location
 
+
 def _one_hot_with_dtype(data, num_classes, dtype):
     result = torch.zeros([data.size(0), num_classes], device=data.device, dtype=dtype)
     result.scatter_(1, data.unsqueeze(-1), 1)
     return result
+
 
 @register_protocol("swin_moe")
 class SwinMoEProtocol(ProtocolBase):
@@ -128,7 +145,7 @@ class SwinMoEProtocol(ProtocolBase):
         else:
             capacity = torch.max(route_indices)
             capacity = int(
-                communicate.simple_all_reduce(
+                _simple_all_reduce(
                     capacity, group=self.group, op=torch.distributed.ReduceOp.MAX
                 )
             )
