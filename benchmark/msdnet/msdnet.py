@@ -419,16 +419,29 @@ class MSDNet(nn.Module):
         self.gathers = nn.ModuleList()
         
         for i in range(self.nBlocks - 1):
+            # self.scatters.append(
+            #     ScatterRouter(
+            #         protocol_type="binary_threshold",
+            #         # fabric_type="single_ptu_dispatch",
+            #         protocol_kwargs={"threshold": thresholds[i]},
+            #         fabric_kwargs={
+            #             "flow_num": 2,
+            #             "route_logic": ["1d", "1d"],
+            #             "transform": [False, False],
+
+            #         },
+            #     )
+            # )
             self.scatters.append(
                 ScatterRouter(
                     protocol_type="binary_threshold",
                     # fabric_type="single_ptu_dispatch",
                     protocol_kwargs={"threshold": thresholds[i]},
                     fabric_kwargs={
-                        "flow_num": 2,
-                        "route_logic": ["1d", "1d"],
-                        "transform": [False, False],
-                        "sparse":False,
+                        "flow_num": 5,
+                        "route_logic": ["1d", "1d","1d","1d","1d"],
+                        "transform": [False, False,False,False,False],
+
                     },
                 )
             )
@@ -456,25 +469,58 @@ class MSDNet(nn.Module):
                 if i < self.nBlocks - 1:
                     #x : 4 256 96 56 56 tmp_res : 256 1000
                     ##build a tesnsor with the size(0) of bs
+                    # import pdb;pdb.set_trace()
+                    sccater_input=[]
+                    result_scatter=[]
                     for j, output in enumerate(x):
-                        if j== 0:
-                            in_flows = output.view(output.size(0), -1)
-                        else:
-                            in_flows = torch.cat((in_flows, output.view(output.size(0), -1)), dim=1)
+                        sccater_input.append(output)
+                        result_scatter.append([])
+                    
+                    for m in range(j+1,4):
+                        sccater_input.append(torch.zeros_like(output))
+                        result_scatter.append([])
+                        
+                    
+                    sccater_input.append(tmp_res)
                     ##scatter
-                    routed_x, routed_res = self.scatters[i]([in_flows,tmp_res], tmp_res)
+                    
+                    result_scatter[0],result_scatter[1],result_scatter[2],result_scatter[3], routed_res = self.scatters[i](sccater_input, tmp_res)
                     result=[]
-                    cur=0
-                    ##recover the List to the original size
-                    for i,output in enumerate(x):
-                        result.append(torch.reshape( routed_x[1][:,cur:cur+output.view([output.size()[0], -1]).size(1)],output[: routed_x[1].size(0)].size()))
-                        cur+=output.view(output.size(0), -1).size(1)
+                    for j, output in enumerate(x):
+                        sccater_input.append(output)
+                    for j, output in enumerate(x):
+                        result.append(result_scatter[j][1])
                     routed_res = routed_res[0]
                     x = result
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    # for j, output in enumerate(x):
+                    #     print("j: ", j)
+                    #     if j== 0:
+                    #         in_flows = output.view(output.size(0), -1)
+                    #     else:
+                    #         in_flows = torch.cat((in_flows, output.view(output.size(0), -1)), dim=1)
+                    
+                    # routed_x, routed_res = self.scatters[i]([in_flows,tmp_res], tmp_res)
+                    # result=[]
+                    # cur=0
+                    # ##recover the List to the original size
+                    # for i,output in enumerate(x):
+                    #     result.append(torch.reshape( routed_x[1][:,cur:cur+output.view([output.size()[0], -1]).size(1)],output[: routed_x[1].size(0)].size()))
+                    #     cur+=output.view(output.size(0), -1).size(1)
+                    # routed_res = routed_res[0]
+                    # x = result
                 else:
                     routed_res = tmp_res
                 res.append(routed_res)
             ret=self.final_gather(res)
+            # import pdb; pdb.set_trace()
             return ret
         else:
             ## raw testing
