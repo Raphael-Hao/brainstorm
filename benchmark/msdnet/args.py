@@ -30,7 +30,7 @@ exp_group.add_argument(
 )
 
 exp_group.add_argument(
-    "--thresholds", default=[0.5, 0.5, 0.5, 0.5], type=float, nargs="+", help="threshold"
+    "--thresholds", default=[ 8.4491e-02,  3.6570e-02,  1.7349e-02,  1.2810e-02], type=float, nargs="+", help="threshold"
 )
 
 

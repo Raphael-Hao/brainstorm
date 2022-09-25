@@ -93,7 +93,7 @@ class PermanentPathFoldPass(PassBase):
                     load_histroy = node_m.load_history
                     for path_id, path_load in enumerate(load_histroy):
                         if (
-                            path_load >= self.upper_perm_load
+                            path_load >= self. upper_perm_load
                             or path_load <= self.lower_perm_load
                         ):
                             permanent_paths.append(path_id)
@@ -119,7 +119,7 @@ class PermanentPathFoldPass(PassBase):
                         if path_load == self.upper_perm_load:
                             permanent_paths.append(path_id)
                     if (
-                        len(permanent_paths) == len(load_histroy)
+                        len(permanent_paths) >= len(load_histroy)
                         and len(permanent_paths) > 0
                     ):
                         node_m.fabric = make_fabric(

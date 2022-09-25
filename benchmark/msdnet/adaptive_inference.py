@@ -74,6 +74,36 @@ class Tester(object):
 
         return ts_logits, ts_targets
 
+    def calc(self, dataloader):
+        self.model.eval()
+        n_stage = self.args.nBlocks
+        logits = [[] for _ in range(n_stage)]
+        targets = []
+
+        for i, (input, target) in enumerate(dataloader):
+            targets.append(target)
+            with torch.no_grad():
+                input_var = torch.autograd.Variable(input)
+                output = self.model(input_var)
+                if i==0:
+                    soft_max_result=output
+                else:
+                    soft_max_result=torch.cat((soft_max_result,output),0)
+
+            if i % self.args.print_freq == 0:
+                print('Generate Logit: [{0}/{1}]'.format(i, len(dataloader)))
+        ##get the argmax_preds
+        max_preds, argmax_preds = soft_max_result.max(dim=1, keepdim=False)
+        print(argmax_preds.sum())
+        ##for debug
+        with open("/home/yichuanjiaoda/brainstorm_project/brainstorm/benchmark/msdnet/debug","w") as variable_name:
+            for result in argmax_preds:
+                variable_name.write(str(result.item())+"\n")
+        ##compare to the gold_result targets
+        targets = torch.cat(targets, dim=0)
+        ts_targets = torch.Tensor().resize_(soft_max_result.size(0)).copy_(targets)
+
+        return argmax_preds, ts_targets
     def dynamic_eval_find_threshold(self, logits, targets, p, flops):
         """
             logits: m * n * c

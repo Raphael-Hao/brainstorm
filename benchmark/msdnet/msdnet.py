@@ -236,6 +236,7 @@ class MSDNet(nn.Module):
         self.blocks = nn.ModuleList()
         self.classifier = nn.ModuleList()
         self.scatters = nn.ModuleList()
+        self.gathers = nn.ModuleList()
         self.nBlocks = args.nBlocks
         self.steps = [args.base]
         self.args = args
@@ -278,6 +279,7 @@ class MSDNet(nn.Module):
                 raise NotImplementedError
 
         if args.init_routers:
+            print("Initialized")
             assert args.thresholds is not None
             self.build_routers(args.thresholds)
         else:
@@ -307,7 +309,7 @@ class MSDNet(nn.Module):
         elif isinstance(m, nn.Linear):
             m.bias.data.zero_()
 
-    def _build_block(self, nIn, args, step, n_layer_all, n_layer_curr):
+    def  _build_block(self, nIn, args, step, n_layer_all, n_layer_curr):
 
         layers = [MSDNFirstLayer(3, nIn, args)] if n_layer_curr == 0 else []
         for i in range(step):
@@ -411,43 +413,71 @@ class MSDNet(nn.Module):
         return ClassifierModule(conv, nIn, num_classes)
 
     def build_routers(self, thresholds: List[float]):
-        assert len(thresholds) == self.nBlocks
+        assert len(thresholds) == self.nBlocks-1
         self.routers_initilized = True
         self.scatters = nn.ModuleList()
+        self.gathers = nn.ModuleList()
+        
         for i in range(self.nBlocks - 1):
             self.scatters.append(
                 ScatterRouter(
                     protocol_type="binary_threshold",
-                    fabric_type="single_ptu_dispatch",
+                    # fabric_type="single_ptu_dispatch",
                     protocol_kwargs={"threshold": thresholds[i]},
                     fabric_kwargs={
                         "flow_num": 2,
                         "route_logic": ["1d", "1d"],
                         "transform": [False, False],
+                        "sparse":False,
                     },
                 )
             )
+            self.gathers.append(GatherRouter(
+                                fabric_kwargs={ 
+                                               "flow_num": 2,
+                                               "sparse": False},))
+            
         self.final_gather = GatherRouter(
-            fabric_type="single_ptu_combine",
-            fabric_kwargs={"sparse": True}
+            # fabric_type="single_ptu_combine",
+            # fabric_kwargs={"sparse": True}
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
 
     def forward(self, x):
         res = []
         if not self.training and self.routers_initilized:
+            ##the actual dynamic routing
             for i in range(self.nBlocks):
+                ## scatter all of the image
+                if x[0].size(0)==0:
+                    break
                 x = self.blocks[i](x)
                 tmp_res = self.classifier[i](x)
                 if i < self.nBlocks - 1:
-                    routed_x, routed_res = self.scatter([x, tmp_res], tmp_res)
+                    #x : 4 256 96 56 56 tmp_res : 256 1000
+                    ##build a tesnsor with the size(0) of bs
+                    for j, output in enumerate(x):
+                        if j== 0:
+                            in_flows = output.view(output.size(0), -1)
+                        else:
+                            in_flows = torch.cat((in_flows, output.view(output.size(0), -1)), dim=1)
+                    ##scatter
+                    routed_x, routed_res = self.scatters[i]([in_flows,tmp_res], tmp_res)
+                    result=[]
+                    cur=0
+                    ##recover the List to the original size
+                    for i,output in enumerate(x):
+                        result.append(torch.reshape( routed_x[1][:,cur:cur+output.view([output.size()[0], -1]).size(1)],output[: routed_x[1].size(0)].size()))
+                        cur+=output.view(output.size(0), -1).size(1)
                     routed_res = routed_res[0]
-                    x = routed_x[1]
+                    x = result
                 else:
                     routed_res = tmp_res
                 res.append(routed_res)
-            return self.final_gather(res)
+            ret=self.final_gather(res)
+            return ret
         else:
+            ## raw testing
             for i in range(self.nBlocks):
                 x = self.blocks[i](x)
                 res.append(self.classifier[i](x))
