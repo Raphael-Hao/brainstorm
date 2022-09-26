@@ -336,7 +336,6 @@ class TopKGate(torch.nn.Module):
             capacity=capacity,
             is_postscore=self.is_postscore,
         )
-        print(f"locations_s: {locations_s}")
         dispatched_input = self._fdr.encode(input)
         if sharded_count > 1:
             dispatched_input = dispatched_input.reshape(world_size, 1, -1, M)
@@ -385,7 +384,6 @@ class TopKGate(torch.nn.Module):
         expert_output = expert_output.view(GE * self._fdr.capacity, M)
 
         result_output = self._fdr.decode(expert_output)
-        print(result_output.sum(dim=1))
         return result_output, l_loss
 
 
