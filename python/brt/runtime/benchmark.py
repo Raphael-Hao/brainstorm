@@ -160,3 +160,8 @@ class Benchmarker:
             return
         for item in benchmark_items:
             getattr(self, item)()
+
+
+def generate_deterministic_random_data(shape, dtype=None, device=None, seed=0):
+    np.random.seed(seed)
+    return torch.as_tensor(np.random.randn(*shape), dtype=dtype, device=device)

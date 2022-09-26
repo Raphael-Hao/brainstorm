@@ -14,6 +14,7 @@ from brt.runtime.proto_tensor import (
     ProtoTensor,
     init_proto_tensor,
     to_torch_tensor,
+    make_proto_tensor_cls,
 )
 
 logger = log.get_logger(__file__)
@@ -22,6 +23,8 @@ __all__ = [
     "HomoFusedDispatchFabric",
     "HomoFusedCombineFabric",
 ]
+
+make_proto_tensor_cls(["score"], [0])
 
 
 @register_fabric("homo_fused_dispatch")
@@ -34,7 +37,12 @@ class HomoFusedDispatchFabric(DispatchFabric):
         transform: Union[bool, List[bool]] = False,
     ):
         self.capacity_padding = capacity_padding
-        super().__init__(flow_num, route_logic=route_logic, transform=transform)
+        super().__init__(
+            flow_num,
+            route_logic=route_logic,
+            transform=transform,
+            index_format="dst_index",
+        )
 
     def dispatch(
         self,
@@ -67,7 +75,7 @@ class HomoFusedDispatchFabric(DispatchFabric):
                     in_flow_load_stack,
                     extra_attr_stack_dict,
                 )
-                out_flow.pack(route_indices, loads)
+                out_flow.pack(route_indices, loads, score=score)
             elif self.route_logics[flow_idx] == "2d":
                 in_flow_data = in_flow_data.transpose(0, 1).contiguous()
                 out_flow_data = dispatch_with_dst_indices_2d(
@@ -117,7 +125,7 @@ class HomoFusedCombineFabric(CombineFabric):
             sparse=sparse,
             granularity_padding=False,
         )
-        self.transform = False
+        self.transform = True
 
     def combine(self, in_flows: List[ProtoTensor]) -> List[ProtoTensor]:
         out_flows = []
@@ -140,7 +148,7 @@ class HomoFusedCombineFabric(CombineFabric):
             # self.start_timer()
             if self.transform:
                 out_flow_data = combine_with_src_indices(
-                    in_flow_data, local_indices, loads, score
+                    in_flow_data, local_indices, loads, auto_pad=True, gates=score
                 )
             else:
                 out_flow_data = combine_with_src_indices(
