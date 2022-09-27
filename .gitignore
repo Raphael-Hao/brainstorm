@@ -77,3 +77,6 @@ venv.bak/
 benchmark/dynamic_routing/inference/*
 benchmark/dynamic_routing/log.txt
 *.nsys-rep
+
+.npy
+.npy.npz
