@@ -1,7 +1,10 @@
 NET_CONV_META = {
     "ClassSR_FSRCNN": [
-        [  # net1
-            {  # net1_head_conv_0
+        # net1
+        [
+            # net1_head_conv_0
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 2,
                 "dilation": 1,
@@ -16,7 +19,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 3, 32, 32],
                 "output_shape": [-1, 16, 32, 32],
             },
-            {  # net1_body_conv_0_0+1
+            # net1_body_conv_0_0+1
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 0,
                 "dilation": 1,
@@ -31,7 +36,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 16, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net1_body_conv_1|2|3
+            # net1_body_conv_1|2|3
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 1,
                 "dilation": 1,
@@ -46,7 +53,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net1_body_conv_4+5
+            # net1_body_conv_4+5
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 1,
                 "dilation": 1,
@@ -61,7 +70,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net1_body_conv_6_0+1
+            # net1_body_conv_6_0+1
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 0,
                 "dilation": 1,
@@ -76,7 +87,8 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 16, 32, 32],
             },
-            {  # net1_tail_conv
+            # net1_tail_conv
+            {
                 "module_name": "ConvTranspose2d",
                 "stride": 4,
                 "padding": 3,
@@ -94,8 +106,11 @@ NET_CONV_META = {
                 "output_shape": [-1, 3, 32, 32],
             },
         ],
+        # net2
         [
-            {  # net2_head_conv_0
+            # net2_head_conv_0
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 2,
                 "dilation": 1,
@@ -110,7 +125,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 3, 32, 32],
                 "output_shape": [-1, 36, 32, 32],
             },
-            {  # net2_body_conv_0_0+1
+            # net2_body_conv_0_0+1
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 0,
                 "dilation": 1,
@@ -125,7 +142,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 36, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net2_body_conv_1|2|3
+            # net2_body_conv_1|2|3
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 1,
                 "dilation": 1,
@@ -140,7 +159,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net2_body_conv_4+5
+            # net2_body_conv_4+5
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 1,
                 "dilation": 1,
@@ -155,7 +176,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net2_body_conv_6_0+1
+            # net2_body_conv_6_0+1
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 0,
                 "dilation": 1,
@@ -170,7 +193,8 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 36, 32, 32],
             },
-            {  # net2_tail_conv
+            # net2_tail_conv
+            {
                 "module_name": "ConvTranspose2d",
                 "stride": 4,
                 "padding": 3,
@@ -188,8 +212,11 @@ NET_CONV_META = {
                 "output_shape": [-1, 3, 32, 32],
             },
         ],
+        # net3
         [
-            {  # net3_head_conv_0
+            # net3_head_conv_0
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 2,
                 "dilation": 1,
@@ -204,7 +231,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 3, 32, 32],
                 "output_shape": [-1, 56, 32, 32],
             },
-            {  # net3_body_conv_0_0+1
+            # net3_body_conv_0_0+1
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 0,
                 "dilation": 1,
@@ -219,7 +248,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 56, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net3_body_conv_1|2|3
+            # net3_body_conv_1|2|3
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 1,
                 "dilation": 1,
@@ -234,7 +265,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net3_body_conv_4+5
+            # net3_body_conv_4+5
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 1,
                 "dilation": 1,
@@ -249,7 +282,9 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 12, 32, 32],
             },
-            {  # net3_body_conv_6_0+1
+            # net3_body_conv_6_0+1
+            {
+                "module_name": "Conv2d",
                 "stride": 1,
                 "padding": 0,
                 "dilation": 1,
@@ -264,7 +299,8 @@ NET_CONV_META = {
                 "input_shape": [-1, 12, 32, 32],
                 "output_shape": [-1, 56, 32, 32],
             },
-            {  # net3_tail_conv
+            # net3_tail_conv
+            {
                 "module_name": "ConvTranspose2d",
                 "stride": 4,
                 "padding": 3,
@@ -282,5 +318,650 @@ NET_CONV_META = {
                 "output_shape": [-1, 3, 128, 128],
             },
         ],
+    ],
+    "ClassSR_RCAN": [
+        # net1
+        [
+            # sub_mean
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 3,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 32, 32],
+                "output_shape": [-1, 3, 32, 32],
+            },
+            # head
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 36,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 32, 32],
+                "output_shape": [-1, 36, 32, 32],
+            },
+            # body_0_body_0_body_0+1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 36,
+                "out_channels": 36,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "ReLU",
+                "input_shape": [-1, 36, 32, 32],
+                "output_shape": [-1, 36, 32, 32],
+            },
+            # body_0_body_0_body_2
+            {
+                "module_name": "Conv2d",
+                "in_channels": 36,
+                "out_channels": 36,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 36, 32, 32],
+                "output_shape": [-1, 36, 32, 32],
+            },
+            # body_0_body_0_body_3_avg_pool
+            {
+                "module_name": "AdaptiveAvgPool2d",
+                "output_size": 1,
+                "input_shape": [-1, 36, 32, 32],
+                "output_shape": [-1, 36, 1, 1],
+            },
+            # body_0_body_0_body_3_conv_du_0+1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 36,
+                "out_channels": 2,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "ReLU",
+                "input_shape": [-1, 36, 1, 1],
+                "output_shape": [-1, 2, 1, 1],
+            },
+            # body_0_body_0_body_3_conv_du_2+3
+            {
+                "module_name": "Conv2d",
+                "in_channels": 2,
+                "out_channels": 36,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "Sigmoid",
+                "input_shape": [-1, 2, 1, 1],
+                "output_shape": [-1, 36, 1, 1],
+            },
+            # body_0_body_20
+            {
+                "module_name": "Conv2d",
+                "in_channels": 36,
+                "out_channels": 36,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 36, 32, 32],
+                "output_shape": [-1, 36, 32, 32],
+            },
+            # body_10
+            {
+                "module_name": "Conv2d",
+                "in_channels": 36,
+                "out_channels": 36,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 36, 32, 32],
+                "output_shape": [-1, 36, 32, 32],
+            },
+            # tail_0_0
+            {
+                "module_name": "Conv2d",
+                "in_channels": 36,
+                "out_channels": 144,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 36, 32, 32],
+                "output_shape": [-1, 144, 32, 32],
+            },
+            # tail_0_2
+            {
+                "module_name": "Conv2d",
+                "in_channels": 36,
+                "out_channels": 144,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 36, 64, 64],
+                "output_shape": [-1, 144, 64, 64],
+            },
+            # tail_1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 36,
+                "out_channels": 3,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 36, 128, 128],
+                "output_shape": [-1, 3, 128, 128],
+            },
+            # add_mean
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 3,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 128, 128],
+                "output_shape": [-1, 3, 128, 128],
+            },
+        ],
+        # net2
+        [
+            # sub_mean
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 3,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 32, 32],
+                "output_shape": [-1, 3, 32, 32],
+            },
+            # head
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 50,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 32, 32],
+                "output_shape": [-1, 50, 32, 32],
+            },
+            # body_0_body_0_body_0+1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 50,
+                "out_channels": 50,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "ReLU",
+                "input_shape": [-1, 50, 32, 32],
+                "output_shape": [-1, 50, 32, 32],
+            },
+            # body_0_body_0_body_2
+            {
+                "module_name": "Conv2d",
+                "in_channels": 50,
+                "out_channels": 50,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 50, 32, 32],
+                "output_shape": [-1, 50, 32, 32],
+            },
+            # body_0_body_0_body_3_avg_pool
+            {
+                "module_name": "AdaptiveAvgPool2d",
+                "output_size": 1,
+                "input_shape": [-1, 50, 32, 32],
+                "output_shape": [-1, 50, 1, 1],
+            },
+            # body_0_body_0_body_3_conv_du_0+1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 50,
+                "out_channels": 3,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "ReLU",
+                "input_shape": [-1, 50, 1, 1],
+                "output_shape": [-1, 3, 1, 1],
+            },
+            # body_0_body_0_body_3_conv_du_2+3
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 50,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "Sigmoid",
+                "input_shape": [-1, 3, 1, 1],
+                "output_shape": [-1, 50, 1, 1],
+            },
+            # body_0_body_20
+            {
+                "module_name": "Conv2d",
+                "in_channels": 50,
+                "out_channels": 50,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 50, 32, 32],
+                "output_shape": [-1, 50, 32, 32],
+            },
+            # body_10
+            {
+                "module_name": "Conv2d",
+                "in_channels": 50,
+                "out_channels": 50,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 50, 32, 32],
+                "output_shape": [-1, 50, 32, 32],
+            },
+            # tail_0_0
+            {
+                "module_name": "Conv2d",
+                "in_channels": 50,
+                "out_channels": 144,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 50, 32, 32],
+                "output_shape": [-1, 144, 32, 32],
+            },
+            # tail_0_2
+            {
+                "module_name": "Conv2d",
+                "in_channels": 50,
+                "out_channels": 144,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 50, 64, 64],
+                "output_shape": [-1, 144, 64, 64],
+            },
+            # tail_1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 50,
+                "out_channels": 3,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 50, 128, 128],
+                "output_shape": [-1, 3, 128, 128],
+            },
+            # add_mean
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 3,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 128, 128],
+                "output_shape": [-1, 3, 128, 128],
+            },
+        ],
+        # net3
+        [
+            # sub_mean
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 3,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 32, 32],
+                "output_shape": [-1, 3, 32, 32],
+            },
+            # head
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 64,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 32, 32],
+                "output_shape": [-1, 64, 32, 32],
+            },
+            # body_0_body_0_body_0+1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 64,
+                "out_channels": 64,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "ReLU",
+                "input_shape": [-1, 64, 32, 32],
+                "output_shape": [-1, 64, 32, 32],
+            },
+            # body_0_body_0_body_2
+            {
+                "module_name": "Conv2d",
+                "in_channels": 64,
+                "out_channels": 64,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 64, 32, 32],
+                "output_shape": [-1, 64, 32, 32],
+            },
+            # body_0_body_0_body_3_avg_pool
+            {
+                "module_name": "AdaptiveAvgPool2d",
+                "output_size": 1,
+                "input_shape": [-1, 64, 32, 32],
+                "output_shape": [-1, 64, 1, 1],
+            },
+            # body_0_body_0_body_3_conv_du_0+1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 64,
+                "out_channels": 4,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "ReLU",
+                "input_shape": [-1, 64, 1, 1],
+                "output_shape": [-1, 4, 1, 1],
+            },
+            # body_0_body_0_body_3_conv_du_2+3
+            {
+                "module_name": "Conv2d",
+                "in_channels": 4,
+                "out_channels": 64,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": "Sigmoid",
+                "input_shape": [-1, 4, 1, 1],
+                "output_shape": [-1, 64, 1, 1],
+            },
+            # body_0_body_20
+            {
+                "module_name": "Conv2d",
+                "in_channels": 64,
+                "out_channels": 64,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 64, 32, 32],
+                "output_shape": [-1, 64, 32, 32],
+            },
+            # body_10
+            {
+                "module_name": "Conv2d",
+                "in_channels": 64,
+                "out_channels": 64,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 64, 32, 32],
+                "output_shape": [-1, 64, 32, 32],
+            },
+            # tail_0_0
+            {
+                "module_name": "Conv2d",
+                "in_channels": 64,
+                "out_channels": 144,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 64, 32, 32],
+                "output_shape": [-1, 144, 32, 32],
+            },
+            # tail_0_2
+            {
+                "module_name": "Conv2d",
+                "in_channels": 64,
+                "out_channels": 144,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 64, 64, 64],
+                "output_shape": [-1, 144, 64, 64],
+            },
+            # tail_1
+            {
+                "module_name": "Conv2d",
+                "in_channels": 64,
+                "out_channels": 3,
+                "kernel_size": 3,
+                "stride": 1,
+                "padding": 1,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 64, 128, 128],
+                "output_shape": [-1, 3, 128, 128],
+            },
+            # add_mean
+            {
+                "module_name": "Conv2d",
+                "in_channels": 3,
+                "out_channels": 3,
+                "kernel_size": 1,
+                "stride": 1,
+                "padding": 0,
+                "dilation": 1,
+                "groups": 1,
+                "bias": True,
+                "padding_mode": "zeros",
+                "norm": None,
+                "activation": None,
+                "input_shape": [-1, 3, 128, 128],
+                "output_shape": [-1, 3, 128, 128],
+            },
+        ],
+
     ]
 }
