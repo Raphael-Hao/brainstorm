@@ -125,12 +125,12 @@ def parse_option():
     parser.add_argument("--custom_scaler", action="store_true", default=False)
 
     # distributed training
-    parser.add_argument(
-        "--local_rank",
-        type=int,
-        required=True,
-        help="local rank for DistributedDataParallel",
-    )
+    # parser.add_argument(
+    #     "--local_rank",
+    #     type=int,
+    #     required=True,
+    #     help="local rank for DistributedDataParallel",
+    # )
 
     # deepspeed
     parser.add_argument("--enable_deepspeed", action="store_true", default=False)
@@ -140,6 +140,8 @@ def parse_option():
     parser.add_argument(
         "--dpfp16", action="store_true", default=False, help="deepspeed fp16"
     )
+    parser.add_argument("--debug", action="store_true", default=False)
+    parser.add_argument("--trace", action="store_true", default=False)
 
     known_args, _ = parser.parse_known_args()
 
@@ -159,6 +161,8 @@ def parse_option():
         ds_init = None
 
     args, unparsed = parser.parse_known_args()
+
+    args.local_rank = int(os.environ["LOCAL_RANK"])
 
     config = get_config(args)
 
@@ -268,7 +272,15 @@ def main(args, config, ds_init):
             logger,
             loss_scaler=loss_scaler,
         )
-        debug(model, bs=1)
+        if args.debug:
+            debug(model, bs=1)
+            from dump_result import print_modules
+            print_modules(model)
+        if args.trace:
+            acc1, acc5, loss = validate(config, data_loader_val, model)
+            logger.info(
+                f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
+            )
         if config.EVAL_MODE:
             return
 

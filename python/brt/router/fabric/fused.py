@@ -1,7 +1,6 @@
 from typing import List, Tuple, Union
 
 import torch
-from brt.router.utils import generate_dst_indices
 from brt._C.router import (
     dispatch_with_dst_indices_1d,
     dispatch_with_dst_indices_2d,
@@ -20,15 +19,15 @@ from brt.runtime.proto_tensor import (
 logger = log.get_logger(__file__)
 
 __all__ = [
-    "HomoFusedDispatchFabric",
-    "HomoFusedCombineFabric",
+    "FusedDispatchFabric",
+    "FusedCombineFabric",
 ]
 
 make_proto_tensor_cls(["score"], [0])
 
 
-@register_fabric("homo_fused_dispatch")
-class HomoFusedDispatchFabric(DispatchFabric):
+@register_fabric("fused_dispatch")
+class FusedDispatchFabric(DispatchFabric):
     def __init__(
         self,
         flow_num: int,
@@ -115,8 +114,8 @@ class HomoFusedDispatchFabric(DispatchFabric):
         return out_flow
 
 
-@register_fabric("homo_fused_combine")
-class HomoFusedCombineFabric(CombineFabric):
+@register_fabric("fused_combine")
+class FusedCombineFabric(CombineFabric):
     def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
         assert granularity_padding == False
         super().__init__(
