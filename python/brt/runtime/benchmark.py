@@ -162,6 +162,9 @@ class Benchmarker:
             getattr(self, item)()
 
 
-def generate_deterministic_random_data(shape, dtype=None, device=None, seed=0):
+def deterministic_random_generator(shape, num=1, dtype=None, device=None, seed=0):
     np.random.seed(seed)
-    return torch.as_tensor(np.random.randn(*shape), dtype=dtype, device=device)
+    i = 0
+    while i < num:
+        i += 1
+        yield torch.from_numpy(np.random.randn(*shape)).type(dtype).to(device)

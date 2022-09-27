@@ -46,7 +46,8 @@ from utils import (
 
 import warnings
 from tutel_ea.moe import router_exporter
-from brt.runtime.benchmark import CUDATimer, generate_deterministic_random_data
+from brt.runtime.benchmark import CUDATimer, deterministic_random_generator
+from brt.runtime.dump_trace import dump_trace
 
 warnings.filterwarnings(
     "ignore",
@@ -123,14 +124,6 @@ def parse_option():
         "--throughput", action="store_true", help="Test throughput only"
     )
     parser.add_argument("--custom_scaler", action="store_true", default=False)
-
-    # distributed training
-    # parser.add_argument(
-    #     "--local_rank",
-    #     type=int,
-    #     required=True,
-    #     help="local rank for DistributedDataParallel",
-    # )
 
     # deepspeed
     parser.add_argument("--enable_deepspeed", action="store_true", default=False)
@@ -273,14 +266,15 @@ def main(args, config, ds_init):
             loss_scaler=loss_scaler,
         )
         if args.debug:
-            debug(model, bs=1)
-            from dump_result import print_modules
-            print_modules(model)
+            debug(model, bs=1, iteration=1)
+            dump_trace(model_without_ddp)
         if args.trace:
             acc1, acc5, loss = validate(config, data_loader_val, model)
             logger.info(
                 f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
             )
+            dump_trace(model_without_ddp)
+
         if config.EVAL_MODE:
             return
 
@@ -607,15 +601,18 @@ def throughput(data_loader, model, logger):
         )
         return
 
-
-def debug(model, bs=1):
+@torch.inference_mode()
+def debug(model, bs=1, iteration=1):
     model.eval()
     # timer = CUDATimer(1, 10, 5)
     timer = CUDATimer(0, 1, 1)
-    inputs = generate_deterministic_random_data(
-        [bs, 3, 192, 192], dtype=torch.float32, device="cuda"
+    inputs_generator = deterministic_random_generator(
+        [bs, 3, 192, 192],num=iteration, dtype=torch.float32, device="cuda"
     )
-    timer.execute(lambda: model(inputs), "debugging")
+    def timer_func():
+        for inputs in inputs_generator:
+            model(inputs)
+    timer.execute(timer_func, "debugging")
 
     return
 
