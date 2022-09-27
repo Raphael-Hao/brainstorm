@@ -6,6 +6,8 @@ import models.archs.arch_util as arch_util
 class CALayer(nn.Module):
     def __init__(self, channel, reduction=16):
         super(CALayer, self).__init__()
+        self.channel = channel
+        self.reduction = reduction
         # global average pooling: feature --> point
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         # feature channel downscale and upscale --> channel weight
@@ -37,6 +39,7 @@ class RCAB(nn.Module):
     ):
 
         super(RCAB, self).__init__()
+        self.n_feat = n_feat
         modules_body = []
         for i in range(2):
             modules_body.append(conv(n_feat, n_feat, kernel_size, bias=bias))
@@ -61,6 +64,7 @@ class ResidualGroup(nn.Module):
         self, conv, n_feat, kernel_size, reduction, act, res_scale, n_resblocks
     ):
         super(ResidualGroup, self).__init__()
+        self.n_feat = n_feat
         modules_body = []
         modules_body = [
             RCAB(
@@ -86,7 +90,7 @@ class ResidualGroup(nn.Module):
 
 class Upsampler(nn.Sequential):
     def __init__(self, conv, scale, n_feat, bn=False, act=False, bias=True):
-
+        self.n_feat = n_feat
         m = []
         if (scale & (scale - 1)) == 0:  # Is scale = 2^n?
             for _ in range(int(math.log(scale, 2))):
@@ -127,45 +131,48 @@ class RCAN(nn.Module):
     ):
         super(RCAN, self).__init__()
 
-        n_resgroups = n_resgroups
-        n_resblocks = n_resblocks
-        n_feats = n_feats
-        kernel_size = 3
-        reduction = reduction
-        scale = scale
+        self.n_resgroups = n_resgroups
+        self.n_resblocks = n_resblocks
+        self.n_feat = n_feats
+        self.res_scale = res_scale
+        self.n_colors = n_colors
+        self.rgb_range = rgb_range
+        self.kernel_size = 3
+        self.scale = scale
+        self.reduction = reduction
         act = nn.ReLU(True)
 
         # RGB mean for DIV2K
-        rgb_mean = (0.4488, 0.4371, 0.4040)
-        rgb_std = (1.0, 1.0, 1.0)
-        self.sub_mean = arch_util.MeanShift(rgb_range, rgb_mean, rgb_std)
+        self.rgb_mean = (0.4488, 0.4371, 0.4040)
+        self.rgb_std = (1.0, 1.0, 1.0)
+        self.sub_mean = arch_util.MeanShift(self.rgb_range, self.rgb_mean, self.rgb_std)
 
         # define head module
-        modules_head = [conv(n_colors, n_feats, kernel_size)]
+        modules_head = [conv(self.n_colors, self.n_feats, self.kernel_size)]
 
         # define body module
         modules_body = [
             ResidualGroup(
                 conv,
-                n_feats,
-                kernel_size,
-                reduction,
+                self.n_feats,
+                self.kernel_size,
+                self.reduction,
                 act=act,
-                res_scale=res_scale,
-                n_resblocks=n_resblocks,
+                res_scale=self.res_scale,
+                n_resblocks=self.n_resblocks,
             )
-            for _ in range(n_resgroups)
+            for _ in range(self.n_resgroups)
         ]
 
-        modules_body.append(conv(n_feats, n_feats, kernel_size))
+        modules_body.append(conv(self.n_feats, self.n_feats, self.kernel_size))
 
         # define tail module
         modules_tail = [
-            Upsampler(conv, scale, n_feats, act=False),
-            conv(n_feats, n_colors, kernel_size),
+            Upsampler(conv, self.scale, self.n_feats, act=False),
+            conv(self.n_feats, self.n_colors, self.kernel_size),
         ]
 
-        self.add_mean = arch_util.MeanShift(rgb_range, rgb_mean, rgb_std, 1)
+        self.add_mean = arch_util.MeanShift(self.rgb_range, self.rgb_mean, self.rgb_std, 1)
 
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
