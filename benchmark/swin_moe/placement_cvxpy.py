@@ -18,6 +18,7 @@ def dump_scatter_trace(mod: nn.Module):
     return scatter_results
     # np.save("scatter_results.npy", scatter_results, allow_pickle=True)
 
+
 def load_scatter_trace(trace_path):
     return np.load(trace_path, allow_pickle=True)
 
@@ -41,8 +42,9 @@ class PlacementSolver:
 
     def solve(self):
         self.problem = cp.Problem(self.objective, self.constraints)
-        self.problem.solve()
-        print(self.problem.status)
+        self.problem.solve(solver=cp.OSQP, verbose=True)
+        # self.problem.solve(solver=cp.GUROBI, verbose=True)
+        # print(self.problem.status)
 
     def construct_variable(self):
         self.placements = [
@@ -64,9 +66,7 @@ class PlacementSolver:
                             self.placements[i + 1][path_j],
                         )
                     )
-                ) * np.intersect1d(
-                    self.scatter_trace[i][path_i], self.scatter_trace[i + 1][path_j]
-                ).size
+                ) * self.scatter_trace[i][path_i][path_j]
                 if cost is None:
                     cost = path_cost
                 else:
@@ -82,13 +82,13 @@ class PlacementSolver:
 
 
 def main():
-    scatter_trace = load_scatter_trace("scatter_results.npy")
-    solver = PlacementSolver(2, scatter_trace)
+    scatter_trace = load_scatter_trace("scatter_trace.npy")
+    solver = PlacementSolver(4, scatter_trace, least_path_per_node=4, mode="optimizer")
     solver.construct_variable()
     solver.construct_objective()
     solver.add_constraints()
     solver.solve()
-    print(solver.placements[0].value)
+
 
 @register_pass("pipline")
 class PipelinePass(PassBase):
@@ -98,3 +98,7 @@ class PipelinePass(PassBase):
 @register_pass("sharded")
 class ShardedPass(PassBase):
     pass
+
+
+if __name__ == "__main__":
+    main()
