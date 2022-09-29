@@ -235,6 +235,8 @@ class ModuleKernel(GlobalKernel):
     def load_from_db(self):
         identifier = self.make_identifier()
         fetched_kernel = kernel_storager.query_kernel(identifier, self.platform)
+        if fetched_kernel is None:
+            raise ValueError(f"No kernel found in database with {identifier =}")
         attribute_dict = json.loads(fetched_kernel[3])
         function_dict = json.loads(fetched_kernel[6])
         tag_dict = json.loads(fetched_kernel[7])
