@@ -71,6 +71,7 @@ def main():
         model.features = torch.nn.DataParallel(model.features)
         model.cuda()
     else:
+        print("Parallel")
         model = torch.nn.DataParallel(model).cuda()
 
     criterion = nn.CrossEntropyLoss().cuda()
@@ -83,6 +84,7 @@ def main():
     )
 
     if args.resume:
+        print("resuming")
         checkpoint = load_checkpoint(args)
         if checkpoint is not None:
             args.start_epoch = checkpoint["epoch"] + 1
@@ -97,13 +99,30 @@ def main():
     if args.evalmode is not None:
         state_dict = torch.load(args.evaluate_from)["state_dict"]
         model.load_state_dict(state_dict)
+        # import pdb; pdb.set_trace()
+        if args.parallel:
+            print("do not Parallel")
+            
+            # model=model.module
+            
+            torch.save(model.module.state_dict(),'/home/yichuanjiaoda/brainstorm_project/brainstorm/benchmark/msdnet/generic/MSDNet.pth')
+            del(model)
+            model = MSDNet(args)
+            pretrained_dict = torch.load('/home/yichuanjiaoda/brainstorm_project/brainstorm/benchmark/msdnet/generic/MSDNet.pth')
+            model.load_state_dict(pretrained_dict, strict=False)
+        # model=model.module
+        
+        
+        
+        
+        
 
         if args.evalmode == "anytime":
             validate(test_loader, model, criterion)
         elif args.evalmode == "dynamic":
             dynamic_evaluate(model, test_loader, val_loader, args)
         else:
-            threshold_dynamic_evaluate(model, val_loader, args)
+            threshold_dynamic_evaluate(model, test_loader, val_loader, args)
         return
 
     scores = [

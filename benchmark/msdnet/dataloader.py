@@ -83,7 +83,7 @@ def get_dataloaders(args):
         if 'test' in args.splits:
             test_loader = torch.utils.data.DataLoader(
                 val_set,
-                batch_size=args.batch_size, shuffle=False,
+                batch_size=10, shuffle=False,
                 num_workers=args.workers, pin_memory=True)
     else:
         if 'train' in args.splits:
