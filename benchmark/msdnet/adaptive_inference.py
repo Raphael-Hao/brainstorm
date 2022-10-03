@@ -40,6 +40,8 @@ class Tester(object):
         self.args = args
         self.model = model
         self.softmax = nn.Softmax(dim=1).cuda()
+        self.softmax2 = nn.Softmax(dim=0).cuda()
+        
 
     def calc_logit(self, dataloader):
         self.model.eval()
@@ -85,6 +87,7 @@ class Tester(object):
             with torch.no_grad():
                 input_var = torch.autograd.Variable(input)
                 output = self.model(input_var)
+                # output= self.softmax2(output)
                 if i==0:
                     soft_max_result=output
                 else:
@@ -92,13 +95,16 @@ class Tester(object):
 
             if i % self.args.print_freq == 0:
                 print('Generate Logit: [{0}/{1}]'.format(i, len(dataloader)))
+                if i==20:
+                    break
         ##get the argmax_preds
         max_preds, argmax_preds = soft_max_result.max(dim=1, keepdim=False)
-        print(argmax_preds.sum())
         ##for debug
         with open("/home/yichuanjiaoda/brainstorm_project/brainstorm/benchmark/msdnet/debug","w") as variable_name:
-            for result in argmax_preds:
+            for i,result in enumerate(argmax_preds) :
                 variable_name.write(str(result.item())+"\n")
+        
+        print(argmax_preds.sum())
         ##compare to the gold_result targets
         targets = torch.cat(targets, dim=0)
         ts_targets = torch.Tensor().resize_(soft_max_result.size(0)).copy_(targets)
