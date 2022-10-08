@@ -167,10 +167,9 @@ class FusedLayer(nn.Module):
         self.output_shapes = output_shapes
         sample_inputs = [torch.randn(shp).cuda() for shp in input_shapes]
         self.fused_kernel = make_jit_kernel(
-            models, sample_inputs, opt_level="hetero_fuse"
+            models, sample_inputs, opt_level="horiz_fuse"
         )
-        # print([[n, t.shape] for n, t in self.named_parameters()])
-        self.ACTIVE_BLOCKS = [1] * self.num_submodels
+        # self.ACTIVE_BLOCKS = [1] * self.num_submodels
         # Conv2dBiasPReLU or Conv2dBias or ConvTranspose2dBias
         if isinstance(models[0], nn.Sequential):
             conv2d = models[0][0]
@@ -233,7 +232,8 @@ class FusedLayer(nn.Module):
                 self.output_shapes[i], device="cuda"
             )
         self.fused_kernel(
-            *self.inputs_templete["forward"], active_blocks=self.ACTIVE_BLOCKS
+            *self.inputs_templete["forward"],
+            # active_blocks=self.ACTIVE_BLOCKS,
         )
         outputs = [
             self.inputs_templete["forward"][index] for index in self.output_indices

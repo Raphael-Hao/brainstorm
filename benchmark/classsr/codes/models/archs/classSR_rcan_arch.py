@@ -10,9 +10,9 @@ import time
 from brt.router import ScatterRouter, GatherRouter
 
 
-class classSR_3class_rcan(nn.Module):
+class classSR_3class_rcan_net(nn.Module):
     def __init__(self, in_nc=3, out_nc=3):
-        super(classSR_3class_rcan, self).__init__()
+        super(classSR_3class_rcan_net, self).__init__()
         self.upscale = 4
         self.classifier = Classifier()
 

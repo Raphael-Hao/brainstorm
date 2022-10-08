@@ -148,13 +148,13 @@ class RCAN(nn.Module):
         self.sub_mean = arch_util.MeanShift(self.rgb_range, self.rgb_mean, self.rgb_std)
 
         # define head module
-        modules_head = [conv(self.n_colors, self.n_feats, self.kernel_size)]
+        modules_head = [conv(self.n_colors, self.n_feat, self.kernel_size)]
 
         # define body module
         modules_body = [
             ResidualGroup(
                 conv,
-                self.n_feats,
+                self.n_feat,
                 self.kernel_size,
                 self.reduction,
                 act=act,
@@ -164,12 +164,12 @@ class RCAN(nn.Module):
             for _ in range(self.n_resgroups)
         ]
 
-        modules_body.append(conv(self.n_feats, self.n_feats, self.kernel_size))
+        modules_body.append(conv(self.n_feat, self.n_feat, self.kernel_size))
 
         # define tail module
         modules_tail = [
-            Upsampler(conv, self.scale, self.n_feats, act=False),
-            conv(self.n_feats, self.n_colors, self.kernel_size),
+            Upsampler(conv, self.scale, self.n_feat, act=False),
+            conv(self.n_feat, self.n_colors, self.kernel_size),
         ]
 
         self.add_mean = arch_util.MeanShift(self.rgb_range, self.rgb_mean, self.rgb_std, 1)
