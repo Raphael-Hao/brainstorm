@@ -25,6 +25,8 @@ logger = log.get_logger(__file__)
 
 
 class TVMTuner:
+    SUPPORTED_OBJECTIVE_FUNCS = ["fastest", "most_efficient"]
+
     def __init__(
         self,
         dtype="float32",
@@ -118,10 +120,9 @@ class TVMTuner:
             raise RuntimeError("No netlet imported.")
         task_scheduler.tune(self.option)
 
-    def get_template_file_generated(self, objective_func: str):
-        assert objective_func in (
-            "fastest",
-            "most_efficient",
+    def get_template_file_generated(self, objective_func: str, rank: int = 1):
+        assert (
+            objective_func in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS
         ), f"Unsupported {objective_func = }"
         return (
             BRT_KERNEL_TEMPLATE_PATH
@@ -129,12 +130,16 @@ class TVMTuner:
             / f"{self.filename}_{objective_func}.cu"
         )
 
-    def export_netlet_template(self, objective_func: str = "fastest"):
-        assert objective_func in (
-            "fastest",
-            "most_efficient",
+    def export_netlet_template(self, objective_func: str = "fastest", rank: int = 1):
+        assert (
+            objective_func == "all"
+            or objective_func in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS
         ), f"Unsupported {objective_func = }"
-        kernel_source = self._get_best_source(objective_func)
+        if objective_func == "all":
+            for f in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS:
+                self.export_netlet_template(f, rank)
+            return
+        kernel_source = self._get_best_source(objective_func, rank)
         module_function = ModuleKernel(
             self.module_name,
             self.method,
@@ -144,7 +149,7 @@ class TVMTuner:
             output_infos=self.output_infos,
             parameters=self.parameters,
         )
-        template_file_generated = self.get_template_file_generated(objective_func)
+        template_file_generated = self.get_template_file_generated(objective_func, rank)
         if self.template_file_origin.exists():
             logger.warn(f"{self.template_file_origin} already exists.")
         if template_file_generated.exists():
@@ -154,11 +159,15 @@ class TVMTuner:
         template_file_generated.parent.mkdir(parents=True, exist_ok=True)
         template_file_generated.write_text(module_function.get_code()[0])
 
-    def insert_netlet_to_storage(self, objective_func: str = "fastest"):
-        assert objective_func in (
-            "fastest",
-            "most_efficient",
+    def insert_netlet_to_storage(self, objective_func: str = "fastest", rank: int = 1):
+        assert (
+            objective_func == "all"
+            or objective_func in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS
         ), f"Unsupported {objective_func = }"
+        if objective_func == "all":
+            for f in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS:
+                self.insert_netlet_to_storage(f, rank)
+            return
         kernel_source = self._get_best_source(objective_func)
         module_function = ModuleKernel(
             self.module_name,
@@ -169,9 +178,9 @@ class TVMTuner:
             output_infos=self.output_infos,
             parameters=self.parameters,
         )
-        module_function.dump_to_db()
+        module_function.dump_to_db(objective_func, rank)
 
-    def _get_best_source(self, objective_func: str):
+    def _get_best_source(self, objective_func: str, rank: int = 1):
         # if objective_func == "fastest":
         #     grid_dim, block_dim, source_code = self._get_fastest_template()
         # elif objective_func == "most_efficient":
@@ -181,7 +190,8 @@ class TVMTuner:
         kernel_source = culaunch_config + source_code
         return kernel_source
 
-    def _get_best_template(self, objective_func: str):
+    def _get_best_template(self, objective_func: str, rank: int = 1):
+        # TODO: get the rank-th best template
         if not self.tune_log_file.exists() and self.old_tune_log_file.exists():
             contents = self.old_tune_log_file.read_text()
             self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -191,14 +201,14 @@ class TVMTuner:
             best_score = float("inf")
             best_sch, best_args, best_grid_dim, best_block_dim = None, None, None, None
             for inp, res in record_reader:
-                tvm_sch, tvm_args = self.tvm_task.compute_dag.apply_steps_from_state(
-                    inp.state
-                )
-                tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-                grid_dim, block_dim = parse_culaunch_config(tvm_ir)
                 if objective_func == "fastest":
                     score = sum(res.costs) / len(res.costs)
                 elif objective_func == "most_efficient":
+                    tvm_sch, tvm_args = self.tvm_task.compute_dag.apply_steps_from_state(
+                        inp.state
+                    )
+                    tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
+                    grid_dim, block_dim = parse_culaunch_config(tvm_ir)
                     num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
                     score = num_blocks * sum(res.costs) / len(res.costs)
                 else:

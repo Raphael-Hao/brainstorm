@@ -21,7 +21,12 @@ class LinearInfo(ModuleInfo):
 
     @classmethod
     def make_kernel(
-        cls, module: torch.nn.Linear, method: str, sample_input: torch.Tensor
+        cls,
+        module: torch.nn.Linear,
+        method: str,
+        sample_input: torch.Tensor,
+        objective_func: str = "fastest",
+        rank: int = 1,
     ) -> ModuleKernel:
         assert method in cls._shared_arg_indices, f"{method} is not supported"
         module_name = "Linear" if module.bias is None else "LinearBias"
@@ -39,7 +44,7 @@ class LinearInfo(ModuleInfo):
             input_infos=input_infos,
             output_infos=output_infos,
             parameters=parameters,
-        ).load_from_db()
+        ).load_from_db(objective_func, rank)
 
     @classmethod
     def extract_shared_arg_infos(
