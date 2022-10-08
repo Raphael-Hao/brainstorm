@@ -17,12 +17,12 @@ from brt.runtime.proto_tensor import (
 from brt.jit import make_jit_kernel
 
 import models.archs.arch_util as arch_util
-from models.archs.classSR_rcan_arch import classSR_3class_rcan
+from models.archs.classSR_rcan_arch import classSR_3class_rcan_net
 from models.archs.RCAN_arch import RCAN, ResidualGroup, RCAB, CALayer, Upsampler
 
 
 class fused_classSR_3class_rcan_net(nn.Module):
-    def __init__(self, raw: classSR_3class_rcan, subnet_bs: Tuple[int] = (34, 38, 29)):
+    def __init__(self, raw: classSR_3class_rcan_net, subnet_bs: Tuple[int] = (34, 38, 29)):
         super(fused_classSR_3class_rcan_net, self).__init__()
         self.upscale = 4
         self.subnet_bs = subnet_bs
@@ -52,14 +52,11 @@ class fused_classSR_3class_rcan_net(nn.Module):
         sr_xs_padding = [
             srx.resize_([bs, *srx.shape[1:]]) for bs, srx in zip(self.subnet_bs, sr_xs)
         ]
-        # xs = self.fused_head(sr_xs_padding)
-        # xs = self.fused_bodys(xs)
-        # # xs = self.fused_tail(xs)
-        # xs = [self.tail_convs[i](xs[i]) for i in range(3)]
-        # for i in range(3):
-        #     xs[i] = init_proto_tensor(xs[i][:real_bs[i]], *proto_info[i])
-        # gr_x = self.gather_router(xs)
-        # return gr_x, [yy.shape[0] for yy in xs]
+        xs = self.fused_rcan(sr_xs_padding)
+        for i in range(3):
+            xs[i] = init_proto_tensor(xs[i][:real_bs[i]], *proto_info[i])
+        gr_x = self.gather_router(xs)
+        return gr_x, [yy.shape[0] for yy in xs]
 
 
 class Classifier(nn.Module):
@@ -100,7 +97,10 @@ class FusedLayer(nn.Module):
         output_shapes: List[torch.Size],
     ):
         super().__init__()
-        models = nn.ModuleList(models)
+        if not isinstance(models, nn.ModuleList):
+            models = nn.ModuleList(models)
+        if isinstance(models[0], nn.Sequential) and len(models[0]) == 1:
+            models = [m[0] for m in models]
         self.input_shapes = input_shapes
         self.output_shapes = output_shapes
         self.num_submodels = len(models)
@@ -121,12 +121,16 @@ class FusedLayer(nn.Module):
             self.module_name = "Conv2dBias"
         elif isinstance(models[0], nn.Sequential):
             if isinstance(models[0][0], nn.Conv2d) and models[0][0].bias is not None:
-                if isinstance(models[0][1], nn.ReLU):
+                if len(models[0]) == 1:
+                    self.module_name = "Conv2dBias"
+                elif isinstance(models[0][1], nn.ReLU):
                     self.module_name = "Conv2dBiasReLU"
                 elif isinstance(models[0][1], nn.Sigmoid):
                     self.module_name = "Conv2dBiasSigmoid"
                 else:
                     raise NotImplementedError(f"{models}")
+            else:
+                raise NotImplementedError(f"{models}")
         elif isinstance(models[0], nn.AdaptiveAvgPool2d):
             self.module_name = "AdaptiveAvgPool2d"
         else:
@@ -135,7 +139,7 @@ class FusedLayer(nn.Module):
 
         self.inputs_templete = {}
         self.inputs_templete["forward"] = []
-        if "Conv2d" in self.module_name:
+        if self.module_name == "Conv2dBias":
             for i in range(self.num_submodels):
                 self.inputs_templete["forward"].extend(
                     [
@@ -143,6 +147,18 @@ class FusedLayer(nn.Module):
                         self.get_parameter(f"m{i}_weight"),
                         None,
                         self.get_parameter(f"m{i}_bias"),
+                    ]
+                )
+            self.input_indices = [i * 4 for i in range(self.num_submodels)]
+            self.output_indices = [i * 4 + 2 for i in range(self.num_submodels)]
+        elif self.module_name in ["Conv2dBiasReLU", "Conv2dBiasSigmoid"]:
+            for i in range(self.num_submodels):
+                self.inputs_templete["forward"].extend(
+                    [
+                        None,
+                        self.get_parameter(f"m{i}_0_weight"),
+                        None,
+                        self.get_parameter(f"m{i}_0_bias"),
                     ]
                 )
             self.input_indices = [i * 4 for i in range(self.num_submodels)]
@@ -185,12 +201,7 @@ class FusedCALayer(nn.Module):
         # output_shapes: List[torch.Size],
     ) -> None:
         super().__init__()
-        self.avg_pool = FusedLayer(
-            # AdaptiveAvgPool2d
-            [m.avg_pool for m in models],
-            input_shapes=[[n, m.channel, 32, 32] for n, m in zip(bs, models)],
-            output_shapes=[[n, m.channel, 1, 1] for n, max in zip(bs, models)],
-        )
+        self.avg_pool = [m.avg_pool for m in models]
         self.conv_du = nn.Sequential(
             FusedLayer(
                 # Conv2dBiasReLU
@@ -211,7 +222,7 @@ class FusedCALayer(nn.Module):
         )
 
     def foward(self, x: List[torch.Tensor]):
-        y = self.avg_pool(x)
+        y = [subpool(xx) for subpool, xx in zip(self.avg_pool, x)]
         y = self.conv_du(y)
         return [xx * yy for xx, yy in zip(x, y)]
 
@@ -297,7 +308,7 @@ class FusedRCAN(nn.Module):
         self.head = FusedLayer(
             [m.head for m in models],
             input_shapes=[[n, 3, 32, 32] for n in bs],
-            output_shapes=[[n, m.n_feats, 32, 32] for n, m in zip(bs, models)],
+            output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
         )
         self.body = nn.Sequential(
             *[

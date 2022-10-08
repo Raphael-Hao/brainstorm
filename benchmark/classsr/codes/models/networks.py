@@ -1,15 +1,18 @@
 import torch
-import models.archs.SRResNet_arch as SRResNet_arch
-import models.archs.classSR_fsrcnn_arch as classSR_3class_arch
-import models.archs.classSR_rcan_arch as classSR_rcan_arch
-import models.archs.classSR_carn_arch as classSR_carn_arch
-import models.archs.classSR_srresnet_arch as classSR_srresnet_arch
-import models.archs.RCAN_arch as RCAN_arch
-import models.archs.FSRCNN_arch as FSRCNN_arch
-import models.archs.CARN_arch as CARN_arch
 
-import models.archs.fused_classSR_fsrcnn_arch as fused_classSR_3class_fsrcnn_net
-import models.archs.classSR_fused_fsrcnn_arch as classSR_3class_fused_fsrcnn_net
+import models.archs.FSRCNN_arch as FSRCNN
+import models.archs.CARN_arch as CARN
+import models.archs.SRResNet_arch as SRResNet
+import models.archs.RCAN_arch as RCAN
+
+import models.archs.classSR_fsrcnn_arch as classSR_fsrcnn
+import models.archs.classSR_carn_arch as classSR_carn
+import models.archs.classSR_srresnet_arch as classSR_srresnet
+import models.archs.classSR_rcan_arch as classSR_rcan
+
+import models.archs.fused_classSR_fsrcnn_arch as fused_classSR_3class_fsrcnn
+import models.archs.fused_classSR_rcan_arch as fused_classSR_3class_rcan
+import models.archs.classSR_fused_fsrcnn_arch as classSR_3class_fused_fsrcnn
 
 # Generator
 def define_G(opt):
@@ -18,7 +21,7 @@ def define_G(opt):
 
     # image restoration
     if which_model == "MSRResNet":
-        netG = SRResNet_arch.MSRResNet(
+        netG = SRResNet.MSRResNet(
             in_nc=opt_net["in_nc"],
             out_nc=opt_net["out_nc"],
             nf=opt_net["nf"],
@@ -27,7 +30,7 @@ def define_G(opt):
         )
 
     elif which_model == "RCAN":
-        netG = RCAN_arch.RCAN(
+        netG = RCAN.RCAN(
             n_resblocks=opt_net["n_resblocks"],
             n_feats=opt_net["n_feats"],
             res_scale=opt_net["res_scale"],
@@ -38,7 +41,7 @@ def define_G(opt):
             n_resgroups=opt_net["n_resgroups"],
         )
     elif which_model == "CARN_M":
-        netG = CARN_arch.CARN_M(
+        netG = CARN.CARN_M(
             in_nc=opt_net["in_nc"],
             out_nc=opt_net["out_nc"],
             nf=opt_net["nf"],
@@ -47,7 +50,7 @@ def define_G(opt):
         )
 
     elif which_model == "fsrcnn":
-        netG = FSRCNN_arch.FSRCNN_net(
+        netG = FSRCNN.FSRCNN_net(
             input_channels=opt_net["in_nc"],
             upscale=opt_net["scale"],
             d=opt_net["d"],
@@ -56,19 +59,19 @@ def define_G(opt):
         )
 
     elif which_model == "classSR_3class_fsrcnn_net":
-        netG = classSR_3class_arch.classSR_3class_fsrcnn_net(
+        netG = classSR_fsrcnn.classSR_3class_fsrcnn_net(
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
     elif which_model == "classSR_3class_rcan":
-        netG = classSR_rcan_arch.classSR_3class_rcan(
+        netG = classSR_rcan.classSR_3class_rcan(
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
     elif which_model == "classSR_3class_srresnet":
-        netG = classSR_srresnet_arch.ClassSR(
+        netG = classSR_srresnet.ClassSR(
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
     elif which_model == "classSR_3class_carn":
-        netG = classSR_carn_arch.ClassSR(
+        netG = classSR_carn.ClassSR(
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
 
@@ -76,7 +79,14 @@ def define_G(opt):
         which_model == "classSR_3class_fused_fsrcnn_net"
         or which_model == "fused_classSR_3class_fsrcnn_net"
     ):
-        netG = classSR_3class_arch.classSR_3class_fsrcnn_net(
+        netG = classSR_fsrcnn.classSR_3class_fsrcnn_net(
+            in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
+        )
+    elif (
+        # which_model == "classSR_3class_fused_fsrcnn_net" or
+        which_model == "fused_classSR_3class_rcan_net"
+    ):
+        netG = classSR_rcan.classSR_3class_rcan_net(
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
 
@@ -94,11 +104,15 @@ def fuse_G(opt, raw):
 
     # image restoration
     if which_model == "fused_classSR_3class_fsrcnn_net":
-        netG = fused_classSR_3class_fsrcnn_net.fused_classSR_3class_fsrcnn_net(
+        netG = fused_classSR_3class_fsrcnn.fused_classSR_3class_fsrcnn_net(
+            raw, input_bs
+        ).cuda()
+    elif which_model == "fused_classSR_3class_rcan_net":
+        netG = fused_classSR_3class_rcan.fused_classSR_3class_rcan_net(
             raw, input_bs
         ).cuda()
     elif which_model == "classSR_3class_fused_fsrcnn_net":
-        netG = classSR_3class_fused_fsrcnn_net.classSR_3class_fused_fsrcnn_net(
+        netG = classSR_3class_fused_fsrcnn.classSR_3class_fused_fsrcnn_net(
             raw, input_bs
         ).cuda()
     else:

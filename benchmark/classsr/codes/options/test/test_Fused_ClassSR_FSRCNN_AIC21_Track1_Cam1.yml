@@ -1,4 +1,4 @@
-name: test_ClassSR_Fused_FSRCNN_AIC21_Track1_Cam1
+name: test_Fused_ClassSR_FSRCNN_AIC21_Track1_Cam1
 suffix: ~  # add suffix to saved images
 model: FusedClassSR
 distortion: sr

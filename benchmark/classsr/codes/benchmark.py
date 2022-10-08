@@ -7,7 +7,7 @@ from pathlib import Path
 from models.archs.classSR_fsrcnn_arch import classSR_3class_fsrcnn_net as ClassSR_FSRCNN
 from models.archs.classSR_carn_arch import ClassSR as ClassSR_CARN
 from models.archs.classSR_srresnet_arch import ClassSR as ClassSR_SRResNet 
-from models.archs.classSR_rcan_arch import classSR_3class_rcan as ClassSR_RCAN 
+from models.archs.classSR_rcan_arch import classSR_3class_rcan_net as ClassSR_RCAN 
 
 from models.archs.fused_classSR_fsrcnn_arch import fused_classSR_3class_fsrcnn_net as Fused_ClassSR_FSRCNN
 from models.archs.classSR_fused_fsrcnn_arch import classSR_3class_fused_fsrcnn_net as ClassSR_Fused_FSRCNN
