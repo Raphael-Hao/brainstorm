@@ -13,6 +13,7 @@ import models.archs.classSR_rcan_arch as classSR_rcan
 import models.archs.fused_classSR_fsrcnn_arch as fused_classSR_3class_fsrcnn
 import models.archs.fused_classSR_rcan_arch as fused_classSR_3class_rcan
 import models.archs.classSR_fused_fsrcnn_arch as classSR_3class_fused_fsrcnn
+import models.archs.classSR_fused_rcan_arch as classSR_3class_fused_rcan
 
 # Generator
 def define_G(opt):
@@ -71,9 +72,7 @@ def define_G(opt):
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
     elif which_model == "classSR_3class_carn":
-        netG = classSR_carn.ClassSR(
-            in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
-        )
+        netG = classSR_carn.ClassSR(in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"])
 
     elif (
         which_model == "classSR_3class_fused_fsrcnn_net"
@@ -83,8 +82,8 @@ def define_G(opt):
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
     elif (
-        # which_model == "classSR_3class_fused_fsrcnn_net" or
-        which_model == "fused_classSR_3class_rcan_net"
+        which_model == "classSR_3class_fused_rcan_net"
+        or which_model == "fused_classSR_3class_rcan_net"
     ):
         netG = classSR_rcan.classSR_3class_rcan_net(
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
@@ -113,6 +112,10 @@ def fuse_G(opt, raw):
         ).cuda()
     elif which_model == "classSR_3class_fused_fsrcnn_net":
         netG = classSR_3class_fused_fsrcnn.classSR_3class_fused_fsrcnn_net(
+            raw, input_bs
+        ).cuda()
+    elif which_model == "classSR_3class_fused_rcan_net":
+        netG = classSR_3class_fused_rcan.classSR_3class_fused_rcan_net(
             raw, input_bs
         ).cuda()
     else:

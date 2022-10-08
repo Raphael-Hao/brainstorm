@@ -227,7 +227,6 @@ class FusedClassSR(BaseModel):
             self.load_network_classSR_3class(
                 load_path_Gs, self.netG, self.opt["path"]["strict_load"]
             )
-    
 
     def save(self, iter_label):
         self.save_network(self.netG, "G", iter_label)

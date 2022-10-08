@@ -22,7 +22,9 @@ from models.archs.RCAN_arch import RCAN, ResidualGroup, RCAB, CALayer, Upsampler
 
 
 class fused_classSR_3class_rcan_net(nn.Module):
-    def __init__(self, raw: classSR_3class_rcan_net, subnet_bs: Tuple[int] = (34, 38, 29)):
+    def __init__(
+        self, raw: classSR_3class_rcan_net, subnet_bs: Tuple[int] = (34, 38, 29)
+    ):
         super(fused_classSR_3class_rcan_net, self).__init__()
         self.upscale = 4
         self.subnet_bs = subnet_bs
@@ -54,7 +56,7 @@ class fused_classSR_3class_rcan_net(nn.Module):
         ]
         xs = self.fused_rcan(sr_xs_padding)
         for i in range(3):
-            xs[i] = init_proto_tensor(xs[i][:real_bs[i]], *proto_info[i])
+            xs[i] = init_proto_tensor(xs[i][: real_bs[i]], *proto_info[i])
         gr_x = self.gather_router(xs)
         return gr_x, [yy.shape[0] for yy in xs]
 
@@ -166,7 +168,10 @@ class FusedLayer(nn.Module):
         elif self.module_name == "AdaptiveAvgPool2d":
             for i in range(self.num_submodels):
                 self.inputs_templete["forward"].extend(
-                    [None, None,]
+                    [
+                        None,
+                        None,
+                    ]
                 )
             self.input_indices = [i * 2 for i in range(self.num_submodels)]
             self.output_indices = [i * 2 + 1 for i in range(self.num_submodels)]
@@ -228,7 +233,11 @@ class FusedCALayer(nn.Module):
 
 
 class FusedRCAB(nn.Module):
-    def __init__(self, models: List[RCAB], bs: List[int],) -> None:
+    def __init__(
+        self,
+        models: List[RCAB],
+        bs: List[int],
+    ) -> None:
         super().__init__()
         self.body = nn.Sequential(
             FusedLayer(
@@ -251,7 +260,10 @@ class FusedRCAB(nn.Module):
 
 class FusedResidualGroup(nn.Module):
     def __init__(
-        self, models: List[ResidualGroup], bs: List[int], n_resblocks: int = 20,
+        self,
+        models: List[ResidualGroup],
+        bs: List[int],
+        n_resblocks: int = 20,
     ) -> None:
         super().__init__()
         self.body = nn.Sequential(
@@ -269,7 +281,11 @@ class FusedResidualGroup(nn.Module):
 
 
 class FusedUpsampler(nn.Sequential):
-    def __init__(self, models: List[Upsampler], bs: List[int],) -> None:
+    def __init__(
+        self,
+        models: List[Upsampler],
+        bs: List[int],
+    ) -> None:
         # assert scale == 4
         super().__init__(
             FusedLayer(
@@ -319,7 +335,7 @@ class FusedRCAN(nn.Module):
                 [m.body[10] for m in models],
                 input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
                 output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
-            )
+            ),
         )
         self.tail = nn.Sequential(
             FusedUpsampler([m.tail[0] for m in models], bs),
@@ -327,14 +343,14 @@ class FusedRCAN(nn.Module):
                 [m.body[10] for m in models],
                 input_shapes=[[n, m.n_feat, 128, 128] for n, m in zip(bs, models)],
                 output_shapes=[[n, 3, 128, 128] for n, m in zip(bs, models)],
-            )
+            ),
         )
         self.add_mean = FusedLayer(
             [m.add_mean for m in models],
             input_shapes=[[n, 3, 32, 32] for n in bs],
             output_shapes=[[n, 3, 32, 32] for n in bs],
         )
-    
+
     def forward(self, x: List[torch.Tensor]):
         x = self.sub_mean(x)
         x = self.head(x)
@@ -346,5 +362,3 @@ class FusedRCAN(nn.Module):
         x = self.add_mean(x)
 
         return x
-
-

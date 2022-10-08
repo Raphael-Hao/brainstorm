@@ -115,7 +115,7 @@ class Upsampler(nn.Sequential):
 
 ## Residual Channel Attention Network (RCAN)
 class RCAN(nn.Module):
-    """ modified RCAN """
+    """modified RCAN"""
 
     def __init__(
         self,
@@ -172,7 +172,9 @@ class RCAN(nn.Module):
             conv(self.n_feat, self.n_colors, self.kernel_size),
         ]
 
-        self.add_mean = arch_util.MeanShift(self.rgb_range, self.rgb_mean, self.rgb_std, 1)
+        self.add_mean = arch_util.MeanShift(
+            self.rgb_range, self.rgb_mean, self.rgb_std, 1
+        )
 
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)

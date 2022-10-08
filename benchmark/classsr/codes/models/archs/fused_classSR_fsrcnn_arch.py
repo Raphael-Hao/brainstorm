@@ -23,7 +23,9 @@ from .classSR_fsrcnn_arch import classSR_3class_fsrcnn_net
 
 
 class fused_classSR_3class_fsrcnn_net(nn.Module):
-    def __init__(self, raw: classSR_3class_fsrcnn_net, subnet_bs: Tuple[int]=(34, 38, 29)):
+    def __init__(
+        self, raw: classSR_3class_fsrcnn_net, subnet_bs: Tuple[int] = (34, 38, 29)
+    ):
         super(fused_classSR_3class_fsrcnn_net, self).__init__()
         self.upscale = 4
         self.subnet_bs = subnet_bs
@@ -103,15 +105,14 @@ class fused_classSR_3class_fsrcnn_net(nn.Module):
         real_bs = [srx.shape[0] for srx in sr_xs]
         proto_info = [collect_proto_attr_stack(srx) for srx in sr_xs]
         sr_xs_padding = [
-            srx.resize_([bs, *srx.shape[1:]])
-            for bs, srx in zip(self.subnet_bs, sr_xs)
+            srx.resize_([bs, *srx.shape[1:]]) for bs, srx in zip(self.subnet_bs, sr_xs)
         ]
         xs = self.fused_head(sr_xs_padding)
         xs = self.fused_bodys(xs)
         # xs = self.fused_tail(xs)
         xs = [self.tail_convs[i](xs[i]) for i in range(3)]
         for i in range(3):
-            xs[i] = init_proto_tensor(xs[i][:real_bs[i]], *proto_info[i])
+            xs[i] = init_proto_tensor(xs[i][: real_bs[i]], *proto_info[i])
         gr_x = self.gather_router(xs)
         return gr_x, [yy.shape[0] for yy in xs]
 
@@ -200,7 +201,9 @@ class FusedLayer(nn.Module):
                         self.get_parameter(f"m{i}_0_weight"),
                         None,
                         self.get_parameter(f"m{i}_0_bias"),
-                        self.get_parameter(f"m{i}_1_weight").expand(self.output_shapes[1]).contiguous(),
+                        self.get_parameter(f"m{i}_1_weight")
+                        .expand(self.output_shapes[1])
+                        .contiguous(),
                     ]
                 )
             self.input_indices = [i * 5 for i in range(self.num_submodels)]
