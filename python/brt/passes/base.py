@@ -12,6 +12,8 @@ from brt.trace.graph import symbolic_trace
 __all__ = ["PassBase", "register_pass", "get_pass"]
 
 logger = log.get_logger(__file__)
+
+
 class PassBase:
     def __init__(self, m: Union[torch.nn.Module, GraphModule]):
         if isinstance(m, GraphModule):
@@ -27,7 +29,9 @@ class PassBase:
         return self.finalize()
 
     def run_on_graph(self) -> None:
-        raise NotImplementedError("run_on_graph should be implemented by an actual Pass.")
+        raise NotImplementedError(
+            "run_on_graph should be implemented by an actual Pass."
+        )
 
     def finalize(self) -> GraphModule:
         self.graph_mod.graph.eliminate_dead_code()

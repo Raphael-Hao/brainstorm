@@ -45,7 +45,6 @@ class MemoryPlanPass(PassBase):
         ] = dict()
         self.initial_loaders: List[nn.Module] = []
 
-
     def build_goal_classifiers(
         self, node_types: List[str] = None, custom_check_fns: List[Callable] = None
     ) -> None:

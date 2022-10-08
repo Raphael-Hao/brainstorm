@@ -24,4 +24,3 @@ def update_gitignore(
         return
     with gitignore_path.open("a") as f:
         f.write("\n".join(ignoring_items) + "\n")
-

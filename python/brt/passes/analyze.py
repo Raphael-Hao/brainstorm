@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 
+
 @register_pass("analyze")
 class AnalyzePass(PassBase):
     def __init__(self, m: Union[nn.Module, GraphModule], origin_m, evaluator):

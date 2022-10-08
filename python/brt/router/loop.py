@@ -15,6 +15,7 @@ __all__ = [
 
 logger = log.get_logger(__file__)
 
+
 @register_router("loop")
 class LoopRouter(RouterBase):
     def __init__(
