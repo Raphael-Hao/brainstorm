@@ -6,7 +6,7 @@ import torch
 
 
 class MSRResNet(nn.Module):
-    """ modified SRResNet"""
+    """modified SRResNet"""
 
     def __init__(self, in_nc=3, out_nc=3, nf=64, nb=16, upscale=4):
         super(MSRResNet, self).__init__()
@@ -60,7 +60,7 @@ class MSRResNet(nn.Module):
 
 
 class MSRResNet_scSE(nn.Module):
-    """ modified SRResNet"""
+    """modified SRResNet"""
 
     def __init__(self, in_nc=3, out_nc=3, nf=64, nb=16, upscale=4):
         super(MSRResNet_scSE, self).__init__()
@@ -114,7 +114,7 @@ class MSRResNet_scSE(nn.Module):
 
 
 class MSRResNet_Bottleneck_Inverted_Residual(nn.Module):
-    """ modified SRResNet"""
+    """modified SRResNet"""
 
     def __init__(self, in_nc=3, out_nc=3, nf=64, nb=16, upscale=4):
         super(MSRResNet_Bottleneck_Inverted_Residual, self).__init__()
@@ -170,7 +170,7 @@ class MSRResNet_Bottleneck_Inverted_Residual(nn.Module):
 
 
 class MSRResNet_Bottleneck_Inverted_Residual_scSE(nn.Module):
-    """ modified SRResNet"""
+    """modified SRResNet"""
 
     def __init__(self, in_nc=3, out_nc=3, nf=64, nb=16, upscale=4):
         super(MSRResNet_Bottleneck_Inverted_Residual_scSE, self).__init__()

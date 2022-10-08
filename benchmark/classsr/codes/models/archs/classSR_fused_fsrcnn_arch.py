@@ -38,12 +38,18 @@ class classSR_3class_fused_fsrcnn_net(nn.Module):
 
         weights = self.classifier(x)
         sr_xs = self.scatter_router(x, weights)
-        real_bs = [srx.shape[0] for srx in sr_xs] 
+        real_bs = [srx.shape[0] for srx in sr_xs]
         proto_info = [collect_proto_attr_stack(srx) for srx in sr_xs]
-        sr_xs = [srx.resize_([bs, *srx.shape[1:]]) for bs, srx in zip(self.subnet_bs, sr_xs)]
-        y = [self.net1(sr_xs[0]), self.net2(sr_xs[1]), self.net3(sr_xs[2])]
+        sr_xs_padding = [
+            srx.resize_([bs, *srx.shape[1:]]) for bs, srx in zip(self.subnet_bs, sr_xs)
+        ]
+        y = [
+            self.net1(sr_xs_padding[0]),
+            self.net2(sr_xs_padding[1]),
+            self.net3(sr_xs_padding[2]),
+        ]
         for i in range(3):
-            y[i] = init_proto_tensor(y[i][:real_bs[i]], *proto_info[i])
+            y[i] = init_proto_tensor(y[i][: real_bs[i]], *proto_info[i])
         gr_xs = self.gather_router(y)
         return gr_xs, [yy.shape[0] for yy in y]
 
