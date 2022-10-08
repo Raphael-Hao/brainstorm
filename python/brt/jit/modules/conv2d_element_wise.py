@@ -9,8 +9,13 @@ from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
 logger = log.get_logger(__file__)
 
 
-class Conv2dBatchNorm2dReLUInfo(ModuleInfo):
-    _involved_module_cls = [torch.nn.Conv2d, torch.nn.BatchNorm2d, torch.nn.ReLU]
+class Conv2dElementWiseInfo(ModuleInfo):
+    _required_module_cls = torch.nn.Conv2d
+    _optional_succeed_module_cls = (
+        torch.nn.BatchNorm2d,
+        torch.nn.ReLU,
+        torch.nn.Sigmoid,
+    )
     _input_arg_indices = {"forward": [0]}
     _output_arg_indices = {"forward": [2]}
     _shared_arg_indices = {"forward": [0, 2]}
@@ -19,25 +24,21 @@ class Conv2dBatchNorm2dReLUInfo(ModuleInfo):
     def ismodule(cls, module: torch.nn.Module):
         if not isinstance(module, torch.nn.Sequential):
             module = torch.nn.Sequential(module)
-        if len(module) == 1 and isinstance(module[0], cls._involved_module_cls[0]):
-            return True
-        if len(module) == 2 and isinstance(module[0], cls._involved_module_cls[0]):
-            if isinstance(module[1], cls._involved_module_cls[1]) or isinstance(
-                module[1], cls._involved_module_cls[2]
-            ):
-                return True
-        if (
-            len(module) == 3
-            and isinstance(module[0], cls._involved_module_cls[0])
-            and isinstance(module[1], cls._involved_module_cls[1])
-            and isinstance(module[2], cls._involved_module_cls[2])
-        ):
-            return True
-        return False
+        for i, sub_module in enumerate(module):
+            if i == 0 and not isinstance(sub_module, cls._required_module_cls):
+                return False
+            elif not isinstance(sub_module, cls._optional_succeed_module_cls):
+                return False
+        return True
 
     @classmethod
     def make_kernel(
-        cls, module: torch.nn.Module, method: str, sample_input: torch.Tensor
+        cls,
+        module: torch.nn.Module,
+        method: str,
+        sample_input: torch.Tensor,
+        objective_func: str = "fastest",
+        rank: int = 1,
     ) -> ModuleKernel:
         assert method in cls._shared_arg_indices, f"{method} is not supported"
         if not isinstance(module, torch.nn.Sequential):
@@ -70,7 +71,7 @@ parameters: {parameters}
             input_infos=input_infos,
             output_infos=output_infos,
             parameters=parameters,
-        ).load_from_db()
+        ).load_from_db(objective_func, rank)
 
     @classmethod
     def extract_shared_arg_infos(
@@ -150,12 +151,13 @@ parameters: {parameters}
 
     @classmethod
     def get_module_name(cls, modules) -> str:
-        module_name = "Conv2d"
-        module_name += "Bias" if modules[0].bias is not None else ""
-        if len(modules) == 2:
-            module_name += (
-                "BatchNorm" if isinstance(modules[1], torch.nn.BatchNorm2d) else "ReLU"
-            )
-        elif len(modules) == 3:
-            module_name += "BatchNormReLU"
+        if not isinstance(module, torch.nn.Sequential):
+            module = torch.nn.Sequential(module)
+        for i, sub_module in enumerate(module):
+            if i == 0:
+                module_name = "Conv2d"
+                if sub_module.bias is not None:
+                    module_name += "Bias"
+            elif isinstance(sub_module, cls._optional_succeed_module_cls):
+                module_name += type(sub_module).__name__
         return module_name
