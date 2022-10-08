@@ -36,9 +36,7 @@ class HeteroFusedScatterRouter(ScatterRouter):
         transform: bool = False,
         **kwargs,
     ):
-        super().__init__(
-            route_func, route_method, residual_dst, transform, **kwargs
-        )
+        super().__init__(route_func, route_method, residual_dst, transform, **kwargs)
 
     def dispatch(
         self,

@@ -131,9 +131,7 @@ class RouterBase(nn.Module):
         if self.history_len == 0:
             self.load_history = np.zeros(path_num, dtype=np.float64)
 
-        current_load = np.array(
-            [flow.size(0) for flow in in_flows], dtype=np.float64
-        )
+        current_load = np.array([flow.size(0) for flow in in_flows], dtype=np.float64)
         if self.capture_mode == "avg":
             self.load_history = (
                 self.load_history * self.history_len + current_load

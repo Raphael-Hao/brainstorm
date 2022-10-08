@@ -30,10 +30,12 @@ def get_compute_location_func(sorted=False, score=None):
 
     return compute_location
 
+
 def _one_hot_with_dtype(data, num_classes, dtype):
     result = torch.zeros([data.size(0), num_classes], device=data.device, dtype=dtype)
     result.scatter_(1, data.unsqueeze(-1), 1)
     return result
+
 
 @register_protocol("swin_moe")
 class SwinMoEProtocol(ProtocolBase):

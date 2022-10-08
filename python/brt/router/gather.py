@@ -56,5 +56,3 @@ class GatherRouter(RouterBase):
         self.capture_flow_stats(self.fabric_type, in_flows)
         out_flow = self.fabric(in_flows)
         return out_flow
-
-
