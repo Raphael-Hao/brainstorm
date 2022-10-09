@@ -19,19 +19,32 @@ __all__ = ["make_jit_kernel"]
 
 
 def make_jit_kernel(
-    modules, sample_inputs, method="forward", opt_level=None
+    modules,
+    sample_inputs,
+    method="forward",
+    opt_level=None,
+    objective_func: str = "fastest",
+    rank: int = 1,
 ) -> Callable[..., None]:
     if opt_level is None:
-        kernel = ModuleKernelFactory.make_kernel(modules, method, sample_inputs)
+        kernel = ModuleKernelFactory.make_kernel(
+            modules, method, sample_inputs, objective_func, rank
+        )
 
     elif opt_level == "horiz_fuse":
-        kernel = HorizFusedKernelFactory.make_kernel(modules, method, sample_inputs)
+        kernel = HorizFusedKernelFactory.make_kernel(
+            modules, method, sample_inputs, objective_func, rank
+        )
 
     elif opt_level == "hetero_fuse":
-        kernel = HeteroFusedKernelFactory.make_kernel(modules, method, sample_inputs)
+        kernel = HeteroFusedKernelFactory.make_kernel(
+            modules, method, sample_inputs, objective_func, rank
+        )
 
     elif opt_level == "homo_fuse":
-        kernel = HomoFusedKernelFactory.make_kernel(modules, method, sample_inputs)
+        kernel = HomoFusedKernelFactory.make_kernel(
+            modules, method, sample_inputs, objective_func, rank
+        )
     else:
         raise ValueError(f"Not supported optimize level: {opt_level}")
     kernel_code, _, _, _ = kernel.get_code()
@@ -48,14 +61,22 @@ def make_jit_kernel(
 
 class HorizFusedKernelFactory:
     @staticmethod
-    def make_kernel(modules: torch.nn.ModuleList, method, sample_inputs):
+    def make_kernel(
+        modules: torch.nn.ModuleList,
+        method,
+        sample_inputs,
+        objective_func: str = "fastest",
+        rank: int = 1,
+    ):
         assert len(modules) == len(
             sample_inputs
         ), "modules and sample_inputs must have the same length"
 
         candidates = []
         for m, sample_input in zip(modules, sample_inputs):
-            module_kernel = ModuleKernelFactory.make_kernel(m, method, sample_input)
+            module_kernel = ModuleKernelFactory.make_kernel(
+                m, method, sample_input, objective_func, rank
+            )
             candidates.append(module_kernel)
         fused_kernel = HorizFusedKernel(candidates)
         return fused_kernel
@@ -63,14 +84,22 @@ class HorizFusedKernelFactory:
 
 class HeteroFusedKernelFactory:
     @staticmethod
-    def make_kernel(modules: torch.nn.ModuleList, method, sample_inputs):
+    def make_kernel(
+        modules: torch.nn.ModuleList,
+        method,
+        sample_inputs,
+        objective_func: str = "fastest",
+        rank: int = 1,
+    ):
         assert len(modules) == len(
             sample_inputs
         ), "modules and sample_inputs must have the same length"
 
         candidates = []
         for m, sample_input in zip(modules, sample_inputs):
-            module_kernel = ModuleKernelFactory.make_kernel(m, method, sample_input)
+            module_kernel = ModuleKernelFactory.make_kernel(
+                m, method, sample_input, objective_func, rank
+            )
             candidates.append(module_kernel)
         fused_kernel = HeteroFusedKernel(candidates)
         return fused_kernel
@@ -79,12 +108,16 @@ class HeteroFusedKernelFactory:
 class HomoFusedKernelFactory:
     @staticmethod
     def make_kernel(
-        modules: torch.nn.ModuleList, method, sample_inputs: List[List[torch.Tensor]]
+        modules: torch.nn.ModuleList,
+        method,
+        sample_inputs: List[List[torch.Tensor]],
+        objective_func: str = "fastest",
+        rank: int = 1,
     ):
         HomoFusedKernelFactory.check_homogeneity(modules)
         candidate_module = modules[0]
         candidate_kernels = ModuleKernelFactory.make_kernels(
-            candidate_module, method, sample_inputs
+            candidate_module, method, sample_inputs, objective_func, rank
         )
         path_num = len(modules)
         capacities = [
@@ -133,22 +166,36 @@ class HomoFusedKernelFactory:
 
 class ModuleKernelFactory:
     @staticmethod
-    def make_kernel(module: torch.nn.Module, method, sample_input) -> ModuleKernel:
+    def make_kernel(
+        module: torch.nn.Module,
+        method,
+        sample_input,
+        objective_func: str = "fastest",
+        rank: int = 1,
+    ) -> ModuleKernel:
         for subclass in ModuleInfo.__subclasses__():
             if subclass.ismodule(module):
-                return subclass.make_kernel(module, method, sample_input)
+                return subclass.make_kernel(
+                    module, method, sample_input, objective_func, rank
+                )
         raise ValueError(f"Unknown module type: {module}")
 
     @staticmethod
     def make_kernels(
-        module: torch.nn.Module, method, sample_inputs
+        module: torch.nn.Module,
+        method,
+        sample_inputs,
+        objective_func: str = "fastest",
+        rank: int = 1,
     ) -> List[ModuleKernel]:
         for subclass in ModuleInfo.__subclasses__():
             if subclass.ismodule(module):
                 ret_kernels = []
                 for sample_input in sample_inputs:
                     ret_kernels.append(
-                        subclass.make_kernel(module, method, sample_input)
+                        subclass.make_kernel(
+                            module, method, sample_input, objective_func, rank
+                        )
                     )
                 return ret_kernels
         raise ValueError(f"Unknown module type: {module}")

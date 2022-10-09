@@ -189,7 +189,7 @@ class ModuleKernel(GlobalKernel):
             self.parameters,
         )
 
-    def dump_to_db(self):
+    def dump_to_db(self, objective_func: str = "fastest", rank: int = 1):
         assert self.input_infos is not None and self.output_infos is not None
         code, func_deps, func_signature, func_body = self.get_code()
         key = code
@@ -228,13 +228,19 @@ class ModuleKernel(GlobalKernel):
             "Function": function,
             "Tags": tag,
             "Miscs": miscs,
+            "ObjectiveFunc": objective_func,
+            "Rank": rank,
         }
         kernel_storager.add_kernel(module_dict, overwrite=True)
         return self
 
-    def load_from_db(self):
+    def load_from_db(self, objective_func: str = "fastest", rank: int = 1):
         identifier = self.make_identifier()
-        fetched_kernel = kernel_storager.query_kernel(identifier, self.platform)
+        fetched_kernel = kernel_storager.query_kernel(
+            identifier, self.platform, objective_func, rank
+        )
+        if fetched_kernel is None:
+            raise ValueError(f"No kernel found in database with {identifier =}")
         attribute_dict = json.loads(fetched_kernel[3])
         function_dict = json.loads(fetched_kernel[6])
         tag_dict = json.loads(fetched_kernel[7])

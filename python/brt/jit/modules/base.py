@@ -28,6 +28,8 @@ class ModuleInfo:
         module: torch.nn.Module,
         method: str,
         sample_input: Union[torch.Tensor, List[torch.Tensor]],
+        objective_func: str = "fastest",
+        rank: int = 1,
     ) -> ModuleKernel:
         raise NotImplementedError()
 
