@@ -240,7 +240,9 @@ class ModuleKernel(GlobalKernel):
             identifier, self.platform, objective_func, rank
         )
         if fetched_kernel is None:
-            raise ValueError(f"No kernel found in database with {identifier =}")
+            raise ValueError(
+                f"No kernel found in database with {identifier = }, {objective_func = }"
+            )
         attribute_dict = json.loads(fetched_kernel[3])
         function_dict = json.loads(fetched_kernel[6])
         tag_dict = json.loads(fetched_kernel[7])
