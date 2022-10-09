@@ -25,8 +25,9 @@ class Conv2dElementWiseInfo(ModuleInfo):
         if not isinstance(module, torch.nn.Sequential):
             module = torch.nn.Sequential(module)
         for i, sub_module in enumerate(module):
-            if i == 0 and not isinstance(sub_module, cls._required_module_cls):
-                return False
+            if i == 0:
+                if not isinstance(sub_module, cls._required_module_cls):
+                    return False
             elif not isinstance(sub_module, cls._optional_succeed_module_cls):
                 return False
         return True
@@ -150,7 +151,7 @@ parameters: {parameters}
         return init_output
 
     @classmethod
-    def get_module_name(cls, modules) -> str:
+    def get_module_name(cls, module: torch.nn.Module) -> str:
         if not isinstance(module, torch.nn.Sequential):
             module = torch.nn.Sequential(module)
         for i, sub_module in enumerate(module):

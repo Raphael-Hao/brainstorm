@@ -196,78 +196,29 @@ class TVMTuner:
             contents = self.old_tune_log_file.read_text()
             self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
             self.tune_log_file.write_text(contents)
-        try:
-            record_reader = auto_scheduler.RecordReader(str(self.tune_log_file))
-            best_score = float("inf")
-            best_sch, best_args, best_grid_dim, best_block_dim = None, None, None, None
-            for inp, res in record_reader:
-                if objective_func == "fastest":
-                    score = sum(res.costs) / len(res.costs)
-                elif objective_func == "most_efficient":
-                    tvm_sch, tvm_args = self.tvm_task.compute_dag.apply_steps_from_state(
-                        inp.state
-                    )
-                    tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-                    grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-                    num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
-                    score = num_blocks * sum(res.costs) / len(res.costs)
-                else:
-                    raise ValueError(f"Unsupported {objective_func = }")
-                if score < best_score:
-                    best_score = score
-                    best_sch, best_args, best_grid_dim, best_block_dim = (
-                        tvm_sch,
-                        tvm_args,
-                        grid_dim,
-                        block_dim,
-                    )
-            func = tvm.driver.build_module.build(best_sch, best_args, "cuda")
-            return best_grid_dim, best_block_dim, func.imported_modules[0].get_source()
-        except Exception as e:
-            logger.error(f"Failed to get best ({objective_func}) netlet, {e}")
-
-    # def _get_fastest_template(self):
-    #     if not self.tune_log_file.exists() and self.old_tune_log_file.exists():
-    #         contents = self.old_tune_log_file.read_text()
-    #         self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
-    #         self.tune_log_file.write_text(contents)
-    #     try:
-    #         tvm_sch, tvm_args = self.tvm_task.apply_best(str(self.tune_log_file))
-    #         tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-    #         grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-    #         source_code = self.tvm_task.print_best(
-    #             str(self.tune_log_file), print_mode="cuda"
-    #         )
-    #         return grid_dim, block_dim, source_code
-    #     except Exception as e:
-    #         logger.error(f"Failed to get fastest netlet {e}")
-
-    # def _get_most_efficient_template(self):
-    #     if not self.tune_log_file.exists() and self.old_tune_log_file.exists():
-    #         contents = self.old_tune_log_file.read_text()
-    #         self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
-    #         self.tune_log_file.write_text(contents)
-    #     try:
-    #         record_reader = auto_scheduler.RecordReader(str(self.tune_log_file))
-    #         best_score = float("inf")
-    #         best_sch, best_args, best_grid_dim, best_block_dim = None, None, None, None
-    #         for inp, res in record_reader:
-    #             tvm_sch, tvm_args = self.tvm_task.compute_dag.apply_steps_from_state(
-    #                 inp.state
-    #             )
-    #             tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-    #             grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-    #             num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
-    #             score = num_blocks * sum(res.costs) / len(res.costs)
-    #             if score < best_score:
-    #                 best_score = score
-    #                 best_sch, best_args, best_grid_dim, best_block_dim = (
-    #                     tvm_sch,
-    #                     tvm_args,
-    #                     grid_dim,
-    #                     block_dim,
-    #                 )
-    #         func = tvm.driver.build_module.build(best_sch, best_args, "cuda")
-    #         return best_grid_dim, best_block_dim, func.imported_modules[0].get_source()
-    #     except Exception as e:
-    #         logger.error(f"Failed to get the most efficient netlet {e}")
+        record_reader = auto_scheduler.RecordReader(str(self.tune_log_file))
+        best_score = float("inf")
+        for inp, res in record_reader:
+            if objective_func == "fastest":
+                score = sum(res.costs) / len(res.costs)
+            elif objective_func == "most_efficient":
+                tvm_sch, tvm_args = self.tvm_task.compute_dag.apply_steps_from_state(
+                    inp.state
+                )
+                tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
+                grid_dim, block_dim = parse_culaunch_config(tvm_ir)
+                num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
+                score = num_blocks * sum(res.costs) / len(res.costs)
+            else:
+                raise ValueError(f"Unsupported {objective_func = }")
+            if score < best_score:
+                best_score = score
+                best_inp = inp
+        best_sch, best_args = self.tvm_task.compute_dag.apply_steps_from_state(
+            best_inp.state, self.tvm_task.layout_rewrite_option
+        )
+        best_ir = tvm.lower(best_sch, best_args, simple_mode=True)
+        best_grid_dim, best_block_dim = parse_culaunch_config(best_ir)
+        best_func = tvm.driver.build_module.build(best_sch, best_args, "cuda")
+        best_source_code = best_func.imported_modules[0].get_source()
+        return best_grid_dim, best_block_dim, best_source_code
