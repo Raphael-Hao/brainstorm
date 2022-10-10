@@ -27,9 +27,11 @@ __all__ = [
     "get_logger",
 ]
 
-logging.basicConfig(
-    handlers=[logging.FileHandler(BRT_LOG_FNAME), logging.StreamHandler(sys.stdout)]
-)
+for module in _BRT_MODULES:
+    logger = logging.getLogger(f"brainstorm.{module}")
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.FileHandler(BRT_LOG_FNAME)),
+    logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def _to_list(modules):
