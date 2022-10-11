@@ -3,3 +3,4 @@
 
 from brt.passes.liveness import DeadPathEliminatePass, PermanentPathFoldPass
 from brt.passes.memory_plan import MemoryPlanPass, OnDemandMemoryPlanPass, PredictMemoryPlanPass
+from brt.passes.transformop import TransformPass

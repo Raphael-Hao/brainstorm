@@ -26,6 +26,7 @@ if args.gpu:
 args.grFactor = list(map(int, args.grFactor.split("-")))
 args.bnFactor = list(map(int, args.bnFactor.split("-")))
 args.nScales = len(args.grFactor)
+print("nscale: {}".format(args.nScales))
 
 if args.use_valid:
     args.splits = ["train", "val", "test"]

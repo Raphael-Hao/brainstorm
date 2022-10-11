@@ -309,7 +309,6 @@ class MSDNet(nn.Module):
             m.bias.data.zero_()
 
     def  _build_block(self, nIn, args, step, n_layer_all, n_layer_curr):
-
         layers = [MSDNFirstLayer(3, nIn, args)] if n_layer_curr == 0 else []
         for i in range(step):
             n_layer_curr += 1
@@ -455,15 +454,18 @@ class MSDNet(nn.Module):
                     for j, output in enumerate(x):
                         sccater_input.append(output)
                         result_scatter.append([])
+                    
                     for m in range(j+1,4):
+                        # print('output shape {}',output.shape)
                         sccater_input.append(torch.zeros_like(output))
                         result_scatter.append([])
                     sccater_input.append(tmp_res)
                     ##scatter
                     result_scatter[0],result_scatter[1],result_scatter[2],result_scatter[3], routed_res = self.scatters[i](sccater_input, tmp_res)
                     result=[]
-                    for j, output in enumerate(x):
-                        sccater_input.append(output)
+                    # for j, output in enumerate(x):
+                    #     sccater_input.append(output)
+                    # differ the path by 0 and 1
                     for j, output in enumerate(x):
                         result.append(result_scatter[j][1])
                     routed_res = routed_res[0]

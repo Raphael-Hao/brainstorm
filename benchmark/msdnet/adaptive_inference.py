@@ -92,11 +92,11 @@ class Tester(object):
                     soft_max_result=output
                 else:
                     soft_max_result=torch.cat((soft_max_result,output),0)
-
+            if i==3:
+                    break
             if i % self.args.print_freq == 0:
                 print('Generate Logit: [{0}/{1}]'.format(i, len(dataloader)))
-                if i==20:
-                    break
+                
         ##get the argmax_preds
         max_preds, argmax_preds = soft_max_result.max(dim=1, keepdim=False)
         ##for debug

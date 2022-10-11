@@ -27,6 +27,7 @@ class DeadPathEliminatePass(PassBase):
         # eliminate dead path
         for node in self.graph_mod.graph.nodes:
             if self.is_gather_node(node):
+                # import pdb; pdb.set_trace()
                 node_m = self.sub_modules[node.target]
                 dead_paths = []
                 load_histroy = node_m.load_history
