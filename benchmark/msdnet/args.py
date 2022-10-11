@@ -41,13 +41,19 @@ exp_group.add_argument(
 
 exp_group.add_argument(
     "--thresholds", default=
+    ## block 3 gather path
+    # [100000000.00000000,
+    #  1000000.0000,
+    #  0.69275671,
+    #  -1]
     
     
-    # block two blocks
-    [100000000.00000000,
-     0.85972512,
-     0.69275671,
-     -1]
+    
+    # block two block(args.grFactor
+    # [100000000.00000000,
+    #  0.85972512,
+    #  0.69275671,
+    #  -1]
     
     # # p=torch.tensor([0,0.3,0.2,0.2,0.3]) with this probablity block 1 block
     # [100000000.00000000,
@@ -61,7 +67,7 @@ exp_group.add_argument(
     
     # threshold that cater to the probability of the p=torch.tensor([0.1,0.2,0.2,0.2,0.3])
     # [ 9.6454e-01,  8.6269e-01,  6.9252e-01,  4.7205e-01]
-    # [0.96454340,0.86269057, 0.69251990, 0.47205138]
+    [0.96454340,0.86269057, 0.69251990, 0.47205138]
     
     #non parallel allign(maybe oen error due to the precision but it is acceptable, we just need to elevate the precision)
     # [ 8.4275e-02,  3.8183e-02,  1.6313e-02,  1.1815e-02]
@@ -220,3 +226,5 @@ optim_group.add_argument(
 bench_arg_manager = BenchmarkArgumentManager(arg_parser)
 bench_arg_manager.add_item("liveness")
 bench_arg_manager.add_item("memory_plan")
+bench_arg_manager.add_item("transform")
+
