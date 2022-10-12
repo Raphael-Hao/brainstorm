@@ -92,7 +92,7 @@ class Tester(object):
                     soft_max_result=output
                 else:
                     soft_max_result=torch.cat((soft_max_result,output),0)
-            if i==3:
+            if i==1:
                     break
             if i % self.args.print_freq == 0:
                 print('Generate Logit: [{0}/{1}]'.format(i, len(dataloader)))
