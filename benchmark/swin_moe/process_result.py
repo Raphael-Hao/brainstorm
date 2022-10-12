@@ -5,6 +5,7 @@
 import numpy as np
 from itertools import product
 
+#%%
 trace_info = np.load("scatter_results.npy", allow_pickle=True)
 
 # %%
@@ -22,5 +23,15 @@ for layer_id in range(layer_num - 1):
         scatter_trace[layer_id][cur_path, post_path] = token_num
 
 np.save("scatter_trace.npy", scatter_trace, allow_pickle=True)
+
+# %%
+scatter_trace = np.load("scatter_trace.npy", allow_pickle=True)
+from matplotlib import pyplot as plt
+import seaborn as sns
+for i in range(len(scatter_trace)):
+    plt.figure()
+    ax = sns.heatmap(scatter_trace[i], linewidth=0.5, cmap="YlGnBu")
+    plt.savefig(f"scatter_trace_{i}.png")
+
 
 # %%

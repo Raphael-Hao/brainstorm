@@ -45,10 +45,9 @@ class PlacementSolver:
     def solve(self):
         self.model.Params.LogToConsole = True
         self.model.Params.MIPGap =0.001
-        self.model.Params.TimeLimit = 60
+        # self.model.Params.TimeLimit = 60
         self.model.optimize()
         print("Obj: ",self.model.objVal)
-        # for placement in self.model.getAttr()
 
     def construct_variable(self):
         self.placements = [
