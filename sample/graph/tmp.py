@@ -37,3 +37,21 @@ moe_model = SimpleModel()
 indata = torch.arange(0, 40, dtype=torch.float32).view(4, 10)
 outdata = moe_model(indata)
 print(outdata)
+from brt.trace.graph import GraphTracer
+from torch.fx.graph_module import GraphModule
+from brt.runtime import BRT_CACHE_PATH
+tracer = GraphTracer()
+graph = tracer.trace(moe_model)
+# name = moe_model.__class__.__name__ if isinstance(moe_model, torch.nn.Module) else moe_model.__name__
+# graph_module= GraphModule(tracer.root, graph, name)
+
+# from torch.fx.passes.graph_drawer import FxGraphDrawer
+
+# graph_drawer = FxGraphDrawer(graph_module, "brt_model")
+
+import pdb;pdb.set_trace()
+for node in graph.nodes:
+    print(node)
+
+# with open("a.svg", "wb") as f:
+#     f.write(graph_drawer.get_dot_graph().create_svg())

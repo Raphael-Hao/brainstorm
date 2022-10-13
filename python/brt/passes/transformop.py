@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 from ast import arg
 from hashlib import new
+from turtle import pd
 from typing import Union
 
 import torch
@@ -67,8 +68,13 @@ class TransformPass(PassBase):
                         continue
                     edge_set.add(set_node)   
             return seen,edge_set,node_visited
-        
+        copy_order_node=[]
         for node in self.graph_mod.graph.nodes:
+            copy_order_node.append(node)
+        
+        
+        
+        for node in copy_order_node:
             if self.is_scatter_node(node):
                 node_m=self.sub_modules[node.target]
                 ## bfs to find the node that have data dependency with node (find the score depandency)
@@ -93,7 +99,6 @@ class TransformPass(PassBase):
                 for key in node.users.copy().keys():
                     for new_key in key.users.copy().keys():
                         get_item_node.append(new_key)
-                import pdb;pdb.set_trace()
                 for key in node.users.copy().keys():
                     for new_key in key.users.copy().keys():
                         if i==len(get_item_node)-1:
@@ -105,7 +110,6 @@ class TransformPass(PassBase):
                                 new_node=self.graph_mod.graph.call_function(new_key.target,new_key.args,new_key.kwargs)
                                 new_key.replace_all_uses_with(new_node)
                             self.graph_mod.graph.erase_node(new_key)
-                            import pdb;pdb.set_trace()
                             break 
                         list_front_node=edge_users.pop(0)
                         edge_node_in_seq=edge_nodes_in_seq.pop(0)
@@ -158,7 +162,7 @@ class TransformPass(PassBase):
                                 self.graph_mod.graph.erase_node(front_node)
                             elif self.is_module_node(front_node):
                                 with self.graph_mod.graph.inserting_after(front_node):
-                                    new_node=self.graph_mod.graph.call_method(front_node.target,new_args,front_node.kwargs)
+                                    new_node=self.graph_mod.graph.call_module(front_node.target,new_args,front_node.kwargs)
                                     front_node.replace_all_uses_with(new_node)
                                 self.graph_mod.graph.erase_node(front_node)
                     if i==len(get_item_node)-1:
@@ -203,13 +207,16 @@ class TransformPass(PassBase):
                         print('nn {}',nn)
                         for oo in nn.users.copy().keys():
                             print('oo {}',oo)
-                import pdb;pdb.set_trace()
-            # self.graph_mod.recompile()
-            # self.graph_mod.graph.lint() 
+                # import pdb;pdb.set_trace()
+                self.graph_mod.recompile()
+                
             if self.is_gather_node(node):
                 node_m = self.sub_modules[node.target]
+        
+        
+        
         self.graph_mod.recompile()
-        self.graph_mod.graph.lint()
+        # self.graph_mod.graph.lint()
         for node in self.graph_mod.graph.nodes:
             with  open('/home/yichuanjiaoda/brainstorm_project/brainstorm/python/brt/passes/node1.txt','a+') as f:
                 f.write(str(i))
@@ -223,13 +230,74 @@ class TransformPass(PassBase):
         with  open('aftertransgraphcode.txt','a+') as f:
                 print(self.graph_mod.code,file=f)
                 f.close()
-        import pdb;pdb.set_trace()
+        from torch.fx.passes.graph_drawer import FxGraphDrawer
+        graph_drawer = FxGraphDrawer(self.graph_mod, "new_backbone")
+        with open("tran_op.svg", "wb") as f:
+                f.write(graph_drawer.get_dot_graph().create_svg())
+        
+        
         
         return 
     def finalize(self):
-        # self.graph_mod.graph.eliminate_dead_code()
+        import pdb; pdb.set_trace()
+        import torch.fx as fx
+        new_graph = fx.Graph()  # As we're building up a new graph
+        def topological():
+            import pdb; pdb.set_trace()
+            
+            in_degrees = dict((u,0) for u in self.graph_mod.graph.nodes)   
+            num = len(in_degrees)     
+            for u in self.graph_mod.graph.nodes:
+                for v in u.users.copy().keys():
+                    in_degrees[v]+=1
+            Q = [u for u in in_degrees if in_degrees[u] == 0]
+            Seq=[]
+            while Q:         
+                u = Q.pop()            
+                Seq.append(u) 
+                
+                if self.is_placeholder_node(u):
+                    new_node = new_graph.placeholder(u.name)
+                    u.replace_all_uses_with(new_node)
+                elif self.is_output_node(u):
+                    new_node = new_graph.output(u.args)
+                elif self.is_function_node(u):
+                    new_node=new_graph.call_function(u.target,u.args,u.kwargs)
+                    u.replace_all_uses_with(new_node)
+                elif self.is_module_node(u):
+                    new_node=new_graph.call_module(u.target,u.args,u.kwargs)
+                    u.replace_all_uses_with(new_node)
+                elif self.is_method_node(u):
+                    new_node=new_graph.call_method(u.target,u.args,u.kwargs)
+                    u.replace_all_uses_with(new_node)
+                else:
+                    print('Unknown node!',u)
+                for v in new_node.users.copy().keys():             
+                    in_degrees[v] -= 1    
+                    if in_degrees[v] == 0:        
+                        Q.append(v)          
+            
+            
+            if len(Seq) == num:       
+                print('finish topological search')   
+            else:         
+                print('failed to finish topological search')
+            return
+        ## reorder the graph using topological sort
+        topological()
+        for node in new_graph.nodes:
+            with  open('/home/yichuanjiaoda/brainstorm_project/brainstorm/python/brt/passes/new_node.txt','a+') as f:
+                f.write(str(node))
+                f.write('\n')
+                f.close()
         
-        self.graph_mod.recompile()
-        return self.graph_mod
-        return super().finalize()
+        
+        new_graph.lint()
+        
+        new_module=fx.GraphModule(self.graph_mod, new_graph)
+        new_graph.eliminate_dead_code()
+        new_module.recompile()
+        import pdb;pdb.set_trace()
+        # self.graph_mod.recompile()
+        return new_module
  
