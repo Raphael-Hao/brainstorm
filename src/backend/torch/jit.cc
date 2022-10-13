@@ -2,23 +2,9 @@
  * Copyright (c) 2022 by Microsoft Corporation.
  * Licensed under the MIT license.
  */
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/CUDAEvent.h>
 #include <brt/jit/compiler.h>
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <torch/extension.h>
 
-#undef CHECK_EQ
-#undef CHECK_NE
-#undef CHECK_ON_CPU
-#undef CHECK_ON_CUDA
-#undef CHECK_CONTIGUOUS
-
-#define CHECK_EQ(x, y) TORCH_INTERNAL_ASSERT((x) == (y), "CHECK_EQ fails.")
-#define CHECK_NE(x, y) TORCH_INTERNAL_ASSERT((x) != (y), "CHECK_NE fails.")
-#define CHECK_ON_CPU(x) TORCH_INTERNAL_ASSERT(!x.is_cuda(), #x " must be a CPU tensor")
-#define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
-#define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
+#include "./torch.h"
 
 namespace brt {
 namespace backend {
@@ -85,7 +71,6 @@ static void homo_invoke(const std::vector<::torch::Tensor>& shared_inputs,
                         at::cuda::getDefaultCUDAStream().stream());
 }
 
-
 static std::pair<std::string, int> inject_source(const std::string& headless_code) {
   return jit::CUDACompiler::get_compiler().inject_source(headless_code);
 }
@@ -99,6 +84,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Generic Invoke for GPU function (CUDA)");
   m.def("hetero_invoke", &brt::backend::torch::hetero_invoke,
         "Invoke for horizontally fused GPU function (CUDA) of heterogenous kernels");
-  m.def("homo_invoke", &brt::backend::torch::homo_invoke, "Invoke for horizontally fused GPU function (CUDA) of homogenous kernels");
+  m.def("homo_invoke", &brt::backend::torch::homo_invoke,
+        "Invoke for horizontally fused GPU function (CUDA) of homogenous kernels");
   m.def("inject_source", &brt::backend::torch::inject_source, "Inject Source for GPU (CUDA)");
 }

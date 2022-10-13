@@ -2,24 +2,11 @@
  * Copyright (c) 2022 by Microsoft Corporation.
  * Licensed under the MIT license.
  */
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/CUDAEvent.h>
+
 #include <brt/router/location.h>
 #include <brt/router/route.h>
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <torch/extension.h>
 
-#undef CHECK_EQ
-#undef CHECK_NE
-#undef CHECK_ON_CPU
-#undef CHECK_ON_CUDA
-#undef CHECK_CONTIGUOUS
-
-#define CHECK_EQ(x, y) TORCH_INTERNAL_ASSERT((x) == (y), "CHECK_EQ fails.")
-#define CHECK_NE(x, y) TORCH_INTERNAL_ASSERT((x) != (y), "CHECK_NE fails.")
-#define CHECK_ON_CPU(x) TORCH_INTERNAL_ASSERT(!x.is_cuda(), #x " must be a CPU tensor")
-#define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
-#define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
+#include "./torch.h"
 
 namespace brt {
 namespace backend {
@@ -113,8 +100,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   ::torch::Tensor cuda_loads;
   if (!loads.is_cuda() && target_index_fmt_id == 1) {
     cuda_loads = loads.cuda();
-  }
-  else{
+  } else {
     cuda_loads = loads;
   }
   ::torch::Tensor new_indices = ::at::zeros_like(origin_indices, origin_indices.options());
@@ -149,8 +135,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   ::torch::Tensor cuda_loads;
   if (!loads.is_cuda()) {
     cuda_loads = loads.cuda();
-  }
-  else{
+  } else {
     cuda_loads = loads;
   }
 
@@ -215,8 +200,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   ::torch::Tensor cuda_loads;
   if (!loads.is_cuda()) {
     cuda_loads = loads.cuda();
-  }
-  else{
+  } else {
     cuda_loads = loads;
   }
 
@@ -243,8 +227,8 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
 
   router::CombineWithSrcIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
                                 gates_data_ptr, route_indices.data_ptr<int>(),
-                                cuda_loads.data_ptr<int>(), capacity, sample_num, sample_size, path_num,
-                                at::cuda::getDefaultCUDAStream().stream());
+                                cuda_loads.data_ptr<int>(), capacity, sample_num, sample_size,
+                                path_num, at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
