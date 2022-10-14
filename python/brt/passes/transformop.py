@@ -25,9 +25,6 @@ class TransformPass(PassBase):
         super().__init__(m)
         self.dead_load = dead_load
         self.runtime_load = runtime_load
-        
-    
-    
     def run_on_graph(self):
         i=0
         def bfs(node,fa):
@@ -69,12 +66,8 @@ class TransformPass(PassBase):
                     edge_set.add(set_node)   
             return seen,edge_set,node_visited
         copy_order_node=[]
-        # import pdb; pdb.set_trace()
         for node in self.graph_mod.graph.nodes:
             copy_order_node.append(node)
-        
-        
-        
         for node in copy_order_node:
             if self.is_scatter_node(node):
                 node_m=self.sub_modules[node.target]
@@ -103,14 +96,6 @@ class TransformPass(PassBase):
                 for key in node.users.copy().keys():
                     for new_key in key.users.copy().keys():
                         if i==len(get_item_node)-1:
-                            # with self.graph_mod.graph.inserting_after(key):
-                            #     new_node=self.graph_mod.graph.call_function(key.target,key.args,key.kwargs)
-                            #     key.replace_all_uses_with(new_node)
-                            # self.graph_mod.graph.erase_node(key)
-                            # with self.graph_mod.graph.inserting_after(new_key):
-                            #     new_node=self.graph_mod.graph.call_function(new_key.target,new_key.args,new_key.kwargs)
-                            #     new_key.replace_all_uses_with(new_node)
-                            # self.graph_mod.graph.erase_node(new_key)
                             break 
                         list_front_node=edge_users.pop(0)
                         edge_node_in_seq=edge_nodes_in_seq.pop(0)
@@ -118,24 +103,26 @@ class TransformPass(PassBase):
                             if edge_node_in_seq in node.args[0]:
                                 index_edge_node:int=node.args[0].index(edge_node_in_seq)
                                 if not isinstance(new_key1.args[0],list):
-                                    new_args=([get_item_node[index_edge_node]],)
+                                    new_args=(get_item_node[index_edge_node],)
                                 else:
                                     construct_new_args=[]
                                     for tmp_node in new_key1.args[0]:
                                         if not tmp_node == new_key:
                                             construct_new_args.append(tmp_node)
-                                    construct_new_args.append(get_item_node[index_edge_node])
+                                        else:
+                                            construct_new_args.append(get_item_node[index_edge_node])
                                     new_args=(construct_new_args,)
                                 new_key1.args=new_args
                                 continue
                             if not isinstance(new_key1.args[0],list):
-                                new_args=([node.args[0][i]],)
+                                new_args=(node.args[0][i],)
                             else:
                                 construct_new_args=[]
                                 for tmp_node in new_key1.args[0]:
                                     if not tmp_node == new_key:
                                         construct_new_args.append(tmp_node)
-                                construct_new_args.append(node.args[0][i])
+                                    else:
+                                        construct_new_args.append(node.args[0][i])
                                 new_args=(construct_new_args,)
                             new_key1.args=new_args
                         if_continue=False
@@ -147,91 +134,55 @@ class TransformPass(PassBase):
                             continue
                         for front_node in list_front_node:
                             if not isinstance(front_node.args[0],list):
-                                new_args=([new_key],)
+                                new_args=(new_key,)
                             else:
                                 construct_new_args=[]
                                 for tmp_node in front_node.args[0]:
                                     if not tmp_node == edge_node_in_seq:
                                         construct_new_args.append(tmp_node)
-                                construct_new_args.append(new_key)
+                                    else:
+                                        construct_new_args.append(new_key)
                                 new_args=(construct_new_args,)
                             front_node.args=new_args
                     if i==len(get_item_node)-1:
                         break
                     i=i+1  
-                    # with self.graph_mod.graph.inserting_after(key):
-                    #     new_node=self.graph_mod.graph.call_function(key.target,key.args,key.kwargs)
-                    #     key.replace_all_uses_with(new_node)
-                    # self.graph_mod.graph.erase_node(key)
-                    # with self.graph_mod.graph.inserting_after(new_key):
-                    #     new_node=self.graph_mod.graph.call_function(new_key.target,new_key.args,new_key.kwargs)
-                    #     new_key.replace_all_uses_with(new_node)
-                    # self.graph_mod.graph.erase_node(new_key)
-                    
-                    
-                    
-                
-                
                 for tmp_node in node.args[0]:
                     if self.is_function_node(tmp_node) and tmp_node.target == torch.zeros_like:
                         edge_node_in_seq_copy.append(tmp_node)
                 edge_node_in_seq_copy.append(node.args[0][-1])
                 new_args = ([w for w in edge_node_in_seq_copy],node.args[0][-1])
                 node.args=new_args
-                
-                
-                # with self.graph_mod.graph.inserting_before(node):
-                #     new_node=self.graph_mod.graph.call_module(node.target,node.args,node.kwargs)
-                #     node.replace_all_uses_with(new_node)
-                # self.graph_mod.graph.erase_node(node)
-                
-                # for node in self.graph_mod.graph.nodes:
-                #     with  open('/home/yichuanjiaoda/brainstorm_project/brainstorm/python/brt/passes/nodeprocess.txt','a+') as f:
-                #         f.write(str(i))
-                #         f.write(str(node))
-                #         f.write('\n')
-                #         f.close()
-                for node_arg in node.args[0]:
-                    print('node_arg',node_arg)
-                for mm in node.users.copy().keys():
-                    print('mm {}',mm)
-                    for nn in mm.users.copy().keys():
-                        print('nn {}',nn)
-                        for oo in nn.users.copy().keys():
-                            print('oo {}',oo)
-                # import pdb;pdb.set_trace()
                 self.graph_mod.recompile()
                 
             if self.is_gather_node(node):
                 node_m = self.sub_modules[node.target]
-        
-        
-        
-        # self.graph_mod.recompile()
-        # self.graph_mod.graph.lint()
-        for node in self.graph_mod.graph.nodes:
-            with  open('/home/yichuanjiaoda/brainstorm_project/brainstorm/python/brt/passes/node1.txt','a+') as f:
-                f.write(str(i))
-                f.write(str(node))
-                f.write('\n')
-                f.close()
-        
-        with  open('aftertransgraphnode.txt','a+') as f:
-                print(self.graph_mod.graph,file=f)
-                f.close()
-        with  open('aftertransgraphcode.txt','a+') as f:
-                print(self.graph_mod.code,file=f)
-                f.close()
-        from torch.fx.passes.graph_drawer import FxGraphDrawer
-        graph_drawer = FxGraphDrawer(self.graph_mod, "new_backbone")
-        with open("tran_op.svg", "wb") as f:
-                f.write(graph_drawer.get_dot_graph().create_svg())
-        
-        
-        
         return 
     def finalize(self):
-        import pdb; pdb.set_trace()
+        def reorder_link():
+            seen=set()
+            
+            for node in self.graph_mod.graph.nodes:
+                seen.add(node)
+                if self.is_placeholder_node(node):
+                        continue
+                nodes = node.args[0]
+                if self.is_method_node(node) and not isinstance(nodes,list):
+                    nodes=[]
+                    for arg in node.args:
+                        if isinstance(arg,torch.fx.node.Node):
+                            nodes.append(arg)
+                elif self.is_function_node(node) and not isinstance(nodes,list):
+                    nodes=[]
+                    for arg in node.args:
+                        if isinstance(arg,torch.fx.node.Node):
+                            nodes.append(arg)
+                elif not isinstance(nodes,list):
+                    nodes=[nodes]    
+                for arg_node in nodes:
+                    if arg_node not in seen:
+                        node.prepend(arg_node)
+                        seen.add(arg_node)
         def topological():
             in_degrees = dict((u,0) for u in self.graph_mod.graph.nodes)   
             num = len(in_degrees)     
@@ -241,141 +192,91 @@ class TransformPass(PassBase):
             Q = [u for u in in_degrees if in_degrees[u] == 0]
             Seq=[]
             import torch.fx as fx
-            # new_graph=fx.Graph()
             while Q:         
                 u = Q.pop(0)   
                 Seq.append(u)         
-                # if self.is_placeholder_node(u):
-                #     new_node = new_graph.placeholder(u.name)
-                #     u.replace_all_uses_with(new_node)
-                # elif self.is_output_node(u):
-                #     new_node = new_graph.output(u.args)
-                # elif self.is_function_node(u):
-                #     new_node=new_graph.call_function(u.target,u.args,u.kwargs)
-                #     u.replace_all_uses_with(new_node)
-                # elif self.is_module_node(u):
-                #     new_node=self.graph_mod.graph.call_module(u.target,u.args,u.kwargs)
-                #     u.replace_all_uses_with(new_node)
-                # elif self.is_method_node(u):
-                #     new_node=new_graph.call_method(u.target,u.args,u.kwargs)
-                #     u.replace_all_uses_with(new_node)
-                # else:
-                #     print('Unknown node!',u)
                 for v in u.users.copy().keys():             
                     in_degrees[v] -= 1    
                     if in_degrees[v] == 0:        
                         Q.append(v)          
-            if len(Seq) == num:       
-                print('finish topological search')   
-            else:         
-                print('failed to finish topological search')
-            
+            if not len(Seq) == num: 
+                raise Exception("ailed to finish topological search")      
             return Seq
-        ## reorder the graph using topological sort
-        topological_seq=topological()
-        i=0
-        import pdb; pdb.set_trace()
-        
-        # origin_node_seq=[]
-        # for node in self.graph_mod.graph.nodes:
-        #     print(node)
-        #     origin_node_seq.append(node)
-        # assert len(origin_node_seq)==len(topological_seq)
-        
-        for front_node in self.graph_mod.graph.nodes:
-            if i>599:
-                import pdb; pdb.set_trace()
-            if i==669:
-                import pdb; pdb.set_trace()
-            new_node=topological_seq[i]
-            
-            print(i)
-            print(new_node)  
-            print(front_node)    
-            
-            if new_node==front_node:
-                i+=1
-                # if self.graph_mod.graph.nodes.direction=='_prev':
-                #     self.graph_mod.graph.nodes=self.graph_mod.graph.nodes.__reversed__()
-                self.graph_mod.graph.nodes.direction='_next'
-                
-                continue
-            i+=1
-            if self.is_placeholder_node(new_node):
-                with self.graph_mod.graph.inserting_before(front_node):
-                    create_node=self.graph_mod.graph.placeholder(new_node.name)
-                    new_node.replace_all_uses_with(create_node)
-                self.graph_mod.graph.erase_node(new_node)
-                
-            elif self.is_output_node(new_node):
-                with self.graph_mod.graph.inserting_before(front_node):
-                    create_node=self.graph_mod.graph.output(new_node.args)
-                    new_node.replace_all_uses_with(create_node)
-                    
-                self.graph_mod.graph.erase_node(new_node)
-                
-            elif self.is_function_node(new_node):
-                with self.graph_mod.graph.inserting_before(front_node):
-                    create_node=self.graph_mod.graph.call_function(new_node.target,new_node.args,new_node.kwargs)
-                    new_node.replace_all_uses_with(create_node)
-                    
-                self.graph_mod.graph.erase_node(new_node)
-                
-            elif self.is_module_node(new_node):
-                with self.graph_mod.graph.inserting_before(front_node):
-                    create_node=self.graph_mod.graph.call_module(new_node.target,new_node.args,new_node.kwargs)
-                    new_node.replace_all_uses_with(create_node)
-                    
-                self.graph_mod.graph.erase_node(new_node)
 
-            elif self.is_method_node(new_node):
-                with self.graph_mod.graph.inserting_before(front_node):
-                    create_node=self.graph_mod.graph.call_method(new_node.target,new_node.args,new_node.kwargs)
-                    new_node.replace_all_uses_with(create_node)
-                    
-                self.graph_mod.graph.erase_node(new_node)
-
-            else:
-                print('Unknown node!',new_node)
-            import pdb; pdb.set_trace()
-            
-            # if self.graph_mod.graph.nodes.direction=='_next':
-            #     self.graph_mod.graph.nodes=self.graph_mod.graph.nodes.__reversed__()
-            self.graph_mod.graph.nodes.direction='_prev'
-        
-        import pdb;pdb.set_trace()
-        for node in self.graph_mod.graph.nodes:
-            with  open('/home/yichuanjiaoda/brainstorm_project/brainstorm/python/brt/passes/after_topo_node.txt','a+') as f:
-                f.write(str(node))
-                f.write('\n')
+        def reorder_topo():
+            topological_seq=topological()
+            with  open('/home/yichuanjiaoda/brainstorm_project/brainstorm/python/brt/passes/seq_node.txt','a+') as f:
+                for element in topological_seq:
+                    f.write(str(element))
+                    f.write('\n')
                 f.close()
-        with  open('/home/yichuanjiaoda/brainstorm_project/brainstorm/python/brt/passes/seq_node.txt','a+') as f:
-            for element in topological_seq:
-                f.write(str(element))
-                f.write('\n')
-            f.close()
+            i=0
+            for front_node in self.graph_mod.graph.nodes:
+
+                new_node=topological_seq[i]
                 
+                
+                if new_node==front_node:
+                    i+=1
+                    self.graph_mod.graph.nodes.direction='_next'
+                    
+                    continue
+                i+=1
+                if self.is_placeholder_node(new_node):
+                    with self.graph_mod.graph.inserting_before(front_node):
+                        create_node=self.graph_mod.graph.placeholder(new_node.name)
+                        new_node.replace_all_uses_with(create_node)
+                    self.graph_mod.graph.erase_node(new_node)
+                    
+                elif self.is_output_node(new_node):
+                    with self.graph_mod.graph.inserting_before(front_node):
+                        create_node=self.graph_mod.graph.output(new_node.args)
+                        new_node.replace_all_uses_with(create_node)
+                        
+                    self.graph_mod.graph.erase_node(new_node)
+                    
+                elif self.is_function_node(new_node):
+                    with self.graph_mod.graph.inserting_before(front_node):
+                        create_node=self.graph_mod.graph.call_function(new_node.target,new_node.args,new_node.kwargs)
+                        new_node.replace_all_uses_with(create_node)
+                        
+                    self.graph_mod.graph.erase_node(new_node)
+                    
+                elif self.is_module_node(new_node):
+                    with self.graph_mod.graph.inserting_before(front_node):
+                        create_node=self.graph_mod.graph.call_module(new_node.target,new_node.args,new_node.kwargs)
+                        new_node.replace_all_uses_with(create_node)
+                        
+                    self.graph_mod.graph.erase_node(new_node)
+
+                elif self.is_method_node(new_node):
+                    with self.graph_mod.graph.inserting_before(front_node):
+                        create_node=self.graph_mod.graph.call_method(new_node.target,new_node.args,new_node.kwargs)
+                        new_node.replace_all_uses_with(create_node)
+                        
+                    self.graph_mod.graph.erase_node(new_node)
+
+                else:
+                    print('Unknown node!',new_node)
+                
+                self.graph_mod.graph.nodes.direction='_prev'
         
-        from torch.fx.passes.graph_drawer import FxGraphDrawer
-        graph_drawer = FxGraphDrawer(self.graph_mod, "new_backbone")
-        with open("end1_trans.svg", "wb") as f:
-                f.write(graph_drawer.get_dot_graph().create_svg())   
-        import pdb; pdb.set_trace()
+        def topo_prepend():
+            topological_seq=topological()
+            i=0
+            for front_node in self.graph_mod.graph.nodes:
+                new_node=topological_seq[i]
+                if new_node==front_node:
+                    i+=1
+                    continue
+                while not new_node==front_node:
+                    front_node.prepend(new_node)
+                    i+=1
+                    new_node=topological_seq[i]
+            return 
+        topo_prepend()
         self.graph_mod.graph.lint()
         self.graph_mod.graph.eliminate_dead_code()
         self.graph_mod.recompile()
-        
-        
-        
-        
-        
-        with  open('aftertransgraphcode1.txt','a+') as f:
-                print(self.graph_mod.code,file=f)
-                f.close()
-        from torch.fx.passes.graph_drawer import FxGraphDrawer
-        graph_drawer = FxGraphDrawer(self.graph_mod, "new_backbone")
-        with open("end_trans.svg", "wb") as f:
-                f.write(graph_drawer.get_dot_graph().create_svg())
-        import pdb;pdb.set_trace()
         return self.graph_mod
  
