@@ -456,15 +456,12 @@ class MSDNet(nn.Module):
                         result_scatter.append([])
                     
                     for m in range(j+1,4):
-                        # print('output shape {}',output.shape)
                         sccater_input.append(torch.zeros_like(output))
                         result_scatter.append([])
                     sccater_input.append(tmp_res)
                     ##scatter
                     result_scatter[0],result_scatter[1],result_scatter[2],result_scatter[3], routed_res = self.scatters[i](sccater_input, tmp_res)
                     result=[]
-                    # for j, output in enumerate(x):
-                    #     sccater_input.append(output)
                     # differ the path by 0 and 1
                     for j, output in enumerate(x):
                         result.append(result_scatter[j][1])

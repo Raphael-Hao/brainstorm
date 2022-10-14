@@ -45,13 +45,6 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
             torch.load(os.path.join(args.save, 'logits_single.pth'))
     else:
         target_predict, val_target = tester.calc(val_loader)
-        
-        # return 
-        
-        
-        
-    
-            
         torch.cuda.empty_cache()
 
         benchmarker = Benchmarker()
