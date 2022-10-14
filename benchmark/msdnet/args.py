@@ -41,6 +41,16 @@ exp_group.add_argument(
 
 exp_group.add_argument(
     "--thresholds", default=
+    
+    
+    ##  shallow network to test for transform pass
+    # [-1,-1,-1,-1]
+    
+    ## deeper network to test for transform pass
+    [0.5,-1,-1,-1]
+    
+    
+    
     ## block 3 gather path
     # [100000000.00000000,
     #  1000000.0000,
@@ -67,7 +77,9 @@ exp_group.add_argument(
     
     # threshold that cater to the probability of the p=torch.tensor([0.1,0.2,0.2,0.2,0.3])
     # [ 9.6454e-01,  8.6269e-01,  6.9252e-01,  4.7205e-01]
-    [0.96454340,0.86269057, 0.69251990, 0.47205138]
+    
+    ## this is correctedly tested under the transform pass
+    # [0.96454340,0.86269057, 0.69251990, 0.47205138]
     
     #non parallel allign(maybe oen error due to the precision but it is acceptable, we just need to elevate the precision)
     # [ 8.4275e-02,  3.8183e-02,  1.6313e-02,  1.1815e-02]
