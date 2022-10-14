@@ -96,10 +96,6 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                     print('min of speed_up_of_permaentpathfoldpass',min(speed_up_of_permaentpathfoldpass))
                     print('avg of speed_up_of_deadpatheliminatepass',sum(speed_up_of_deadpatheliminatepass)/len(speed_up_of_deadpatheliminatepass))
                     print('avg of speed_up_of_permaentpathfoldpass',sum(speed_up_of_permaentpathfoldpass)/len(speed_up_of_permaentpathfoldpass))
-                    # graph_drawer = FxGraphDrawer(naive_backbone, "naive_backbone")
-                    # with open("old_backbone.svg", "wb") as f:
-                    #     f.write(graph_drawer.get_dot_graph().create_svg())
-                    
                     from torch.fx.passes.graph_drawer import FxGraphDrawer
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("new_backbone.svg", "wb") as f:
@@ -137,17 +133,25 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                     timer.execute(lambda: new_backbone(input_var), "dead_path_eliminated")
                     DeadPathEliminatePass_time.append(timer.avg)
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-                    with open("transform_dce_backbone.svg", "wb") as f:
-                        f.write(graph_drawer.get_dot_graph().create_svg())
                     transform_pass = TransformPass(new_backbone, runtime_load=1)
                     transform_pass.run_on_graph()
                     new_backbone=transform_pass.finalize()
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    with open("dce_trans_backbone.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
                     timer.execute(lambda: new_backbone(input_var), "transform")
+                    output_dce=new_backbone(input_var)
+                    
                     TransformPass_time.append(timer.avg)
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("transform_dce_trans_backbone.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
+                    output_trans=new_backbone(input_var)
+                    
+                    print('naive output',output_naive)
+                    print('dce output',output_dce)
+                    print('trans output',output_trans)
+                    
                     speed_up_of_deadpatheliminatepass.append(baseline_time[-1]/DeadPathEliminatePass_time[-1])
                     speed_up_of_transformpass.append(baseline_time[-1]/TransformPass_time[-1])
                 if i % 10 == 0:
