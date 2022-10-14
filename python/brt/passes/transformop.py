@@ -205,11 +205,6 @@ class TransformPass(PassBase):
 
         def reorder_topo():
             topological_seq=topological()
-            with  open('/home/yichuanjiaoda/brainstorm_project/brainstorm/python/brt/passes/seq_node.txt','a+') as f:
-                for element in topological_seq:
-                    f.write(str(element))
-                    f.write('\n')
-                f.close()
             i=0
             for front_node in self.graph_mod.graph.nodes:
 
