@@ -149,9 +149,6 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                     timer.execute(lambda: new_backbone(input_var), "transform")
                     
                     TransformPass_time.append(timer.avg)
-                    graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-                    with open("transform_dce_trans_backbone.svg", "wb") as f:
-                        f.write(graph_drawer.get_dot_graph().create_svg())
                     speed_up_of_deadpatheliminatepass.append(baseline_time[-1]/DeadPathEliminatePass_time[-1])
                     speed_up_of_transformpass.append(baseline_time[-1]/TransformPass_time[-1])
                 if i % 10 == 0:
