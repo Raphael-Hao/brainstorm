@@ -3,11 +3,11 @@
  * Licensed under the MIT license.
  */
 
-#ifndef BRT_NETLET_PTR_ARITH_CUH_
-#define BRT_NETLET_PTR_ARITH_CUH_
+#ifndef BRT_JIT_PTR_ARITH_CUH_
+#define BRT_JIT_PTR_ARITH_CUH_
 
 namespace brt {
-namespace netlet {
+namespace jit {
 
 template <typename T>
 __global__ void __launch_bounds__(32)
@@ -34,8 +34,7 @@ void DevicePtr2PtrArray(T** dst, T* src, int index[], int array_size, int granul
   ptr_to_ptr_array<T><<<grid_dim, block_dim, 0, stream>>>(dst, src, index, array_size, granularity);
 }
 
-}  // namespace netlet
+}  // namespace jit
 }  // namespace brt
-
 
 #endif  // BRT_NETLET_PTR_ARITH_CUH_

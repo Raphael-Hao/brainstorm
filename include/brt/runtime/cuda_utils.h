@@ -3,8 +3,8 @@
  * Licensed under the MIT license.
  */
 
-#ifndef BRT_RUNTIME_CUDA_UTILS_H_
-#define BRT_RUNTIME_CUDA_UTILS_H_
+#ifndef INCLUDE_BRT_RUNTIME_CUDA_UTILS_H_
+#define INCLUDE_BRT_RUNTIME_CUDA_UTILS_H_
 
 #include <string>
 
@@ -152,4 +152,4 @@ inline void __CUBLAS_CHECK(cublasStatus_t x, const char* file, int line) {
 
 }  // namespace brt
 
-#endif  // BRT_RUNTIME_CUDA_UTILS_H_
+#endif  // INCLUDE_BRT_RUNTIME_CUDA_UTILS_H_
