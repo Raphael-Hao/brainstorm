@@ -159,30 +159,6 @@ class TransformPass(PassBase):
                 node_m = self.sub_modules[node.target]
         return 
     def finalize(self):
-        def reorder_link():
-            seen=set()
-            
-            for node in self.graph_mod.graph.nodes:
-                seen.add(node)
-                if self.is_placeholder_node(node):
-                        continue
-                nodes = node.args[0]
-                if self.is_method_node(node) and not isinstance(nodes,list):
-                    nodes=[]
-                    for arg in node.args:
-                        if isinstance(arg,torch.fx.node.Node):
-                            nodes.append(arg)
-                elif self.is_function_node(node) and not isinstance(nodes,list):
-                    nodes=[]
-                    for arg in node.args:
-                        if isinstance(arg,torch.fx.node.Node):
-                            nodes.append(arg)
-                elif not isinstance(nodes,list):
-                    nodes=[nodes]    
-                for arg_node in nodes:
-                    if arg_node not in seen:
-                        node.prepend(arg_node)
-                        seen.add(arg_node)
         def topological():
             in_degrees = dict((u,0) for u in self.graph_mod.graph.nodes)   
             num = len(in_degrees)     
