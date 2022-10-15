@@ -141,9 +141,9 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                         f.write(graph_drawer.get_dot_graph().create_svg())
                     output_trans=new_backbone(input_var)
                     
-                    print('naive output',output_naive)
-                    print('dce output',output_dce)
-                    print('trans output',output_trans)
+                    # print('naive output',output_naive)
+                    # print('dce output',output_dce)
+                    # print('trans output',output_trans)
                     
                     speed_up_of_deadpatheliminatepass.append(baseline_time[-1]/DeadPathEliminatePass_time[-1])
                     speed_up_of_transformpass.append(baseline_time[-1]/TransformPass_time[-1])
