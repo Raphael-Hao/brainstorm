@@ -3,8 +3,8 @@
  * Licensed under the MIT license.
  */
 
-#ifndef BRT_ROUTER_ROUTE_H_
-#define BRT_ROUTER_ROUTE_H_
+#ifndef INCLUDE_BRT_ROUTER_ROUTE_H_
+#define INCLUDE_BRT_ROUTER_ROUTE_H_
 
 #include <brt/runtime/cuda_utils.h>
 
@@ -33,4 +33,4 @@ void CombineWithSrcIndices(float* src_data /*[?load*dst_num x sample_size]*/,
 }  // namespace router
 }  // namespace brt
 
-#endif  // BRT_ROUTER_ROUTE_H_
+#endif  // INCLUDE_BRT_ROUTER_ROUTE_H_

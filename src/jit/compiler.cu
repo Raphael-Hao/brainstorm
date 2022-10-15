@@ -6,8 +6,7 @@
 #include <brt/jit/compiler.h>
 #include <dmlc/common.h>
 
-#include <brt/netlet/ptr_arith.cuh>
-
+#include "./ptr_arith.cuh"
 #include "./utils.h"
 
 namespace brt {
@@ -196,9 +195,9 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
 
   for (auto arg_idx = 0; arg_idx < kernel.arg_num; arg_idx++) {
     if (arg_idx < kernel.shared_arg_num) {
-      netlet::DevicePtr2PtrArray((char**)kernel.arg_dptr_array[arg_idx],
-                                 (char*)shared_inputs_ptr[arg_idx], kernel.shared_arg_offset,
-                                 kernel.branch_num, kernel.shared_arg_grans[arg_idx], stream);
+      DevicePtr2PtrArray((char**)kernel.arg_dptr_array[arg_idx], (char*)shared_inputs_ptr[arg_idx],
+                         kernel.shared_arg_offset, kernel.branch_num,
+                         kernel.shared_arg_grans[arg_idx], stream);
       // CUDA_CHECK(cudaStreamSynchronize(stream));
     } else {
       CUDA_CHECK(cudaMemcpyAsync(kernel.arg_dptr_array[arg_idx],
@@ -240,7 +239,6 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
 
   CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
                              0, stream, (void**)ppargs.data(), nullptr));
-  // CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 
 std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headless_code) {

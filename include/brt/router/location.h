@@ -3,8 +3,8 @@
  * Licensed under the MIT license.
  */
 
-#ifndef BRT_ROUTER_LOCATION_H_
-#define BRT_ROUTER_LOCATION_H_
+#ifndef INCLUDE_BRT_ROUTER_LOCATION_H_
+#define INCLUDE_BRT_ROUTER_LOCATION_H_
 
 #include <brt/runtime/cuda_utils.h>
 
@@ -35,4 +35,4 @@ void ConvertIndexFormat(int* origin_indices, int* new_indices, int* loads, const
 
 }  // namespace router
 }  // namespace brt
-#endif  // BRT_ROUTER_LOCATION_H_
+#endif  // INCLUDE_BRT_ROUTER_LOCATION_H_

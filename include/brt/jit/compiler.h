@@ -3,8 +3,8 @@
  * Licensed under the MIT license.
  */
 
-#ifndef BRT_JIT_COMPILER_H_
-#define BRT_JIT_COMPILER_H_
+#ifndef INCLUDE_BRT_JIT_COMPILER_H_
+#define INCLUDE_BRT_JIT_COMPILER_H_
 
 #include <brt/runtime/cuda_utils.h>
 #include <thrust/device_vector.h>
@@ -91,4 +91,4 @@ class CUDACompiler {
 
 }  // namespace jit
 }  // namespace brt
-#endif  // BRT_JIT_COMPILER_H_
+#endif  // INCLUDE_BRT_JIT_COMPILER_H_
