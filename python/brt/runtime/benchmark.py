@@ -32,6 +32,7 @@ def profile(func):
         profiler.start()
         for i in range(12):
             func()
+            torch.cuda.synchronize()
             profiler.step()
         profiler.stop()
 
