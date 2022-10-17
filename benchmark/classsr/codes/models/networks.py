@@ -64,7 +64,7 @@ def define_G(opt):
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
     elif which_model == "classSR_3class_rcan":
-        netG = classSR_rcan.classSR_3class_rcan(
+        netG = classSR_rcan.classSR_3class_rcan_net(
             in_nc=opt_net["in_nc"], out_nc=opt_net["out_nc"]
         )
     elif which_model == "classSR_3class_srresnet":

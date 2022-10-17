@@ -1,3 +1,4 @@
+import logging
 import functools
 from typing import Type, List, Union, Tuple
 import time
@@ -20,12 +21,24 @@ import models.archs.arch_util as arch_util
 from models.archs.classSR_rcan_arch import classSR_3class_rcan_net
 from models.archs.RCAN_arch import RCAN, ResidualGroup, RCAB, CALayer, Upsampler
 
+logger = logging.getLogger("ClassSR")
+logger.setLevel(logging.INFO)
+
+OBJECTIVE_FUNC = "fastest"
+
 
 class fused_classSR_3class_rcan_net(nn.Module):
     def __init__(
-        self, raw: classSR_3class_rcan_net, subnet_bs: Tuple[int] = (34, 38, 29)
+        self,
+        raw: classSR_3class_rcan_net,
+        subnet_bs: Tuple[int] = (34, 38, 29),
+        objective_func="fastest",
+        n_resgroups: int = 10,
+        n_resblocks: int = 20,
     ):
         super(fused_classSR_3class_rcan_net, self).__init__()
+        global OBJECTIVE_FUNC
+        OBJECTIVE_FUNC = objective_func
         self.upscale = 4
         self.subnet_bs = subnet_bs
         self.classifier = raw.classifier
@@ -33,7 +46,7 @@ class fused_classSR_3class_rcan_net(nn.Module):
             protocol_type="topk", protocol_kwargs={"top_k": 1}
         )
         subnets = [raw.net1, raw.net2, raw.net3]
-        self.fused_rcan = FusedRCAN(subnets, subnet_bs)
+        self.fused_rcan = FusedRCAN(subnets, subnet_bs, n_resgroups, n_resblocks)
         # self.fused_head = FusedLayer(
         #     [subnet.head_conv for subnet in subnets],
         #     [[bs, 3, 32, 32] for bs in subnet_bs],
@@ -45,9 +58,9 @@ class fused_classSR_3class_rcan_net(nn.Module):
         # )
         self.gather_router = GatherRouter(fabric_type="combine")
 
-    def forward(self, x, is_train=False):
+    def forward(self, x: torch.Tensor, is_train: bool = False):
 
-        weights = self.classifier(x)
+        weights = self.classifier(x.div(255.0))
         sr_xs = self.scatter_router(x, weights)
         real_bs = [srx.shape[0] for srx in sr_xs]
         proto_info = [collect_proto_attr_stack(srx) for srx in sr_xs]
@@ -81,7 +94,7 @@ class Classifier(nn.Module):
         self.avgPool2d = nn.AvgPool2d(8)
         arch_util.initialize_weights([self.CondNet], 0.1)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         # assert x.shape[1:] == torch.Size([3, 32, 32]), x.shape
         out = self.CondNet(x)  # [bs, 32, 8, 8]
         out = self.avgPool2d(out)  # [bs, 32, 1, 1]
@@ -116,7 +129,7 @@ class FusedLayer(nn.Module):
                 self.register_buffer(name.replace(".", "_"), tensor)
         sample_inputs = [torch.randn(shp).cuda() for shp in input_shapes]
         self.fused_kernel = make_jit_kernel(
-            models, sample_inputs, opt_level="horiz_fuse"
+            models, sample_inputs, opt_level="horiz_fuse", objective_func=OBJECTIVE_FUNC
         )
 
         if isinstance(models[0], nn.Conv2d) and models[0].bias is not None:
@@ -179,7 +192,7 @@ class FusedLayer(nn.Module):
             raise NotImplementedError(f"{self.module_name}")
         self.forward(sample_inputs)
 
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: List[torch.Tensor]) -> List[torch.Tensor]:
         for i in range(self.num_submodels):
             self.inputs_templete["forward"][self.input_indices[i]] = inputs[i]
             self.inputs_templete["forward"][self.output_indices[i]] = torch.empty(
@@ -226,7 +239,7 @@ class FusedCALayer(nn.Module):
             ),
         )
 
-    def foward(self, x: List[torch.Tensor]):
+    def forward(self, x: List[torch.Tensor]):
         y = [subpool(xx) for subpool, xx in zip(self.avg_pool, x)]
         y = self.conv_du(y)
         return [xx * yy for xx, yy in zip(x, y)]
@@ -274,46 +287,49 @@ class FusedResidualGroup(nn.Module):
                 output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
             ),
         )
+        logger.info("FusedResidualGroup builded")
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: List[torch.Tensor]):
         res = self.body(x)
         return [rr + xx for rr, xx in zip(res, x)]
 
 
-class FusedUpsampler(nn.Sequential):
+class FusedUpsampler(nn.Module):
     def __init__(
         self,
         models: List[Upsampler],
         bs: List[int],
     ) -> None:
         # assert scale == 4
-        super().__init__(
-            FusedLayer(
-                [m[0] for m in models],
-                input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
-                output_shapes=[[n, m.n_feat * 4, 32, 32] for n, m in zip(bs, models)],
-            ),
-            FusedLayer(
-                [m[1] for m in models],
-                input_shapes=[[n, m.n_feat * 4, 32, 32] for n, m in zip(bs, models)],
-                output_shapes=[[n, m.n_feat, 64, 64] for n, m in zip(bs, models)],
-            ),
-            FusedLayer(
-                [m[2] for m in models],
-                input_shapes=[[n, m.n_feat, 64, 64] for n, m in zip(bs, models)],
-                output_shapes=[[n, m.n_feat * 4, 64, 64] for n, m in zip(bs, models)],
-            ),
-            FusedLayer(
-                [m[3] for m in models],
-                input_shapes=[[n, m.n_feat * 4, 32, 32] for n, m in zip(bs, models)],
-                output_shapes=[[n, m.n_feat, 128, 128] for n, m in zip(bs, models)],
-            ),
+        super().__init__()
+        self.conv2d_0 = FusedLayer(
+            [m[0] for m in models],
+            input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
+            output_shapes=[[n, m.n_feat * 4, 32, 32] for n, m in zip(bs, models)],
         )
+        self.pixel_shuffle_0 = [m[1] for m in models]
+        self.conv2d_1 = FusedLayer(
+            [m[2] for m in models],
+            input_shapes=[[n, m.n_feat, 64, 64] for n, m in zip(bs, models)],
+            output_shapes=[[n, m.n_feat * 4, 64, 64] for n, m in zip(bs, models)],
+        )
+        self.pixel_shuffle_1 = [m[3] for m in models]
+
+    def forward(self, x: List[torch.Tensor]):
+        y = self.conv2d_0(x)
+        y = [psnet(yy) for psnet, yy in zip(self.pixel_shuffle_0, y)]
+        y = self.conv2d_1(y)
+        y = [psnet(yy) for psnet, yy in zip(self.pixel_shuffle_1, y)]
+        return y
 
 
 class FusedRCAN(nn.Module):
     def __init__(
-        self, models: List[RCAN], bs: List[int], n_resgroups: int = 10
+        self,
+        models: List[RCAN],
+        bs: List[int],
+        n_resgroups: int = 10,
+        n_resblocks: int = 20,
     ) -> None:
         super().__init__()
         self.sub_mean = FusedLayer(
@@ -321,37 +337,44 @@ class FusedRCAN(nn.Module):
             input_shapes=[[n, 3, 32, 32] for n in bs],
             output_shapes=[[n, 3, 32, 32] for n in bs],
         )
+        logger.info("FusedRCAN.sub_mean builded")
         self.head = FusedLayer(
             [m.head for m in models],
             input_shapes=[[n, 3, 32, 32] for n in bs],
             output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
         )
+        logger.info("FusedRCAN.head builded")
         self.body = nn.Sequential(
             *[
-                FusedResidualGroup([m.body[i] for m in models], bs)
+                FusedResidualGroup([m.body[i] for m in models], bs, n_resblocks)
+                # for i in range(1)
                 for i in range(n_resgroups)
             ],
             FusedLayer(
-                [m.body[10] for m in models],
+                [m.body[n_resgroups] for m in models],
                 input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
                 output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
             ),
         )
+        logger.info("FusedRCAN.body builded")
         self.tail = nn.Sequential(
             FusedUpsampler([m.tail[0] for m in models], bs),
             FusedLayer(
-                [m.body[10] for m in models],
+                [m.tail[1] for m in models],
                 input_shapes=[[n, m.n_feat, 128, 128] for n, m in zip(bs, models)],
-                output_shapes=[[n, 3, 128, 128] for n, m in zip(bs, models)],
+                output_shapes=[[n, 3, 128, 128] for n in bs],
             ),
         )
+        logger.info("FusedRCAN.tail builded")
         self.add_mean = FusedLayer(
             [m.add_mean for m in models],
-            input_shapes=[[n, 3, 32, 32] for n in bs],
-            output_shapes=[[n, 3, 32, 32] for n in bs],
+            input_shapes=[[n, 3, 128, 128] for n in bs],
+            output_shapes=[[n, 3, 128, 128] for n in bs],
         )
+        logger.info("FusedRCAN.add_mean builded")
 
     def forward(self, x: List[torch.Tensor]):
+
         x = self.sub_mean(x)
         x = self.head(x)
 

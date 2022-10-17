@@ -45,7 +45,9 @@ class FusedClassSR(BaseModel):
         # else:
         #     self.netG = DataParallel(self.netG)
         self.load()
+        logger.info("Building fused model...")
         self.netG = networks.fuse_G(opt, self.netG).to(self.device)
+        logger.info("Fused model builded...")
         # print network
         self.print_network()
 
@@ -122,16 +124,20 @@ class FusedClassSR(BaseModel):
                 .permute((0, 3, 1, 2))
                 .contiguous()
             )
-        if self.which_model != "classSR_3class_rcan":
+        if "rcan" not in self.which_model:
+            assert self.which_model not in [
+                "classSR_3class_rcan",
+                "classSR_3class_fused_rcan_net",
+                "fused_classSR_3class_rcan_net",
+            ]
             brt_lr = brt_lr.divide(255.0)
         assert brt_lr.shape[1:] == (3, 32, 32)
 
         with torch.no_grad():
             brt_srt, brt_type = self.netG(brt_lr, False)
 
-        sr_list = []
         for srt in brt_srt:
-            if self.which_model == "classSR_3class_rcan":
+            if "rcan" in self.which_model:
                 sr_img = util.tensor2img(
                     srt.detach().float().cpu(), out_type=np.uint8, min_max=(0, 255)
                 )
@@ -203,6 +209,7 @@ class FusedClassSR(BaseModel):
         if load_path_G is not None:
             logger.info("Loading model for G [{:s}] ...".format(load_path_G))
             self.load_network(load_path_G, self.netG, self.opt["path"]["strict_load"])
+            logger.info("Model loaded.")
         if load_path_classifier is not None:
             logger.info(
                 "Loading model for classfier [{:s}] ...".format(load_path_classifier)
