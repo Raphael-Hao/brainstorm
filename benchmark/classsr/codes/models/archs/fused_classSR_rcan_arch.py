@@ -15,16 +15,14 @@ from brt.runtime.proto_tensor import (
     collect_proto_attr_stack,
     init_proto_tensor,
 )
-from brt.jit import make_jit_kernel
 
 import models.archs.arch_util as arch_util
 from models.archs.classSR_rcan_arch import classSR_3class_rcan_net
 from models.archs.RCAN_arch import RCAN, ResidualGroup, RCAB, CALayer, Upsampler
+from models.archs.fuse import FusedKernel, FusedLayer, set_objective_func
 
 logger = logging.getLogger("ClassSR")
 logger.setLevel(logging.INFO)
-
-OBJECTIVE_FUNC = "fastest"
 
 
 class fused_classSR_3class_rcan_net(nn.Module):
@@ -37,26 +35,16 @@ class fused_classSR_3class_rcan_net(nn.Module):
         n_resblocks: int = 20,
     ):
         super(fused_classSR_3class_rcan_net, self).__init__()
-        global OBJECTIVE_FUNC
-        OBJECTIVE_FUNC = objective_func
-        self.upscale = 4
-        self.subnet_bs = subnet_bs
-        self.classifier = raw.classifier
-        self.scatter_router = ScatterRouter(
-            protocol_type="topk", protocol_kwargs={"top_k": 1}
-        )
-        subnets = [raw.net1, raw.net2, raw.net3]
-        self.fused_rcan = FusedRCAN(subnets, subnet_bs, n_resgroups, n_resblocks)
-        # self.fused_head = FusedLayer(
-        #     [subnet.head_conv for subnet in subnets],
-        #     [[bs, 3, 32, 32] for bs in subnet_bs],
-        #     [
-        #         [subnet_bs[0], 16, 32, 32],
-        #         [subnet_bs[1], 36, 32, 32],
-        #         [subnet_bs[2], 56, 32, 32],
-        #     ],
-        # )
-        self.gather_router = GatherRouter(fabric_type="combine")
+        with set_objective_func(objective_func):
+            self.upscale = 4
+            self.subnet_bs = subnet_bs
+            self.classifier = raw.classifier
+            self.scatter_router = ScatterRouter(
+                protocol_type="topk", protocol_kwargs={"top_k": 1}
+            )
+            subnets = [raw.net1, raw.net2, raw.net3]
+            self.fused_rcan = FusedRCAN(subnets, subnet_bs, n_resgroups, n_resblocks)
+            self.gather_router = GatherRouter(fabric_type="combine")
 
     def forward(self, x: torch.Tensor, is_train: bool = False):
 
@@ -101,114 +89,6 @@ class Classifier(nn.Module):
         out = out.view(-1, 32)  # [bs, 32]
         out = self.lastOut(out)  # [bs, 3]
         return out
-
-
-class FusedLayer(nn.Module):
-    # Support Conv2dBias, Conv2dBiasReLU, Conv2dBiasSigmoid and AdaptiveAvgPool2d
-    def __init__(
-        self,
-        models: Union[List[nn.Module], List[nn.Sequential]],
-        input_shapes: List[torch.Size],
-        output_shapes: List[torch.Size],
-    ):
-        super().__init__()
-        if not isinstance(models, nn.ModuleList):
-            models = nn.ModuleList(models)
-        if isinstance(models[0], nn.Sequential) and len(models[0]) == 1:
-            models = [m[0] for m in models]
-        self.input_shapes = input_shapes
-        self.output_shapes = output_shapes
-        self.num_submodels = len(models)
-        assert len(input_shapes) == self.num_submodels
-        assert len(output_shapes) == self.num_submodels
-
-        for i, model in enumerate(models):
-            for name, tensor in model.named_parameters(f"m{i}"):
-                self.register_parameter(name.replace(".", "_"), tensor)
-            for name, tensor in model.named_buffers(f"m{i}"):
-                self.register_buffer(name.replace(".", "_"), tensor)
-        sample_inputs = [torch.randn(shp).cuda() for shp in input_shapes]
-        self.fused_kernel = make_jit_kernel(
-            models, sample_inputs, opt_level="horiz_fuse", objective_func=OBJECTIVE_FUNC
-        )
-
-        if isinstance(models[0], nn.Conv2d) and models[0].bias is not None:
-            self.module_name = "Conv2dBias"
-        elif isinstance(models[0], nn.Sequential):
-            if isinstance(models[0][0], nn.Conv2d) and models[0][0].bias is not None:
-                if len(models[0]) == 1:
-                    self.module_name = "Conv2dBias"
-                elif isinstance(models[0][1], nn.ReLU):
-                    self.module_name = "Conv2dBiasReLU"
-                elif isinstance(models[0][1], nn.Sigmoid):
-                    self.module_name = "Conv2dBiasSigmoid"
-                else:
-                    raise NotImplementedError(f"{models}")
-            else:
-                raise NotImplementedError(f"{models}")
-        elif isinstance(models[0], nn.AdaptiveAvgPool2d):
-            self.module_name = "AdaptiveAvgPool2d"
-        else:
-            self.module_name = "ERROR"
-            raise NotImplementedError(f"{models}")
-
-        self.inputs_templete = {}
-        self.inputs_templete["forward"] = []
-        if self.module_name == "Conv2dBias":
-            for i in range(self.num_submodels):
-                self.inputs_templete["forward"].extend(
-                    [
-                        None,
-                        self.get_parameter(f"m{i}_weight"),
-                        None,
-                        self.get_parameter(f"m{i}_bias"),
-                    ]
-                )
-            self.input_indices = [i * 4 for i in range(self.num_submodels)]
-            self.output_indices = [i * 4 + 2 for i in range(self.num_submodels)]
-        elif self.module_name in ["Conv2dBiasReLU", "Conv2dBiasSigmoid"]:
-            for i in range(self.num_submodels):
-                self.inputs_templete["forward"].extend(
-                    [
-                        None,
-                        self.get_parameter(f"m{i}_0_weight"),
-                        None,
-                        self.get_parameter(f"m{i}_0_bias"),
-                    ]
-                )
-            self.input_indices = [i * 4 for i in range(self.num_submodels)]
-            self.output_indices = [i * 4 + 2 for i in range(self.num_submodels)]
-        elif self.module_name == "AdaptiveAvgPool2d":
-            for i in range(self.num_submodels):
-                self.inputs_templete["forward"].extend(
-                    [
-                        None,
-                        None,
-                    ]
-                )
-            self.input_indices = [i * 2 for i in range(self.num_submodels)]
-            self.output_indices = [i * 2 + 1 for i in range(self.num_submodels)]
-        else:
-            raise NotImplementedError(f"{self.module_name}")
-        self.forward(sample_inputs)
-
-    def forward(self, inputs: List[torch.Tensor]) -> List[torch.Tensor]:
-        for i in range(self.num_submodels):
-            self.inputs_templete["forward"][self.input_indices[i]] = inputs[i]
-            self.inputs_templete["forward"][self.output_indices[i]] = torch.empty(
-                self.output_shapes[i], device="cuda"
-            )
-        self.fused_kernel(*self.inputs_templete["forward"])
-        outputs = [
-            self.inputs_templete["forward"][index] for index in self.output_indices
-        ]
-        for i in range(self.num_submodels):
-            self.inputs_templete["forward"][self.input_indices[i]] = None
-            self.inputs_templete["forward"][self.output_indices[i]] = None
-        return outputs
-
-    def extra_repr(self):
-        return self.module_name
 
 
 class FusedCALayer(nn.Module):
@@ -294,33 +174,27 @@ class FusedResidualGroup(nn.Module):
         return [rr + xx for rr, xx in zip(res, x)]
 
 
-class FusedUpsampler(nn.Module):
+class FusedUpsampler(nn.Sequential):
     def __init__(
         self,
-        models: List[Upsampler],
-        bs: List[int],
+        model: Upsampler,
+        bs: int,
     ) -> None:
         # assert scale == 4
-        super().__init__()
-        self.conv2d_0 = FusedLayer(
-            [m[0] for m in models],
-            input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
-            output_shapes=[[n, m.n_feat * 4, 32, 32] for n, m in zip(bs, models)],
+        super().__init__(
+            FusedKernel(
+                model[0],
+                input_shape=[bs, model.n_feat, 32, 32],
+                output_shape=[bs, model.n_feat * 4, 32, 32],
+            ),
+            model[1],
+            FusedKernel(
+                model[2],
+                input_shape=[bs, model.n_feat, 64, 64],
+                output_shape=[bs, model.n_feat * 4, 64, 64],
+            ),
+            model[3],
         )
-        self.pixel_shuffle_0 = [m[1] for m in models]
-        self.conv2d_1 = FusedLayer(
-            [m[2] for m in models],
-            input_shapes=[[n, m.n_feat, 64, 64] for n, m in zip(bs, models)],
-            output_shapes=[[n, m.n_feat * 4, 64, 64] for n, m in zip(bs, models)],
-        )
-        self.pixel_shuffle_1 = [m[3] for m in models]
-
-    def forward(self, x: List[torch.Tensor]):
-        y = self.conv2d_0(x)
-        y = [psnet(yy) for psnet, yy in zip(self.pixel_shuffle_0, y)]
-        y = self.conv2d_1(y)
-        y = [psnet(yy) for psnet, yy in zip(self.pixel_shuffle_1, y)]
-        return y
 
 
 class FusedRCAN(nn.Module):
