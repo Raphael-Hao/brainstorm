@@ -1,8 +1,11 @@
+import timeit
+import logging
+import sys
+from pathlib import Path
+
 import torch
 import cv2
 import numpy as np
-import timeit
-from pathlib import Path
 
 from models.archs.classSR_fsrcnn_arch import classSR_3class_fsrcnn_net as ClassSR_FSRCNN
 from models.archs.classSR_carn_arch import ClassSR as ClassSR_CARN
@@ -15,15 +18,29 @@ from models.archs.fused_classSR_fsrcnn_arch import (
 from models.archs.classSR_fused_fsrcnn_arch import (
     classSR_3class_fused_fsrcnn_net as ClassSR_Fused_FSRCNN,
 )
+from models.archs.fused_classSR_rcan_arch import (
+    fused_classSR_3class_rcan_net as Fused_ClassSR_RCAN,
+)
+from models.archs.classSR_fused_rcan_arch import (
+    classSR_3class_fused_rcan_net as ClassSR_Fused_RCAN,
+)
 
 from brt.runtime.benchmark import profile
 
-BRT_PROJECT_PATH = Path("/home/ouyang/project/brainstorm/")
+BRT_PROJECT_PATH = Path("/home/v-louyang/brainstorm_project/brainstorm/")
 # BRT_PROJECT_PATH = Path("/home/v-louyang/brainstorm_project/brainstorm/")
 IMAGE_PATH = (
     BRT_PROJECT_PATH
     / "benchmark/classsr/datasets_2/AIC21_Track1_Vehicle_Counting/Dataset_A_Images/cam1/LQ/0001.png"
 )
+
+logger = logging.getLogger("benchmark")
+logger.setLevel(logging.DEBUG)
+logger_handler = logging.StreamHandler(stream=sys.stdout)
+logger_handler.setFormatter(
+    logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+)
+logger.addHandler(logger_handler)
 
 
 def crop_cpu(img, crop_sz, step):
@@ -55,9 +72,109 @@ def crop_cpu(img, crop_sz, step):
     return lr_list, num_h, num_w, h, w
 
 
+n_resgroups = 1
+n_resblocks = 2
+
+
+class ModuleFactory:
+    module_dict = {}
+
+    def __class_getitem__(cls, module_type: str):
+        module = cls.module_dict.get(module_type, None)
+        if module is None:
+            module = cls._build(module_type)
+            cls.module_dict[module_type] = module
+        return module
+
+    @classmethod
+    def _build(cls, module_type: str):
+        if module_type == "Raw FSRCNN Model":
+            model = ClassSR_FSRCNN().cuda().eval()
+            full_state_dict = torch.load(
+                BRT_PROJECT_PATH
+                / "benchmark/classsr/experiments/pre_trained_models/ClassSR_FSRCNN.pth"
+            )
+            model.load_state_dict(full_state_dict)
+        elif module_type == "Raw CARN Model":
+            model = ClassSR_CARN().cuda().eval()
+            full_state_dict = torch.load(
+                BRT_PROJECT_PATH
+                / "benchmark/classsr/experiments/pre_trained_models/ClassSR_CARN.pth"
+            )
+            model.load_state_dict(full_state_dict)
+        elif module_type == "Raw SRResNet Model":
+            model = ClassSR_SRResNet().cuda().eval()
+            full_state_dict = torch.load(
+                BRT_PROJECT_PATH
+                / "benchmark/classsr/experiments/pre_trained_models/ClassSR_SRResNet.pth"
+            )
+            model.load_state_dict(full_state_dict)
+        elif module_type == "Raw RCAN Model":
+            model = (
+                ClassSR_RCAN(n_resgroups=n_resgroups, n_resblocks=n_resblocks)
+                .cuda()
+                .eval()
+            )
+            full_state_dict = torch.load(
+                BRT_PROJECT_PATH
+                / "benchmark/classsr/experiments/pre_trained_models/ClassSR_RCAN.pth"
+            )
+            model.load_state_dict(full_state_dict, strict=False)
+        elif module_type == "Horizontal Fused FSRCNN Model":
+            model = (
+                Fused_ClassSR_FSRCNN(cls["Raw FSRCNN Model"], (34, 38, 29))
+                .cuda()
+                .eval()
+            )
+        elif module_type == "Vertical Fused FSRCNN Model":
+            model = (
+                ClassSR_Fused_FSRCNN(cls["Raw FSRCNN Model"], (34, 38, 29))
+                .cuda()
+                .eval()
+            )
+        elif module_type == "Horizontal Fused RCAN Model":
+            model = (
+                Fused_ClassSR_RCAN(
+                    cls["Raw RCAN Model"],
+                    (27, 50, 28),
+                    objective_func="most_efficient",
+                    n_resgroups=n_resgroups,
+                    n_resblocks=n_resblocks,
+                )
+                .cuda()
+                .eval()
+            )
+        elif module_type == "Horizontal Fused RCAN Model (fastest)":
+            model = (
+                Fused_ClassSR_RCAN(
+                    cls["Raw RCAN Model"],
+                    (27, 50, 28),
+                    n_resgroups=n_resgroups,
+                    n_resblocks=n_resblocks,
+                )
+                .cuda()
+                .eval()
+            )
+        elif module_type == "Vertical Fused RCAN Model":
+            model = (
+                ClassSR_Fused_RCAN(
+                    cls["Raw RCAN Model"],
+                    (27, 50, 28),
+                    n_resgroups=n_resgroups,
+                    n_resblocks=n_resblocks,
+                )
+                .cuda()
+                .eval()
+            )
+        else:
+            raise ValueError(f"Unsupported module type `{module_type}`")
+
+        logger.info(f"{module_type} builded")
+        return model
+
+
 image = cv2.imread(str(IMAGE_PATH), cv2.IMREAD_UNCHANGED)
 lr_list, num_h, num_w, h, w = crop_cpu(image, 32, 28)
-
 input_tensor = (
     torch.Tensor(np.array(lr_list))
     .cuda()
@@ -67,72 +184,53 @@ input_tensor = (
     )
     .permute((0, 3, 1, 2))
     .contiguous()
-    .divide(255.0)
 )
+input_tensor_div = input_tensor.div(255.0)
 
-raw_fsrcnn = {}
-raw_fsrcnn["name"] = "Raw FSRCNN Model"
-raw_fsrcnn["model"] = ClassSR_FSRCNN().cuda().eval()
-full_state_dict = torch.load(
-    BRT_PROJECT_PATH
-    / "benchmark/classsr/experiments/pre_trained_models/ClassSR_FSRCNN.pth"
-)
-raw_fsrcnn["model"].load_state_dict(full_state_dict)
-
-raw_carn = {}
-raw_carn["name"] = "Raw CARN Model"
-raw_carn["model"] = ClassSR_CARN().cuda().eval()
-full_state_dict = torch.load(
-    BRT_PROJECT_PATH
-    / "benchmark/classsr/experiments/pre_trained_models/ClassSR_CARN.pth"
-)
-raw_carn["model"].load_state_dict(full_state_dict)
-
-raw_srresnet = {}
-raw_srresnet["name"] = "Raw SRResNet Model"
-raw_srresnet["model"] = ClassSR_SRResNet().cuda().eval()
-full_state_dict = torch.load(
-    BRT_PROJECT_PATH
-    / "benchmark/classsr/experiments/pre_trained_models/ClassSR_SRResNet.pth"
-)
-raw_srresnet["model"].load_state_dict(full_state_dict)
-
-raw_rcan = {}
-raw_rcan["name"] = "Raw RCAN Model"
-raw_rcan["model"] = ClassSR_RCAN().cuda().eval()
-full_state_dict = torch.load(
-    BRT_PROJECT_PATH
-    / "benchmark/classsr/experiments/pre_trained_models/ClassSR_RCAN.pth"
-)
-raw_rcan["model"].load_state_dict(full_state_dict)
-
-# horiz_fused_fsrcnn = {}
-# horiz_fused_fsrcnn["name"] = "Horizontal Fused FSRCNN Model"
-# horiz_fused_fsrcnn["model"] = Fused_ClassSR_FSRCNN(raw_fsrcnn["model"], (34, 38, 29)).cuda().eval()
-
-# verti_fused_fsrcnn = {}
-# verti_fused_fsrcnn["name"] = "Vertical Fused FSRCNN Model"
-# verti_fused_fsrcnn["model"] = ClassSR_Fused_FSRCNN(raw_fsrcnn["model"], (34, 38, 29)).cuda().eval()
-
-model_list = [
-    raw_fsrcnn,
-    raw_carn,
-    raw_srresnet,
-    raw_rcan,
-    # horiz_fused_fsrcnn,
-    # verti_fused_fsrcnn,
+logger.info(f"Start building module")
+module_type_list = [
+    # "Raw FSRCNN Model",
+    # "Raw CARN Model",
+    # "Raw SRResNet Model",
+    # "Raw RCAN Model",
+    # "Horizontal Fused FSRCNN Model",
+    # "Vertical Fused FSRCNN Model",
+    # "Horizontal Fused RCAN Model",
+    # "Horizontal Fused RCAN Model (fastest)",
+    "Vertical Fused RCAN Model",
 ]
+for module_type in module_type_list:
+    _ = ModuleFactory[module_type]
 
-# for model_info in model_list:
-#     profile(lambda :model_info["model"](input_tensor))
 
-for n in [1, 100]:
-    print(f"* Start timeit: Run {n} times")
-    for model_info in model_list:
-        model = model_info["model"]
-        time = timeit.timeit(
-            f"model(input_tensor)",
-            setup="from __main__ import model, input_tensor; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
-            number=n,
-        )
-        print(f"{model_info['name']}:\t\t {time}s in {n} runs ({time/n}s/run)")
+# for module_type in module_type_list:
+#     logger.info(f"Profiling {module_type}")
+#     if "RCAN" not in module_type:
+#         x = input_tensor_div
+#     else:
+#         x = input_tensor
+#     ModuleFactory[module_type](x)
+
+# for module_type in module_type_list:
+#     logger.info(f"Profiling {module_type}")
+#     model = ModuleFactory[module_type]
+#     if "RCAN" not in module_type:
+#         x = input_tensor_div
+#     else:
+#         x = input_tensor
+#     profile(lambda: model(x))
+
+# for n in [1, 100]:
+#     print(f"* Start timeit: Run {n} times")
+#     for module_type in module_type_list:
+#         model = ModuleFactory[module_type]
+#         if "RCAN" not in module_type:
+#             x = input_tensor_div
+#         else:
+#             x = input_tensor
+#         time = timeit.timeit(
+#             f"model(x); torch.cuda.synchronize()",
+#             setup="from __main__ import model, x; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
+#             number=n,
+#         )
+#         print(f"{module_type}:\t\t {time}s in {n} runs ({time/n}s/run)")
