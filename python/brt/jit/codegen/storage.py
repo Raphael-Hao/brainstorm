@@ -19,19 +19,21 @@ INSERT INTO KernelCache
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
     DEL_KERNEL_CMD = r"""
 DELETE FROM KernelCache
-WHERE (Key = ?);"""
+WHERE (Identifier = ?) AND (ObjectiveFunc = ?) AND (Rank = ?);"""
     INIT_DB_CMD = r"""
 CREATE TABLE IF NOT EXISTS KernelCache(
-   Key        TEXT NOT NULL,
-   Identifier TEXT NOT NULL,
-   OpType     TEXT NOT NULL,
-   Attributes TEXT DEFAULT "",
-   Source     TEXT DEFAULT "External",
-   DeviceType TEXT NOT NULL,
-   Function   TEXT NOT NULL,
-   Tags       TEXT DEFAULT "",
-   Miscs      TEXT DEFAULT "",
-   PRIMARY KEY(Key)
+   Key           TEXT NOT NULL,
+   Identifier    TEXT NOT NULL,
+   OpType        TEXT NOT NULL,
+   Attributes    TEXT DEFAULT "",
+   Source        TEXT DEFAULT "External",
+   DeviceType    TEXT NOT NULL,
+   Function      TEXT NOT NULL,
+   Tags          TEXT DEFAULT "",
+   Miscs         TEXT DEFAULT "",
+   ObjectiveFunc TEXT DEFAULT "fastest",
+   Rank          INT  DEFAULT 1,
+   PRIMARY KEY(Identifier, ObjectiveFunc, Rank)
    );
 """
 
@@ -61,7 +63,14 @@ CREATE TABLE IF NOT EXISTS KernelCache(
         overwrite=False,
     ):
         if overwrite:
-            self.cursor.execute(self.DEL_KERNEL_CMD, (kernel_dict["Key"],))
+            self.cursor.execute(
+                self.DEL_KERNEL_CMD,
+                (
+                    kernel_dict["Identifier"],
+                    kernel_dict["ObjectiveFunc"],
+                    kernel_dict["Rank"],
+                ),
+            )
 
         self.cursor.execute(
             self.ADD_KERNEL_CMD,
