@@ -28,15 +28,12 @@ def install(use_cuda=False):
             },
         )
         ext_libs += ["dl", "cuda", "nvrtc"]
-        ext_args["cxx"] += ["-DUSE_CUDA"]
-        ext_args["nvcc"] += ["-DUSE_CUDA"]
+        ext_args["cxx"] += ["-DUSE_CUDA", "-DUSE_NCCL"]
+        ext_args["nvcc"] += ["-DUSE_CUDA", "-DUSE_NCCL"]
         torch_extensions = [
             CUDAExtension(
                 name="brt._C.jit",
-                sources=[
-                    "./src/backend/torch/jit.cc",
-                    "./src/jit/compiler.cu",
-                ],
+                sources=["./src/backend/torch/jit.cc", "./src/jit/compiler.cu",],
                 library_dirs=["/usr/local/cuda/lib64/stubs"],
                 libraries=ext_libs,
                 include_dirs=[
