@@ -3,7 +3,7 @@
  * Licensed under the MIT license.
  */
 
-#include "./manager.h"
+#include <brt/distributed/manager.h>
 
 namespace brt {
 namespace distributed {
