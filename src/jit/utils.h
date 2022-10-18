@@ -2,8 +2,8 @@
  * Copyright (c) 2022 by Microsoft Corporation.
  * Licensed under the MIT license.
  */
-#ifndef SRC_JIT_UTILS_H_
-#define SRC_JIT_UTILS_H_
+#ifndef BRT_JIT_UTILS_H_
+#define BRT_JIT_UTILS_H_
 
 #include <algorithm>
 #include <numeric>
@@ -66,4 +66,4 @@ std::vector<int> sort_indice(const std::vector<T>& V) {
 
 }  // namespace brt
 
-#endif  // SRC_JIT_UTILS_H_
+#endif  // BRT_JIT_UTILS_H_

@@ -3,8 +3,8 @@
  * Licensed under the MIT license.
  */
 
-#ifndef INCLUDE_BRT_RUNTIME_CUDA_UTILS_H_
-#define INCLUDE_BRT_RUNTIME_CUDA_UTILS_H_
+#ifndef BRT_RUNTIME_CUDA_UTILS_H_
+#define BRT_RUNTIME_CUDA_UTILS_H_
 
 #include <string>
 
@@ -193,4 +193,4 @@ inline void __NCCL_CHECK(ncclResult_t x, const char* file, int line) {
 
 }  // namespace brt
 
-#endif  // INCLUDE_BRT_RUNTIME_CUDA_UTILS_H_
+#endif  // BRT_RUNTIME_CUDA_UTILS_H_

@@ -3,8 +3,9 @@
  * Licensed under the MIT license.
  */
 
-#ifndef INCLUDE_BRT_DISTRIBUTED_MANAGER_H_
-#define INCLUDE_BRT_DISTRIBUTED_MANAGER_H_
+#ifndef BRT_DISTRIBUTED_MANAGER_H_
+#define BRT_DISTRIBUTED_MANAGER_H_
+
 #include <brt/runtime/cuda_utils.h>
 
 #include <cuda.h>
@@ -43,4 +44,4 @@ class NCCLManager {
 }  // namespace distributed
 }  // namespace brt
 
-#endif  // INCLUDE_BRT_DISTRIBUTED_MANAGER_H_
+#endif  // BRT_DISTRIBUTED_MANAGER_H_
