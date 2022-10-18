@@ -2,7 +2,6 @@
  * Copyright (c) 2022 by Microsoft Corporation.
  * Licensed under the MIT license.
  */
-
 #ifndef BRT_JIT_PTR_ARITH_CUH_
 #define BRT_JIT_PTR_ARITH_CUH_
 
@@ -38,3 +37,6 @@ void DevicePtr2PtrArray(T** dst, T* src, int index[], int array_size, int granul
 }  // namespace brt
 
 #endif  // BRT_NETLET_PTR_ARITH_CUH_
+
+
+#endif  // BRT_JIT_PTR_ARITH_CUH_

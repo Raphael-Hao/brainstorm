@@ -1,5 +1,5 @@
-#ifndef SRC_BACKEND_TORCH_TORCH_H_
-#define SRC_BACKEND_TORCH_TORCH_H_
+#ifndef BRT_BACKEND_TORCH_TORCH_H_
+#define BRT_BACKEND_TORCH_TORCH_H_
 
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/cuda/CUDAEvent.h>
@@ -18,4 +18,4 @@
 #define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
 
-#endif  // SRC_BACKEND_TORCH_TORCH_H_
+#endif  // BRT_BACKEND_TORCH_TORCH_H_

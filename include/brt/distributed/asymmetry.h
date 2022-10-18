@@ -5,8 +5,9 @@
  * Author: raphael hao
  */
 
-#ifndef INCLUDE_BRT_DISTRIBUTED_ASYMMETRY_H_
-#define INCLUDE_BRT_DISTRIBUTED_ASYMMETRY_H_
+#ifndef BRT_DISTRIBUTED_ASYMMETRY_H_
+#define BRT_DISTRIBUTED_ASYMMETRY_H_
+
 #include <vector>
 
 namespace brt {
@@ -16,4 +17,4 @@ void AsymmetryAllToAll(void* send_buffer, void* recv_buffer, const std::vector<i
                        const int& slice_size_in_byte, const int& slice_num);
 }
 }  // namespace brt
-#endif  // INCLUDE_BRT_DISTRIBUTED_ASYMMETRY_H_
+#endif  // BRT_DISTRIBUTED_ASYMMETRY_H_
