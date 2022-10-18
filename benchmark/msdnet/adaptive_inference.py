@@ -99,17 +99,13 @@ class Tester(object):
                 
         ##get the argmax_preds
         max_preds, argmax_preds = soft_max_result.max(dim=1, keepdim=False)
-        ##for debug
-        with open("/home/yichuanjiaoda/brainstorm_project/brainstorm/benchmark/msdnet/debug","w") as variable_name:
-            for i,result in enumerate(argmax_preds) :
-                variable_name.write(str(result.item())+"\n")
         
         print(argmax_preds.sum())
         ##compare to the gold_result targets
         targets = torch.cat(targets, dim=0)
         ts_targets = torch.Tensor().resize_(soft_max_result.size(0)).copy_(targets)
 
-        return argmax_preds, ts_targets
+        return argmax_preds, ts_targets,i+1
     def dynamic_eval_find_threshold(self, logits, targets, p, flops):
         """
             logits: m * n * c
