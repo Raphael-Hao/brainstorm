@@ -8,7 +8,12 @@
 namespace brt {
 namespace backend {
 namespace torch {
+
 static void init_nccl() {}
+
+
+
+
 }  // namespace torch
 
 }  // namespace backend

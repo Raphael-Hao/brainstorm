@@ -6,25 +6,32 @@
 #ifndef SRC_DISTRIBUTED_MANGER_H_
 #define SRC_DISTRIBUTED_MANGER_H_
 
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/CUDAEvent.h>
-#include <c10/cuda/CUDACachingAllocator.h>
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <nccl.h>
 #include <nvrtc.h>
-#include <torch/extension.h>
 
 namespace brt {
 namespace distributed {
 class NCCLManager {
  public:
   static NCCLManager& get_manager();
-  void init() {}
+
+  void init(ncclComm_t comm, cudaStream_t stream) {
+    set_stream(stream);
+    set_comm(comm);
+  }
+
+  void set_stream(cudaStream_t stream) { stream_ = stream; }
+  void set_comm(ncclComm_t comm) { comm_ = comm; }
+
+  ncclComm_t get_nccl_comm() { return comm_; }
+  cudaStream_t get_nccl_stream() { return stream_; }
 
  private:
   ncclComm_t comm_;
+  cudaStream_t stream_;
 };
 }  // namespace distributed
 }  // namespace brt
