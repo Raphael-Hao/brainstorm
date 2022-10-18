@@ -57,6 +57,21 @@ def install(use_cuda=False):
                 ],
                 extra_compile_args=ext_args,
             ),
+            CUDAExtension(
+                name="brt._C.distributed",
+                sources=[
+                    "./src/backend/torch/distributed.cc",
+                    "./src/distributed/manager.cc",
+                    "./src/distributed/asymmetry.cc",
+                ],
+                library_dirs=["/usr/local/cuda/lib64/stubs"],
+                libraries=ext_libs,
+                include_dirs=[
+                    root_path / "include",
+                    root_path / "3rdparty/dmlc-core/include",
+                ],
+                extra_compile_args=ext_args,
+            ),
         ]
     setup(
         name="brt",
