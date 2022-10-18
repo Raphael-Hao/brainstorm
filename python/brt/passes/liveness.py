@@ -18,10 +18,12 @@ class DeadPathEliminatePass(PassBase):
         m: Union[torch.nn.Module, GraphModule],
         dead_load=0.0,
         runtime_load: int = 0,
+        retain_model: bool = False,
     ):
         super().__init__(m)
         self.dead_load = dead_load
         self.runtime_load = runtime_load
+        self.retain_model = retain_model
 
     def run_on_graph(self):
         # eliminate dead path
@@ -44,7 +46,8 @@ class DeadPathEliminatePass(PassBase):
                     [load_histroy[path_id] for path_id in live_paths],
                     dtype=np.float64,
                 )
-                node_m.load_history = new_load_history
+                if  self.retain_model==False:
+                    node_m.load_history = new_load_history
                 node.args = new_args
 
     def finalize(self):
@@ -117,10 +120,10 @@ class PermanentPathFoldPass(PassBase):
                     permanent_paths = []
                     load_histroy = node_m.load_history
                     for path_id, path_load in enumerate(load_histroy):
-                        if path_load == self.upper_perm_load:
+                        if path_load >= self.upper_perm_load:
                             permanent_paths.append(path_id)
                     if (
-                        len(permanent_paths) >= len(load_histroy)
+                        len(permanent_paths) == len(load_histroy)
                         and len(permanent_paths) > 0
                     ):
                         node_m.fabric = make_fabric(

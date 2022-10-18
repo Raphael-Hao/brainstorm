@@ -42,11 +42,33 @@ exp_group.add_argument(
 exp_group.add_argument(
     "--thresholds", default=
     
+    ##[0 0 0 0.4 0.6]
+#     [100000000.00000000,
+# 100000000.00000000,
+# 100000000.00000000,
+# 0.83451331]
+    
+    
+    ##[0,0,0.3,0.3,0.4]
+#     [100000000.00000000,
+# 100000000.00000000,
+# 0.90728849,
+# 0.57961094]
+    
+    
+    
+    ##[0.1,0.1,0.2,0.3,0.3]
+#     [0.96616900,
+# 0.95113075,
+# 0.80969042,
+# 0.45410264]
+    
+    
     ## 0.6 0.1 0.1 0.1 0.1
-    [0.34071380,
-0.47392023,
-0.37517136,
-0.22579938,]
+#     [0.34071380,
+# 0.47392023,
+# 0.37517136,
+# 0.22579938,]
     
     ## 0.5 0.2 0.2 0.1
 #     [0.44246864,
@@ -66,7 +88,7 @@ exp_group.add_argument(
     # [0.44246858,-1,-1,-1]
     
     ##  shallow network to test for transform pass
-    # [-1,-1,-1,-1]
+    [-1,-1,-1,-1]
     
     ## deeper network to test for transform pass
     # [0.5,-1,-1,-1]
@@ -261,4 +283,5 @@ bench_arg_manager = BenchmarkArgumentManager(arg_parser)
 bench_arg_manager.add_item("liveness")
 bench_arg_manager.add_item("memory_plan")
 bench_arg_manager.add_item("transform")
+bench_arg_manager.add_item("constant_propagation")
 

@@ -176,7 +176,7 @@ class TransformPass(PassBase):
                     if in_degrees[v] == 0:        
                         Q.append(v)          
             if not len(Seq) == num: 
-                raise Exception("ailed to finish topological search")      
+                raise Exception("failed to finish topological search")      
             return Seq
 
         def reorder_topo():
