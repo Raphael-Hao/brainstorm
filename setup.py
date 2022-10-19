@@ -71,7 +71,7 @@ def install(use_cuda=False):
                 sources=[
                     "./src/backend/torch/distributed.cc",
                     "./src/backend/torch/nccl_manager.cc",
-                    "./src/distributed/asymmetry.cc",
+                    "./src/distributed/collective.cc",
                 ],
                 library_dirs=["/usr/local/cuda/lib64/stubs"],
                 libraries=dist_libs,
