@@ -3,11 +3,11 @@
  * Licensed under the MIT license.
  */
 
-#ifndef INCLUDE_BRT_JIT_COMPILER_H_
-#define INCLUDE_BRT_JIT_COMPILER_H_
+#ifndef BRT_JIT_COMPILER_H_
+#define BRT_JIT_COMPILER_H_
 
 #include <cuda.h>
-#include <thrust/device_vector.h>
+#include <cuda_runtime.h>
 #include <thrust/host_vector.h>
 
 #include <regex>
@@ -53,7 +53,7 @@ struct KernelConfig {
 
   // runtime dispatching
   int* shared_arg_offset;
-  thrust::host_vector<void**> standalone_arg_hptr_array;  // allocate 2
+  thrust::host_vector<void**> standalone_arg_hptr_array;
   thrust::host_vector<void**> arg_dptr_array;
   void InitBranchArgStore();
 };
@@ -91,4 +91,5 @@ class CUDACompiler {
 
 }  // namespace jit
 }  // namespace brt
+
 #endif  // INCLUDE_BRT_JIT_COMPILER_H_
