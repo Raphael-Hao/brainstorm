@@ -70,7 +70,7 @@ def install(use_cuda=False):
                 name="brt._C.distributed",
                 sources=[
                     "./src/backend/torch/distributed.cc",
-                    "./src/distributed/manager.cc",
+                    "./src/backend/torch/nccl_manager.cc",
                     "./src/distributed/asymmetry.cc",
                 ],
                 library_dirs=["/usr/local/cuda/lib64/stubs"],
@@ -97,7 +97,7 @@ try:
     print("Installing brt with CUDA runtime...")
     install(use_cuda=True)
 except:
-    print("CUDA not found, skipping CUDA build")
+    print("CUDA build failed, skipping CUDA build")
     try:
         install(use_cuda=False)
     except:
