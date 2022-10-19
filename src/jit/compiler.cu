@@ -4,6 +4,7 @@
  */
 
 #include <brt/jit/compiler.h>
+#include <brt/runtime/cuda_utils.h>
 #include <dmlc/common.h>
 
 #include "./ptr_arith.cuh"
