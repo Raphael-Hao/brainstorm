@@ -64,27 +64,27 @@ class CUDACompiler {
 
  public:
   CUDACompiler(/* args */);
-  static CUDACompiler& get_compiler();
+  static CUDACompiler& GetCompiler();
 
-  std::string nvrtc_compile(const char* code, const std::string& arch);
+  std::string RTCompile(const char* code, const std::string& arch);
 
-  CUfunction activate(int fd, int dev);
+  CUfunction Activate(int fd, int dev);
 
-  void execute(const std::vector<const void*>& ppargs, int fd, int dev, cudaStream_t stream = 0);
+  void Execute(const std::vector<const void*>& ppargs, int fd, int dev, cudaStream_t stream = 0);
 
-  void static_execute(const std::vector<const void*>& ppargs, int fd, int dev,
+  void StaticExecute(const std::vector<const void*>& ppargs, int fd, int dev,
                       cudaStream_t stream = 0);
 
-  void hetero_execute(const std::vector<const void*>& ppargs,
+  void HeteroExecute(const std::vector<const void*>& ppargs,
                       const std::vector<long>& active_blocks, int fd, int dev,
                       cudaStream_t stream = 0);
 
-  void homo_execute(const std::vector<const void*>& shared_inputs_ptr,
+  void HomoExecute(const std::vector<const void*>& shared_inputs_ptr,
                     const std::vector<const void*>& standalone_inputs_ptr,
                     const std::vector<long>& branch_capacities, int fd, int dev,
                     cudaStream_t stream = 0);
 
-  std::pair<std::string, int> inject_source(const std::string& headless_code);
+  std::pair<std::string, int> InjectSource(const std::string& headless_code);
 
   ~CUDACompiler();
 };

@@ -7,8 +7,8 @@
 
 namespace brt {
 namespace distributed {
-NCCLManager& NCCLManager::get_manager() {
-  static NCCLManager manager;
+NcclManager& NcclManager::GetManager() {
+  static NcclManager manager;
   return manager;
 }
 }  // namespace distributed
