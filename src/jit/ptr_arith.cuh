@@ -10,7 +10,7 @@ namespace jit {
 
 template <typename T>
 __global__ void __launch_bounds__(32)
-    ptr_to_ptr_array(T** __restrict__ dst, T* __restrict__ src, int index[], int array_size,
+    PtrToPtrArrayKernel(T** __restrict__ dst, T* __restrict__ src, int index[], int array_size,
                      int granularity) {
   // [thread_extent] blockIdx.x = length of dst and index
   // [thread_extent] blockIdx.y = 1
@@ -30,7 +30,7 @@ void DevicePtr2PtrArray(T** dst, T* src, int index[], int array_size, int granul
                         cudaStream_t stream) {
   const dim3 block_dim(32);
   const dim3 grid_dim((array_size + 31) / 32);
-  ptr_to_ptr_array<T><<<grid_dim, block_dim, 0, stream>>>(dst, src, index, array_size, granularity);
+  PtrToPtrArrayKernel<T><<<grid_dim, block_dim, 0, stream>>>(dst, src, index, array_size, granularity);
 }
 
 }  // namespace jit

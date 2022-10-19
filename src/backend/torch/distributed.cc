@@ -16,9 +16,9 @@ static void init_nccl(::torch::Tensor unique_id_tensor, const int& world_rank,
                       const int& world_size) {
   static bool initialized = false;
   if (!initialized) {
-    distributed::NCCLManager& manager = distributed::NCCLManager::get_manager();
+    distributed::NcclManager& manager = distributed::NcclManager::GetManager();
     auto nccl_stream = at::cuda::getStreamFromPool();
-    manager.init(unique_id_tensor.data_ptr(), world_rank, world_size, nccl_stream);
+    manager.Init(unique_id_tensor.data_ptr(), world_rank, world_size, nccl_stream);
     initialized = true;
   }else{
     LOG(WARNING) << "NCCL has been initialized, Reinitilizing it.";

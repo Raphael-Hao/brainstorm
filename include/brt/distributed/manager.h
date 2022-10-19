@@ -15,31 +15,31 @@
 
 namespace brt {
 namespace distributed {
-class NCCLManager {
+class NcclManager {
  public:
-  static NCCLManager& get_manager();
+  static NcclManager& GetManager();
 
-  void init(void* unique_id_ptr, const int& world_rank, const int& world_size,
+  void Init(void* unique_id_ptr, const int& world_rank, const int& world_size,
             cudaStream_t stream) {
-    set_stream(stream);
-    init_comm(unique_id_ptr, world_rank, world_size);
+    SetStream(stream);
+    InitComm(unique_id_ptr, world_rank, world_size);
     initialized_ = true;
   }
 
-  int get_nccl_unique_id_size() { return sizeof(ncclUniqueId); }
+  int GetNcclUniqueIDSize() { return sizeof(ncclUniqueId); }
 
-  ncclComm_t get_nccl_comm() { return comm_; }
-  cudaStream_t get_nccl_stream() { return stream_; }
-  bool is_initialized() { return initialized_; }
+  ncclComm_t GetNcclComm() { return comm_; }
+  cudaStream_t GetNcclStream() { return stream_; }
+  bool IsInitialized() { return initialized_; }
 
  private:
-  void set_stream(cudaStream_t stream) { stream_ = stream; }
-  void init_comm(void* unique_id_ptr, int world_rank, int world_size) {
+  void SetStream(cudaStream_t stream) { stream_ = stream; }
+  void InitComm(void* unique_id_ptr, int world_rank, int world_size) {
     NCCL_CHECK(ncclGroupStart());
     NCCL_CHECK(ncclCommInitRank(&comm_, world_size, *(ncclUniqueId*)unique_id_ptr, world_rank));
     NCCL_CHECK(ncclGroupEnd());
   }
-  NCCLManager() { initialized_ = false; }
+  NcclManager() { initialized_ = false; }
   bool initialized_;
   ncclComm_t comm_;
   cudaStream_t stream_;

@@ -37,12 +37,12 @@ CUDACompiler::CUDACompiler() {}
 
 CUDACompiler::~CUDACompiler() {}
 
-CUDACompiler& CUDACompiler::get_compiler() {
+CUDACompiler& CUDACompiler::GetCompiler() {
   static CUDACompiler instance;
   return instance;
 }
 
-std::string CUDACompiler::nvrtc_compile(const char* code, const std::string& arch) {
+std::string CUDACompiler::RTCompile(const char* code, const std::string& arch) {
   std::string arch_option = "--gpu-architecture=compute_" + arch;
   std::vector<const char*> param_cstrings = {
       "--restrict",        "--include-path=/usr/local/cuda/include",
@@ -72,7 +72,7 @@ std::string CUDACompiler::nvrtc_compile(const char* code, const std::string& arc
   return ptx;
 }
 
-CUfunction CUDACompiler::activate(int fd, int dev) {
+CUfunction CUDACompiler::Activate(int fd, int dev) {
   auto& kernel = kernels_[fd];
   if (kernel.hFunc.size() <= static_cast<size_t>(dev)) kernel.hFunc.resize(dev + 1);
 
@@ -85,9 +85,9 @@ CUfunction CUDACompiler::activate(int fd, int dev) {
     const char* source = kernel.code.data();
 
     std::string image;
-    image = nvrtc_compile(source, arch);
+    image = RTCompile(source, arch);
     long launch_bound =
-        capture_with_default(kernel.code, std::regex(R"(\s+__launch_bounds__\((\d+)\)\s+)"), 0);
+        CaptureWithDefault(kernel.code, std::regex(R"(\s+__launch_bounds__\((\d+)\)\s+)"), 0);
 
     static CUjit_option options[] = {CU_JIT_OPTIMIZATION_LEVEL, CU_JIT_THREADS_PER_BLOCK};
     static void* values[] = {(void*)4L, (void*)launch_bound};
@@ -109,18 +109,18 @@ CUfunction CUDACompiler::activate(int fd, int dev) {
   return kernel.hFunc[dev];
 }
 
-void CUDACompiler::execute(const std::vector<const void*>& ppargs, int fd, int dev,
+void CUDACompiler::Execute(const std::vector<const void*>& ppargs, int fd, int dev,
                            cudaStream_t stream) {
-  CUfunction hfunc = activate(fd, dev);
+  CUfunction hfunc = Activate(fd, dev);
   auto& blocks = kernels_[fd].blocks;
   auto& threads = kernels_[fd].threads;
   CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
                              0, stream, (void**)ppargs.data(), nullptr));
 }
 
-void CUDACompiler::static_execute(const std::vector<const void*>& ppargs, int fd, int dev,
+void CUDACompiler::StaticExecute(const std::vector<const void*>& ppargs, int fd, int dev,
                                   cudaStream_t stream) {
-  CUfunction hfunc = activate(fd, dev);
+  CUfunction hfunc = Activate(fd, dev);
   auto& blocks = kernels_[fd].blocks;
   auto& threads = kernels_[fd].threads;
 
@@ -128,10 +128,10 @@ void CUDACompiler::static_execute(const std::vector<const void*>& ppargs, int fd
                              0, stream, (void**)ppargs.data(), nullptr));
 }
 
-void CUDACompiler::hetero_execute(const std::vector<const void*>& ppargs,
+void CUDACompiler::HeteroExecute(const std::vector<const void*>& ppargs,
                                   const std::vector<long>& active_blocks, int fd, int dev,
                                   cudaStream_t stream) {
-  CUfunction hfunc = activate(fd, dev);
+  CUfunction hfunc = Activate(fd, dev);
   auto& blocks = kernels_[fd].blocks;
   auto& threads = kernels_[fd].threads;
   CHECK_EQ(kernels_[fd].grid_sizes.size(), active_blocks.size());
@@ -146,7 +146,7 @@ void CUDACompiler::hetero_execute(const std::vector<const void*>& ppargs,
                              0, stream, (void**)ppargs.data(), nullptr));
 }
 
-void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_ptr,
+void CUDACompiler::HomoExecute(const std::vector<const void*>& shared_inputs_ptr,
                                 const std::vector<const void*>& standalone_inputs_ptr,
                                 const std::vector<long>& branch_capacities, int fd, int dev,
                                 cudaStream_t stream) {
@@ -162,7 +162,7 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
 
   std::vector<int> active_blocks(kernel.supported_capacity_num, 0);
   // reorder the arguments for kernel based on capacities
-  auto branch_indice_with_order = sort_indice(branch_capacities);
+  auto branch_indice_with_order = SortIndice(branch_capacities);
 
   int real_branch_index = 0;
   // printf("runtime arg dispatch begin\n");
@@ -223,7 +223,7 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
     ppargs[i] = &pargs[i];
   }
 
-  CUfunction hfunc = activate(fd, dev);
+  CUfunction hfunc = Activate(fd, dev);
   auto& blocks = kernels_[fd].blocks;
   auto& threads = kernels_[fd].threads;
   CHECK_EQ(kernels_[fd].grid_sizes.size(), active_blocks.size());
@@ -242,14 +242,14 @@ void CUDACompiler::homo_execute(const std::vector<const void*>& shared_inputs_pt
                              0, stream, (void**)ppargs.data(), nullptr));
 }
 
-std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headless_code) {
+std::pair<std::string, int> CUDACompiler::InjectSource(const std::string& headless_code) {
   int fd = kernels_.size();
   kernels_.resize(fd + 1);
 
   auto& kernel = kernels_[fd];
   kernel.code = "#include <cuda_runtime.h>\n#include <cuda_fp16.h>\n" + headless_code;
 
-  std::string kernel_type_str = capture_with_default(
+  std::string kernel_type_str = CaptureWithDefault(
       headless_code, std::regex(R"(\/\/\s+\[kernel_type\]\s+(\w+)\s*)"), "global");
   auto kernel_type_it = kernel_type_tb.find(kernel_type_str);
   if (kernel_type_it == kernel_type_tb.end()) {
@@ -261,56 +261,56 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
   switch (kernel.type) {
     case KernelType::kGlobal:
     case KernelType::kHorizFuse: {
-      kernel.blocks.x = capture_with_default(
+      kernel.blocks.x = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*(\d+)\s*)"), 1);
-      kernel.threads.x = capture_with_default(
+      kernel.threads.x = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*(\d+)\s*)"), 1);
       break;
     }
     case KernelType::kHeteroFuse: {
-      auto fused_kernel_grids_str = capture_with_default(
+      auto fused_kernel_grids_str = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"),
           "");
-      kernel.grid_sizes = to_uint_vector(fused_kernel_grids_str, ',');
-      auto fused_kernel_blocks_str = capture_with_default(
+      kernel.grid_sizes = ToUintVector(fused_kernel_grids_str, ',');
+      auto fused_kernel_blocks_str = CaptureWithDefault(
           kernel.code,
           std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*\[([0-9,\s]+)\])"), "");
-      kernel.block_sizes = to_uint_vector(fused_kernel_blocks_str, ',');
+      kernel.block_sizes = ToUintVector(fused_kernel_blocks_str, ',');
       break;
     }
     case KernelType::kHomoFuse: {
-      auto fused_kernel_grids_str = capture_with_default(
+      auto fused_kernel_grids_str = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*\[([0-9,\s]+)\])"),
           "");
-      kernel.grid_sizes = to_uint_vector(fused_kernel_grids_str, ',');
-      auto fused_kernel_blocks_str = capture_with_default(
+      kernel.grid_sizes = ToUintVector(fused_kernel_grids_str, ',');
+      auto fused_kernel_blocks_str = CaptureWithDefault(
           kernel.code,
           std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*\[([0-9,\s]+)\])"), "");
-      kernel.block_sizes = to_uint_vector(fused_kernel_blocks_str, ',');
-      kernel.branch_num = capture_with_default(
+      kernel.block_sizes = ToUintVector(fused_kernel_blocks_str, ',');
+      kernel.branch_num = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[homo_fuse_info\]\s+branch_num\s*=\s*(\d+)\s*)"), 1);
-      auto capacity_str = capture_with_default(
+      auto capacity_str = CaptureWithDefault(
           kernel.code,
           std::regex(R"(\/\/\s+\[homo_fuse_info\]\s+supported_capacity\s*=\s*\[([0-9,\s]+)\])"),
           "");
-      kernel.supported_capacities = to_int_vector(capacity_str);
+      kernel.supported_capacities = ToIntVector(capacity_str);
       kernel.supported_capacity_num = kernel.supported_capacities.size();
-      kernel.arg_num = capture_with_default(
+      kernel.arg_num = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[homo_fuse_info\]\s+arg_num\s*=\s*(\d+)\s*)"), 1);
-      kernel.shared_arg_num = capture_with_default(
+      kernel.shared_arg_num = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[homo_fuse_info\]\s+shared_arg_num\s*=\s*(\d+)\s*)"),
           1);
-      auto shared_arg_grans_str = capture_with_default(
+      auto shared_arg_grans_str = CaptureWithDefault(
           kernel.code,
           std::regex(R"(\/\/\s+\[homo_fuse_info\]\s+shared_arg_grans\s*=\s*\[([0-9,\s]+)\])"), "");
-      kernel.shared_arg_grans = to_uint_vector(shared_arg_grans_str, ',');
+      kernel.shared_arg_grans = ToUintVector(shared_arg_grans_str, ',');
       kernel.InitBranchArgStore();
       break;
     }
     case KernelType::kElasticHomoFuse: {
-      kernel.blocks.x = capture_with_default(
+      kernel.blocks.x = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.x\s*=\s*(\d+)\s*)"), 1);
-      kernel.threads.x = capture_with_default(
+      kernel.threads.x = CaptureWithDefault(
           kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.x\s*=\s*(\d+)\s*)"), 1);
       break;
     }
@@ -318,13 +318,13 @@ std::pair<std::string, int> CUDACompiler::inject_source(const std::string& headl
       LOG(FATAL) << "unknown kernel type";
       break;
   }
-  kernel.blocks.y = capture_with_default(
+  kernel.blocks.y = CaptureWithDefault(
       kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.y\s+=\s+(\d+)\s*)"), 1);
-  kernel.blocks.z = capture_with_default(
+  kernel.blocks.z = CaptureWithDefault(
       kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+blockIdx.z\s+=\s+(\d+)\s*)"), 1);
-  kernel.threads.y = capture_with_default(
+  kernel.threads.y = CaptureWithDefault(
       kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.y\s+=\s+(\d+)\s*)"), 1);
-  kernel.threads.z = capture_with_default(
+  kernel.threads.z = CaptureWithDefault(
       kernel.code, std::regex(R"(\/\/\s+\[thread_extent\]\s+threadIdx.z\s+=\s+(\d+)\s*)"), 1);
 
   return {kernel_type_str, fd};
