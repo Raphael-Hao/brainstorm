@@ -5,8 +5,8 @@
  * Author: raphael hao
  */
 
-#ifndef BRT_DISTRIBUTED_ASYMMETRY_H_
-#define BRT_DISTRIBUTED_ASYMMETRY_H_
+#ifndef BRT_DISTRIBUTED_COLLECTIVE_H_
+#define BRT_DISTRIBUTED_COLLECTIVE_H_
 
 #include <cuda_runtime.h>
 #include <nccl.h>
@@ -15,10 +15,12 @@
 
 namespace brt {
 namespace distributed {
+void AllToAll(void* send_buffer, void* recv_buffer, const int& slice_size_in_byte,
+              const int& slice_num, ncclComm_t comm, cudaStream_t stream);
 void AsymmetryAllToAll(void* send_buffer, void* recv_buffer, const std::vector<int>& send_sizes,
                        const std::vector<int>& recv_sizes, const int& grain_size_in_byte,
                        const int& slice_size_in_byte, const int& slice_num, ncclComm_t comm,
                        cudaStream_t stream);
 }  // namespace distributed
 }  // namespace brt
-#endif  // BRT_DISTRIBUTED_ASYMMETRY_H_
+#endif  // BRT_DISTRIBUTED_COLLECTIVE_H_

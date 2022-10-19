@@ -18,6 +18,8 @@ NcclManager& NcclManager::GetManager() {
 
 void NcclManager::Init(::torch::Tensor unique_id_t, const int& world_rank, const int& world_size,
                        const int& event_num) {
+  world_rank_ = world_rank;
+  world_size_ = world_size;
   NCCL_CHECK(ncclGroupStart());
   NCCL_CHECK(
       ncclCommInitRank(&comm_, world_size, *(ncclUniqueId*)unique_id_t.data_ptr(), world_rank));
