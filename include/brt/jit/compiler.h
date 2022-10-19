@@ -6,12 +6,11 @@
 #ifndef BRT_JIT_COMPILER_H_
 #define BRT_JIT_COMPILER_H_
 
-#include <brt/runtime/cuda_utils.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
-#include <fstream>
 #include <regex>
+#include <string>
 #include <unordered_map>
 
 namespace brt {
@@ -91,4 +90,4 @@ class CUDACompiler {
 
 }  // namespace jit
 }  // namespace brt
-#endif  // BRT_JIT_COMPILER_H_
+#endif // BRT_JIT_COMPILER_H_
