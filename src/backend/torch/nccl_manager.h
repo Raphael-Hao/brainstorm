@@ -32,8 +32,8 @@ class NcclManager {
   void ExternalWaitEvent(const int& event_id, at::cuda::CUDAStream stream);
   int GetNcclUniqueIDSize() { return sizeof(ncclUniqueId); }
 
-  ncclComm_t GetNcclComm() { return comm_; }
-  cudaStream_t GetNcclStream() { return stream_; }
+  ncclComm_t GetComm() { return comm_; }
+  cudaStream_t GetStream() { return stream_; }
   bool IsInitialized() { return initialized_; }
 
  private:
