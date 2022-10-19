@@ -7,7 +7,6 @@
 #define BRT_DISTRIBUTED_MANAGER_H_
 
 #include <brt/runtime/cuda_utils.h>
-
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
@@ -24,20 +23,24 @@ class NCCLManager {
             cudaStream_t stream) {
     set_stream(stream);
     init_comm(unique_id_ptr, world_rank, world_size);
+    initialized_ = true;
   }
 
+  int get_nccl_unique_id_size() { return sizeof(ncclUniqueId); }
+
+  ncclComm_t get_nccl_comm() { return comm_; }
+  cudaStream_t get_nccl_stream() { return stream_; }
+  bool is_initialized() { return initialized_; }
+
+ private:
   void set_stream(cudaStream_t stream) { stream_ = stream; }
   void init_comm(void* unique_id_ptr, int world_rank, int world_size) {
     NCCL_CHECK(ncclGroupStart());
     NCCL_CHECK(ncclCommInitRank(&comm_, world_size, *(ncclUniqueId*)unique_id_ptr, world_rank));
     NCCL_CHECK(ncclGroupEnd());
   }
-  int get_nccl_unique_id_size() { return sizeof(ncclUniqueId); }
-
-  ncclComm_t get_nccl_comm() { return comm_; }
-  cudaStream_t get_nccl_stream() { return stream_; }
-
- private:
+  NCCLManager() { initialized_ = false; }
+  bool initialized_;
   ncclComm_t comm_;
   cudaStream_t stream_;
 };

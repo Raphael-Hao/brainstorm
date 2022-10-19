@@ -36,7 +36,4 @@ void DevicePtr2PtrArray(T** dst, T* src, int index[], int array_size, int granul
 }  // namespace jit
 }  // namespace brt
 
-#endif  // BRT_NETLET_PTR_ARITH_CUH_
-
-
-#endif  // BRT_JIT_PTR_ARITH_CUH_
+#endif

@@ -5,7 +5,7 @@
 
 #include <brt/distributed/asymmetry.h>
 #include <brt/distributed/manager.h>
-#include <brt/runtime/cuda_utils.h>
+#include <dmlc/common.h>
 
 namespace brt {
 
@@ -14,6 +14,7 @@ void AsymmetryAllToAll(void* send_buffer, void* recv_buffer, const std::vector<i
                        const std::vector<int>& recv_sizes, const int& grain_size_in_byte,
                        const int& slice_size_in_byte, const int& slice_num) {
   NCCLManager& manager = NCCLManager::get_manager();
+  CHECK_EQ(manager.is_initialized(), true);
   NCCL_CHECK(ncclGroupStart());
   for (auto i = 0; i < slice_num; i++) {
     NCCL_CHECK(ncclSend((char*)send_buffer + i * slice_size_in_byte,

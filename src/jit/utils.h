@@ -63,7 +63,6 @@ std::vector<int> sort_indice(const std::vector<T>& V) {
 }
 
 }  // namespace jit
-
 }  // namespace brt
 
-#endif  // BRT_JIT_UTILS_H_
+#endif
