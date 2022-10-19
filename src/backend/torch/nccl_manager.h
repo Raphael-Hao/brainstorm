@@ -23,17 +23,22 @@ class NcclManager {
 
   void Init(::torch::Tensor unique_id_t, const int& world_rank, const int& world_size,
             const int& event_num = 1);
+  // context
   void StartContext();
   void EndContext();
+  // memory
   void RecordStorage(const ::torch::Tensor& T);
+  // synchorization
   void RecordEvent(const int& event_id);
   void WaitEvent(const int& event_id);
-  void ExternalRecordEvent(const int& event_id, at::cuda::CUDAStream stream);
-  void ExternalWaitEvent(const int& event_id, at::cuda::CUDAStream stream);
-  int GetNcclUniqueIDSize() { return sizeof(ncclUniqueId); }
+  void ExternalRecordEvent(const int& event_id, at::cuda::CUDAStream ext_stream);
+  void ExternalWaitEvent(const int& event_id, at::cuda::CUDAStream ext_stream);
 
   ncclComm_t GetComm() { return comm_; }
   cudaStream_t GetStream() { return stream_; }
+  const int& GetWorldRank() { return world_rank_; }
+  const int& GetWorldSize() { return world_size_; }
+
   bool IsInitialized() { return initialized_; }
 
  private:
@@ -43,6 +48,8 @@ class NcclManager {
     initialized_ = false;
   }
   bool initialized_;
+  int world_rank_;
+  int world_size_;
   ncclComm_t comm_;
   at::cuda::CUDAStream stream_;
   at::cuda::CUDAStream original_stream_;
