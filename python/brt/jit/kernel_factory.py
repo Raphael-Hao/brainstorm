@@ -6,7 +6,7 @@ from typing import Callable, List, Union
 import torch
 
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
-from brt.jit.modules import ModuleInfo
+from brt.jit.modules import ModuleInfoFactory
 from brt.jit.compiler import CUDACompiler
 from brt.jit.codegen import (
     ModuleKernel,
@@ -174,12 +174,8 @@ class ModuleKernelFactory:
         objective_func: str = "fastest",
         rank: int = 1,
     ) -> ModuleKernel:
-        for subclass in ModuleInfo.__subclasses__():
-            if subclass.ismodule(module):
-                return subclass.make_kernel(
-                    module, method, sample_input, objective_func, rank
-                )
-        raise ValueError(f"Unknown module type: {module}")
+        module_info = ModuleInfoFactory.produce(module)
+        return module_info.make_kernel(method, sample_input, objective_func, rank)
 
     @staticmethod
     def make_kernels(
@@ -189,14 +185,8 @@ class ModuleKernelFactory:
         objective_func: str = "fastest",
         rank: int = 1,
     ) -> List[ModuleKernel]:
-        for subclass in ModuleInfo.__subclasses__():
-            if subclass.ismodule(module):
-                ret_kernels = []
-                for sample_input in sample_inputs:
-                    ret_kernels.append(
-                        subclass.make_kernel(
-                            module, method, sample_input, objective_func, rank
-                        )
-                    )
-                return ret_kernels
-        raise ValueError(f"Unknown module type: {module}")
+        module_info = ModuleInfoFactory.produce(module)
+        return [
+            module_info.make_kernel(method, sample_input, objective_func, rank)
+            for sample_input in sample_inputs
+        ]
