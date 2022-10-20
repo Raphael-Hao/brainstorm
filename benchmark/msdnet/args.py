@@ -41,6 +41,16 @@ exp_group.add_argument(
 
 exp_group.add_argument(
     "--thresholds", default=
+    ##[0 0 0 0 0 1]
+    [1000000,100000,1000000,100000]
+    
+    
+    #[0 0.2 0 0.2 0.6]
+#     [100000000.00000000,
+# 0.94459999,
+# 100000000.00000000,
+# 0.84057808]
+    
     
     ##[0 0 0 0.4 0.6]
 #     [100000000.00000000,
@@ -88,7 +98,7 @@ exp_group.add_argument(
     # [0.44246858,-1,-1,-1]
     
     ##  shallow network to test for transform pass
-    [-1,-1,-1,-1]
+    # [-1,-1,-1,-1]
     
     ## deeper network to test for transform pass
     # [0.5,-1,-1,-1]
@@ -284,4 +294,6 @@ bench_arg_manager.add_item("liveness")
 bench_arg_manager.add_item("memory_plan")
 bench_arg_manager.add_item("transform")
 bench_arg_manager.add_item("constant_propagation")
+bench_arg_manager.add_item("all_opt")
+
 

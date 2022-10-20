@@ -12,6 +12,9 @@ __all__ = ["symbolic_trace"]
 
 class GraphTracer(fx.Tracer):
     def is_leaf_module(self, m: torch.nn.Module, module_qualified_name: str) -> bool:
+        # if is_router(m):
+        #     import pdb; pdb.set_trace()
+        
         if is_router(m) or is_leaf_node(m):
             return True
         return super().is_leaf_module(m, module_qualified_name)

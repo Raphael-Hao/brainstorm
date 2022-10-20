@@ -1,3 +1,5 @@
+import imp
+from turtle import speed
 from brt.passes.base import PassBase
 import torch
 import torch.nn as nn
@@ -48,9 +50,7 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
     else:
         target_predict, val_target ,n_batch= tester.calc(val_loader)
         torch.cuda.empty_cache()
-
         benchmarker = Benchmarker()
-
         def liveness_benchmark():
             timer = CUDATimer(repeat=5)
             naive_backbone = model1
@@ -95,14 +95,10 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("new_backbone.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
-
-
-
         benchmarker.add_benchmark("liveness", liveness_benchmark)
 
         def transform_benchmark():
             from torch.fx.passes.graph_drawer import FxGraphDrawer
-            
             timer = CUDATimer(repeat=5)
             naive_backbone = model1
             naive_backbone = switch_router_mode(naive_backbone, False).eval()
@@ -118,13 +114,13 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                     input_var = torch.autograd.Variable(input)
                     timer.execute(lambda: naive_backbone(input_var), "naive")
                     baseline_time.append(timer.avg)
-                    # naive_pass=PassBase(naive_backbone)
-                    # naive_backbone=naive_pass.finalize()
-                    # graph_drawer = FxGraphDrawer(naive_backbone, "new_backbone")
-                    # with open("normal.svg", "wb") as f:
-                    #     f.write(graph_drawer.get_dot_graph().create_svg())
+                    import copy
+                    model_copy = copy.deepcopy(naive_backbone)
+                    model_copy.final_gather.__class__=naive_backbone.final_gather.__class__
+                    for j in range(len(naive_backbone.scatters)):
+                        model_copy.scatters[j].__class__=naive_backbone.scatters[j].__class__
                     output_naive=naive_backbone(input_var)
-                    eliminate_pass = DeadPathEliminatePass(naive_backbone, runtime_load=1)
+                    eliminate_pass = DeadPathEliminatePass(model_copy, runtime_load=1)
                     eliminate_pass.run_on_graph()
                     new_backbone = eliminate_pass.finalize() 
                     timer.execute(lambda: new_backbone(input_var), "dead_path_eliminated")
@@ -135,20 +131,16 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                     transform_pass = TransformPass(new_backbone, runtime_load=1)
                     transform_pass.run_on_graph()
                     new_backbone=transform_pass.finalize()
-                    
                     timer.execute(lambda: new_backbone(input_var), "transform")
                     output_dce=new_backbone(input_var)
-                    
                     TransformPass_time.append(timer.avg)
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("dce_trans.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
                     output_trans=new_backbone(input_var)
-                    
                     # print('naive output',output_naive)
                     # print('dce output',output_dce)
                     # print('trans output',output_trans)
-                    
                     speed_up_of_deadpatheliminatepass.append(baseline_time[-1]/DeadPathEliminatePass_time[-1])
                     speed_up_of_transformpass.append(baseline_time[-1]/TransformPass_time[-1])
                     
@@ -160,86 +152,11 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                     print('min of speed_up_of_transformpass',min(speed_up_of_transformpass))
                     print('avg of speed_up_of_deadpatheliminatepass',sum(speed_up_of_deadpatheliminatepass)/len(speed_up_of_deadpatheliminatepass))
                     print('avg of speed_up_of_transformpass',sum(speed_up_of_transformpass)/len(speed_up_of_transformpass))
-                import pdb;pdb.set_trace()
-        def transformnew_benchmark():
-            from torch.fx.passes.graph_drawer import FxGraphDrawer
-            
-            timer = CUDATimer(repeat=5)
-            naive_backbone = model1
-            naive_backbone = switch_router_mode(naive_backbone, False).eval()
-            targets = []
-            baseline_time=[]
-            DeadPathEliminatePass_time=[]
-            TransformPass_time=[]
-            speed_up_of_deadpatheliminatepass=[]
-            speed_up_of_transformpass=[]
-            
-            
-            eliminate_pass = DeadPathEliminatePass(naive_backbone, runtime_load=1)
-            eliminate_pass.run_on_graph()
-            new_backbone = eliminate_pass.finalize() 
-            graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-            with open("dce__backbone.svg", "wb") as f:
-                f.write(graph_drawer.get_dot_graph().create_svg())
-            transform_pass = TransformPass(new_backbone, runtime_load=1)
-            transform_pass.run_on_graph()
-            new_backbone1=transform_pass.finalize()
-            graph_drawer = FxGraphDrawer(new_backbone1, "new_backbone")
-            
-            
-            with open("transform_dce_trans_backbone.svg", "wb") as f:
-                        f.write(graph_drawer.get_dot_graph().create_svg())
-            
-            transform_pass2 = TransformPass(new_backbone1, runtime_load=1)
-            transform_pass2.run_on_graph()
-            new_backbone2=transform_pass2.finalize()
-            for i, (input, target) in enumerate(test_loader):
-                targets.append(target)
-                with torch.no_grad():
-                    input_var = torch.autograd.Variable(input)
-                    timer.execute(lambda: naive_backbone(input_var), "naive")
-                    baseline_time.append(timer.avg)
-                    timer.execute(lambda: naive_backbone(input_var), "naive2")  
-                    output_naive=naive_backbone(input_var)
-                    
-                    timer.execute(lambda: new_backbone(input_var), "dead_path_eliminated")
-                    DeadPathEliminatePass_time.append(timer.avg)
-                    
-                    
-                    timer.execute(lambda: new_backbone1(input_var), "transform")
-                    output_dce=new_backbone(input_var)
-                    
-                    TransformPass_time.append(timer.avg)
-
-                    output_trans=new_backbone(input_var)
-                    
-                    
-                    timer.execute(lambda: new_backbone2(input_var), "transform2")
-                    
-                    # print('naive output',output_naive)
-                    # print('dce output',output_dce)
-                    # print('trans output',output_trans)
-                    
-                    speed_up_of_deadpatheliminatepass.append(baseline_time[-1]/DeadPathEliminatePass_time[-1])
-                    speed_up_of_transformpass.append(baseline_time[-1]/TransformPass_time[-1])
-                if i % 10 == 0:
-                    print('Generate Logit: [{0}/{1}]'.format(i, len(test_loader)))
-                    print('max of speed_up_of_deadpatheliminatepass',max(speed_up_of_deadpatheliminatepass))
-                    print('max of speed_up_of_transformpass',max(speed_up_of_transformpass))
-                    print('min of speed_up_of_deadpatheliminatepass',min(speed_up_of_deadpatheliminatepass))
-                    print('min of speed_up_of_transformpass',min(speed_up_of_transformpass))
-                    print('avg of speed_up_of_deadpatheliminatepass',sum(speed_up_of_deadpatheliminatepass)/len(speed_up_of_deadpatheliminatepass))
-                    print('avg of speed_up_of_transformpass',sum(speed_up_of_transformpass)/len(speed_up_of_transformpass))
-                    
-                    
-                    
-                    
         benchmarker.add_benchmark("transform", transform_benchmark)
         
         
         def constant_propagation_benchmark():
             from torch.fx.passes.graph_drawer import FxGraphDrawer
-            
             timer = CUDATimer(repeat=5)
             naive_backbone = model1
             naive_backbone = switch_router_mode(naive_backbone, False).eval()
@@ -249,23 +166,19 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
             ConstProPass_time=[]
             speed_up_of_deadpatheliminatepass=[]
             speed_up_of_constpropogationpass=[]
-            
-            
-            
-            
-            
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
                 with torch.no_grad():
                     input_var = torch.autograd.Variable(input)
                     import copy
-                    
                     model_copy = copy.deepcopy(naive_backbone)
-                    
+                    model_copy.final_gather.__class__=naive_backbone.final_gather.__class__
+                    for j in range(len(naive_backbone.scatters)):
+                        model_copy.scatters[j].__class__=naive_backbone.scatters[j].__class__
                     timer.execute(lambda: model_copy(input_var), "naive")
                     baseline_time.append(timer.avg)
                     output_naive=model_copy(input_var)
-                    eliminate_pass = DeadPathEliminatePass(naive_backbone, runtime_load=1,retain_model=True)
+                    eliminate_pass = DeadPathEliminatePass(model_copy, runtime_load=1)
                     eliminate_pass.run_on_graph()
                     new_dce_backbone = eliminate_pass.finalize() 
                     graph_drawer = FxGraphDrawer(new_dce_backbone, "new_backbone")
@@ -273,8 +186,7 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                         f.write(graph_drawer.get_dot_graph().create_svg())
                     timer.execute(lambda: new_dce_backbone(input_var), "dead_path_eliminated")
                     DeadPathEliminatePass_time.append(timer.avg)
-
-                    
+                    output_dce=new_dce_backbone(input_var)
                     constant_propagation_pass = ConstantPropagationPass(new_dce_backbone, upper_perm_load=args.batch_size*n_batch)
                     constant_propagation_pass.run_on_graph()
                     new_backbone_const=constant_propagation_pass.finalize()
@@ -283,25 +195,11 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                         f.write(graph_drawer.get_dot_graph().create_svg())
                     timer.execute(lambda: new_backbone_const(input_var), "constant_propagation")
                     ConstProPass_time.append(timer.avg)
-                    
-                    # transform_pass = TransformPass(new_backbone, runtime_load=1)
-                    # transform_pass.run_on_graph()
-                    # new_backbone=transform_pass.finalize()
-                    # graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-                    
-                    # timer.execute(lambda: new_backbone(input_var), "transform")
-                    # output_dce=new_backbone(input_var)
-                    
-                    # TransformPass_time.append(timer.avg)
-                    # graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-                    # with open("transform_dce_trans_backbone.svg", "wb") as f:
-                    #     f.write(graph_drawer.get_dot_graph().create_svg())
-                    # output_trans=new_backbone(input_var)
-                    
+                    out_put_const=new_backbone_const(input_var)
                     # print('naive output',output_naive)
                     # print('dce output',output_dce)
-                    # print('trans output',output_trans)
-                    
+                    # print('const output',out_put_const)
+                    # import pdb;pdb.set_trace()
                     speed_up_of_deadpatheliminatepass.append(baseline_time[-1]/DeadPathEliminatePass_time[-1])
                     speed_up_of_constpropogationpass.append(baseline_time[-1]/ConstProPass_time[-1])
                 if i % 10 == 0:
@@ -312,10 +210,83 @@ def threshold_dynamic_evaluate(model1: MSDNet, test_loader: DataLoader,val_loade
                     print('min of speed_up_of_constpropagation',min(speed_up_of_constpropogationpass))
                     print('avg of speed_up_of_deadpatheliminatepass',sum(speed_up_of_deadpatheliminatepass)/len(speed_up_of_deadpatheliminatepass))
                     print('avg of speed_up_of_constpropagation',sum(speed_up_of_constpropogationpass)/len(speed_up_of_constpropogationpass))
-                    
         benchmarker.add_benchmark("constant_propagation", constant_propagation_benchmark)
         
         
+        def all_opt_benchmark():
+            from torch.fx.passes.graph_drawer import FxGraphDrawer
+            timer = CUDATimer(repeat=5)
+            naive_backbone = model1
+            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            targets = []
+            baseline_time=[]
+            DeadPathEliminatePass_time=[]
+            ConstProPass_time=[]
+            TransformPass_time=[]
+            speed_up_of_deadpatheliminatepass=[]
+            speed_up_of_constpropogationpass=[]
+            speed_up_of_transformpass=[]
+            for i, (input, target) in enumerate(test_loader):
+                targets.append(target)
+                with torch.no_grad():
+                    input_var = torch.autograd.Variable(input)
+                    import copy
+                    model_copy = copy.deepcopy(naive_backbone)
+                    ## to solve the decorator issue caused by DeepCopy
+                    model_copy.final_gather.__class__=naive_backbone.final_gather.__class__
+                    for j in range(len(naive_backbone.scatters)):
+                        model_copy.scatters[j].__class__=naive_backbone.scatters[j].__class__
+                    timer.execute(lambda: model_copy(input_var), "naive")
+                    baseline_time.append(timer.avg)
+                    output_naive=model_copy(input_var)
+                    eliminate_pass = DeadPathEliminatePass(model_copy, runtime_load=1)
+                    eliminate_pass.run_on_graph()
+                    new_dce_backbone = eliminate_pass.finalize() 
+                    graph_drawer = FxGraphDrawer(new_dce_backbone, "new_backbone")
+                    with open("dce_backbone_const.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(lambda: new_dce_backbone(input_var), "dead_path_eliminated")
+                    DeadPathEliminatePass_time.append(timer.avg)
+                    output_dce=new_dce_backbone(input_var)
+                    constant_propagation_pass = ConstantPropagationPass(new_dce_backbone, upper_perm_load=args.batch_size*n_batch)
+                    constant_propagation_pass.run_on_graph()
+                    new_backbone_const=constant_propagation_pass.finalize()
+                    graph_drawer = FxGraphDrawer(new_backbone_const, "new_backbone")
+                    with open("dce_const_pro_backbone.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(lambda: new_backbone_const(input_var), "constant_propagation")
+                    ConstProPass_time.append(timer.avg)
+                    out_put_const=new_backbone_const(input_var)
+                    transform_pass = TransformPass(new_backbone_const, runtime_load=1)
+                    transform_pass.run_on_graph()
+                    new_backbone=transform_pass.finalize()
+                    timer.execute(lambda: new_backbone(input_var), "transform")
+                    output_dce=new_backbone(input_var)
+                    TransformPass_time.append(timer.avg)
+                    graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    with open("dce_trans.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    # print('naive output',output_naive)
+                    # print('dce output',output_dce)
+                    # print('const output',out_put_const)
+                    # import pdb;pdb.set_trace()
+                    speed_up_of_deadpatheliminatepass.append(baseline_time[-1]/DeadPathEliminatePass_time[-1])
+                    speed_up_of_constpropogationpass.append(baseline_time[-1]/ConstProPass_time[-1])
+                    speed_up_of_transformpass.append(baseline_time[-1]/TransformPass_time[-1])
+                    # import pdb;pdb.set_trace()
+                if i % 10 == 0:
+                    print('Generate Logit: [{0}/{1}]'.format(i, len(test_loader)))
+                    print('max of speed_up_of_deadpatheliminatepass',max(speed_up_of_deadpatheliminatepass))
+                    print('max of speed_up_of_constpropagation',max(speed_up_of_constpropogationpass))
+                    print('max of speed_up_of_transformpass',max(speed_up_of_transformpass))
+                    print('min of speed_up_of_deadpatheliminatepass',min(speed_up_of_deadpatheliminatepass))
+                    print('min of speed_up_of_constpropagation',min(speed_up_of_constpropogationpass))
+                    print('min of speed_up_of_transformpass',min(speed_up_of_transformpass))
+                    print('avg of speed_up_of_deadpatheliminatepass',sum(speed_up_of_deadpatheliminatepass)/len(speed_up_of_deadpatheliminatepass))
+                    print('avg of speed_up_of_constpropagation',sum(speed_up_of_constpropogationpass)/len(speed_up_of_constpropogationpass))
+                    print('avg of speed_up_of_transformpass',sum(speed_up_of_transformpass)/len(speed_up_of_transformpass))
+        benchmarker.add_benchmark("all_opt", all_opt_benchmark)
+                    
         
         def memroy_plan_benchmark():
             timer = CUDATimer(repeat=5)
