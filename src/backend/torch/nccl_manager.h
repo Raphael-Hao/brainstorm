@@ -21,7 +21,7 @@ class NcclManager {
  public:
   static NcclManager& GetManager();
 
-  void Init(::torch::Tensor unique_id_t, const int& world_rank, const int& world_size);
+  void Init(const ::torch::Tensor& unique_id_t, const int& world_rank, const int& world_size);
   // context
   void StartContext();
   void EndContext();

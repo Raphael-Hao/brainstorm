@@ -10,15 +10,35 @@ namespace brt {
 
 namespace distributed {
 
-void Gather(const void* sendbuf, void* recvbuf, const int& send_size_in_byte, const int& root,
+void BroadCast(void* send_buffer, void* recv_buffer, const int& send_size_in_byte, const int& root,
+               ncclComm_t comm, cudaStream_t stream) {
+  NCCL_CHECK(
+      ncclBroadcast(send_buffer, recv_buffer, send_size_in_byte, ncclChar, root, comm, stream));
+}
+
+void Scatter(void* send_buffer, void* recv_buffer, const int& send_size_in_byte, const int& root,
+             const int& world_rank, const int& world_size, ncclComm_t comm, cudaStream_t stream) {
+  NCCL_CHECK(ncclGroupStart());
+  if (world_rank == root) {
+    for (int i = 0; i < world_size; i++) {
+      NCCL_CHECK(ncclSend((char*)send_buffer + i * send_size_in_byte, send_size_in_byte, ncclChar,
+                          i, comm, stream));
+    }
+  }
+  NCCL_CHECK(ncclRecv(recv_buffer, send_size_in_byte, ncclChar, root, comm, stream));
+  NCCL_CHECK(ncclGroupEnd());
+}
+
+void Gather(void* send_buffer, void* recv_buffer, const int& send_size_in_byte, const int& root,
             const int& world_rank, const int& world_size, ncclComm_t comm, cudaStream_t stream) {
   NCCL_CHECK(ncclGroupStart());
   if (world_rank == root) {
     for (int i = 0; i < world_size; i++) {
-      NCCL_CHECK(ncclRecv((char*)recvbuf + i * send_size_in_byte, send_size_in_byte, ncclChar, i, comm, stream));
+      NCCL_CHECK(ncclRecv((char*)recv_buffer + i * send_size_in_byte, send_size_in_byte, ncclChar,
+                          i, comm, stream));
     }
   }
-  NCCL_CHECK(ncclSend(sendbuf, send_size_in_byte, ncclChar, root, comm, stream));
+  NCCL_CHECK(ncclSend(send_buffer, send_size_in_byte, ncclChar, root, comm, stream));
   NCCL_CHECK(ncclGroupEnd());
 }
 
