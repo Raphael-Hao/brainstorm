@@ -15,13 +15,14 @@ namespace torch {
 
 static ::torch::Tensor make_nccl_unique_id(const int& world_rank) {
   ::torch::Tensor nccl_unique_id_t = ::torch::empty(
-      {sizeof(ncclUniqueId)}, ::torch::TensorOptions().dtype(::torch::kInt8).device(::torch::kCPU));
+      {sizeof(ncclUniqueId)}, ::torch::TensorOptions().dtype(::torch::kChar).device(::torch::kCPU));
   CHECK_EQ(nccl_unique_id_t.nbytes(), sizeof(ncclUniqueId));
   if (world_rank == 0) {
     ncclUniqueId nccl_unique_id;
     CHECK_EQ(0, ncclGetUniqueId(&nccl_unique_id));
     memcpy((void*)nccl_unique_id_t.data_ptr(), &nccl_unique_id, sizeof(ncclUniqueId));
   }
+  nccl_unique_id_t = nccl_unique_id_t.to(::torch::kCUDA);
   return nccl_unique_id_t;
 }
 
@@ -51,7 +52,7 @@ static std::pair<::torch::Tensor, ::torch::Tensor> locality_reorder(const ::torc
 
 static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& in_data,
                                                          const ::torch::Tensor& send_sizes,
-                                                         bool locality = false) {
+                                                         bool post_locality = false) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
@@ -77,7 +78,7 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
 
   ::torch::Tensor all_recv_sizes;
-  if (locality) {
+  if (post_locality) {
     if (world_rank == 0) {
       all_recv_sizes =
           ::torch::empty({send_sizes.numel() * manager.GetWorldSize()}, send_sizes.options());
@@ -115,26 +116,39 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   manager.RecordEvent(0);
   manager.EndContext();
 
-  if (locality) {
+  ::torch::Tensor reorder_indices;
+  ::torch::Tensor all_reordered_loads;
+  ::torch::Tensor reordered_loads = ::torch::empty_like(send_sizes, send_sizes.options());
+
+  if (post_locality) {
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
-    auto all_recv_sizes_cpu = all_recv_sizes.cpu();
-    std::vector<int> all_recv_sizes_vec(
-        all_recv_sizes_cpu.data_ptr<int>(),
-        all_recv_sizes_cpu.data_ptr<int>() + all_recv_sizes_cpu.numel());
-    ::torch::Tensor new_all_recv_sizes;
-    std::vector<int> reorder_indices;
-    for (int i = 0; i < world_size; i++) {
-      auto max_element = std::max_element(all_recv_sizes_vec.begin(), all_recv_sizes_vec.end());
-      int current_rank_index = (max_element - all_recv_sizes_vec.begin()) / world_size;
-      int original_rank_index = (max_element - all_recv_sizes_vec.begin()) % world_size;
-      std::fill_n(all_recv_sizes_vec.begin() + current_rank_index * world_size, world_size, -1);
-      int new_rank_index = i;
-      reorder_indices.emplace_back(original_rank_index);
+    if (world_rank == 0) {
+      auto reorder_results = locality_reorder(all_recv_sizes, world_size);
+      reorder_indices = reorder_results.first;
+      all_reordered_loads = reorder_results.second;
+    } else {
+      reorder_indices = ::torch::empty_like(send_sizes, send_sizes.options());
     }
+    manager.StartContext();
+    manager.WaitEvent(0);
+    manager.RecordStorage(all_reordered_loads);
+    manager.RecordStorage(reorder_indices);
+    manager.RecordStorage(reordered_loads);
+    distributed::Scatter(all_reordered_loads.data_ptr(), reordered_loads.data_ptr(),
+                         reordered_loads.nbytes(), 0, world_rank, world_size, manager.GetComm(),
+                         manager.GetStream());
+    distributed::BroadCast(reorder_indices.data_ptr(), reorder_indices.data_ptr(),
+                           reorder_indices.nbytes(), 0, manager.GetComm(), manager.GetStream());
+    manager.RecordEvent(0);
+    manager.EndContext();
   }
 
   manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
-  return {out_data, recv_sizes};
+  if (post_locality) {
+    return {out_data, reordered_loads, reorder_indices};
+  } else {
+    return {out_data, recv_sizes};
+  }
 }
 }  // namespace torch
 }  // namespace backend
@@ -148,5 +162,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("locality_reorder", &brt::backend::torch::locality_reorder, "locality reorder",
         pybind11::arg("loads"), pybind11::arg("wolrd_size"));
   m.def("asymmetry_all_to_all", &brt::backend::torch::asymmetry_all_to_all, "asymmetry all to all",
-        pybind11::arg("in_data"), pybind11::arg("send_sizes"), pybind11::arg("locality") = false);
+        pybind11::arg("in_data"), pybind11::arg("send_sizes"),
+        pybind11::arg("post_locality") = false);
 }
