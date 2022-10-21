@@ -15,6 +15,8 @@
 
 namespace brt {
 namespace distributed {
+void Gather(const void* sendbuf, void* recvbuf, const int& send_size_in_byte, const int& root,
+            const int& world_rank, const int& world_size, ncclComm_t comm, cudaStream_t stream);
 void AllToAll(void* send_buffer, void* recv_buffer, const int& slice_size_in_byte,
               const int& slice_num, ncclComm_t comm, cudaStream_t stream);
 void AsymmetryAllToAll(void* send_buffer, void* recv_buffer, const std::vector<int>& send_sizes,

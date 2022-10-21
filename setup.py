@@ -72,6 +72,7 @@ def install(use_cuda=False):
                     "./src/backend/torch/distributed.cc",
                     "./src/backend/torch/nccl_manager.cc",
                     "./src/distributed/collective.cc",
+                    "./src/distributed/local_reorder.cu",
                 ],
                 library_dirs=["/usr/local/cuda/lib64/stubs"],
                 libraries=dist_libs,

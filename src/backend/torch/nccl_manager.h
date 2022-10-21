@@ -21,8 +21,7 @@ class NcclManager {
  public:
   static NcclManager& GetManager();
 
-  void Init(::torch::Tensor unique_id_t, const int& world_rank, const int& world_size,
-            const int& event_num = 1);
+  void Init(::torch::Tensor unique_id_t, const int& world_rank, const int& world_size);
   // context
   void StartContext();
   void EndContext();
@@ -31,8 +30,8 @@ class NcclManager {
   // synchorization
   void RecordEvent(const int& event_id);
   void WaitEvent(const int& event_id);
-  void ExternalRecordEvent(const int& event_id, at::cuda::CUDAStream ext_stream);
-  void ExternalWaitEvent(const int& event_id, at::cuda::CUDAStream ext_stream);
+  void ExternalRecordEvent(const int& event_id, const at::cuda::CUDAStream& ext_stream);
+  void ExternalWaitEvent(const int& event_id, const at::cuda::CUDAStream& ext_stream);
 
   ncclComm_t GetComm() { return comm_; }
   cudaStream_t GetStream() { return stream_; }
@@ -42,17 +41,16 @@ class NcclManager {
   bool IsInitialized() { return initialized_; }
 
  private:
-  ~NcclManager() { NCCL_CHECK(ncclCommDestroy(comm_)); }
-  NcclManager()
-      : stream_(at::cuda::getStreamFromPool()), original_stream_(at::cuda::getCurrentCUDAStream()) {
+  NcclManager() : stream_(at::cuda::getStreamFromPool()), original_stream_(c10::nullopt) {
     initialized_ = false;
   }
+  ~NcclManager() { NCCL_CHECK(ncclCommDestroy(comm_)); }
   bool initialized_;
   int world_rank_;
   int world_size_;
   ncclComm_t comm_;
   at::cuda::CUDAStream stream_;
-  at::cuda::CUDAStream original_stream_;
+  c10::optional<at::cuda::CUDAStream> original_stream_;
   std::vector<at::cuda::CUDAEvent> events_;
 };
 }  // namespace torch
