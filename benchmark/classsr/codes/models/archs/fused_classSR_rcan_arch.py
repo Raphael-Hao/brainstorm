@@ -19,7 +19,7 @@ from brt.runtime.proto_tensor import (
 import models.archs.arch_util as arch_util
 from models.archs.classSR_rcan_arch import classSR_3class_rcan_net
 from models.archs.RCAN_arch import RCAN, ResidualGroup, RCAB, CALayer, Upsampler
-from models.archs.fuse import FusedKernel, FusedLayer, set_objective_func
+from models.archs.fuse import TunedKernel, FusedLayer, GroupFusedLayer, set_objective_func
 
 logger = logging.getLogger("ClassSR")
 logger.setLevel(logging.INFO)
@@ -133,15 +133,17 @@ class FusedRCAB(nn.Module):
     ) -> None:
         super().__init__()
         self.body = nn.Sequential(
-            FusedLayer(
+            GroupFusedLayer(
                 [nn.Sequential(m.body[0], m.body[1]) for m in models],
                 input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
                 output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
+                group_indices=[[1, 0], [2]],
             ),
-            FusedLayer(
+            GroupFusedLayer(
                 [m.body[2] for m in models],
                 input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
                 output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
+                group_indices=[[1, 0], [2]],
             ),
             FusedCALayer([m.body[3] for m in models], bs),
         )
@@ -161,10 +163,11 @@ class FusedResidualGroup(nn.Module):
         super().__init__()
         self.body = nn.Sequential(
             *[FusedRCAB([m.body[i] for m in models], bs) for i in range(n_resblocks)],
-            FusedLayer(
+            GroupFusedLayer(
                 [m.body[n_resblocks] for m in models],
                 input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
                 output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
+                group_indices=[[1, 0], [2]],
             ),
         )
         logger.info("FusedResidualGroup builded")
@@ -174,27 +177,34 @@ class FusedResidualGroup(nn.Module):
         return [rr + xx for rr, xx in zip(res, x)]
 
 
-class FusedUpsampler(nn.Sequential):
+class FusedUpsampler(nn.Module):
     def __init__(
         self,
-        model: Upsampler,
-        bs: int,
+        models: List[Upsampler],
+        bs: List[int],
     ) -> None:
         # assert scale == 4
-        super().__init__(
-            FusedKernel(
-                model[0],
-                input_shape=[bs, model.n_feat, 32, 32],
-                output_shape=[bs, model.n_feat * 4, 32, 32],
-            ),
-            model[1],
-            FusedKernel(
-                model[2],
-                input_shape=[bs, model.n_feat, 64, 64],
-                output_shape=[bs, model.n_feat * 4, 64, 64],
-            ),
-            model[3],
-        )
+        super().__init__()
+        self.subnets = [
+            nn.Sequential(
+                TunedKernel(
+                    m[0],
+                    input_shape=[n, m.n_feat, 32, 32],
+                    output_shape=[n, m.n_feat * 4, 32, 32],
+                ),
+                m[1],
+                TunedKernel(
+                    m[2],
+                    input_shape=[n, m.n_feat, 64, 64],
+                    output_shape=[n, m.n_feat * 4, 64, 64],
+                ),
+                m[3],
+            )
+            for n, m in zip(bs, models)
+        ]
+
+    def forward(self, x: List[torch.Tensor]):
+        return [subnet(xx) for subnet, xx in zip(self.subnets, x)]
 
 
 class FusedRCAN(nn.Module):
@@ -224,10 +234,11 @@ class FusedRCAN(nn.Module):
                 # for i in range(1)
                 for i in range(n_resgroups)
             ],
-            FusedLayer(
+            GroupFusedLayer(
                 [m.body[n_resgroups] for m in models],
                 input_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
                 output_shapes=[[n, m.n_feat, 32, 32] for n, m in zip(bs, models)],
+                group_indices=[[1, 0], [2]],
             ),
         )
         logger.info("FusedRCAN.body builded")
