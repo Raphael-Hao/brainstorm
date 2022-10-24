@@ -129,15 +129,11 @@ class HomoFusedKernelFactory:
         ]
         shared_arg_indices = None
         shared_arg_grans = None
-        for subclass in ModuleInfo.__subclasses__():
-            if subclass.ismodule(candidate_module):
-                (
-                    shared_arg_indices,
-                    shared_arg_grans,
-                ) = subclass.extract_shared_arg_infos(
-                    candidate_module, method, sample_inputs[0]
-                )
-                break
+        module_info = ModuleInfoFactory.produce(candidate_module)
+        (
+            shared_arg_indices,
+            shared_arg_grans,
+        ) = module_info.extract_shared_arg_infos(method, sample_inputs[0])
         assert shared_arg_indices is not None, "shared_arg_indices is None"
         assert shared_arg_grans is not None, "shared_arg_grans is None"
 
