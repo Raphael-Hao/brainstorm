@@ -12,8 +12,8 @@ device = torch.device("cuda", local_rank)
 torch.cuda.set_device(device)
 group = dist.group.WORLD
 brt_dist.init_nccl(group)
-tensor = torch.arange(local_rank * 10, (local_rank + 1) * 10, device=device).reshape(
-    -1, 1
+tensor = torch.arange(local_rank * 100, (local_rank + 1) * 100, device=device).reshape(
+    -1, 5
 )
 loads = torch.randint(1, 5, (world_size,), dtype=torch.int32, device=device)
 print(tensor)
