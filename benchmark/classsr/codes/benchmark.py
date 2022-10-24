@@ -72,8 +72,8 @@ def crop_cpu(img, crop_sz, step):
     return lr_list, num_h, num_w, h, w
 
 
-n_resgroups = 1
-n_resblocks = 2
+n_resgroups = 10
+n_resblocks = 20
 
 
 class ModuleFactory:
@@ -173,64 +173,56 @@ class ModuleFactory:
         return model
 
 
-image = cv2.imread(str(IMAGE_PATH), cv2.IMREAD_UNCHANGED)
-lr_list, num_h, num_w, h, w = crop_cpu(image, 32, 28)
-input_tensor = (
-    torch.Tensor(np.array(lr_list))
-    .cuda()
-    .index_select(
-        dim=3,
-        index=torch.tensor([2, 1, 0], dtype=torch.int, device="cuda"),
+if __name__ == '__main__':
+    image = cv2.imread(str(IMAGE_PATH), cv2.IMREAD_UNCHANGED)
+    lr_list, num_h, num_w, h, w = crop_cpu(image, 32, 28)
+    input_tensor = (
+        torch.Tensor(np.array(lr_list))
+        .cuda()
+        .index_select(
+            dim=3,
+            index=torch.tensor([2, 1, 0], dtype=torch.int, device="cuda"),
+        )
+        .permute((0, 3, 1, 2))
+        .contiguous()
     )
-    .permute((0, 3, 1, 2))
-    .contiguous()
-)
-input_tensor_div = input_tensor.div(255.0)
+    input_tensor_div = input_tensor.div(255.0)
 
-logger.info(f"Start building module")
-module_type_list = [
-    # "Raw FSRCNN Model",
-    # "Raw CARN Model",
-    # "Raw SRResNet Model",
-    # "Raw RCAN Model",
-    # "Horizontal Fused FSRCNN Model",
-    # "Vertical Fused FSRCNN Model",
-    # "Horizontal Fused RCAN Model",
-    # "Horizontal Fused RCAN Model (fastest)",
-    "Vertical Fused RCAN Model",
-]
-for module_type in module_type_list:
-    _ = ModuleFactory[module_type]
+    logger.info(f"Start building module")
+    module_type_list = [
+        # "Raw FSRCNN Model",
+        # "Horizontal Fused FSRCNN Model",
+        # "Vertical Fused FSRCNN Model",
+        # "Raw CARN Model",
+        # "Raw SRResNet Model",
+        # "Raw RCAN Model",
+        # "Horizontal Fused RCAN Model",
+        "Horizontal Fused RCAN Model (fastest)",
+        # "Vertical Fused RCAN Model",
+    ]
+    for module_type in module_type_list:
+        _ = ModuleFactory[module_type]
 
+    # for module_type in module_type_list:
+    #     logger.info(f"Profiling {module_type}")
+    #     model = ModuleFactory[module_type]
+    #     if "RCAN" not in module_type:
+    #         x = input_tensor_div
+    #     else:
+    #         x = input_tensor
+    #     profile(lambda: model(x))
 
-# for module_type in module_type_list:
-#     logger.info(f"Profiling {module_type}")
-#     if "RCAN" not in module_type:
-#         x = input_tensor_div
-#     else:
-#         x = input_tensor
-#     ModuleFactory[module_type](x)
-
-# for module_type in module_type_list:
-#     logger.info(f"Profiling {module_type}")
-#     model = ModuleFactory[module_type]
-#     if "RCAN" not in module_type:
-#         x = input_tensor_div
-#     else:
-#         x = input_tensor
-#     profile(lambda: model(x))
-
-# for n in [1, 100]:
-#     print(f"* Start timeit: Run {n} times")
-#     for module_type in module_type_list:
-#         model = ModuleFactory[module_type]
-#         if "RCAN" not in module_type:
-#             x = input_tensor_div
-#         else:
-#             x = input_tensor
-#         time = timeit.timeit(
-#             f"model(x); torch.cuda.synchronize()",
-#             setup="from __main__ import model, x; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
-#             number=n,
-#         )
-#         print(f"{module_type}:\t\t {time}s in {n} runs ({time/n}s/run)")
+    for n in [1, 100]:
+        print(f"* Start timeit: Run {n} times")
+        for module_type in module_type_list:
+            model = ModuleFactory[module_type]
+            if "RCAN" not in module_type:
+                x = input_tensor_div
+            else:
+                x = input_tensor
+            time = timeit.timeit(
+                f"model(x)",
+                setup="from __main__ import model, x; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
+                number=n,
+            )
+            print(f"{module_type}:\t\t {time}s in {n} runs ({time/n}s/run)")
