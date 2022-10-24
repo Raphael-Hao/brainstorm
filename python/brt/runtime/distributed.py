@@ -7,11 +7,10 @@ import torch.distributed as dist
 
 
 def init_nccl(group: dist.ProcessGroup):
-    world_rank = dist.get_world_size(group)
-    world_size = dist.get_rank(group)
+    world_size = dist.get_world_size(group)
+    world_rank = dist.get_rank(group)
     unique_id = C_dist.make_nccl_unique_id(world_rank)
     dist.broadcast(unique_id, 0, group)
-    print(unique_id.element_size()*unique_id.numel())
     C_dist.init_nccl(unique_id, world_rank, world_size)
 
 
