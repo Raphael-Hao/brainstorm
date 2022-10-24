@@ -15,7 +15,7 @@ namespace torch {
 
 static ::torch::Tensor make_nccl_unique_id(const int& world_rank) {
   ::torch::Tensor nccl_unique_id_t = ::torch::empty(
-      {sizeof(ncclUniqueId)}, ::torch::TensorOptions().dtype(::torch::kChar).device(::torch::kCPU));
+      {sizeof(ncclUniqueId)}, ::torch::TensorOptions().dtype(::torch::kInt8).device(::torch::kCPU));
   CHECK_EQ(nccl_unique_id_t.nbytes(), sizeof(ncclUniqueId));
   if (world_rank == 0) {
     ncclUniqueId nccl_unique_id;
@@ -23,15 +23,16 @@ static ::torch::Tensor make_nccl_unique_id(const int& world_rank) {
     memcpy((void*)nccl_unique_id_t.data_ptr(), &nccl_unique_id, sizeof(ncclUniqueId));
   }
   nccl_unique_id_t = nccl_unique_id_t.to(::torch::kCUDA);
+  CHECK_ON_CUDA(nccl_unique_id_t);
   return nccl_unique_id_t;
 }
 
 static void init_nccl(::torch::Tensor unique_id, const int& world_rank, const int& world_size) {
   static bool initialized = false;
   auto unique_it_cpu = unique_id.to(::torch::kCPU);
+  CHECK_ON_CPU(unique_it_cpu);
   if (!initialized) {
     NcclManager& manager = NcclManager::GetManager();
-    auto nccl_stream = at::cuda::getStreamFromPool();
     manager.Init(unique_it_cpu, world_rank, world_size);
     initialized = true;
   } else {
