@@ -344,9 +344,9 @@ NET_CONV_META = {
                 "module_name": "Conv2d",
                 "in_channels": 3,
                 "out_channels": 36,
-                "kernel_size": 1,
+                "kernel_size": 3,
                 "stride": 1,
-                "padding": 0,
+                "padding": 1,
                 "dilation": 1,
                 "groups": 1,
                 "bias": True,
@@ -558,9 +558,9 @@ NET_CONV_META = {
                 "module_name": "Conv2d",
                 "in_channels": 3,
                 "out_channels": 50,
-                "kernel_size": 1,
+                "kernel_size": 3,
                 "stride": 1,
-                "padding": 0,
+                "padding": 1,
                 "dilation": 1,
                 "groups": 1,
                 "bias": True,
@@ -683,7 +683,7 @@ NET_CONV_META = {
             {
                 "module_name": "Conv2d",
                 "in_channels": 50,
-                "out_channels": 144,
+                "out_channels": 200,
                 "kernel_size": 3,
                 "stride": 1,
                 "padding": 1,
@@ -694,13 +694,13 @@ NET_CONV_META = {
                 "norm": None,
                 "activation": None,
                 "input_shape": [-1, 50, 32, 32],
-                "output_shape": [-1, 144, 32, 32],
+                "output_shape": [-1, 200, 32, 32],
             },
             # tail_0_2
             {
                 "module_name": "Conv2d",
                 "in_channels": 50,
-                "out_channels": 144,
+                "out_channels": 200,
                 "kernel_size": 3,
                 "stride": 1,
                 "padding": 1,
@@ -711,7 +711,7 @@ NET_CONV_META = {
                 "norm": None,
                 "activation": None,
                 "input_shape": [-1, 50, 64, 64],
-                "output_shape": [-1, 144, 64, 64],
+                "output_shape": [-1, 200, 64, 64],
             },
             # tail_1
             {
@@ -772,9 +772,9 @@ NET_CONV_META = {
                 "module_name": "Conv2d",
                 "in_channels": 3,
                 "out_channels": 64,
-                "kernel_size": 1,
+                "kernel_size": 3,
                 "stride": 1,
-                "padding": 0,
+                "padding": 1,
                 "dilation": 1,
                 "groups": 1,
                 "bias": True,
@@ -897,7 +897,7 @@ NET_CONV_META = {
             {
                 "module_name": "Conv2d",
                 "in_channels": 64,
-                "out_channels": 144,
+                "out_channels": 256,
                 "kernel_size": 3,
                 "stride": 1,
                 "padding": 1,
@@ -908,13 +908,13 @@ NET_CONV_META = {
                 "norm": None,
                 "activation": None,
                 "input_shape": [-1, 64, 32, 32],
-                "output_shape": [-1, 144, 32, 32],
+                "output_shape": [-1, 256, 32, 32],
             },
             # tail_0_2
             {
                 "module_name": "Conv2d",
                 "in_channels": 64,
-                "out_channels": 144,
+                "out_channels": 256,
                 "kernel_size": 3,
                 "stride": 1,
                 "padding": 1,
@@ -925,7 +925,7 @@ NET_CONV_META = {
                 "norm": None,
                 "activation": None,
                 "input_shape": [-1, 64, 64, 64],
-                "output_shape": [-1, 144, 64, 64],
+                "output_shape": [-1, 256, 64, 64],
             },
             # tail_1
             {
@@ -962,6 +962,5 @@ NET_CONV_META = {
                 "output_shape": [-1, 3, 128, 128],
             },
         ],
-
-    ]
+    ],
 }
