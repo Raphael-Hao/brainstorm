@@ -22,13 +22,13 @@ qrs = cursor.execute(SELECT_ALL_CMD).fetchall()
 for key, id, optype in qrs:
     id: Dict = json.loads(id)
 
-    # # Delete parameters.module_name
-    # popret = id['parameters'].pop('module_name', None)
-    # if popret is not None:
-    #     print(id['parameters'])
-    #     id = json.dumps(id)
-    #     cursor.execute(UPDATE_CMD, (id, key))
-    #     cursor.connection.commit()
+    # Delete parameters.padding_mode
+    popret = id['parameters'].pop('padding_mode', None)
+    if popret is not None:
+        print(id['parameters'])
+        new_id = json.dumps(id)
+        cursor.execute(UPDATE_CMD, (new_id, key))
+        cursor.connection.commit()
         
     # Update output size of ConvTranspose2d
     # {
@@ -37,14 +37,14 @@ for key, id, optype in qrs:
     #     },
     #     ...
     # }
-    if optype == 'ConvTranspose2dBias':
-        outinfo: List = id['output_infos']['output_0']
-        if outinfo is None:
-            id['output_infos']['output_0'] = [id['input_infos']['input_0'][0], 3, 128, 128]
-        else:
-            outinfo[:2].extend([128, 128])
-            id['output_infos']['output_0'] = outinfo
-        print(f"{id['output_infos']['output_0']}")
+    # if optype == 'ConvTranspose2dBias':
+    #     outinfo: List = id['output_infos']['output_0']
+    #     if outinfo is None:
+    #         id['output_infos']['output_0'] = [id['input_infos']['input_0'][0], 3, 128, 128]
+    #     else:
+    #         outinfo[:2].extend([128, 128])
+    #         id['output_infos']['output_0'] = outinfo
+    #     print(f"{id['output_infos']['output_0']}")
 
     
     # Sort id

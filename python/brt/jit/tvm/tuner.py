@@ -198,6 +198,7 @@ class TVMTuner:
             self.tune_log_file.write_text(contents)
         record_reader = auto_scheduler.RecordReader(str(self.tune_log_file))
         best_score = float("inf")
+        best_inp = None
         for inp, res in record_reader:
             if objective_func == "fastest":
                 score = sum(res.costs) / len(res.costs)
@@ -214,6 +215,8 @@ class TVMTuner:
             if score < best_score:
                 best_score = score
                 best_inp = inp
+        if best_inp == None:
+            raise ValueError(f"Error around record file {str(self.tune_log_file)}")
         best_sch, best_args = self.tvm_task.compute_dag.apply_steps_from_state(
             best_inp.state, self.tvm_task.layout_rewrite_option
         )
