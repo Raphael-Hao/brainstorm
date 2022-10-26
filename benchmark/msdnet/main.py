@@ -73,7 +73,6 @@ def main():
         model.features = torch.nn.DataParallel(model.features)
         model.cuda()
     else:
-        print("Parallel")
         model = torch.nn.DataParallel(model).cuda()
 
     criterion = nn.CrossEntropyLoss().cuda()
@@ -86,7 +85,6 @@ def main():
     )
 
     if args.resume:
-        print("resuming")
         checkpoint = load_checkpoint(args)
         if checkpoint is not None:
             args.start_epoch = checkpoint["epoch"] + 1
@@ -102,7 +100,6 @@ def main():
         state_dict = torch.load(args.evaluate_from)["state_dict"]
         model.load_state_dict(state_dict)
         if args.parallel:
-            print("do not Parallel")
             torch.save(
                 model.module.state_dict(),
                 "MSDNet.pth",
