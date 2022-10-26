@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-from tutel import moe as tutel_moe
+from tutel_ea import moe as tutel_moe
 
 
 def print_rank(str):

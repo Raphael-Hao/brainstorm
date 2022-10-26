@@ -4,6 +4,7 @@
 import json
 import re
 from typing import Dict, List, Union
+from collections import OrderedDict
 
 __all__ = [
     "remove_empty_lines",
@@ -68,9 +69,10 @@ def make_identifier(
     identifier_dict["op_type"] = op_type
     identifier_dict["method"] = method
     identifier_dict["device_name"] = device_name
-    identifier_dict["input_infos"] = input_infos
-    identifier_dict["output_infos"] = output_infos
-    identifier_dict["parameters"] = parameters
+    identifier_dict["input_infos"] = OrderedDict(sorted(input_infos.items()))
+    identifier_dict["output_infos"] = OrderedDict(sorted(output_infos.items()))
+    identifier_dict["parameters"] = OrderedDict(sorted(parameters.items()))
+    identifier_dict = OrderedDict(sorted(identifier_dict.items()))
     identifier = json.dumps(identifier_dict)
     return identifier
 

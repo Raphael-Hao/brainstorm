@@ -1,6 +1,6 @@
 import pathlib
 import sys
-
+import copy
 from setuptools import find_packages, setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
@@ -61,6 +61,28 @@ def install(use_cuda=False):
                 extra_compile_args=ext_args,
             ),
         ]
+        dist_libs = ext_libs + ["nccl"]
+        dist_args = copy.deepcopy(ext_args)
+        dist_args["cxx"] += ["-DUSE_NCCL"]
+        dist_args["nvcc"] += ["-DUSE_NCCL"]
+        torch_extensions.append(
+            CUDAExtension(
+                name="brt._C.distributed",
+                sources=[
+                    "./src/backend/torch/distributed.cc",
+                    "./src/backend/torch/nccl_manager.cc",
+                    "./src/distributed/collective.cc",
+                    "./src/distributed/local_reorder.cu",
+                ],
+                library_dirs=["/usr/local/cuda/lib64/stubs"],
+                libraries=dist_libs,
+                include_dirs=[
+                    root_path / "include",
+                    root_path / "3rdparty/dmlc-core/include",
+                ],
+                extra_compile_args=dist_args,
+            )
+        )
     setup(
         name="brt",
         version="0.1",
@@ -76,7 +98,7 @@ try:
     print("Installing brt with CUDA runtime...")
     install(use_cuda=True)
 except:
-    print("CUDA not found, skipping CUDA build")
+    print("CUDA build failed, skipping CUDA build")
     try:
         install(use_cuda=False)
     except:

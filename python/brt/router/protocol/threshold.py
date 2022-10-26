@@ -18,7 +18,7 @@ class ThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         residual_path=-1,
-        single_tpu=False,
+        single_ptu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -29,7 +29,7 @@ class ThresholdProtocol(ProtocolBase):
         )
         self.threshold = threshold
         self.residual_path = residual_path
-        self.single_tpu = single_tpu
+        self.single_ptu = single_ptu
         self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
@@ -47,7 +47,7 @@ class ThresholdProtocol(ProtocolBase):
                 device=score.device,
             )
             hot_mask = torch.scatter_add(hot_mask, 1, residual_index, residual_indices)
-        if self.single_tpu:
+        if self.single_ptu:
             if hot_mask.numel() > 0:
                 loads = hot_mask.view(-1).cpu()
             else:
@@ -69,7 +69,7 @@ class ResidualThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         residual_path=0,
-        single_tpu=False,
+        single_ptu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -82,7 +82,7 @@ class ResidualThresholdProtocol(ProtocolBase):
         )
         self.threshold = threshold
         self.residual_path = residual_path
-        self.single_tpu = single_tpu
+        self.single_ptu = single_ptu
         self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
@@ -98,7 +98,7 @@ class ResidualThresholdProtocol(ProtocolBase):
             ).scatter_(1, hot_mask, 1)
         else:
             raise ValueError("drop_path should be 0 or 1")
-        if self.single_tpu:
+        if self.single_ptu:
             if hot_mask.numel() > 0:
                 loads = hot_mask.view(-1).cpu()
             else:
@@ -119,7 +119,7 @@ class BinaryThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         selected_path=0,
-        single_tpu=False,
+        single_ptu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -132,7 +132,7 @@ class BinaryThresholdProtocol(ProtocolBase):
         )
         self.threshold = threshold
         self.selected_path = selected_path
-        self.single_tpu = single_tpu
+        self.single_ptu = single_ptu
         self.supported_capacities = supported_capacities
         self.softmax = nn.Softmax(dim=1)
 
@@ -155,7 +155,7 @@ class BinaryThresholdProtocol(ProtocolBase):
                 "selected_path should be 0 or 1 for a binary threshold protocol"
             )
 
-        if self.single_tpu:
+        if self.single_ptu:
             if hot_mask.numel() > 0:
                 loads = hot_mask.view(-1).cpu()
             else:

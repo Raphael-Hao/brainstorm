@@ -56,7 +56,7 @@ def parse_conv2d_bn_act_params(json_params: Dict[str, Any]):
         norm = nn.BatchNorm2d(out_channels)
         json_params["module_name"] += "BatchNorm"
     elif norm is not None:
-        assert False, f'Unsupported norm type {norm}'
+        assert False, f"Unsupported norm type {norm}"
     activation = json_params.pop("activation")
     if activation == "ReLU":
         activation = nn.ReLU()
@@ -66,12 +66,14 @@ def parse_conv2d_bn_act_params(json_params: Dict[str, Any]):
         activation = nn.PReLU()
         json_params["module_name"] += "PReLU"
     elif activation is not None:
-        assert False, f'Unsupported activation type {activation}'
+        assert False, f"Unsupported activation type {activation}"
     input_infos = {"input_0": json_params.pop("input_shape")}
     output_infos = {"output_0": json_params.pop("output_shape")}
+    module_name = json_params["module_name"]
+    json_params.pop("module_name")
     parameters = json_params
     return (
-        json_params["module_name"],
+        module_name,
         input_infos,
         output_infos,
         parameters,
@@ -158,7 +160,7 @@ def make_log_fname(
 def main():
     tvm_tuner = TVMTuner()
     conv_params_log_file = (
-        BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_AIC21_Track1_Cam16.json"
+        BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_AIC21_Track1_Cam1_no_PReLU.json"
     )
     conv_params_log_file_nodup = (
         BRT_LOG_PATH / "benchmark/classsr/fsrcnn/conv_params_nodup.json"
@@ -246,7 +248,7 @@ def main():
             # )
             # template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
             # template_file_loaded.write_text(module_function.get_code()[0])
-    print('Done!')
+    print("Done!")
 
 
 if __name__ == "__main__":

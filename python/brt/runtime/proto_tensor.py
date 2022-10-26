@@ -383,6 +383,12 @@ def deinit_proto_tensor(
     return torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
 
 
+def make_proto_tensor_from(
+    tensor: torch.Tensor, from_proto_tensor: ProtoTensor
+) -> ProtoTensor:
+    return init_proto_tensor(tensor, *collect_proto_attr_stack(from_proto_tensor))
+
+
 def to_proto_tensor(_torch_tensor: torch.Tensor):
     """
     restore a torch.Tensor to a ProtoTensor without any pack operation

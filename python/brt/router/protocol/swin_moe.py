@@ -4,13 +4,28 @@ import os
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
-from tutel.impls import losses, communicate
 
 from brt.runtime import log
 from brt.router.protocol.base import ProtocolBase, register_protocol
 from brt.router.utils import generate_dst_indices
 
 logger = log.get_logger(__file__)
+
+
+def _get_world_size(group=None):
+    try:
+        return dist.get_world_size(group)
+    except:
+        return 1
+
+
+def _simple_all_reduce(input, group=None, op=torch.distributed.ReduceOp.SUM):
+    world_size = _get_world_size(group)
+    if world_size == 1:
+        return input
+    output = torch.clone(input, memory_format=torch.contiguous_format)
+    dist.all_reduce(output, op=op, group=group)
+    return output
 
 
 def get_compute_location_func(sorted=False, score=None):
@@ -31,6 +46,12 @@ def get_compute_location_func(sorted=False, score=None):
     return compute_location
 
 
+def _one_hot_with_dtype(data, num_classes, dtype):
+    result = torch.zeros([data.size(0), num_classes], device=data.device, dtype=dtype)
+    result.scatter_(1, data.unsqueeze(-1), 1)
+    return result
+
+
 @register_protocol("swin_moe")
 class SwinMoEProtocol(ProtocolBase):
     def __init__(
@@ -48,7 +69,9 @@ class SwinMoEProtocol(ProtocolBase):
         index_gen_opt=True,
         **kwargs,
     ):
-        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt, **kwargs)
+        super().__init__(
+            index_format=index_format, index_gen_opt=index_gen_opt, **kwargs
+        )
         self.top_k = top_k
         self.capacity_factor = capacity_factor
         self.gate_noise = gate_noise
@@ -69,7 +92,7 @@ class SwinMoEProtocol(ProtocolBase):
         indices_s = [x.view(-1) for x in topk_indices.chunk(self.top_k, dim=1)]
 
         masks_se = [
-            losses._one_hot_with_dtype(x, num_classes=num_global_experts, dtype=x.dtype)
+            _one_hot_with_dtype(x, num_classes=num_global_experts, dtype=x.dtype)
             for x in indices_s
         ]
         gates_s = [(score * x).sum(dim=1) for x in masks_se]
@@ -122,7 +145,7 @@ class SwinMoEProtocol(ProtocolBase):
         else:
             capacity = torch.max(route_indices)
             capacity = int(
-                communicate.simple_all_reduce(
+                _simple_all_reduce(
                     capacity, group=self.group, op=torch.distributed.ReduceOp.MAX
                 )
             )
@@ -144,19 +167,22 @@ class SwinMoEProtocol(ProtocolBase):
             capacity = capacity + self.alignment - remainder
 
         loads = acc_base.view(-1).cpu()
-        capacity = torch.zeros_like(loads, dtype=loads.dtype, device=loads.device).fill_(capacity)
+        capacity = torch.zeros_like(
+            loads, dtype=loads.dtype, device=loads.device
+        ).fill_(capacity)
 
-        return route_indices, acc_base.view(-1), capacity, new_score, loss
+        return route_indices, loads, capacity, new_score, loss
 
     def generate_auxiliary(self, score, logits_wo_noise, logits, topk_ids):
-        if self.is_gshard_loss:
-            loss = losses.gshard_loss(score, topk_ids)
-        else:
-            num_global_experts = score.size(1)
-            loss = losses.load_importance_loss(
-                F.softmax(logits, dim=1),
-                logits_wo_noise.gather(index=topk_ids, dim=1),
-                num_global_experts,
-                self.gate_noise,
-            )
+        # if self.is_gshard_loss:
+        #     loss = losses.gshard_loss(score, topk_ids)
+        # else:
+        #     num_global_experts = score.size(1)
+        #     loss = losses.load_importance_loss(
+        #         F.softmax(logits, dim=1),
+        #         logits_wo_noise.gather(index=topk_ids, dim=1),
+        #         num_global_experts,
+        #         self.gate_noise,
+        #     )
+        loss = None
         return loss

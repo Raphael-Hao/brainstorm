@@ -57,7 +57,6 @@ class DispatchFabric(FabricBase):
         real_loads: torch.Tensor,
         score: torch.Tensor = None,
     ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
-        assert self.index_format == "src_index", "DispatchFabric only support src_index"
         in_flow = self.pack_invalid_flow(in_flow)
 
         if self.flow_num == 1:

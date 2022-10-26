@@ -30,7 +30,7 @@ class classSR_3class_fsrcnn_net(nn.Module):
         y = [self.net1(sr_x[0]), self.net2(sr_x[1]), self.net3(sr_x[2])]
         gr_x = self.gather_router(y)
         return gr_x, [yy.shape[0] for yy in y]
-        
+
 
 class Classifier(nn.Module):
     def __init__(self):
@@ -54,7 +54,7 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         # assert x.shape[1:] == torch.Size([3, 32, 32]), x.shape
-        out = self.CondNet(x) # [bs, 32, 8, 8]
+        out = self.CondNet(x)  # [bs, 32, 8, 8]
         out = self.avgPool2d(out)  # [bs, 32, 1, 1]
         out = out.view(-1, 32)  # [bs, 32]
         out = self.lastOut(out)  # [bs, 3]

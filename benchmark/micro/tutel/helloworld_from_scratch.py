@@ -8,7 +8,7 @@ import time
 import torch
 import torch.nn.functional as F
 
-from tutel import moe, net, system
+from tutel_ea import moe, net, system
 
 if torch.cuda.is_available():
   dist = system.init_data_model_parallel(backend='nccl')

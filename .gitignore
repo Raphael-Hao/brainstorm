@@ -7,6 +7,7 @@ total_latency.tsv
 *.qdrep
 *.svg
 *.csv
+benchmark/swin_moe/results
 
 .cache/*
 !.cache/kernel_db.sqlite
@@ -80,3 +81,6 @@ benchmark/dynamic_routing/log.txt
 benchmark/msdnet/*.pth
 benchmark/msdnet/saveresult
 *.nsys-rep
+
+*.npy
+*.npy.npz
