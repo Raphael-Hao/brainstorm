@@ -2,24 +2,11 @@
  * Copyright (c) 2022 by Microsoft Corporation.
  * Licensed under the MIT license.
  */
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/CUDAEvent.h>
+
 #include <brt/router/location.h>
 #include <brt/router/route.h>
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <torch/extension.h>
 
-#undef CHECK_EQ
-#undef CHECK_NE
-#undef CHECK_ON_CPU
-#undef CHECK_ON_CUDA
-#undef CHECK_CONTIGUOUS
-
-#define CHECK_EQ(x, y) TORCH_INTERNAL_ASSERT((x) == (y), "CHECK_EQ fails.")
-#define CHECK_NE(x, y) TORCH_INTERNAL_ASSERT((x) != (y), "CHECK_NE fails.")
-#define CHECK_ON_CPU(x) TORCH_INTERNAL_ASSERT(!x.is_cuda(), #x " must be a CPU tensor")
-#define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
-#define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
+#include "./torch.h"
 
 namespace brt {
 namespace backend {
@@ -34,9 +21,9 @@ std::vector<::torch::Tensor> generate_global_dst_indices(
   auto path_num = hot_mask.size(1);
   auto supported_capacity_num = supported_capacities.size(0);
 
-  ::torch::Tensor global_dst_indices = ::at::zeros_like(hot_mask, hot_mask.options());
-  ::torch::Tensor loads = ::at::zeros({path_num}, hot_mask.options());
-  ::torch::Tensor base_indices = at::zeros({path_num}, hot_mask.options());
+  ::torch::Tensor global_dst_indices = ::torch::zeros_like(hot_mask, hot_mask.options());
+  ::torch::Tensor loads = ::torch::zeros({path_num}, hot_mask.options());
+  ::torch::Tensor base_indices = ::torch::zeros({path_num}, hot_mask.options());
   router::GenerateGlobalDstIndices(
       hot_mask.data_ptr<int>(), global_dst_indices.data_ptr<int>(), loads.data_ptr<int>(),
       base_indices.data_ptr<int>(), supported_capacities.data_ptr<int>(), sample_num, path_num,
@@ -50,8 +37,6 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_src_indices(
     const bool& load_on_cpu = true) {
   CHECK_ON_CUDA(hot_mask);
 
-  // hot_mask.to(at::kInt, true);
-
   auto sample_num = hot_mask.size(0);
   auto path_num = hot_mask.size(1);
 
@@ -64,8 +49,8 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_src_indices(
     supported_capacity_num = supported_capacities.value().size(0);
   }
 
-  ::torch::Tensor src_indices = ::at::zeros_like(hot_mask, hot_mask.options());
-  ::torch::Tensor loads = ::at::zeros({path_num}, hot_mask.options());
+  ::torch::Tensor src_indices = ::torch::zeros_like(hot_mask, hot_mask.options());
+  ::torch::Tensor loads = ::torch::zeros({path_num}, hot_mask.options());
   router::GenerateSrcIndices(hot_mask.data_ptr<int>(), src_indices.data_ptr<int>(),
                              loads.data_ptr<int>(), supported_capacities_data_ptr, sample_num,
                              path_num, supported_capacity_num,
@@ -94,8 +79,8 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
     supported_capacity_num = supported_capacities.value().size(0);
   }
 
-  ::torch::Tensor dst_indices = ::at::zeros_like(hot_mask, hot_mask.options());
-  ::torch::Tensor loads = ::at::zeros({path_num}, hot_mask.options());
+  ::torch::Tensor dst_indices = ::torch::zeros_like(hot_mask, hot_mask.options());
+  ::torch::Tensor loads = ::torch::zeros({path_num}, hot_mask.options());
   router::GenerateDstIndices(hot_mask.data_ptr<int>(), dst_indices.data_ptr<int>(),
                              loads.data_ptr<int>(), supported_capacities_data_ptr, sample_num,
                              path_num, supported_capacity_num,
@@ -113,11 +98,10 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   ::torch::Tensor cuda_loads;
   if (!loads.is_cuda() && target_index_fmt_id == 1) {
     cuda_loads = loads.cuda();
-  }
-  else{
+  } else {
     cuda_loads = loads;
   }
-  ::torch::Tensor new_indices = ::at::zeros_like(origin_indices, origin_indices.options());
+  ::torch::Tensor new_indices = ::torch::zeros_like(origin_indices, origin_indices.options());
   auto sample_num = origin_indices.size(0);
   auto path_num = origin_indices.size(1);
   router::ConvertIndexFormat(origin_indices.data_ptr<int>(), new_indices.data_ptr<int>(),
@@ -149,8 +133,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   ::torch::Tensor cuda_loads;
   if (!loads.is_cuda()) {
     cuda_loads = loads.cuda();
-  }
-  else{
+  } else {
     cuda_loads = loads;
   }
 
@@ -162,7 +145,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
 
   auto out_shape = in_data.sizes().vec();
   out_shape[0] = total_load;
-  auto out_data = ::at::zeros(out_shape, in_data.options());
+  auto out_data = ::torch::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
   router::DispatchWithDstIndices1D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
@@ -195,7 +178,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
 
   auto out_shape = in_data.sizes().vec();
   out_shape[0] = total_load;
-  auto out_data = ::at::zeros(out_shape, in_data.options());
+  auto out_data = ::torch::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
   router::DispatchWithDstIndices2D(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
@@ -215,8 +198,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   ::torch::Tensor cuda_loads;
   if (!loads.is_cuda()) {
     cuda_loads = loads.cuda();
-  }
-  else{
+  } else {
     cuda_loads = loads;
   }
 
@@ -238,13 +220,13 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
   }
 
   out_shape[0] = sample_num;
-  ::torch::Tensor out_data = ::at::zeros(out_shape, in_data.options());
+  ::torch::Tensor out_data = ::torch::zeros(out_shape, in_data.options());
   CHECK_ON_CUDA(out_data);
 
   router::CombineWithSrcIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
                                 gates_data_ptr, route_indices.data_ptr<int>(),
-                                cuda_loads.data_ptr<int>(), capacity, sample_num, sample_size, path_num,
-                                at::cuda::getDefaultCUDAStream().stream());
+                                cuda_loads.data_ptr<int>(), capacity, sample_num, sample_size,
+                                path_num, at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
