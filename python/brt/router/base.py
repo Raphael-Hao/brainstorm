@@ -32,6 +32,11 @@ class RouterBase(nn.Module):
             "max for maximum"
             "cum for cumulative"
             self.capture_mode = capture_mode
+            captured_fabric_type = os.environ.get("BRT_CAPTURED_FABRIC_TYPE")
+            if captured_fabric_type is not None:
+                self.captured_fabric_type = captured_fabric_type.split(":")
+            else:
+                self.captured_fabric_type = ["dispatch"]
         else:
             self.capturing = False
 
@@ -93,9 +98,9 @@ class RouterBase(nn.Module):
         if not self.capturing:
             return
 
-        if "dispatch" in fabric_type:
+        if "dispatch" in fabric_type and "dispatch" in self.captured_fabric_type:
             self.capture_dispatch_flows(in_flows, route_indices, loads)
-        elif "combine" in fabric_type:
+        elif "combine" in fabric_type and "combine" in self.captured_fabric_type:
             self.capture_combine_flows(in_flows)
         else:
             return
