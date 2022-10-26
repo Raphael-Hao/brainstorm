@@ -87,8 +87,13 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
     }
     manager.StartContext();
     manager.WaitEvent(1);
-    distributed::Gather(recv_sizes.data_ptr(), all_recv_sizes.data_ptr(), recv_sizes.nbytes(), 0,
-                        world_rank, world_size, manager.GetComm(), manager.GetStream());
+    if (world_rank == 0) {
+      distributed::Gather(recv_sizes.data_ptr(), all_recv_sizes.data_ptr(), recv_sizes.nbytes(), 0,
+                          world_rank, world_size, manager.GetComm(), manager.GetStream());
+    } else {
+      distributed::Gather(recv_sizes.data_ptr(), nullptr, recv_sizes.nbytes(), 0, world_rank,
+                          world_size, manager.GetComm(), manager.GetStream());
+    }
     manager.RecordEvent(1);
     manager.EndContext();
   }
@@ -129,17 +134,22 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
       auto reorder_results = locality_reorder(all_recv_sizes, world_size);
       reorder_indices = reorder_results.first;
       all_reordered_loads = reorder_results.second;
+      manager.RecordStorage(all_reordered_loads);
     } else {
       reorder_indices = ::torch::empty_like(send_sizes, send_sizes.options());
     }
     manager.StartContext();
     manager.WaitEvent(1);
-    manager.RecordStorage(all_reordered_loads);
     manager.RecordStorage(reorder_indices);
     manager.RecordStorage(reordered_loads);
-    distributed::Scatter(all_reordered_loads.data_ptr(), reordered_loads.data_ptr(),
-                         reordered_loads.nbytes(), 0, world_rank, world_size, manager.GetComm(),
-                         manager.GetStream());
+    if (world_rank == 0) {
+      distributed::Scatter(all_reordered_loads.data_ptr(), reordered_loads.data_ptr(),
+                           reordered_loads.nbytes(), 0, world_rank, world_size, manager.GetComm(),
+                           manager.GetStream());
+    } else {
+      distributed::Scatter(nullptr, reordered_loads.data_ptr(), reordered_loads.nbytes(), 0,
+                           world_rank, world_size, manager.GetComm(), manager.GetStream());
+    }
     distributed::BroadCast(reorder_indices.data_ptr(), reorder_indices.data_ptr(),
                            reorder_indices.nbytes(), 0, manager.GetComm(), manager.GetStream());
     manager.RecordEvent(1);
