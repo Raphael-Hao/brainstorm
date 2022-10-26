@@ -13,7 +13,7 @@ from brt.passes import (
     PermanentPathFoldPass,
     OnDemandMemoryPlanPass,
     PredictMemoryPlanPass,
-    ReorderOperationPass,
+    OperatorReorderPass,
     ConstantPropagationPass,
 )
 import torch.nn.parallel
@@ -137,7 +137,7 @@ def threshold_dynamic_evaluate(
 
         benchmarker.add_benchmark("liveness", liveness_benchmark)
 
-        def reorder_operation_benchmark():
+        def reorder_operator_benchmark():
             from torch.fx.passes.graph_drawer import FxGraphDrawer
 
             timer = CUDATimer(repeat=5)
@@ -146,9 +146,9 @@ def threshold_dynamic_evaluate(
             targets = []
             baseline_time = []
             DeadPathEliminatePass_time = []
-            reorder_operationPass_time = []
+            reorder_operatorPass_time = []
             speed_up_of_deadpatheliminatepass = []
-            speed_up_of_reorder_operationpass = []
+            speed_up_of_reorder_operatorpass = []
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
                 with torch.no_grad():
@@ -176,12 +176,12 @@ def threshold_dynamic_evaluate(
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("dce.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
-                    reorder_operation_pass = ReorderOperationPass(new_backbone, runtime_load=1)
-                    reorder_operation_pass.run_on_graph()
-                    new_backbone = reorder_operation_pass.finalize()
-                    timer.execute(lambda: new_backbone(input_var), "reorder_operation")
+                    reorder_operator_pass = OperatorReorderPass(new_backbone, runtime_load=1)
+                    reorder_operator_pass.run_on_graph()
+                    new_backbone = reorder_operator_pass.finalize()
+                    timer.execute(lambda: new_backbone(input_var), "reorder_operator")
                     output_dce = new_backbone(input_var)
-                    reorder_operationPass_time.append(timer.avg)
+                    reorder_operatorPass_time.append(timer.avg)
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("dce_trans.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
@@ -192,8 +192,8 @@ def threshold_dynamic_evaluate(
                     speed_up_of_deadpatheliminatepass.append(
                         baseline_time[-1] / DeadPathEliminatePass_time[-1]
                     )
-                    speed_up_of_reorder_operationpass.append(
-                        baseline_time[-1] / reorder_operationPass_time[-1]
+                    speed_up_of_reorder_operatorpass.append(
+                        baseline_time[-1] / reorder_operatorPass_time[-1]
                     )
 
                 if i % 10 == 0:
@@ -203,16 +203,16 @@ def threshold_dynamic_evaluate(
                         max(speed_up_of_deadpatheliminatepass),
                     )
                     print(
-                        "max of speed_up_of_reorder_operationpass",
-                        max(speed_up_of_reorder_operationpass),
+                        "max of speed_up_of_reorder_operatorpass",
+                        max(speed_up_of_reorder_operatorpass),
                     )
                     print(
                         "min of speed_up_of_deadpatheliminatepass",
                         min(speed_up_of_deadpatheliminatepass),
                     )
                     print(
-                        "min of speed_up_of_reorder_operationpass",
-                        min(speed_up_of_reorder_operationpass),
+                        "min of speed_up_of_reorder_operatorpass",
+                        min(speed_up_of_reorder_operatorpass),
                     )
                     print(
                         "avg of speed_up_of_deadpatheliminatepass",
@@ -220,11 +220,11 @@ def threshold_dynamic_evaluate(
                         / len(speed_up_of_deadpatheliminatepass),
                     )
                     print(
-                        "avg of speed_up_of_reorder_operationpass",
-                        sum(speed_up_of_reorder_operationpass) / len(speed_up_of_reorder_operationpass),
+                        "avg of speed_up_of_reorder_operatorpass",
+                        sum(speed_up_of_reorder_operatorpass) / len(speed_up_of_reorder_operatorpass),
                     )
 
-        benchmarker.add_benchmark("reorder_operation", reorder_operation_benchmark)
+        benchmarker.add_benchmark("reorder_operator", reorder_operator_benchmark)
 
         def constant_propagation_benchmark():
             from torch.fx.passes.graph_drawer import FxGraphDrawer
@@ -328,10 +328,10 @@ def threshold_dynamic_evaluate(
             baseline_time = []
             DeadPathEliminatePass_time = []
             ConstProPass_time = []
-            reorder_operationPass_time = []
+            reorder_operatorPass_time = []
             speed_up_of_deadpatheliminatepass = []
             speed_up_of_constpropogationpass = []
-            speed_up_of_reorder_operationpass = []
+            speed_up_of_reorder_operatorpass = []
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
                 with torch.no_grad():
@@ -374,12 +374,12 @@ def threshold_dynamic_evaluate(
                     )
                     ConstProPass_time.append(timer.avg)
                     out_put_const = new_backbone_const(input_var)
-                    reorder_operation_pass = ReorderOperationPass(new_backbone_const, runtime_load=1)
-                    reorder_operation_pass.run_on_graph()
-                    new_backbone = reorder_operation_pass.finalize()
-                    timer.execute(lambda: new_backbone(input_var), "reorder_operation")
+                    reorder_operator_pass = OperatorReorderPass(new_backbone_const, runtime_load=1)
+                    reorder_operator_pass.run_on_graph()
+                    new_backbone = reorder_operator_pass.finalize()
+                    timer.execute(lambda: new_backbone(input_var), "reorder_operator")
                     output_dce = new_backbone(input_var)
-                    reorder_operationPass_time.append(timer.avg)
+                    reorder_operatorPass_time.append(timer.avg)
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("dce_trans.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
@@ -389,8 +389,8 @@ def threshold_dynamic_evaluate(
                     speed_up_of_constpropogationpass.append(
                         baseline_time[-1] / ConstProPass_time[-1]
                     )
-                    speed_up_of_reorder_operationpass.append(
-                        baseline_time[-1] / reorder_operationPass_time[-1]
+                    speed_up_of_reorder_operatorpass.append(
+                        baseline_time[-1] / reorder_operatorPass_time[-1]
                     )
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
@@ -403,8 +403,8 @@ def threshold_dynamic_evaluate(
                         max(speed_up_of_constpropogationpass),
                     )
                     print(
-                        "max of speed_up_of_reorder_operationpass",
-                        max(speed_up_of_reorder_operationpass),
+                        "max of speed_up_of_reorder_operatorpass",
+                        max(speed_up_of_reorder_operatorpass),
                     )
                     print(
                         "min of speed_up_of_deadpatheliminatepass",
@@ -415,8 +415,8 @@ def threshold_dynamic_evaluate(
                         min(speed_up_of_constpropogationpass),
                     )
                     print(
-                        "min of speed_up_of_reorder_operationpass",
-                        min(speed_up_of_reorder_operationpass),
+                        "min of speed_up_of_reorder_operatorpass",
+                        min(speed_up_of_reorder_operatorpass),
                     )
                     print(
                         "avg of speed_up_of_deadpatheliminatepass",
@@ -429,8 +429,8 @@ def threshold_dynamic_evaluate(
                         / len(speed_up_of_constpropogationpass),
                     )
                     print(
-                        "avg of speed_up_of_reorder_operationpass",
-                        sum(speed_up_of_reorder_operationpass) / len(speed_up_of_reorder_operationpass),
+                        "avg of speed_up_of_reorder_operatorpass",
+                        sum(speed_up_of_reorder_operatorpass) / len(speed_up_of_reorder_operatorpass),
                     )
 
         benchmarker.add_benchmark("all_opt", all_opt_benchmark)
