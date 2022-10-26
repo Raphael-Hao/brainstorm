@@ -15,7 +15,7 @@ group = dist.group.WORLD
 brt_dist.init_nccl(group)
 
 grain_size = 768
-capacity = 1024
+capacity = 10
 
 
 tensor = torch.arange(
@@ -24,26 +24,26 @@ tensor = torch.arange(
     device=device,
 ).reshape(-1, grain_size)
 loads = torch.randint(
-    1, capacity + 1, (world_size,), dtype=torch.int32, device=device
+    capacity // 2, capacity + 1, (world_size,), dtype=torch.int32, device=device
 )
 
 
-# print(tensor)
-# print(loads)
-out_data, out_loads = brt_dist.asymmetry_all_to_all(tensor, loads)
-# print(out_data)
-# print(out_loads)
+print(tensor)
+print(loads)
+out_data, out_loads = brt_dist.asymmetry_a2a(tensor, loads)
+print(out_data)
+print(out_loads)
 
-timer = CUDATimer(repeat=2)
+timer = CUDATimer(repeat=2, root=local_rank)
 timer.execute(
-    lambda: brt_dist.asymmetry_all_to_all(tensor, loads), "brt.asymmetry_all_to_all"
+    lambda: brt_dist.asymmetry_a2a(tensor, loads), "brt.asymmetry_all_to_all"
 )
 
 
-def torch_asymmetry_all_to_all(tensor):
+def torch_symmetry_a2a(tensor):
     output = torch.empty_like(tensor)
     dist.all_to_all_single(output, tensor)
     return output
 
 
-timer.execute(lambda: torch_asymmetry_all_to_all(tensor), "dist.all_to_all_single")
+timer.execute(lambda: torch_symmetry_a2a(tensor), "dist.all_to_all_single")
