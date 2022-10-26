@@ -53,7 +53,7 @@ static std::pair<::torch::Tensor, ::torch::Tensor> locality_reorder(const ::torc
 
 static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& in_data,
                                                          const ::torch::Tensor& send_sizes,
-                                                         bool post_locality = false) {
+                                                         bool locality_aware = false) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
@@ -79,7 +79,7 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
 
   ::torch::Tensor all_recv_sizes;
-  if (post_locality) {
+  if (locality_aware) {
     if (world_rank == 0) {
       all_recv_sizes =
           ::torch::empty({send_sizes.numel() * manager.GetWorldSize()}, send_sizes.options());
@@ -117,11 +117,13 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   manager.RecordEvent(0);
   manager.EndContext();
 
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
   ::torch::Tensor reorder_indices;
   ::torch::Tensor all_reordered_loads;
   ::torch::Tensor reordered_loads = ::torch::empty_like(send_sizes, send_sizes.options());
 
-  if (post_locality) {
+  if (locality_aware) {
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
     if (world_rank == 0) {
       auto reorder_results = locality_reorder(all_recv_sizes, world_size);
@@ -131,7 +133,7 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
       reorder_indices = ::torch::empty_like(send_sizes, send_sizes.options());
     }
     manager.StartContext();
-    manager.WaitEvent(0);
+    manager.WaitEvent(1);
     manager.RecordStorage(all_reordered_loads);
     manager.RecordStorage(reorder_indices);
     manager.RecordStorage(reordered_loads);
@@ -140,12 +142,12 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
                          manager.GetStream());
     distributed::BroadCast(reorder_indices.data_ptr(), reorder_indices.data_ptr(),
                            reorder_indices.nbytes(), 0, manager.GetComm(), manager.GetStream());
-    manager.RecordEvent(0);
+    manager.RecordEvent(1);
     manager.EndContext();
+    manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
   }
 
-  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
-  if (post_locality) {
+  if (locality_aware) {
     return {out_data, reordered_loads, reorder_indices};
   } else {
     return {out_data, recv_sizes};
@@ -164,5 +166,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("loads"), pybind11::arg("wolrd_size"));
   m.def("asymmetry_all_to_all", &brt::backend::torch::asymmetry_all_to_all, "asymmetry all to all",
         pybind11::arg("in_data"), pybind11::arg("send_sizes"),
-        pybind11::arg("post_locality") = false);
+        pybind11::arg("locality_aware") = false);
 }

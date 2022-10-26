@@ -14,12 +14,12 @@ def init_nccl(group: dist.ProcessGroup):
     C_dist.init_nccl(unique_id, world_rank, world_size)
 
 
-def asymmetry_all_to_all(in_data: torch.Tensor, in_loads: torch.Tensor):
-    out_data, out_loads = C_dist.asymmetry_all_to_all(in_data, in_loads)
-    return out_data, out_loads
+def asymmetry_a2a(in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware=False):
+    return C_dist.asymmetry_all_to_all(in_data, in_loads, locality_aware)
 
 
-def locality_aware_all_to_all(in_data: torch.Tensor, in_loads: torch.Tensor):
+
+def locality_aware_a2a(in_data: torch.Tensor, in_loads: torch.Tensor):
     out_data, out_loads, reorder_indices = C_dist.asymmetry_all_to_all(
         in_data, in_loads, True
     )

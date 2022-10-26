@@ -37,13 +37,17 @@ def profile(func):
 
 
 class Timer:
-    def __init__(self, warm_up: int = 5, loop=10, repeat=1) -> None:
-        self.set_configure(warm_up, loop, repeat)
+    def __init__(
+        self, warm_up: int = 5, loop=10, repeat=1, root=0, detail=False
+    ) -> None:
+        self.set_configure(warm_up, loop, repeat, root, detail)
 
-    def set_configure(self, warm_up: int = 5, loop=10, repeat=1):
+    def set_configure(self, warm_up: int = 5, loop=10, repeat=1, root=0, detail=False):
         self.warm_up = warm_up
         self.loop = loop
         self.repeat = repeat
+        self.root = root
+        self.detail = detail
 
     def start(self):
         self.elapsed = []
@@ -59,8 +63,10 @@ class Timer:
     def step_stop(self):
         self.elapsed.append(self.step_elapsed)
 
-    def print(self, msg, detail=False):
-        if detail == False:
+    def print(self, msg):
+        if self.root != 0:
+            return
+        if self.detail == False:
             print(
                 f"{msg} test results in ms: avg: {self.avg:.3f} max: {self.max:.3f} min: {self.min:.3f}"
             )
@@ -87,8 +93,10 @@ class Timer:
 
 
 class CPUTimer(Timer):
-    def __init__(self, warm_up: int = 5, loop=10, repeat=1) -> None:
-        super().__init__(warm_up, loop, repeat)
+    def __init__(
+        self, warm_up: int = 5, loop=10, repeat=1, root=0, detail=False
+    ) -> None:
+        super().__init__(warm_up, loop, repeat, root, detail)
         self.start_time = None
         self.end_time = None
 
@@ -101,8 +109,10 @@ class CPUTimer(Timer):
 
 
 class CUDATimer(Timer):
-    def __init__(self, warm_up: int = 5, loop=10, repeat=1) -> None:
-        super().__init__(warm_up, loop, repeat)
+    def __init__(
+        self, warm_up: int = 5, loop=10, repeat=1, root=0, detail=False
+    ) -> None:
+        super().__init__(warm_up, loop, repeat, root, detail)
         self.start_event = torch.cuda.Event(enable_timing=True)
         self.end_event = torch.cuda.Event(enable_timing=True)
 
