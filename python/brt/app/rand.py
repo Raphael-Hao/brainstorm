@@ -25,7 +25,6 @@ class RandScatter(nn.Module):
         capture_mode: str = "cum",
     ):
         """random scatter router
-
         Args:
             rand_path_num (int): number of paths for random routing destinations.
             fabric_type (str, optional): fabric type. Defaults to "dispatch".
