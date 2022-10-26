@@ -226,7 +226,7 @@ class ClassifierModule(nn.Module):
 
     def forward(self, x):
         res = self.m(x[-1])
-        res = res.view(res.size(0),self.linear.in_features)
+        res = res.view(res.size(0), self.linear.in_features)
         return self.linear(res)
 
 
@@ -308,7 +308,7 @@ class MSDNet(nn.Module):
         elif isinstance(m, nn.Linear):
             m.bias.data.zero_()
 
-    def  _build_block(self, nIn, args, step, n_layer_all, n_layer_curr):
+    def _build_block(self, nIn, args, step, n_layer_all, n_layer_curr):
         layers = [MSDNFirstLayer(3, nIn, args)] if n_layer_curr == 0 else []
         for i in range(step):
             n_layer_curr += 1
@@ -411,11 +411,10 @@ class MSDNet(nn.Module):
         return ClassifierModule(conv, nIn, num_classes)
 
     def build_routers(self, thresholds: List[float]):
-        assert len(thresholds) == self.nBlocks-1
+        assert len(thresholds) == self.nBlocks - 1
         self.routers_initilized = True
         self.scatters = nn.ModuleList()
 
-        
         for i in range(self.nBlocks - 1):
             self.scatters.append(
                 ScatterRouter(
@@ -424,9 +423,8 @@ class MSDNet(nn.Module):
                     protocol_kwargs={"threshold": thresholds[i]},
                     fabric_kwargs={
                         "flow_num": 5,
-                        "route_logic": ["1d", "1d","1d","1d","1d"],
-                        "transform": [False, False,False,False,False],
-
+                        "route_logic": ["1d", "1d", "1d", "1d", "1d"],
+                        "transform": [False, False, False, False, False],
                     },
                     capturing=True,
                 )
@@ -447,21 +445,27 @@ class MSDNet(nn.Module):
                 x = self.blocks[i](x)
                 tmp_res = self.classifier[i](x)
                 if i < self.nBlocks - 1:
-                    #x : 4 256 96 56 56 tmp_res : 256 1000
+                    # x : 4 256 96 56 56 tmp_res : 256 1000
                     ##build a tesnsor with the size(0) of bs
-                    sccater_input=[]
-                    result_scatter=[]
+                    sccater_input = []
+                    result_scatter = []
                     for j, output in enumerate(x):
                         sccater_input.append(output)
                         result_scatter.append([])
-                    
-                    for m in range(j+1,4):
+
+                    for m in range(j + 1, 4):
                         sccater_input.append(torch.zeros_like(output))
                         result_scatter.append([])
                     sccater_input.append(tmp_res)
                     ##scatter
-                    result_scatter[0],result_scatter[1],result_scatter[2],result_scatter[3], routed_res = self.scatters[i](sccater_input, tmp_res)
-                    result=[]
+                    (
+                        result_scatter[0],
+                        result_scatter[1],
+                        result_scatter[2],
+                        result_scatter[3],
+                        routed_res,
+                    ) = self.scatters[i](sccater_input, tmp_res)
+                    result = []
                     # differ the path by 0 and 1
                     for j, output in enumerate(x):
                         result.append(result_scatter[j][1])
@@ -470,7 +474,7 @@ class MSDNet(nn.Module):
                 else:
                     routed_res = tmp_res
                 res.append(routed_res)
-            ret=self.final_gather(res)
+            ret = self.final_gather(res)
             return ret
         else:
             ## raw testing

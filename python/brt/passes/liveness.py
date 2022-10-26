@@ -29,7 +29,6 @@ class DeadPathEliminatePass(PassBase):
         # eliminate dead path
         for node in self.graph_mod.graph.nodes:
             if self.is_gather_node(node):
-                # import pdb; pdb.set_trace()
                 node_m = self.sub_modules[node.target]
                 dead_paths = []
                 load_histroy = node_m.load_history
@@ -46,7 +45,7 @@ class DeadPathEliminatePass(PassBase):
                     [load_histroy[path_id] for path_id in live_paths],
                     dtype=np.float64,
                 )
-                if  self.retain_model==False:
+                if self.retain_model == False:
                     node_m.load_history = new_load_history
                 node.args = new_args
 
@@ -97,7 +96,7 @@ class PermanentPathFoldPass(PassBase):
                     load_histroy = node_m.load_history
                     for path_id, path_load in enumerate(load_histroy):
                         if (
-                            path_load >= self. upper_perm_load
+                            path_load >= self.upper_perm_load
                             or path_load <= self.lower_perm_load
                         ):
                             permanent_paths.append(path_id)

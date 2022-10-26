@@ -22,6 +22,7 @@ class ConstantPropagationPass(PassBase):
         super().__init__(m)
         self.lower_perm_load = lower_perm_load
         self.upper_perm_load = upper_perm_load
+
     ## maybe specific on msdnet currently
     def run_on_graph(self):
         for node in self.graph_mod.graph.nodes:
@@ -40,28 +41,30 @@ class ConstantPropagationPass(PassBase):
                         len(permanent_paths) == len(load_histroy)
                         and len(permanent_paths) > 0
                     ):
-                        i=0
-                        new_args_tuple=[]
+                        i = 0
+                        new_args_tuple = []
                         for key in node.users.copy().keys():
                             for keyarg in key.args:
-                                if isinstance(keyarg,int):
-                                    i=keyarg
+                                if isinstance(keyarg, int):
+                                    i = keyarg
                             for new_key in key.users.copy().keys():
                                 for new_key1 in new_key.users.copy().keys():
-                                    if not isinstance(new_key1.args[0],list):
-                                        new_args=(node.args[0][i],)
+                                    if not isinstance(new_key1.args[0], list):
+                                        new_args = (node.args[0][i],)
                                     else:
-                                        construct_new_args=[]
+                                        construct_new_args = []
                                         for tmp_node in new_key1.args[0]:
                                             if not tmp_node == new_key:
                                                 construct_new_args.append(tmp_node)
                                             else:
-                                                construct_new_args.append(node.args[0][i])
-                                        new_args=(construct_new_args,)
-                                    new_key1.args=new_args
+                                                construct_new_args.append(
+                                                    node.args[0][i]
+                                                )
+                                        new_args = (construct_new_args,)
+                                    new_key1.args = new_args
                                 self.graph_mod.graph.erase_node(new_key)
-                        
-                            i+=1
+
+                            i += 1
                             self.graph_mod.graph.erase_node(key)
                         self.graph_mod.graph.erase_node(node)
                 elif self.is_gather_node(node):
@@ -74,25 +77,26 @@ class ConstantPropagationPass(PassBase):
                         len(permanent_paths) == len(load_histroy)
                         and len(permanent_paths) > 0
                     ):
-                        i=0
-                        new_args_tuple=[]
+                        i = 0
+                        new_args_tuple = []
                         for key in node.users.copy().keys():
                             for keyarg in key.args:
-                                if isinstance(keyarg,int):
-                                    i=keyarg
-                            if not isinstance(key.args[0],list):
-                                new_args=(node.args[0][i],)
+                                if isinstance(keyarg, int):
+                                    i = keyarg
+                            if not isinstance(key.args[0], list):
+                                new_args = (node.args[0][i],)
                             else:
-                                construct_new_args=[]
+                                construct_new_args = []
                                 for tmp_node in key.args[0]:
                                     if not tmp_node == new_key:
                                         construct_new_args.append(tmp_node)
                                     else:
                                         construct_new_args.append(node.args[0][i])
-                                new_args=(construct_new_args,)
-                            key.args=new_args
-                            i+=1
+                                new_args = (construct_new_args,)
+                            key.args = new_args
+                            i += 1
                         self.graph_mod.graph.erase_node(node)
+
     def finalize(self):
         self.graph_mod.graph.lint()
         return super().finalize()

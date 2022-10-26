@@ -3,5 +3,5 @@
 
 from brt.passes.liveness import DeadPathEliminatePass, PermanentPathFoldPass
 from brt.passes.memory_plan import MemoryPlanPass, OnDemandMemoryPlanPass, PredictMemoryPlanPass
-from brt.passes.transformop import TransformPass
+from brt.passes.transformop import ReorderOperationPass
 from brt.passes.constant_propagation import ConstantPropagationPass
