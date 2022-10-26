@@ -15,7 +15,7 @@ from brt.router.protocol import make_protocol
 
 
 @register_pass("reorder_operation")
-class ReorderOperationPass(PassBase):
+class OperatorReorderPass(PassBase):
     def __init__(
         self,
         m: Union[torch.nn.Module, GraphModule],

@@ -260,6 +260,6 @@ optim_group.add_argument(
 bench_arg_manager = BenchmarkArgumentManager(arg_parser)
 bench_arg_manager.add_item("liveness")
 bench_arg_manager.add_item("memory_plan")
-bench_arg_manager.add_item("reorder_operation")
+bench_arg_manager.add_item("reorder_operator")
 bench_arg_manager.add_item("constant_propagation")
 bench_arg_manager.add_item("all_opt")
