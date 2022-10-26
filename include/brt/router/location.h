@@ -6,8 +6,7 @@
 #ifndef BRT_ROUTER_LOCATION_H_
 #define BRT_ROUTER_LOCATION_H_
 
-#include <brt/runtime/cuda_utils.h>
-
+#include <cuda_runtime.h>
 namespace brt {
 namespace router {
 

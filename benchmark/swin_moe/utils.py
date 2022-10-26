@@ -82,9 +82,6 @@ def load_checkpoint(
                         if "._moe_layer.experts" in entry:
                             continue
                         else:
-                            filtered_entry = ["head.weight", "head.bias"]
-                            if entry in filtered_entry:
-                                print(checkpoint[0]["model"][entry].shape)
                             state_dict[entry] = checkpoint[0]["model"][entry]
                     for entry in new_entry_weights.keys():
                         if "_bias" in entry:
