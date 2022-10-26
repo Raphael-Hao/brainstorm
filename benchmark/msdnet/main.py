@@ -14,10 +14,11 @@ sys.path.insert(0, ".")  # noqa: E402
 
 from dataloader import get_dataloaders
 from args import arg_parser
-from adaptive_inference import dynamic_evaluate 
+from adaptive_inference import dynamic_evaluate
 from theshold_inference import threshold_dynamic_evaluate
 from msdnet import MSDNet
 from op_counter import measure_model
+
 args = arg_parser.parse_args()
 
 if args.gpu:
@@ -63,9 +64,9 @@ def main():
         IM_SIZE = 224
 
     model = MSDNet(args)
-    n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)    
-    torch.save(n_flops, os.path.join(args.save, 'flops.pth'))
-    del(model)
+    n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
+    torch.save(n_flops, os.path.join(args.save, "flops.pth"))
+    del model
     model = MSDNet(args)
 
     if args.arch.startswith("alexnet") or args.arch.startswith("vgg"):
@@ -100,24 +101,18 @@ def main():
     if args.evalmode is not None:
         state_dict = torch.load(args.evaluate_from)["state_dict"]
         model.load_state_dict(state_dict)
-        # import pdb; pdb.set_trace()
         if args.parallel:
             print("do not Parallel")
-            
-            # model=model.module
-            
-            torch.save(model.module.state_dict(),'/home/yichuanjiaoda/brainstorm_project/brainstorm/benchmark/msdnet/generic/MSDNet.pth')
-            del(model)
+            torch.save(
+                model.module.state_dict(),
+                "MSDNet.pth",
+            )
+            del model
             model = MSDNet(args)
-            pretrained_dict = torch.load('/home/yichuanjiaoda/brainstorm_project/brainstorm/benchmark/msdnet/generic/MSDNet.pth')
+            pretrained_dict = torch.load(
+                "MSDNet.pth"
+            )
             model.load_state_dict(pretrained_dict, strict=False)
-        # model=model.module
-        
-        
-        
-        
-        
-
         if args.evalmode == "anytime":
             validate(test_loader, model, criterion)
         elif args.evalmode == "dynamic":
