@@ -1,4 +1,4 @@
-# Copyright (c) 2022 by Microsoft Corporation.
+  # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
 from typing import List, Dict, Any
@@ -105,7 +105,6 @@ class ScatterRouter(RouterBase):
 
     def forward(self, in_flows, score: torch.Tensor):
         route_indices, loads, capacities = self.protocol(score)
-
         if self.dispatch_score:
             if isinstance(in_flows, List):
                 in_flows = in_flows.append(score)
