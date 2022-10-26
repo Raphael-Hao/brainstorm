@@ -143,7 +143,7 @@ class Cell(nn.Module):
             # fabric_type="dispatch",
             fabric_type="single_ptu_dispatch",
             # protocol_kwargs={"threshold": 0.0001},
-            protocol_kwargs={"threshold": 0.0001, "single_tpu": True},
+            protocol_kwargs={"threshold": 0.0001, "single_ptu": True},
             fabric_kwargs={
                 "flow_num": 2,
                 "route_logic": ["1d", "1d"],
@@ -159,7 +159,7 @@ class Cell(nn.Module):
                 protocol_kwargs={
                     "threshold": 0.0001,
                     "residual_path": -1,
-                    "single_tpu": True,
+                    "single_ptu": True,
                 },
             )
 

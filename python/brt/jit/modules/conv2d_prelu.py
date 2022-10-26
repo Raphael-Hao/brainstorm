@@ -10,14 +10,18 @@ logger = log.get_logger(__file__)
 
 
 class Conv2dPReLUInfo(ModuleInfo):
+    """Info for fused torch.nn.Conv2d & torch.nn.PReLU kernel
+
+    Method Args:
+        forward:
+            [0]: float* __restrict__ placeholder,  Input
+            [1]: float* __restrict__ placeholder1, Conv2d.weight
+            [2]: float* __restrict__ T_prelu,      Output
+            [3]: float* __restrict__ placeholder2, Conv2d.bias
+            [4]: float* __restrict__ placeholder3, PReLU.weight
+    """
+
     _involved_module_cls = [torch.nn.Conv2d, torch.nn.PReLU]
-
-    # 0: float* __restrict__ placeholder,  Input
-    # 1: float* __restrict__ placeholder1, Conv2d.weight
-    # 2: float* __restrict__ T_prelu,      Output
-    # 3: float* __restrict__ placeholder2, Conv2d.bias
-    # 4: float* __restrict__ placeholder3, PReLU.weight
-
     _input_arg_indices = {"forward": [0]}
     _output_arg_indices = {"forward": [2]}
     _shared_arg_indices = {"forward": [0, 2]}
@@ -35,7 +39,12 @@ class Conv2dPReLUInfo(ModuleInfo):
 
     @classmethod
     def make_kernel(
-        cls, module: torch.nn.Module, method: str, sample_input: torch.Tensor
+        cls,
+        module: torch.nn.Module,
+        method: str,
+        sample_input: torch.Tensor,
+        objective_func: str = "fastest",
+        rank: int = 1,
     ) -> ModuleKernel:
         assert method in cls._shared_arg_indices, f"{method} is not supported"
         if not isinstance(module, torch.nn.Sequential):
@@ -70,7 +79,7 @@ parameters: {parameters}
             input_infos=input_infos,
             output_infos=output_infos,
             parameters=parameters,
-        ).load_from_db()
+        ).load_from_db(objective_func, rank)
 
     @classmethod
     def extract_shared_arg_infos(
@@ -94,9 +103,9 @@ parameters: {parameters}
             module = torch.nn.Sequential(module)
         module_name = cls.get_module_name(module)
         input_arg_num = 2
-        if 'Bias' in module_name:
+        if "Bias" in module_name:
             input_arg_num += 1
-        if 'PReLU' in module_name:
+        if "PReLU" in module_name:
             input_arg_num += 1
         total_arg_num = input_arg_num + 1
 

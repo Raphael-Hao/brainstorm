@@ -124,7 +124,7 @@ class SinglePTUCombineFabric(CombineFabric):
             granularity_padding=granularity_padding,
         )
 
-    def check_compatibility(self, kwargs: Dict[str,Any]) -> None:
+    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
         sparse = kwargs.pop("sparse", True)
         assert_compatibility(self, "sparse", True, sparse)
 
@@ -150,4 +150,3 @@ class SinglePTUCombineFabric(CombineFabric):
                 out_flow = out_flow.sum(dim=0, keepdim=True)
             out_flows.append(out_flow)
         return out_flows
-

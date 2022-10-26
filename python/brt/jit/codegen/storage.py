@@ -9,21 +9,31 @@ __all__ = ["kernel_storager"]
 
 
 class KernelStorager:
-    QUERY_KERNEL_CMD = r"SELECT Key, Identifier, OpType, Attributes, Source, DeviceType, Function, Tags, Miscs FROM KernelCache WHERE (Identifier = ?) AND (DeviceType = ?);"
-    ADD_KERNEL_CMD = r"INSERT INTO KernelCache (Key,Identifier,OpType,Attributes,Source,DeviceType,Function,Tags,Miscs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);"
-    DEL_KERNEL_CMD = r"DELETE FROM KernelCache WHERE (Key = ?);"
+    QUERY_KERNEL_CMD = r"""
+SELECT Key, Identifier, OpType, Attributes, Source, DeviceType, Function, Tags, Miscs
+FROM KernelCache
+WHERE (Identifier = ?) AND (DeviceType = ?) AND (ObjectiveFunc = ?) AND (Rank = ?);"""
+    ADD_KERNEL_CMD = r"""
+INSERT INTO KernelCache
+    (Key, Identifier, OpType, Attributes, Source, DeviceType, Function, Tags, Miscs, ObjectiveFunc, Rank) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
+    DEL_KERNEL_CMD = r"""
+DELETE FROM KernelCache
+WHERE (Identifier = ?) AND (ObjectiveFunc = ?) AND (Rank = ?);"""
     INIT_DB_CMD = r"""
 CREATE TABLE IF NOT EXISTS KernelCache(
-   Key        TEXT NOT NULL,
-   Identifier TEXT NOT NULL,
-   OpType     TEXT NOT NULL,
-   Attributes TEXT DEFAULT "",
-   Source     TEXT DEFAULT "External",
-   DeviceType TEXT NOT NULL,
-   Function   TEXT NOT NULL,
-   Tags       TEXT DEFAULT "",
-   Miscs      TEXT DEFAULT "",
-   PRIMARY KEY(Key)
+   Key           TEXT NOT NULL,
+   Identifier    TEXT NOT NULL,
+   OpType        TEXT NOT NULL,
+   Attributes    TEXT DEFAULT "",
+   Source        TEXT DEFAULT "External",
+   DeviceType    TEXT NOT NULL,
+   Function      TEXT NOT NULL,
+   Tags          TEXT DEFAULT "",
+   Miscs         TEXT DEFAULT "",
+   ObjectiveFunc TEXT DEFAULT "fastest",
+   Rank          INT  DEFAULT 1,
+   PRIMARY KEY(Identifier, ObjectiveFunc, Rank)
    );
 """
 
@@ -47,9 +57,20 @@ CREATE TABLE IF NOT EXISTS KernelCache(
         self.init_kernel_cache_db()
         self.model_kernels = []
 
-    def add_kernel(self, kernel_dict, overwrite=False):
+    def add_kernel(
+        self,
+        kernel_dict,
+        overwrite=False,
+    ):
         if overwrite:
-            self.cursor.execute(self.DEL_KERNEL_CMD, (kernel_dict["Key"],))
+            self.cursor.execute(
+                self.DEL_KERNEL_CMD,
+                (
+                    kernel_dict["Identifier"],
+                    kernel_dict["ObjectiveFunc"],
+                    kernel_dict["Rank"],
+                ),
+            )
 
         self.cursor.execute(
             self.ADD_KERNEL_CMD,
@@ -63,6 +84,8 @@ CREATE TABLE IF NOT EXISTS KernelCache(
                 kernel_dict["Function"],
                 kernel_dict["Tags"],
                 kernel_dict["Miscs"],
+                kernel_dict["ObjectiveFunc"],
+                kernel_dict["Rank"],
             ),
         )
         self.flush()
@@ -70,8 +93,17 @@ CREATE TABLE IF NOT EXISTS KernelCache(
     def init_kernel_cache_db(self):
         self.cursor.execute(self.INIT_DB_CMD)
 
-    def query_kernel(self, kernel_identifier, device_type):
-        self.cursor.execute(self.QUERY_KERNEL_CMD, (kernel_identifier, device_type))
+    def query_kernel(
+        self,
+        kernel_identifier,
+        device_type,
+        objective_func: str = "fastest",
+        rank: int = 1,
+    ):
+        self.cursor.execute(
+            self.QUERY_KERNEL_CMD,
+            (kernel_identifier, device_type, objective_func, rank),
+        )
         return self.cursor.fetchone()
 
     def flush(self):

@@ -10,15 +10,21 @@ import time
 from brt.router import ScatterRouter, GatherRouter
 
 
-class classSR_3class_rcan(nn.Module):
-    def __init__(self, in_nc=3, out_nc=3):
-        super(classSR_3class_rcan, self).__init__()
+class classSR_3class_rcan_net(nn.Module):
+    def __init__(
+        self,
+        in_nc=3,
+        out_nc=3,
+        n_resgroups: int = 10,
+        n_resblocks: int = 20,
+    ):
+        super(classSR_3class_rcan_net, self).__init__()
         self.upscale = 4
         self.classifier = Classifier()
 
         self.net1 = RCAN(
-            n_resgroups=10,
-            n_resblocks=20,
+            n_resgroups=n_resgroups,
+            n_resblocks=n_resblocks,
             n_feats=36,
             res_scale=1,
             n_colors=3,
@@ -27,8 +33,8 @@ class classSR_3class_rcan(nn.Module):
             reduction=16,
         )
         self.net2 = RCAN(
-            n_resgroups=10,
-            n_resblocks=20,
+            n_resgroups=n_resgroups,
+            n_resblocks=n_resblocks,
             n_feats=50,
             res_scale=1,
             n_colors=3,
@@ -37,8 +43,8 @@ class classSR_3class_rcan(nn.Module):
             reduction=16,
         )
         self.net3 = RCAN(
-            n_resgroups=10,
-            n_resblocks=20,
+            n_resgroups=n_resgroups,
+            n_resblocks=n_resblocks,
             n_feats=64,
             res_scale=1,
             n_colors=3,
@@ -104,7 +110,7 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         # assert x.shape[1:] == torch.Size([3, 32, 32]), x.shape
-        out = self.CondNet(x) # [bs, 32, 8, 8]
+        out = self.CondNet(x)  # [bs, 32, 8, 8]
         out = self.avgPool2d(out)  # [bs, 32, 1, 1]
         out = out.view(-1, 32)  # [bs, 32]
         out = self.lastOut(out)  # [bs, 3]

@@ -240,15 +240,10 @@ __global__ void __launch_bounds__(1024) padded_weighted_combine_with_src_indices
     for (int j = 0; j < path_num; j++) {
       int route_index = i * path_num + j;
       int local_dst = route_indices[route_index];
-
-      if (local_dst == 0) {
+      if (local_dst == 0 || local_dst > loads[j]) {
         continue;
       }
-
       int global_dst = local_dst - 1 + j * capacity;
-      for (int k = 0; k < j; k++) {
-        global_dst += loads[k];
-      }
       for (int k = threadIdx.x; k < sample_size; k += 1024) {
         out_data[i * sample_size + k] += in_data[global_dst * sample_size + k] * gates[route_index];
       }
@@ -474,22 +469,22 @@ void DispatchWithDstIndices1D(float* src_data /*[sample_num x sample_size]*/,
     if (gates == nullptr) {
       dispatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, route_indices, loads, sample_num, sample_size, path_num);
-      CUDA_CHECK(cudaDeviceSynchronize());
+      // CUDA_CHECK(cudaDeviceSynchronize());
     } else {
       weighted_dipatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, gates, route_indices, loads, sample_num, sample_size, path_num);
-      CUDA_CHECK(cudaDeviceSynchronize());
+      // CUDA_CHECK(cudaDeviceSynchronize());
     }
   } else {
     if (gates == nullptr) {
       padded_dispatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, route_indices, loads, capacity, sample_num, sample_size, path_num);
-      CUDA_CHECK(cudaDeviceSynchronize());
+      // CUDA_CHECK(cudaDeviceSynchronize());
     } else {
       padded_weighted_dipatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, gates, route_indices, loads, capacity, sample_num, sample_size,
           path_num);
-      CUDA_CHECK(cudaDeviceSynchronize());
+      // CUDA_CHECK(cudaDeviceSynchronize());
     }
   }
 }

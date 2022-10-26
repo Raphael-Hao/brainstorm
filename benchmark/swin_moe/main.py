@@ -6,7 +6,7 @@
 # --------------------------------------------------------
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
-from tutel import system_init
+from tutel_ea import system_init
 
 system_init.init_affinity_at_program_beginning()
 
@@ -37,7 +37,7 @@ from utils import load_checkpoint, save_checkpoint, auto_resume_helper, reduce_t
     create_ds_config, NativeScalerWithGradNormCount, load_pretrained, hook_scale_grad
 
 import warnings
-from tutel.moe import router_exporter
+from tutel_ea.moe import router_exporter
 
 warnings.filterwarnings("ignore",
                         "Argument interpolation should be of type InterpolationMode instead of int",
@@ -384,7 +384,8 @@ def validate(config, data_loader, model):
                 router_exporter.new_entry()
                 # router_exporter.set_input(images)
             output, l_aux = model(images)
-            router_exporter.set_output(output)
+            if router_exporter.is_enabled():
+                router_exporter.set_output(output)
             # measure accuracy and record loss
             loss = criterion(output, target)
 
@@ -418,7 +419,7 @@ def validate(config, data_loader, model):
                 f'Mem {memory_used:.0f}MB')
     logger.info(f' * Acc@1 {acc1_meter.avg:.3f} Acc@5 {acc5_meter.avg:.3f}')
     if expert_export_path:
-        router_exporter.dump() 
+        router_exporter.dump()
         exit()
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 

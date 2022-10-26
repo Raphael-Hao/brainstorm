@@ -1,13 +1,17 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Type, Union, List, Dict
+from typing import Type, Union, List, Dict, Any
 
 import operator
 import torch
 from torch.fx import GraphModule, Node
 from brt.router import is_router
-from brt.runtime import Registry
+from brt.runtime import Registry, log
 from brt.trace.graph import symbolic_trace
+
+__all__ = ["PassBase", "register_pass", "get_pass"]
+
+logger = log.get_logger(__file__)
 
 
 class PassBase:
@@ -20,11 +24,14 @@ class PassBase:
             self.graph_mod = symbolic_trace(m)
         self.sub_modules = dict(self.graph_mod.named_modules())
 
-    def analyze(flow: torch.Tensor) -> None:
-        raise NotImplementedError
+    def __call__(self) -> GraphModule:
+        self.run_on_graph()
+        return self.finalize()
 
     def run_on_graph(self) -> None:
-        raise NotImplementedError
+        raise NotImplementedError(
+            "run_on_graph should be implemented by an actual Pass."
+        )
 
     def finalize(self) -> GraphModule:
         self.graph_mod.graph.eliminate_dead_code()

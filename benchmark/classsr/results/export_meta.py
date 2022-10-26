@@ -14,25 +14,30 @@ if __name__ == "__main__":
         jsonf = json.load(f)
 
     if "ClassSR_FSRCNN" in jsonf["name"]:
-        for dataset in jsonf["dataset"]:
-            print(dataset["name"], end=": ")
-            maxnums = [
-                max(img["subimgs"][i] for img in dataset["imgs"]) for i in range(3)
-            ]
-            print(maxnums)
-
-            with open(
-                BRT_LOG_PATH
-                / f"benchmark/classsr/fsrcnn/conv_params_{dataset['name']}.json",
-                mode="w",
-            ) as f:
-                for subnet_meta, maxnum in zip(
-                    NET_CONV_META["ClassSR_FSRCNN"], maxnums
-                ):
-                    for conv_meta in subnet_meta:
-                        conv_meta["input_shape"][0] = maxnum
-                        conv_meta["output_shape"][0] = maxnum
-                        f.write(json.dumps(conv_meta))
-                        f.write("\n")
+        meta = NET_CONV_META["ClassSR_FSRCNN"]
+        subnet_name = "fsrcnn"
+    elif "ClassSR_RCAN" in jsonf["name"]:
+        meta = NET_CONV_META["ClassSR_RCAN"]
+        subnet_name = "rcan"
     else:
         assert False, "Unsupported net type"
+
+    for dataset in jsonf["dataset"]:
+        print(dataset["name"])
+        maxnums = [max(img["subimgs"][i] for img in dataset["imgs"]) for i in range(3)]
+        print(f"\t{maxnums=}")
+        minnums = [min(img["subimgs"][i] for img in dataset["imgs"]) for i in range(3)]
+        print(f"\t{minnums=}")
+
+        filename = (
+            BRT_LOG_PATH
+            / f"benchmark/classsr/{subnet_name}/conv_params_{dataset['name']}.json"
+        )
+        with open(filename, mode="w") as f:
+            for subnet_meta, maxnum in zip(meta, maxnums):
+                for conv_meta in subnet_meta:
+                    conv_meta["input_shape"][0] = maxnum
+                    conv_meta["output_shape"][0] = maxnum
+                    f.write(json.dumps(conv_meta))
+                    f.write("\n")
+        print(f"params has been written to {filename}")

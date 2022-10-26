@@ -81,8 +81,8 @@ class PermanentPathFoldPass(PassBase):
         lower_perm_load=0.0,
     ):
         super().__init__(m)
-        self.lower_perm_load = lower_perm_load
         self.upper_perm_load = upper_perm_load
+        self.lower_perm_load = lower_perm_load
 
     def run_on_graph(self):
         for node in self.graph_mod.graph.nodes:
@@ -101,10 +101,9 @@ class PermanentPathFoldPass(PassBase):
                         len(permanent_paths) == len(load_histroy)
                         and len(permanent_paths) > 0
                     ):
-                        if isinstance(node_m, ScatterRouter):
-                            node_m.protocol = make_protocol(
-                                "identity", node_m.protocol_kwargs
-                            )
+                        node_m.protocol = make_protocol(
+                            "identity", node_m.protocol_kwargs
+                        )
                         new_fabric_kwargs = {
                             "path_num": len(permanent_paths),
                         }
