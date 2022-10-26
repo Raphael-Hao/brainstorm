@@ -49,8 +49,7 @@ class Tester(object):
     def __init__(self, model, args=None):
         self.args = args
         self.model = model
-        self.softmax = nn.Softmax(dim=1).cuda()
-        self.softmax2 = nn.Softmax(dim=0).cuda()
+        self.softmax = nn.Softmax(dim=1)
 
     def calc_logit(self, dataloader):
         self.model.eval()
@@ -96,7 +95,6 @@ class Tester(object):
             with torch.no_grad():
                 input_var = torch.autograd.Variable(input)
                 output = self.model(input_var)
-                # output= self.softmax2(output)
                 if i == 0:
                     soft_max_result = output
                 else:
