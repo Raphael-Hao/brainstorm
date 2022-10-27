@@ -81,8 +81,8 @@ class PermanentPathFoldPass(PassBase):
         lower_perm_load=0.0,
     ):
         super().__init__(m)
-        self.lower_perm_load = lower_perm_load
         self.upper_perm_load = upper_perm_load
+        self.lower_perm_load = lower_perm_load
 
     def run_on_graph(self):
         for node in self.graph_mod.graph.nodes:

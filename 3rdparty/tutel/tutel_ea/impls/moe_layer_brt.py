@@ -161,7 +161,7 @@ class TopKGate(torch.nn.Module):
         self.a2a_ffn_overlap_degree = a2a_ffn_overlap_degree
 
         self.scatter = SwinMoEScatterRouter(
-            fabric_type="homo_fused_dispatch",
+            fabric_type="fused_dispatch",
             protocol_kwargs={
                 "top_k": self.top_k,
                 "capacity_factor": self.capacity_factor,
@@ -174,7 +174,7 @@ class TopKGate(torch.nn.Module):
             throttling=True,
         )
 
-        self.gather = GatherRouter(fabric_type="homo_fused_combine")
+        self.gather = GatherRouter(fabric_type="fused_combine")
 
     def compute_sorted_location(self, x, importance_scores):
         sorted_x = x[importance_scores.argsort(dim=0)]

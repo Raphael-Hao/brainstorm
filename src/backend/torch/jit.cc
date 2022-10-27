@@ -2,23 +2,9 @@
  * Copyright (c) 2022 by Microsoft Corporation.
  * Licensed under the MIT license.
  */
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/CUDAEvent.h>
 #include <brt/jit/compiler.h>
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <torch/extension.h>
 
-#undef CHECK_EQ
-#undef CHECK_NE
-#undef CHECK_ON_CPU
-#undef CHECK_ON_CUDA
-#undef CHECK_CONTIGUOUS
-
-#define CHECK_EQ(x, y) TORCH_INTERNAL_ASSERT((x) == (y), "CHECK_EQ fails.")
-#define CHECK_NE(x, y) TORCH_INTERNAL_ASSERT((x) != (y), "CHECK_NE fails.")
-#define CHECK_ON_CPU(x) TORCH_INTERNAL_ASSERT(!x.is_cuda(), #x " must be a CPU tensor")
-#define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
-#define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
+#include "./torch.h"
 
 namespace brt {
 namespace backend {
@@ -40,7 +26,7 @@ static void static_invoke(const std::vector<::torch::Tensor>& ts, const std::vec
 
   int dev = ts[0].device().index();
   CHECK_EQ(0, cudaSetDevice(dev));
-  jit::CUDACompiler::get_compiler().static_execute(ppargs, fd, dev,
+  jit::CUDACompiler::GetCompiler().StaticExecute(ppargs, fd, dev,
                                                    at::cuda::getDefaultCUDAStream().stream());
 }
 
@@ -61,14 +47,14 @@ static void hetero_invoke(const std::vector<::torch::Tensor>& ts,
 
   int dev = ts[0].device().index();
   CHECK_EQ(0, cudaSetDevice(dev));
-  jit::CUDACompiler::get_compiler().hetero_execute(ppargs, active_blocks, fd, dev,
+  jit::CUDACompiler::GetCompiler().HeteroExecute(ppargs, active_blocks, fd, dev,
                                                    at::cuda::getDefaultCUDAStream().stream());
 }
 
 static void homo_invoke(const std::vector<::torch::Tensor>& shared_inputs,
                         const std::vector<::torch::Tensor>& standalone_inputs,
                         const std::vector<long>& branch_capacities, int fd) {
-  auto& compiler = jit::CUDACompiler::get_compiler();
+  auto& compiler = jit::CUDACompiler::GetCompiler();
   std::vector<const void*> shared_inputs_ptr(shared_inputs.size()),
       standalone_inputs_ptr(standalone_inputs.size());
   for (int i = 0; i < (int)shared_inputs.size(); ++i) {
@@ -81,13 +67,12 @@ static void homo_invoke(const std::vector<::torch::Tensor>& shared_inputs,
   }
   int dev = shared_inputs[0].device().index();
   CHECK_EQ(0, cudaSetDevice(dev));
-  compiler.homo_execute(shared_inputs_ptr, standalone_inputs_ptr, branch_capacities, fd, dev,
+  compiler.HomoExecute(shared_inputs_ptr, standalone_inputs_ptr, branch_capacities, fd, dev,
                         at::cuda::getDefaultCUDAStream().stream());
 }
 
-
 static std::pair<std::string, int> inject_source(const std::string& headless_code) {
-  return jit::CUDACompiler::get_compiler().inject_source(headless_code);
+  return jit::CUDACompiler::GetCompiler().InjectSource(headless_code);
 }
 
 }  // namespace torch
@@ -99,6 +84,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Generic Invoke for GPU function (CUDA)");
   m.def("hetero_invoke", &brt::backend::torch::hetero_invoke,
         "Invoke for horizontally fused GPU function (CUDA) of heterogenous kernels");
-  m.def("homo_invoke", &brt::backend::torch::homo_invoke, "Invoke for horizontally fused GPU function (CUDA) of homogenous kernels");
+  m.def("homo_invoke", &brt::backend::torch::homo_invoke,
+        "Invoke for horizontally fused GPU function (CUDA) of homogenous kernels");
   m.def("inject_source", &brt::backend::torch::inject_source, "Inject Source for GPU (CUDA)");
 }
