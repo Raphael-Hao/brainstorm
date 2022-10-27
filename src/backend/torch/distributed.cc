@@ -68,6 +68,7 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
+  const int group_size = send_sizes.size(0) / world_size;
 
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(send_sizes);
@@ -80,8 +81,8 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   manager.RecordStorage(recv_sizes);
 
   distributed::AllToAll(send_sizes.data_ptr(), recv_sizes.data_ptr(),
-                        send_sizes.nbytes() / send_sizes.size(0), send_sizes.numel(),
-                        manager.GetComm(), manager.GetStream());
+                        send_sizes.nbytes() / world_size, world_size, manager.GetComm(),
+                        manager.GetStream());
   manager.RecordEvent(0);
   manager.EndContext();
   auto send_sizes_cpu = send_sizes.cpu();
