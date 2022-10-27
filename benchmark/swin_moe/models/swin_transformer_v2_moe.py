@@ -6,6 +6,7 @@
 # --------------------------------------------------------
 
 import math
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -104,7 +105,15 @@ class MoEMlp(nn.Module):
 
         self.dist_rank = dist.get_rank()
 
-        self._moe_layer = brt_moe.moe_layer(
+        MOE_LAYER_VENDOR = os.environ.get('MOE_LAYER_VENDOR', 'tutel')
+        if MOE_LAYER_VENDOR == 'tutel':
+            moe = tutel_moe
+        elif MOE_LAYER_VENDOR == 'brt':
+            moe = brt_moe
+        else:
+            raise ValueError(f'Unknown MOE layer vendor: {MOE_LAYER_VENDOR}')
+
+        self._moe_layer = moe.moe_layer(
             # gate_type='Top%dGate' % top_value,
             gate_type={'type': 'top', 'k': top_value},
             model_dim=model_dim,
