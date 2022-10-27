@@ -150,6 +150,47 @@ inline void __CUBLAS_CHECK(cublasStatus_t x, const char* file, int line) {
 }
 #endif
 
+#if defined(USE_NCCL)
+#define NCCL_CHECK(x) __NCCL_CHECK(x, __FILE__, __LINE__)
+
+inline void __NCCL_CHECK(ncclResult_t x, const char* file, int line) {
+  do {
+    if (x != ncclResult_t::ncclSuccess) {
+      switch (x) {
+        case ncclResult_t::ncclUnhandledCudaError:
+          fprintf(stderr, "NCCL Error: ncclUnhandledCudaError, file: %s line: %d ", file, line);
+          break;
+
+        case ncclResult_t::ncclSystemError:
+          fprintf(stderr, "NCCL Error: ncclSystemError, file: %s line: %d ", file, line);
+          break;
+
+        case ncclResult_t::ncclInternalError:
+          fprintf(stderr, "NCCL Error: ncclInternalError, file: %s line: %d ", file, line);
+          break;
+
+        case ncclResult_t::ncclInvalidArgument:
+          fprintf(stderr, "NCCL Error: ncclInvalidArgument, file: %s line: %d ", file, line);
+          break;
+
+        case ncclResult_t::ncclInvalidUsage:
+          fprintf(stderr, "NCCL Error: ncclInvalidUsage, file: %s line: %d ", file, line);
+          break;
+
+        case ncclResult_t::ncclNumResults:
+          fprintf(stderr, "NCCL Error: ncclNumResults, file: %s line: %d ", file, line);
+          break;
+        default:
+          fprintf(stderr, "NCCL Error: Unknown error, file: %s line: %d ", file, line);
+          break;
+      }
+      exit(1);
+    }
+  } while (0);
+}
+
+#endif
+
 }  // namespace brt
 
 #endif  // BRT_RUNTIME_CUDA_UTILS_H_

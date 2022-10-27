@@ -7,3 +7,5 @@ from brt.passes.memory_plan import (
     OnDemandMemoryPlanPass,
     PredictMemoryPlanPass,
 )
+from brt.passes.reorder import OperatorReorderPass
+from brt.passes.constant_propagation import ConstantPropagationPass

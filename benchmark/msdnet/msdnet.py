@@ -226,7 +226,7 @@ class ClassifierModule(nn.Module):
 
     def forward(self, x):
         res = self.m(x[-1])
-        res = res.view(res.size(0), -1)
+        res = res.view(res.size(0), self.linear.in_features)
         return self.linear(res)
 
 
@@ -236,6 +236,7 @@ class MSDNet(nn.Module):
         self.blocks = nn.ModuleList()
         self.classifier = nn.ModuleList()
         self.scatters = nn.ModuleList()
+
         self.nBlocks = args.nBlocks
         self.steps = [args.base]
         self.args = args
@@ -308,7 +309,6 @@ class MSDNet(nn.Module):
             m.bias.data.zero_()
 
     def _build_block(self, nIn, args, step, n_layer_all, n_layer_curr):
-
         layers = [MSDNFirstLayer(3, nIn, args)] if n_layer_curr == 0 else []
         for i in range(step):
             n_layer_curr += 1
@@ -411,43 +411,73 @@ class MSDNet(nn.Module):
         return ClassifierModule(conv, nIn, num_classes)
 
     def build_routers(self, thresholds: List[float]):
-        assert len(thresholds) == self.nBlocks
+        assert len(thresholds) == self.nBlocks - 1
         self.routers_initilized = True
         self.scatters = nn.ModuleList()
+
         for i in range(self.nBlocks - 1):
             self.scatters.append(
                 ScatterRouter(
                     protocol_type="binary_threshold",
-                    fabric_type="single_ptu_dispatch",
+                    # fabric_type="single_ptu_dispatch",
                     protocol_kwargs={"threshold": thresholds[i]},
                     fabric_kwargs={
-                        "flow_num": 2,
-                        "route_logic": ["1d", "1d"],
-                        "transform": [False, False],
+                        "flow_num": 5,
+                        "route_logic": ["1d", "1d", "1d", "1d", "1d"],
+                        "transform": [False, False, False, False, False],
                     },
+                    capturing=True,
                 )
             )
         self.final_gather = GatherRouter(
-            fabric_type="single_ptu_combine",
-            fabric_kwargs={"sparse": True}
+            capturing=True
+            # fabric_type="single_ptu_combine",
+            # fabric_kwargs={"sparse": True}
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
 
     def forward(self, x):
         res = []
         if not self.training and self.routers_initilized:
+            ##the actual dynamic routing
             for i in range(self.nBlocks):
+                ## scatter all of the image
                 x = self.blocks[i](x)
                 tmp_res = self.classifier[i](x)
                 if i < self.nBlocks - 1:
-                    routed_x, routed_res = self.scatter([x, tmp_res], tmp_res)
+                    # x : 4 256 96 56 56 tmp_res : 256 1000
+                    ##build a tesnsor with the size(0) of bs
+                    sccater_input = []
+                    result_scatter = []
+                    for j, output in enumerate(x):
+                        sccater_input.append(output)
+                        result_scatter.append([])
+
+                    for m in range(j + 1, 4):
+                        sccater_input.append(torch.zeros_like(output))
+                        result_scatter.append([])
+                    sccater_input.append(tmp_res)
+                    ##scatter
+                    (
+                        result_scatter[0],
+                        result_scatter[1],
+                        result_scatter[2],
+                        result_scatter[3],
+                        routed_res,
+                    ) = self.scatters[i](sccater_input, tmp_res)
+                    result = []
+                    # differ the path by 0 and 1
+                    for j, output in enumerate(x):
+                        result.append(result_scatter[j][1])
                     routed_res = routed_res[0]
-                    x = routed_x[1]
+                    x = result
                 else:
                     routed_res = tmp_res
                 res.append(routed_res)
-            return self.final_gather(res)
+            ret = self.final_gather(res)
+            return ret
         else:
+            ## raw testing
             for i in range(self.nBlocks):
                 x = self.blocks[i](x)
                 res.append(self.classifier[i](x))

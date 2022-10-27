@@ -336,7 +336,6 @@ class TopKGate(torch.nn.Module):
             capacity=capacity,
             is_postscore=self.is_postscore,
         )
-
         dispatched_input = self._fdr.encode(input)
         if sharded_count > 1:
             dispatched_input = dispatched_input.reshape(world_size, 1, -1, M)

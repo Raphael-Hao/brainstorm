@@ -5,6 +5,7 @@ import torch
 from brt.runtime import log
 from brt.router.utils import generate_indices
 from brt.router.protocol.base import ProtocolBase, register_protocol
+import torch.nn as nn
 
 __all__ = ["ThresholdProtocol"]
 
@@ -17,7 +18,7 @@ class ThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         residual_path=-1,
-        single_tpu=False,
+        single_ptu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -28,10 +29,11 @@ class ThresholdProtocol(ProtocolBase):
         )
         self.threshold = threshold
         self.residual_path = residual_path
-        self.single_tpu = single_tpu
+        self.single_ptu = single_ptu
         self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
+
         hot_mask = (score > self.threshold).long().to(score.device)
 
         if self.residual_path >= 0:
@@ -45,7 +47,7 @@ class ThresholdProtocol(ProtocolBase):
                 device=score.device,
             )
             hot_mask = torch.scatter_add(hot_mask, 1, residual_index, residual_indices)
-        if self.single_tpu:
+        if self.single_ptu:
             if hot_mask.numel() > 0:
                 loads = hot_mask.view(-1).cpu()
             else:
@@ -67,7 +69,7 @@ class ResidualThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         residual_path=0,
-        single_tpu=False,
+        single_ptu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -80,13 +82,12 @@ class ResidualThresholdProtocol(ProtocolBase):
         )
         self.threshold = threshold
         self.residual_path = residual_path
-        self.single_tpu = single_tpu
+        self.single_ptu = single_ptu
         self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
 
         hot_mask = (score.sum(dim=1, keepdim=True) < self.threshold).long()
-
         if self.residual_path == 0:
             hot_mask = torch.ones(
                 score.size(0), 2, dtype=torch.int64, device=score.device
@@ -97,7 +98,7 @@ class ResidualThresholdProtocol(ProtocolBase):
             ).scatter_(1, hot_mask, 1)
         else:
             raise ValueError("drop_path should be 0 or 1")
-        if self.single_tpu:
+        if self.single_ptu:
             if hot_mask.numel() > 0:
                 loads = hot_mask.view(-1).cpu()
             else:
@@ -118,7 +119,7 @@ class BinaryThresholdProtocol(ProtocolBase):
         self,
         threshold=0.0,
         selected_path=0,
-        single_tpu=False,
+        single_ptu=False,
         supported_capacities=None,
         index_format="src_index",
         index_gen_opt=True,
@@ -131,13 +132,16 @@ class BinaryThresholdProtocol(ProtocolBase):
         )
         self.threshold = threshold
         self.selected_path = selected_path
-        self.single_tpu = single_tpu
+        self.single_ptu = single_ptu
         self.supported_capacities = supported_capacities
+        self.softmax = nn.Softmax(dim=1)
 
     def make_route_decision(self, score: torch.Tensor):
-
-        hot_mask = (score > self.threshold).long()
-
+        logit_score = self.softmax(score)
+        max_preds, argmax_preds = logit_score.max(dim=1, keepdim=False)
+        hot_mask = (max_preds >= self.threshold).long()
+        dynamic_pred = torch.mul(argmax_preds, hot_mask)
+        hot_mask = hot_mask.unsqueeze(-1)
         if self.selected_path == 0:
             hot_mask = torch.ones(
                 score.size(0), 2, dtype=torch.int64, device=score.device
@@ -151,7 +155,7 @@ class BinaryThresholdProtocol(ProtocolBase):
                 "selected_path should be 0 or 1 for a binary threshold protocol"
             )
 
-        if self.single_tpu:
+        if self.single_ptu:
             if hot_mask.numel() > 0:
                 loads = hot_mask.view(-1).cpu()
             else:

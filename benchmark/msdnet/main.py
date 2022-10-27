@@ -15,8 +15,9 @@ sys.path.insert(0, ".")  # noqa: E402
 from dataloader import get_dataloaders
 from args import arg_parser
 from adaptive_inference import dynamic_evaluate
-from theshold_inference import threshold_evaluate
+from theshold_inference import threshold_dynamic_evaluate
 from msdnet import MSDNet
+from op_counter import measure_model
 
 args = arg_parser.parse_args()
 
@@ -26,6 +27,7 @@ if args.gpu:
 args.grFactor = list(map(int, args.grFactor.split("-")))
 args.bnFactor = list(map(int, args.bnFactor.split("-")))
 args.nScales = len(args.grFactor)
+print("nscale: {}".format(args.nScales))
 
 if args.use_valid:
     args.splits = ["train", "val", "test"]
@@ -62,6 +64,10 @@ def main():
         IM_SIZE = 224
 
     model = MSDNet(args)
+    n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
+    torch.save(n_flops, os.path.join(args.save, "flops.pth"))
+    del model
+    model = MSDNet(args)
 
     if args.arch.startswith("alexnet") or args.arch.startswith("vgg"):
         model.features = torch.nn.DataParallel(model.features)
@@ -93,13 +99,23 @@ def main():
     if args.evalmode is not None:
         state_dict = torch.load(args.evaluate_from)["state_dict"]
         model.load_state_dict(state_dict)
-
+        if args.parallel:
+            torch.save(
+                model.module.state_dict(),
+                "MSDNet.pth",
+            )
+            del model
+            model = MSDNet(args)
+            pretrained_dict = torch.load(
+                "MSDNet.pth"
+            )
+            model.load_state_dict(pretrained_dict, strict=False)
         if args.evalmode == "anytime":
             validate(test_loader, model, criterion)
         elif args.evalmode == "dynamic":
             dynamic_evaluate(model, test_loader, val_loader, args)
         else:
-            threshold_evaluate(model, val_loader, args)
+            threshold_dynamic_evaluate(model, test_loader, val_loader, args)
         return
 
     scores = [
@@ -403,4 +419,5 @@ def adjust_learning_rate(
 
 
 if __name__ == "__main__":
+    print("Running")
     main()
