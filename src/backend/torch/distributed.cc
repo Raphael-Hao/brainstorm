@@ -48,7 +48,18 @@ static std::pair<::torch::Tensor, ::torch::Tensor> locality_reorder(const ::torc
   brt::distributed::LocalityReorder(
       loads.data_ptr<int>(), world_size, reorder_indices.data_ptr<int>(),
       reordered_loads.data_ptr<int>(), at::cuda::getCurrentCUDAStream().stream());
-  return {reorder_indices, reordered_loads};
+  return {reordered_loads, reorder_indices};
+}
+
+static std::pair<::torch::Tensor, ::torch::Tensor> group_locality_reorder(
+    const ::torch::Tensor& loads, const int& world_size, const int& group_size = 1) {
+  CHECK_ON_CUDA(loads);
+  ::torch::Tensor reordered_loads = ::torch::empty_like(loads, loads.options());
+  ::torch::Tensor reorder_indices = ::torch::empty(world_size, loads.options());
+  brt::distributed::GroupLocalityReorder(
+      loads.data_ptr<int>(), group_size, world_size, reorder_indices.data_ptr<int>(),
+      reordered_loads.data_ptr<int>(), at::cuda::getCurrentCUDAStream().stream());
+  return {reordered_loads, reorder_indices};
 }
 
 static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& in_data,
@@ -87,8 +98,13 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
     }
     manager.StartContext();
     manager.WaitEvent(1);
-    distributed::Gather(recv_sizes.data_ptr(), all_recv_sizes.data_ptr(), recv_sizes.nbytes(), 0,
-                        world_rank, world_size, manager.GetComm(), manager.GetStream());
+    if (world_rank == 0) {
+      distributed::Gather(recv_sizes.data_ptr(), all_recv_sizes.data_ptr(), recv_sizes.nbytes(), 0,
+                          world_rank, world_size, manager.GetComm(), manager.GetStream());
+    } else {
+      distributed::Gather(recv_sizes.data_ptr(), nullptr, recv_sizes.nbytes(), 0, world_rank,
+                          world_size, manager.GetComm(), manager.GetStream());
+    }
     manager.RecordEvent(1);
     manager.EndContext();
   }
@@ -129,17 +145,22 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
       auto reorder_results = locality_reorder(all_recv_sizes, world_size);
       reorder_indices = reorder_results.first;
       all_reordered_loads = reorder_results.second;
+      manager.RecordStorage(all_reordered_loads);
     } else {
       reorder_indices = ::torch::empty_like(send_sizes, send_sizes.options());
     }
     manager.StartContext();
     manager.WaitEvent(1);
-    manager.RecordStorage(all_reordered_loads);
     manager.RecordStorage(reorder_indices);
     manager.RecordStorage(reordered_loads);
-    distributed::Scatter(all_reordered_loads.data_ptr(), reordered_loads.data_ptr(),
-                         reordered_loads.nbytes(), 0, world_rank, world_size, manager.GetComm(),
-                         manager.GetStream());
+    if (world_rank == 0) {
+      distributed::Scatter(all_reordered_loads.data_ptr(), reordered_loads.data_ptr(),
+                           reordered_loads.nbytes(), 0, world_rank, world_size, manager.GetComm(),
+                           manager.GetStream());
+    } else {
+      distributed::Scatter(nullptr, reordered_loads.data_ptr(), reordered_loads.nbytes(), 0,
+                           world_rank, world_size, manager.GetComm(), manager.GetStream());
+    }
     distributed::BroadCast(reorder_indices.data_ptr(), reorder_indices.data_ptr(),
                            reorder_indices.nbytes(), 0, manager.GetComm(), manager.GetStream());
     manager.RecordEvent(1);
@@ -164,6 +185,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("world_rank"), pybind11::arg("world_size"));
   m.def("locality_reorder", &brt::backend::torch::locality_reorder, "locality reorder",
         pybind11::arg("loads"), pybind11::arg("wolrd_size"));
+  m.def("group_locality_reorder", &brt::backend::torch::group_locality_reorder,
+        "group locality reorder", pybind11::arg("loads"), pybind11::arg("wolrd_size"),
+        pybind11::arg("group_size") = 1);
   m.def("asymmetry_all_to_all", &brt::backend::torch::asymmetry_all_to_all, "asymmetry all to all",
         pybind11::arg("in_data"), pybind11::arg("send_sizes"),
         pybind11::arg("locality_aware") = false);
