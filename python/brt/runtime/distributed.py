@@ -1,5 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import Tuple, overload, Literal
 
 import brt._C.distributed as C_dist
 import torch
@@ -14,13 +15,21 @@ def init_nccl(group: dist.ProcessGroup):
     C_dist.init_nccl(unique_id, world_rank, world_size)
 
 
-def asymmetry_a2a(in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware=False):
+@overload
+def asymmetry_a2a(
+    in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: Literal[False]
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    ...
+
+
+@overload
+def asymmetry_a2a(
+    in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: Literal[True]
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ...
+
+
+def asymmetry_a2a(
+    in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: bool = False
+):
     return C_dist.asymmetry_all_to_all(in_data, in_loads, locality_aware)
-
-
-
-def locality_aware_a2a(in_data: torch.Tensor, in_loads: torch.Tensor):
-    out_data, out_loads, reorder_indices = C_dist.asymmetry_all_to_all(
-        in_data, in_loads, True
-    )
-    return out_data, out_loads, reorder_indices
