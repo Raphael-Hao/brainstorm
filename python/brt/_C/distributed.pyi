@@ -12,6 +12,9 @@ def init_nccl(unique_id: torch.Tensor, world_rank: int, world_size: int) -> None
 def locality_reorder(
     loads: torch.Tensor, world_size: int
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
+def group_locality_reorder(
+    loads: torch.Tensor, world_size: int, group_size: int = 1
+) -> Tuple[torch.Tensor, torch.Tensor]: ...
 @overload
 def asymmetry_all_to_all(
     in_data: torch.Tensor, send_sizes: torch.Tensor, locality_aware: Literal[False]

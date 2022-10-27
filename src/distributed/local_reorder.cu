@@ -80,8 +80,7 @@ __global__ void group_locality_reorder(int* loads, int group_size, int world_siz
     shared_loads[thd_id] = loads[thd_id];
     untouched_loads[thd_id] = loads[thd_id];
   }
-
-  for (int stride = group_size / 2; stride >= 1; group_size >>= 1) {
+  for (unsigned int stride = group_size / 2; stride >= 1; stride >>= 1) {
     __syncthreads();
     if (thd_id < stride + group_base_thd_id) {
       shared_loads[thd_id] += shared_loads[thd_id + stride];
@@ -134,7 +133,10 @@ __global__ void group_locality_reorder(int* loads, int group_size, int world_siz
     int original_rank_index = shared_reorder_indices[current_rank_index];
     int global_load_index =
         (base_rank_index * world_size + original_rank_index) * group_size + load_offset;
-    reordered_loads[thd_id] = shared_loads[global_load_index];
+    reordered_loads[thd_id] = untouched_loads[global_load_index];
+  }
+  if (thd_id < world_size) {
+    reorder_indices[thd_id] = shared_reorder_indices[thd_id];
   }
 }
 
