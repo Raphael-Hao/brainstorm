@@ -4,8 +4,16 @@ import time
 import argparse
 
 model_names = ["msdnet"]
+from brt.runtime.benchmark import (
+    BenchmarkArgumentManager,
+    Benchmarker,
+    CUDATimer,
+    MemoryStats,
+    profile,
+)
 
 arg_parser = argparse.ArgumentParser(description="Image classification PK main script")
+
 
 exp_group = arg_parser.add_argument_group("exp", "experiment setting")
 exp_group.add_argument(
@@ -18,6 +26,7 @@ exp_group.add_argument(
 exp_group.add_argument(
     "--resume", action="store_true", help="path to latest checkpoint (default: none)"
 )
+exp_group.add_argument("--parallel", action="store_true", help="if parallel mode")
 exp_group.add_argument(
     "--evalmode",
     default=None,
@@ -30,7 +39,79 @@ exp_group.add_argument(
 )
 
 exp_group.add_argument(
-    "--thresholds", default=[0.5, 0.5, 0.5, 0.5], type=float, nargs="+", help="threshold"
+    "--thresholds",
+    default=
+    ##[0 0 0 0 0 1]
+    # [1000000,100000,1000000,100000]
+    # [0 0.2 0 0.2 0.6]
+    #     [100000000.00000000,
+    # 0.94459999,
+    # 100000000.00000000,
+    # 0.84057808]
+    ##[0 0 0 0.4 0.6]
+    #     [100000000.00000000,
+    # 100000000.00000000,
+    # 100000000.00000000,
+    # 0.83451331]
+    ##[0,0,0.3,0.3,0.4]
+    #     [100000000.00000000,
+    # 100000000.00000000,
+    # 0.90728849,
+    # 0.57961094]
+    ##[0.1,0.1,0.2,0.3,0.3]
+    #     [0.96616900,
+    # 0.95113075,
+    # 0.80969042,
+    # 0.45410264]
+    ## 0.6 0.1 0.1 0.1 0.1
+    #     [0.34071380,
+    # 0.47392023,
+    # 0.37517136,
+    # 0.22579938,]
+    ## 0.5 0.2 0.2 0.1
+    #     [0.44246864,
+    # 0.39881980,
+    # 0.19329087,
+    # -1]
+    ## 0.5 0.3 0.2 0 0
+    #     [0.44246849,
+    # 0.26682281,-1,-1]
+    ##0.5 0.5 0 0 0
+    [0.44246858, -1, -1, -1]
+    ##  shallow network to test for transform pass
+    # [-1,-1,-1,-1]
+    ## deeper network to test for transform pass
+    # [0.5,-1,-1,-1]
+    ## block 3 gather path
+    # [100000000.00000000,
+    #  1000000.0000,
+    #  0.69275671,
+    #  -1]
+    # block two block(args.grFactor
+    # [100000000.00000000,
+    #  0.85972512,
+    #  0.69275671,
+    #  -1]
+    # # p=torch.tensor([0,0.3,0.2,0.2,0.3]) with this probablity block 1 block
+    # [100000000.00000000,
+    # 0.85972512,
+    # 0.69275671,
+    # 0.47197723]
+    ## block the first block
+    # [1,0.03818264,0.01631335,0.01181476]
+    # threshold that cater to the probability of the p=torch.tensor([0.1,0.2,0.2,0.2,0.3])
+    # [ 9.6454e-01,  8.6269e-01,  6.9252e-01,  4.7205e-01]
+    ## this is correctedly tested under the transform pass
+    # [0.96454340,0.86269057, 0.69251990, 0.47205138]
+    # non parallel allign(maybe oen error due to the precision but it is acceptable, we just need to elevate the precision)
+    # [ 8.4275e-02,  3.8183e-02,  1.6313e-02,  1.1815e-02]
+    # [0.08427517,0.03818264,0.01631335,0.01181476]
+    ##parallel allign(maybe oen error due to the precision but it is acceptable, we just need to elevate the precision)
+    # [ 8.4491e-02,  3.6570e-02,  1.7349e-02,  1.2810e-02]
+    ,
+    type=float,
+    nargs="+",
+    help="threshold",
 )
 
 
@@ -176,3 +257,9 @@ optim_group.add_argument(
     metavar="W",
     help="weight decay (default: 1e-4)",
 )
+bench_arg_manager = BenchmarkArgumentManager(arg_parser)
+bench_arg_manager.add_item("liveness")
+bench_arg_manager.add_item("memory_plan")
+bench_arg_manager.add_item("reorder_operator")
+bench_arg_manager.add_item("constant_propagation")
+bench_arg_manager.add_item("all_opt")
