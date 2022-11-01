@@ -3,6 +3,7 @@ ARG SSH_KEY_FILE
 ARG BRT_BRANCH
 ENV SSH_KEY_FILE=${SSH_KEY_FILE}
 ENV BRT_BRANCH=${BRT_BRANCH}
+ENV DEBIAN_FRONTEND=noninteractive
 
 # setup ssh key
 RUN mkdir -p /root/.ssh
@@ -11,8 +12,6 @@ RUN chmod 600 /root/.ssh/id_ed25519
 RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
 
 COPY install.sh /tmp/install.sh
-
-RUN echo $BRT_BRANCH
 
 RUN bash /tmp/install.sh --branch $BRT_BRANCH
 
