@@ -5,6 +5,7 @@ ENV SSH_KEY_FILE=${SSH_KEY_FILE}
 ENV BRT_BRANCH=${BRT_BRANCH}
 ENV DEBIAN_FRONTEND=noninteractive
 
+
 # setup ssh key
 RUN mkdir -p /root/.ssh
 COPY "$SSH_KEY_FILE" /root/.ssh/
@@ -14,5 +15,13 @@ RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
 COPY install.sh /tmp/install.sh
 
 RUN bash /tmp/install.sh --branch $BRT_BRANCH
+
+ENV PATH=$HOME/local/bin:/usr/local/cuda/bin:$PATH
+ENV LD_LIBRARY_PATH=$HOME/local/lib:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+ENV LIBRARY_PATH=$HOME/local/lib:/usr/local/cuda/lib64:$LIBRARY_PATH
+ENV CMAKE_PREFIX_PATH=$HOME/local:$CMAKE_PREFIX_PATH
+ENV CPLUS_INCLUDE_PATH=$HOME/local/include:/usr/local/cuda/include:$CPLUS_INCLUDE_PATH
+ENV GIT_INTERNAL_GETTEXT_TEST_FALLBACKS=1
+ENV PKG_CONFIG_PATH=$HOME/local/lib/pkgconfig:$PKG_CONFIG_PATH
 
 WORKDIR /root

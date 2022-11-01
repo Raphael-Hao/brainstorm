@@ -31,6 +31,7 @@ mkdir -p build && cd build || exit
 cp ../../../cmake/config/tvm.cmake config.cmake
 cmake .. -DCMAKE_INSTALL_PREFIX=~/brainstorm_project/install
 make install -j
+cd ../python && pip install .
 
 cd ../../../
 pip3 install --editable .
