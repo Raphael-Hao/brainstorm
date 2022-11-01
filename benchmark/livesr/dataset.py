@@ -7,13 +7,15 @@ import torch
 import torch.nn.functional as F
 import torchvision
 
-def crop_image(image: torch.Tensor, size:int, stride:int):
+
+def crop_image(image: torch.Tensor, size: int, stride: int):
     c, h, w = image.shape
     image = image.unsqueeze(0)
     unfolded = torch.nn.functional.unfold(image, size, stride=stride)
     unfolded = unfolded.permute(0, 2, 1)
     unfolded = unfolded.reshape(-1, c, size, size)
     return unfolded.contiguous()
+
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, path: Path, device: str):
@@ -32,6 +34,7 @@ class Dataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.imgs)
 
+
 class DataLoader:
     def __init__(self, *args, **kwargs):
         self.loader = torch.utils.data.DataLoader(*args, **kwargs)
@@ -40,7 +43,12 @@ class DataLoader:
         for data in self.loader:
             yield data[0]
 
-def get_dataloader(dataset_path: Path, num_workers: int = 1, device: str = "cuda"):
+
+def get_dataloader(
+    dataset_path: Union[Path, str], num_workers: int = 0, device: str = "cuda"
+):
+    if isinstance(dataset_path, str):
+        dataset_path = Path(dataset_path)
     dataset = Dataset(dataset_path, device)
     dataloader = DataLoader(dataset, num_workers=num_workers)
     return dataloader
