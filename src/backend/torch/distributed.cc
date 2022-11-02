@@ -84,9 +84,7 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
                         manager.GetStream());
   manager.RecordEvent(0);
   manager.EndContext();
-  auto send_sizes_cpu = send_sizes.cpu();
-  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
-                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+
   manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
 
   ::torch::Tensor all_recv_sizes;
@@ -108,6 +106,10 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
     manager.RecordEvent(1);
     manager.EndContext();
   }
+
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
 
   auto recv_sizes_cpu = recv_sizes.cpu();
   std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
@@ -143,12 +145,23 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
     if (world_rank == 0) {
       auto reorder_results = locality_reorder(all_recv_sizes, world_size);
-      reorder_indices = reorder_results.first;
-      all_reordered_loads = reorder_results.second;
+      all_reordered_loads = reorder_results.first;
+      // printf("rank: %d, all recv sizes: [", world_rank);
+      // for (int i = 0; i < all_recv_sizes.numel(); ++i) {
+      //   printf("%d, ", all_recv_sizes[i].item<int>());
+      // }
+      // printf("]\n");
+      // printf("rank: %d, all reordered loads: [", world_rank);
+      // for (int i = 0; i < all_reordered_loads.numel(); ++i) {
+      //   printf("%d, ", all_reordered_loads[i].item<int>());
+      // }
+      // printf("]\n");
+      reorder_indices = reorder_results.second;
       manager.RecordStorage(all_reordered_loads);
     } else {
       reorder_indices = ::torch::empty_like(send_sizes, send_sizes.options());
     }
+    manager.ExternalRecordEvent(1, at::cuda::getCurrentCUDAStream());
     manager.StartContext();
     manager.WaitEvent(1);
     manager.RecordStorage(reorder_indices);
@@ -198,9 +211,6 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
                         manager.GetStream());
   manager.RecordEvent(0);
   manager.EndContext();
-  auto send_sizes_cpu = send_sizes.cpu();
-  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
-                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
   manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
 
   ::torch::Tensor all_recv_sizes;
@@ -223,6 +233,9 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
     manager.EndContext();
   }
 
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
   auto recv_sizes_cpu = recv_sizes.cpu();
   std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
                                   recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
@@ -256,12 +269,13 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
     if (world_rank == 0) {
       auto reorder_results = group_locality_reorder(all_recv_sizes, world_size, group_size);
-      reorder_indices = reorder_results.first;
-      all_reordered_loads = reorder_results.second;
+      all_reordered_loads = reorder_results.first;
+      reorder_indices = reorder_results.second;
       manager.RecordStorage(all_reordered_loads);
     } else {
-      reorder_indices = ::torch::empty_like(send_sizes, send_sizes.options());
+      reorder_indices = ::torch::empty(world_size, send_sizes.options());
     }
+    manager.ExternalRecordEvent(1, at::cuda::getCurrentCUDAStream());
     manager.StartContext();
     manager.WaitEvent(1);
     manager.RecordStorage(reorder_indices);
@@ -274,6 +288,7 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
       distributed::Scatter(nullptr, reordered_loads.data_ptr(), reordered_loads.nbytes(), 0,
                            world_rank, world_size, manager.GetComm(), manager.GetStream());
     }
+
     distributed::BroadCast(reorder_indices.data_ptr(), reorder_indices.data_ptr(),
                            reorder_indices.nbytes(), 0, manager.GetComm(), manager.GetStream());
     manager.RecordEvent(1);

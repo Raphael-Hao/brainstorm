@@ -67,16 +67,15 @@ void AsymmetryAllToAll(void* send_buffer, void* recv_buffer, const std::vector<i
   }
   NCCL_CHECK(ncclGroupEnd());
 }
-void GroupAsymmetryAllToAll(void* send_buffer, void* recv_buffer, const std::vector<int>& send_sizes,
-                       const std::vector<int>& recv_sizes, const int& grain_size_in_byte,
-                       const int& slice_size_in_byte, const int& group_size, const int& world_size,
-                       ncclComm_t comm, cudaStream_t stream) {
-  NCCL_CHECK(ncclGroupStart());
+void GroupAsymmetryAllToAll(void* send_buffer, void* recv_buffer,
+                            const std::vector<int>& send_sizes, const std::vector<int>& recv_sizes,
+                            const int& grain_size_in_byte, const int& slice_size_in_byte,
+                            const int& group_size, const int& world_size, ncclComm_t comm,
+                            cudaStream_t stream) {
   const int group_size_in_byte = group_size * slice_size_in_byte;
   int group_base_idx = 0;
+  NCCL_CHECK(ncclGroupStart());
   for (auto i = 0; i < world_size; i++) {
-    send_buffer = (char*)send_buffer + group_size_in_byte;
-    recv_buffer = (char*)recv_buffer + group_size_in_byte;
     for (auto j = 0; j < group_size; j++) {
       NCCL_CHECK(ncclSend((char*)send_buffer + j * slice_size_in_byte,
                           send_sizes[group_base_idx + j] * grain_size_in_byte, ncclChar, i, comm,
@@ -85,6 +84,8 @@ void GroupAsymmetryAllToAll(void* send_buffer, void* recv_buffer, const std::vec
                           recv_sizes[group_base_idx + j] * grain_size_in_byte, ncclChar, i, comm,
                           stream));
     }
+    send_buffer = (char*)send_buffer + group_size_in_byte;
+    recv_buffer = (char*)recv_buffer + group_size_in_byte;
     group_base_idx += group_size;
   }
   NCCL_CHECK(ncclGroupEnd());
