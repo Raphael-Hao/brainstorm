@@ -253,10 +253,6 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
   manager.RecordStorage(out_data);
-  if (world_rank == 0) {
-    printf("in data size in byte: %d\n", in_data.nbytes());
-    printf("out data size in byte: %d\n", out_data.nbytes());
-  }
   distributed::GroupAsymmetryAllToAll(
       in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec, recv_sizes_vec, grain_size_in_byte,
       slice_size_in_byte, group_size, world_size, manager.GetComm(), manager.GetStream());
