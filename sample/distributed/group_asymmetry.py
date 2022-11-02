@@ -14,21 +14,19 @@ torch.cuda.set_device(device)
 group = dist.group.WORLD
 brt_dist.init_nccl(group)
 
-grain_size = 768
-capacity = 1024
+grain_size = 4
+capacity = 4
+group_size = 4
 
 tensor = torch.arange(
-    local_rank * world_size * capacity * grain_size,
-    (local_rank + 1) * world_size * capacity * grain_size,
+    local_rank * world_size * group_size * capacity * grain_size,
+    (local_rank + 1) * world_size * group_size * capacity * grain_size,
     device=device,
 ).reshape(-1, grain_size)
 loads = torch.randint(
-    1, capacity + 1, (world_size,), dtype=torch.int32, device=device
-)
-
-
+    1, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
+).reshape(-1, group_size)
 # print(tensor)
-# print(f"in_loads: {loads}")
 all_in_loads = None
 if local_rank == 0:
     all_in_loads = [torch.empty_like(loads) for _ in range(world_size)]
@@ -37,11 +35,9 @@ dist.gather(loads, all_in_loads)
 if local_rank == 0:
     all_in_loads = torch.stack(all_in_loads)
     print(f"all_in_loads: \n{all_in_loads}")
-    print(f"all_out_loads: \n{all_in_loads.t()}")
+    print(f"all_out_loads: \n{all_in_loads.transpose(0, 1)}")
 
-out_data, out_loads, reorder_indices = brt_dist.asymmetry_a2a(
-    tensor, loads, locality_aware=True
-)
+out_data, out_loads, indices = brt_dist.group_asymmetry_a2a(tensor, loads, True)
 all_out_loads = None
 if local_rank == 0:
     all_out_loads = [torch.empty_like(out_loads) for _ in range(world_size)]
@@ -49,13 +45,11 @@ dist.gather(out_loads, all_out_loads)
 if local_rank == 0:
     all_out_loads = torch.stack(all_out_loads)
     print(f"all_out_loads: \n{all_out_loads}")
-    print(f"reorder_indices: \n{reorder_indices}")
 
 # timer = CUDATimer(repeat=2, root=local_rank)
 
 # timer.execute(
-#     lambda: brt_dist.asymmetry_a2a(tensor, loads),
-#     "brt.asymmetry_all_to_all",
+#     lambda: brt_dist.group_asymmetry_a2a(tensor, loads), "brt.asymmetry_all_to_all",
 # )
 
 
@@ -74,7 +68,7 @@ if local_rank == 0:
 # locality_aware_a2a(tensor, loads)
 
 # timer.execute(
-#     lambda: brt_dist.asymmetry_a2a(tensor, loads, locality_aware=True),
+#     lambda: brt_dist.group_asymmetry_a2a(tensor, loads, locality_aware=True),
 #     "brt.asymmetry_all_to_all with locality aware",
 # )
 
