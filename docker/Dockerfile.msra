@@ -1,16 +1,20 @@
-FROM mcr.microsoft.com/mirror/nvcr/nvidia/pytorch:22.07-py3
-ARG SSH_KEY_FILE
-ARG BRT_BRANCH
+FROM nvidia/cuda:11.3.1-cudnn8-devel-ubuntu20.04
+ARG SSH_KEY_FILE=./id_ed25519
+ARG BRT_BRANCH=main
 ENV SSH_KEY_FILE=${SSH_KEY_FILE}
 ENV BRT_BRANCH=${BRT_BRANCH}
 ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get -y update && apt-get install -y \
+    ssh gcc libtinfo-dev zlib1g-dev build-essential \
+    cmake libedit-dev libxml2-dev llvm tmux wget git
 
 # setup ssh key
 RUN mkdir -p /root/.ssh
 COPY "$SSH_KEY_FILE" /root/.ssh/
 RUN chmod 600 /root/.ssh/id_ed25519
 RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
-ENV PATH=/usr/local/cuda/bin:$PATH
+ENV PATH=/root/miniconda3/bin:/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LD_LIBRARY_PATH}
 ENV LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LIBRARY_PATH}
 ENV CPLUS_INCLUDE_PATH=/usr/local/cuda/include:${CPLUS_INCLUDE_PATH}

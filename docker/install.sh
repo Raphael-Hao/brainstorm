@@ -12,9 +12,10 @@ if [[ "$1" == "--branch" ]]; then
     shift 2
 fi
 
-apt-get update && apt-get install -y python3 python3-dev python3-setuptools \
-    gcc libtinfo-dev zlib1g-dev build-essential \
-    cmake libedit-dev libxml2-dev llvm tmux
+cd /root
+wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
+    bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b &&
+    rm -f Miniconda3-py38_4.10.3-Linux-x86_64.sh
 
 cd /root
 git clone git@github.com:Raphael-Hao/brainstorm.git \
@@ -23,6 +24,7 @@ git clone git@github.com:Raphael-Hao/brainstorm.git \
 cd brainstorm
 
 pip install --upgrade pip
+conda install -y pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.3 -c pytorch
 pip install -r requirements.txt
 
 cd 3rdparty/tvm || exit
