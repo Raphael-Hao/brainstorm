@@ -1,9 +1,10 @@
+ninja
 attrs
 cloudpickle
+transformers
 decorator
 numpy
 psutil
-functorch
 synr==0.6.0
 appdirs
 attrs
@@ -16,7 +17,7 @@ pandas
 Pillow
 scikit-learn
 scipy
-xgboost==1.5.2
+xgboost
 tornado==6.1
 tqdm
 json_tricks
