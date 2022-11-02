@@ -47,6 +47,7 @@ SSH_KEY_FILE="${DOCKER_CONTEXT_PATH}/id_ed25519"
 
 if [[ ! -f "${SSH_KEY_FILE}" ]]; then
     echo "Invalid SSH Key file path:\"${SSH_KEY_FILE}\""
+    echo "Currently, a valid SSH Key file is required to clone the BRT repo."
     exit 1
 fi
 

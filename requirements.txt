@@ -1,6 +1,7 @@
 ninja
 attrs
 cloudpickle
+transformers
 decorator
 numpy
 psutil
