@@ -34,4 +34,4 @@ make install -j
 cd ../python && pip install .
 
 cd /root/brainstorm || exit
-pip install --editable .
+pip install -v --editable .
