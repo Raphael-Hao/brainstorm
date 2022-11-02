@@ -92,7 +92,7 @@ def main():
                 f"####### find tuned {module_name =} with: {parameters =}, {input_infos =}, continue"
             )
             logger.info("##########################################################")
-
+            tvm_tuner.insert_top_n_netlet_to_storage("fastest", 5)
         else:
             logger.info("##########################################################")
             logger.info(
