@@ -33,3 +33,22 @@ def asymmetry_a2a(
     in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: bool = False
 ):
     return C_dist.asymmetry_all_to_all(in_data, in_loads, locality_aware)
+
+@overload
+def group_asymmetry_a2a(
+    in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: Literal[False]
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    ...
+
+
+@overload
+def group_asymmetry_a2a(
+    in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: Literal[True]
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ...
+
+
+def group_asymmetry_a2a(
+    in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: bool = False
+):
+    return C_dist.group_asymmetry_all_to_all(in_data, in_loads, locality_aware)

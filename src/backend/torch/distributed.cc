@@ -80,8 +80,8 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   manager.RecordStorage(recv_sizes);
 
   distributed::AllToAll(send_sizes.data_ptr(), recv_sizes.data_ptr(),
-                        send_sizes.nbytes() / send_sizes.size(0), send_sizes.numel(),
-                        manager.GetComm(), manager.GetStream());
+                        send_sizes.nbytes() / world_size, world_size, manager.GetComm(),
+                        manager.GetStream());
   manager.RecordEvent(0);
   manager.EndContext();
   auto send_sizes_cpu = send_sizes.cpu();
@@ -174,6 +174,119 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
     return {out_data, recv_sizes};
   }
 }
+static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
+                                                               const ::torch::Tensor& send_sizes,
+                                                               bool locality_aware = false) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+  const int total_slice_num = send_sizes.numel();
+  const int group_size = total_slice_num / world_size;
+
+  CHECK_ON_CUDA(in_data);
+  CHECK_ON_CUDA(send_sizes);
+
+  ::torch::Tensor recv_sizes = ::torch::empty_like(send_sizes, send_sizes.options());
+
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(send_sizes);
+  manager.RecordStorage(recv_sizes);
+
+  distributed::AllToAll(send_sizes.data_ptr(), recv_sizes.data_ptr(),
+                        send_sizes.nbytes() / world_size, world_size, manager.GetComm(),
+                        manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
+  ::torch::Tensor all_recv_sizes;
+  if (locality_aware) {
+    if (world_rank == 0) {
+      all_recv_sizes =
+          ::torch::empty({send_sizes.numel() * manager.GetWorldSize()}, send_sizes.options());
+      manager.RecordStorage(all_recv_sizes);
+    }
+    manager.StartContext();
+    manager.WaitEvent(1);
+    if (world_rank == 0) {
+      distributed::Gather(recv_sizes.data_ptr(), all_recv_sizes.data_ptr(), recv_sizes.nbytes(), 0,
+                          world_rank, world_size, manager.GetComm(), manager.GetStream());
+    } else {
+      distributed::Gather(recv_sizes.data_ptr(), nullptr, recv_sizes.nbytes(), 0, world_rank,
+                          world_size, manager.GetComm(), manager.GetStream());
+    }
+    manager.RecordEvent(1);
+    manager.EndContext();
+  }
+
+  auto recv_sizes_cpu = recv_sizes.cpu();
+  std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
+                                  recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
+
+  // Calculate the total size in byte
+  const int total_size_in_byte = in_data.numel() * in_data.element_size();
+  // Calculate the size of each grainularity in byte
+  const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+  // Calculate the slice and per slice size in byte
+  const int slice_size_in_byte = total_size_in_byte / total_slice_num;
+
+  ::torch::Tensor out_data =
+      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(in_data);
+  manager.RecordStorage(out_data);
+  distributed::GroupAsymmetryAllToAll(
+      in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec, recv_sizes_vec, grain_size_in_byte,
+      slice_size_in_byte, group_size, world_size, manager.GetComm(), manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
+  ::torch::Tensor reorder_indices;
+  ::torch::Tensor all_reordered_loads;
+  ::torch::Tensor reordered_loads = ::torch::empty_like(send_sizes, send_sizes.options());
+
+  if (locality_aware) {
+    manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
+    if (world_rank == 0) {
+      auto reorder_results = group_locality_reorder(all_recv_sizes, world_size, group_size);
+      reorder_indices = reorder_results.first;
+      all_reordered_loads = reorder_results.second;
+      manager.RecordStorage(all_reordered_loads);
+    } else {
+      reorder_indices = ::torch::empty_like(send_sizes, send_sizes.options());
+    }
+    manager.StartContext();
+    manager.WaitEvent(1);
+    manager.RecordStorage(reorder_indices);
+    manager.RecordStorage(reordered_loads);
+    if (world_rank == 0) {
+      distributed::Scatter(all_reordered_loads.data_ptr(), reordered_loads.data_ptr(),
+                           reordered_loads.nbytes(), 0, world_rank, world_size, manager.GetComm(),
+                           manager.GetStream());
+    } else {
+      distributed::Scatter(nullptr, reordered_loads.data_ptr(), reordered_loads.nbytes(), 0,
+                           world_rank, world_size, manager.GetComm(), manager.GetStream());
+    }
+    distributed::BroadCast(reorder_indices.data_ptr(), reorder_indices.data_ptr(),
+                           reorder_indices.nbytes(), 0, manager.GetComm(), manager.GetStream());
+    manager.RecordEvent(1);
+    manager.EndContext();
+    manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
+  }
+
+  if (locality_aware) {
+    return {out_data, reordered_loads, reorder_indices};
+  } else {
+    return {out_data, recv_sizes};
+  }
+}
 }  // namespace torch
 }  // namespace backend
 }  // namespace brt
@@ -190,5 +303,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("group_size") = 1);
   m.def("asymmetry_all_to_all", &brt::backend::torch::asymmetry_all_to_all, "asymmetry all to all",
         pybind11::arg("in_data"), pybind11::arg("send_sizes"),
+        pybind11::arg("locality_aware") = false);
+  m.def("group_asymmetry_all_to_all", &brt::backend::torch::group_asymmetry_all_to_all,
+        "asymmetry all to all", pybind11::arg("in_data"), pybind11::arg("send_sizes"),
         pybind11::arg("locality_aware") = false);
 }

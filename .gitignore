@@ -8,6 +8,7 @@ total_latency.tsv
 *.svg
 *.csv
 benchmark/swin_moe/results
+docker/id_*
 
 .cache/*
 !.cache/kernel_db.sqlite

@@ -23,3 +23,11 @@ def asymmetry_all_to_all(
 def asymmetry_all_to_all(
     in_data: torch.Tensor, send_sizes: torch.Tensor, locality_aware: Literal[True]
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
+@overload
+def group_asymmetry_all_to_all(
+    in_data: torch.Tensor, send_sizes: torch.Tensor, locality_aware: Literal[False]
+) -> Tuple[torch.Tensor, torch.Tensor]: ...
+@overload
+def group_asymmetry_all_to_all(
+    in_data: torch.Tensor, send_sizes: torch.Tensor, locality_aware: Literal[True]
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
