@@ -19,10 +19,10 @@ logger.setLevel("INFO")
 
 all_conv_params = [
     f"""{{"module_name": "Conv2d", "in_channels": 36, "out_channels": 36, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": null, "input_shape": [{bs}, 36, 32, 32], "output_shape": [{bs}, 36, 32, 32]}}\n"""
-    for bs in [6, 7, 12, 27, 8, 8, 8, 12, 12, 4]
-] + [
+    for bs in set([6, 7, 12, 27, 8, 8, 8, 12, 12, 4])
+    ] + [
     f"""{{"module_name": "Conv2d", "in_channels": 36, "out_channels": 36, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": "ReLU", "input_shape": [{bs}, 36, 32, 32], "output_shape": [{bs}, 36, 32, 32]}}\n"""
-    for bs in [6, 7, 12, 27, 8, 8, 8, 12, 12, 4]
+    for bs in set([6, 7, 12, 27, 8, 8, 8, 12, 12, 4])
 ]
 
 
@@ -92,7 +92,7 @@ def main():
                 f"####### find tuned {module_name =} with: {parameters =}, {input_infos =}, continue"
             )
             logger.info("##########################################################")
-
+            tvm_tuner.insert_top_n_netlet_to_storage("fastest", 5)
         else:
             logger.info("##########################################################")
             logger.info(
@@ -100,8 +100,8 @@ def main():
             )
             logger.info("##########################################################")
             tvm_tuner.tune_netlet()
-            tvm_tuner.export_netlet_template("all")
-            tvm_tuner.insert_netlet_to_storage("all")
+            tvm_tuner.export_netlet_template("all", range(1, 5))
+            tvm_tuner.insert_netlet_to_storage("all", range(1, 5))
 
         # module_function = ModuleKernel(
         #     module_name,
