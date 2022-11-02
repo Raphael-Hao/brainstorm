@@ -22,15 +22,16 @@ git clone git@github.com:Raphael-Hao/brainstorm.git \
     --recursive --depth 1
 cd brainstorm
 
-pip3 install -r requirements.txt
+pip install --upgrade pip
+pip install -r requirements.txt
 
 cd 3rdparty/tvm || exit
 
 mkdir -p build && cd build || exit
 cp ../../../cmake/config/tvm.cmake config.cmake
-cmake .. -DCMAKE_INSTALL_PREFIX=~/brainstorm_project/install
+cmake ..
 make install -j
 cd ../python && pip install .
 
-cd ../../../
-pip3 install --editable .
+cd /root/brainstorm || exit
+pip install --editable .
