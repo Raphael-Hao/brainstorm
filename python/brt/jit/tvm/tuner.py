@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 import json
 from typing import Dict, List, Union
+from itertools import groupby
 
 import onnx
 import torch
@@ -103,7 +104,7 @@ class TVMTuner:
             len(tvm_tasks) == 1
         ), "TVM tuner of BRT only supports one task for horizontal kernel fusion once."
 
-        self.tvm_task = tvm_tasks[0]
+        self.tvm_task: auto_scheduler.SearchTask = tvm_tasks[0]
         self.tvm_task_weight = tvm_task_weights[0]
         self.task_scheduler = self.task_scheduler_cls(
             [self.tvm_task], [self.tvm_task_weight]
@@ -168,7 +169,7 @@ class TVMTuner:
             for f in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS:
                 self.insert_netlet_to_storage(f, rank)
             return
-        kernel_source = self._get_best_source(objective_func)
+        kernel_source = self._get_best_source(objective_func, rank)
         module_function = ModuleKernel(
             self.module_name,
             method=self.method,
@@ -180,48 +181,147 @@ class TVMTuner:
         )
         module_function.dump_to_db(objective_func, rank)
 
-    def _get_best_source(self, objective_func: str, rank: int = 1):
-        # if objective_func == "fastest":
-        #     grid_dim, block_dim, source_code = self._get_fastest_template()
-        # elif objective_func == "most_efficient":
-        #     grid_dim, block_dim, source_code = self._get_most_efficient_template()
-        grid_dim, block_dim, source_code = self._get_best_template(objective_func)
-        culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
-        kernel_source = culaunch_config + source_code
-        return kernel_source
+    def insert_top_n_netlet_to_storage(
+        self, objective_func: str = "fastest", top: int = 5
+    ):
+        assert (
+            objective_func == "all"
+            or objective_func in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS
+        ), f"Unsupported {objective_func = }"
+        if objective_func == "all":
+            for f in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS:
+                self.insert_top_n_netlet_to_storage(f, top)
+            return
+        for i, kernel_source in enumerate(self._get_top_n_sources(objective_func)):
+            module_function = ModuleKernel(
+                self.module_name,
+                method=self.method,
+                kernel_source=kernel_source,
+                platform=self.platform,
+                input_infos=self.input_infos,
+                output_infos=self.output_infos,
+                parameters=self.parameters,
+            )
+            module_function.dump_to_db(objective_func, i + 1)
 
-    def _get_best_template(self, objective_func: str, rank: int = 1):
-        # TODO: get the rank-th best template
+    def _get_best_source(self, objective_func: str, rank: int):
         if not self.tune_log_file.exists() and self.old_tune_log_file.exists():
             contents = self.old_tune_log_file.read_text()
             self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
             self.tune_log_file.write_text(contents)
-        record_reader = auto_scheduler.RecordReader(str(self.tune_log_file))
-        best_score = float("inf")
-        best_inp = None
-        for inp, res in record_reader:
-            if objective_func == "fastest":
-                score = sum(res.costs) / len(res.costs)
-            elif objective_func == "most_efficient":
-                tvm_sch, tvm_args = self.tvm_task.compute_dag.apply_steps_from_state(
-                    inp.state
-                )
-                tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
-                grid_dim, block_dim = parse_culaunch_config(tvm_ir)
-                num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
-                score = num_blocks * sum(res.costs) / len(res.costs)
-            else:
-                raise ValueError(f"Unsupported {objective_func = }")
-            if score < best_score:
-                best_score = score
-                best_inp = inp
-        if best_inp == None:
-            raise ValueError(f"Error around record file {str(self.tune_log_file)}")
-        best_sch, best_args = self.tvm_task.compute_dag.apply_steps_from_state(
-            best_inp.state, self.tvm_task.layout_rewrite_option
+        record_data = self._get_all_record_data(objective_func, True)
+        if rank == 1:
+            score, grid_dim, block_dim, inp = min(record_data, key=lambda x: x[0])
+        else:
+            score, grid_dim, block_dim, inp = type(self).__sort_record_data_by_group(
+                record_data
+            )[rank - 1]
+        kernel_source = self.__get_kernel_source_from_measure_input(
+            inp, grid_dim, block_dim
         )
-        best_ir = tvm.lower(best_sch, best_args, simple_mode=True)
-        best_grid_dim, best_block_dim = parse_culaunch_config(best_ir)
-        best_func = tvm.driver.build_module.build(best_sch, best_args, "cuda")
-        best_source_code = best_func.imported_modules[0].get_source()
-        return best_grid_dim, best_block_dim, best_source_code
+        return kernel_source
+
+    def _get_top_n_sources(self, objective_func: str, top: int):
+        if not self.tune_log_file.exists() and self.old_tune_log_file.exists():
+            contents = self.old_tune_log_file.read_text()
+            self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
+            self.tune_log_file.write_text(contents)
+        record_data = self._get_all_record_data(objective_func, True)
+        top_records = type(self).__sort_record_data_by_group(record_data)
+        for i in range(top):
+            kernel_source = self.__get_kernel_source_from_measure_input(
+                top_records[i][3], top_records[i][1], top_records[i][2]
+            )
+            yield kernel_source
+
+    def _get_all_record_data(self, objective_func: str, enable_mp: bool = True):
+        record_reader = auto_scheduler.RecordReader(str(self.tune_log_file))
+        record_data = []
+        if enable_mp:
+            # pathos.multiprocessing
+            from pathos import multiprocessing as mp
+
+            pool = mp.ProcessPool()
+            async_results = []
+            for inp, res in record_reader:
+                ar = pool.apipe(
+                    __calcu_record_mp,
+                    self.tvm_task.compute_dag,
+                    objective_func,
+                    inp.serialize(),
+                    res,
+                )
+                async_results.append([ar, inp])
+            pool.close()
+            pool.join()
+            for ar, inp in async_results:
+                record_data.append((*ar.get(), inp))
+        else:
+            for inp, res in record_reader:
+                record_data.append(self.__calcu_record(inp, res))
+        return record_data
+
+    def __calcu_record(self, objective_func, inp, res):
+        # for inp, res in record_reader:
+        tvm_sch, tvm_args = self.tvm_task.compute_dag.apply_steps_from_state(inp.state)
+        tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
+        grid_dim, block_dim = parse_culaunch_config(tvm_ir)
+        if objective_func == "fastest":
+            score = sum(res.costs) / len(res.costs)
+        elif objective_func == "most_efficient":
+            num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
+            score = num_blocks * sum(res.costs) / len(res.costs)
+        else:
+            raise ValueError(f"Unsupported {objective_func = }")
+        return (score, grid_dim, block_dim, inp)
+
+    def __get_kernel_source_from_measure_input(
+        self, inp: auto_scheduler.MeasureInput, grid_dim, block_dim
+    ):
+        source_code = self.__get_source_code_from_measure_input(inp)
+        culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
+        kernel_source = culaunch_config + source_code
+        return kernel_source
+
+    def __get_source_code_from_measure_input(
+        self, inp: auto_scheduler.MeasureInput
+    ):
+        sch, args = self.tvm_task.compute_dag.apply_steps_from_state(
+            inp.state, self.tvm_task.layout_rewrite_option
+        )
+        func = tvm.driver.build_module.build(sch, args, "cuda")
+        source_code = func.imported_modules[0].get_source()
+        return source_code
+
+    @classmethod
+    def __sort_record_data_by_group(record_data: list):
+        record_data.sort(key=lambda x: x[1:3])
+        top_records = []
+        for _, g in groupby(record_data, key=lambda x: x[1:3]):
+            g = list(g)
+            g.sort(key=lambda x: x[0])
+            top_records.append(g[0])
+        top_records.sort(key=lambda x: x[0])
+        print(top_records[:5])
+        input()
+
+
+def __calcu_record_mp(
+    compute_dag: auto_scheduler.ComputeDAG,
+    objective_func: str,
+    inp: auto_scheduler.MeasureInput,
+    res: auto_scheduler.MeasureResult,
+):
+    input = auto_scheduler.MeasureInput.deserialize(inp)
+    # for inp, res in record_reader:
+    tvm_sch, tvm_args = compute_dag.apply_steps_from_state(input.state)
+    tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
+    grid_dim, block_dim = parse_culaunch_config(tvm_ir)
+    if objective_func == "fastest":
+        score = sum(res.costs) / len(res.costs)
+    elif objective_func == "most_efficient":
+        num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
+        score = num_blocks * sum(res.costs) / len(res.costs)
+    else:
+        raise ValueError(f"Unsupported {objective_func = }")
+    return (score, grid_dim, block_dim)
