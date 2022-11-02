@@ -192,7 +192,7 @@ class TVMTuner:
             for f in TVMTuner.SUPPORTED_OBJECTIVE_FUNCS:
                 self.insert_top_n_netlet_to_storage(f, top)
             return
-        for i, kernel_source in enumerate(self._get_top_n_sources(objective_func)):
+        for i, kernel_source in enumerate(self._get_top_n_sources(objective_func, top)):
             module_function = ModuleKernel(
                 self.module_name,
                 method=self.method,
@@ -213,10 +213,10 @@ class TVMTuner:
         if rank == 1:
             score, grid_dim, block_dim, inp = min(record_data, key=lambda x: x[0])
         else:
-            score, grid_dim, block_dim, inp = type(self).__sort_record_data_by_group(
+            score, grid_dim, block_dim, inp = type(self)._sort_record_data_by_group(
                 record_data
             )[rank - 1]
-        kernel_source = self.__get_kernel_source_from_measure_input(
+        kernel_source = self._get_kernel_source_from_measure_input(
             inp, grid_dim, block_dim
         )
         return kernel_source
@@ -227,9 +227,9 @@ class TVMTuner:
             self.tune_log_file.parent.mkdir(parents=True, exist_ok=True)
             self.tune_log_file.write_text(contents)
         record_data = self._get_all_record_data(objective_func, True)
-        top_records = type(self).__sort_record_data_by_group(record_data)
+        top_records = type(self)._sort_record_data_by_group(record_data)
         for i in range(top):
-            kernel_source = self.__get_kernel_source_from_measure_input(
+            kernel_source = self._get_kernel_source_from_measure_input(
                 top_records[i][3], top_records[i][1], top_records[i][2]
             )
             yield kernel_source
@@ -245,7 +245,7 @@ class TVMTuner:
             async_results = []
             for inp, res in record_reader:
                 ar = pool.apipe(
-                    __calcu_record_mp,
+                    _calcu_record_mp,
                     self.tvm_task.compute_dag,
                     objective_func,
                     inp.serialize(),
@@ -256,12 +256,13 @@ class TVMTuner:
             pool.join()
             for ar, inp in async_results:
                 record_data.append((*ar.get(), inp))
+            pool.clear()
         else:
             for inp, res in record_reader:
-                record_data.append(self.__calcu_record(inp, res))
+                record_data.append(self._calcu_record(inp, res))
         return record_data
 
-    def __calcu_record(self, objective_func, inp, res):
+    def _calcu_record(self, objective_func, inp, res):
         # for inp, res in record_reader:
         tvm_sch, tvm_args = self.tvm_task.compute_dag.apply_steps_from_state(inp.state)
         tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
@@ -275,17 +276,15 @@ class TVMTuner:
             raise ValueError(f"Unsupported {objective_func = }")
         return (score, grid_dim, block_dim, inp)
 
-    def __get_kernel_source_from_measure_input(
+    def _get_kernel_source_from_measure_input(
         self, inp: auto_scheduler.MeasureInput, grid_dim, block_dim
     ):
-        source_code = self.__get_source_code_from_measure_input(inp)
+        source_code = self._get_source_code_from_measure_input(inp)
         culaunch_config = make_culaunch_config_str(grid_dim, block_dim)
         kernel_source = culaunch_config + source_code
         return kernel_source
 
-    def __get_source_code_from_measure_input(
-        self, inp: auto_scheduler.MeasureInput
-    ):
+    def _get_source_code_from_measure_input(self, inp: auto_scheduler.MeasureInput):
         sch, args = self.tvm_task.compute_dag.apply_steps_from_state(
             inp.state, self.tvm_task.layout_rewrite_option
         )
@@ -293,8 +292,8 @@ class TVMTuner:
         source_code = func.imported_modules[0].get_source()
         return source_code
 
-    @classmethod
-    def __sort_record_data_by_group(record_data: list):
+    @staticmethod
+    def _sort_record_data_by_group(record_data: list):
         record_data.sort(key=lambda x: x[1:3])
         top_records = []
         for _, g in groupby(record_data, key=lambda x: x[1:3]):
@@ -302,11 +301,10 @@ class TVMTuner:
             g.sort(key=lambda x: x[0])
             top_records.append(g[0])
         top_records.sort(key=lambda x: x[0])
-        print(top_records[:5])
-        input()
+        return top_records
 
 
-def __calcu_record_mp(
+def _calcu_record_mp(
     compute_dag: auto_scheduler.ComputeDAG,
     objective_func: str,
     inp: auto_scheduler.MeasureInput,
