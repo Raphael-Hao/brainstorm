@@ -58,7 +58,9 @@ void NcclManager::ExternalRecordEvent(const int& event_id, const at::cuda::CUDAS
   events_[event_id].record(stream);
 }
 void NcclManager::ExternalWaitEvent(const int& event_id, const at::cuda::CUDAStream& stream) {
-  CHECK_LT(event_id, events_.size());
+  f (event_id >= events_.size()) {
+    events_.resize(event_id + 1);
+  }
   events_[event_id].block(stream);
 }
 
