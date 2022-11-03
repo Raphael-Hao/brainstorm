@@ -1,0 +1,33 @@
+description: GCR Distributed Pytorch BERT example using Horovod
+
+target:
+  service: amlk8s
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  name: itpeusp40cl
+  vc: resrchvc
+
+environment:
+  image: publicrepository/bert:pytorch_1.4_nccl_2.7.8_horovod_0.19.5_transformers_0.5.0
+  setup:
+    # The data will be downloaded to /tmp/ ONLY once per node.
+    - bash download_data.sh /tmp/
+    # The pre-trained bert will be fetched ONLY once per node.
+    - python download_pretrained_bert.py
+
+# This example downloads the data on the fly.
+# If you are interested in using the data in your Azure Blob, make sure to configure this section:
+# storage:
+#   data:
+#     storage_account_name: gcrblob
+#     container_name: data
+#     mount_dir: /mnt/data
+
+code:
+  local_dir: $CONFIG_DIR/code/
+
+jobs:
+  - name: gcr-test-job
+    sku: G4
+    command:
+      # Note, please gives an unique job_name to avoid multiple jobs write to the same checkpoint file concurrently.
+      - python main.py --model_path=$$AMLT_OUTPUT_DIR --data_path=/tmp/ --checkpoint_path=/vc_data/users/$$USER/ --epoch=10 --job_name=test2
