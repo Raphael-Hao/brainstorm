@@ -13,6 +13,7 @@ from brt.runtime.memory_planner import (
     unload_module,
 )
 
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
 
 class SimpleNet(nn.Module):
     def __init__(self) -> None:
