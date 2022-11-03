@@ -14,6 +14,19 @@ shift 1
 
 DOCKERFILE_PATH="${SCRIPT_DIR}/Dockerfile.${CONTAINER_TYPE}"
 
+if [[ "$1" == "--base-image" ]]; then
+    BASE_IMAGE=gcrmembers.azurecr.io/v-weihaocui/"$2"
+    echo "Using base image: ${BASE_IMAGE}"
+    shift 2
+else
+    BASE_IMAGE="nvidia/cuda:11.3.1-cudnn8-devel-ubuntu20.04"
+    if [[ "${CONTAINER_TYPE}" = "update" ]]; then
+        echo "Using base image: ${BASE_IMAGE} for update which is not a base image of brt!!!"
+        exit 1
+    fi
+    echo "Using default base image: ${BASE_IMAGE}"
+fi
+
 if [[ "$1" == "--tag" ]]; then
     DOCKER_IMAGE_TAG="$2"
     echo "Using custom Docker tag: ${DOCKER_IMAGE_TAG}"
@@ -30,12 +43,20 @@ else
 fi
 
 if [[ "$1" == "--branch" ]]; then
-    BRT_BRANCH="$2"
-    echo "Using custom branch: ${BRT_BRANCH}"
+    BRANCH="$2"
+    echo "Using custom branch: ${BRANCH}"
     shift 2
 else
-    BRT_BRANCH="main"
-    echo "Using default branch: ${BRT_BRANCH}"
+    BRANCH="main"
+    echo "Using default branch: ${BRANCH}"
+fi
+
+if [[ "$1" == "--upload-azure" ]]; then
+    UPLOAD_AZURE="true"
+    shift 1
+else
+    UPLOAD_AZURE="false"
+    echo "Not uploading to Azure"
 fi
 
 if [[ ! -f "${DOCKERFILE_PATH}" ]]; then
@@ -67,11 +88,19 @@ DOCKER_IMG_SPEC="${DOCKER_IMG_NAME}:${DOCKER_IMAGE_TAG}"
 echo "Building Docker image: ${DOCKER_IMG_SPEC}..."
 echo "Docker image context path: ${DOCKER_CONTEXT_PATH}"
 echo "Docker image Dockerfile path: ${DOCKERFILE_PATH}"
-echo "Using Branch of Brainstorm: ${BRT_BRANCH}"
+echo "Docker image base image: ${BASE_IMAGE}"
+echo "Using Branch of Brainstorm: ${BRANCH}"
 echo "Using SSH Key file: ${SSH_KEY_FILE} for accessing private git repos"
 
 docker build -t "$DOCKER_IMG_SPEC" \
-    -f "$DOCKERFILE_PATH" \
     --build-arg SSH_KEY_FILE="$SSH_KEY_PATH" \
-    --build-arg BRT_BRANCH="$BRT_BRANCH" \
+    --build-arg BRANCH="$BRANCH" \
+    --build-arg BASE_IMAGE="$BASE_IMAGE" \
+    -f "$DOCKERFILE_PATH" \
     "$DOCKER_CONTEXT_PATH"
+
+if [[ "$UPLOAD_AZURE" == "true" ]]; then
+    echo "Uploading Docker image to Azure GCR ..."
+    docker tag "$DOCKER_IMG_SPEC" "gcrmembers.azurecr.io/v-weihaocui/$DOCKER_IMG_SPEC"
+    docker push "gcrmembers.azurecr.io/v-weihaocui/$DOCKER_IMG_SPEC"
+fi
