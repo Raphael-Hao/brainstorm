@@ -18,8 +18,8 @@ if [[ "$1" == "--brt_only" ]]; then
 fi
 
 cd /root/brainstorm
-git checkout "${BRT_BRANCH:-main}"
-git pull --rebase
+git fetch
+git checkout -b "${BRT_BRANCH:-main}"
 git submodule update --init --recursive
 
 if (("$BRT_ONLY" == 0)); then

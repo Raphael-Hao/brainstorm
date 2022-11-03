@@ -75,9 +75,9 @@ fi
 COMMAND=("$@")
 
 BUILD_TAG="${BUILD_TAG:-brt}"
-DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG:-latest}"
+DOCKER_IMAGE_TAG="${DOCKER_IMAGE_TAG:-${BRANCH}}"
 
-DOCKER_IMG_NAME="${BUILD_TAG}.${CONTAINER_TYPE}"
+DOCKER_IMG_NAME="${BUILD_TAG}"
 
 DOCKER_IMG_NAME=$(echo "${DOCKER_IMG_NAME}" | sed -e 's/=/_/g' -e 's/,/-/g')
 
@@ -100,7 +100,5 @@ docker build -t "$DOCKER_IMG_SPEC" \
     "$DOCKER_CONTEXT_PATH"
 
 if [[ "$UPLOAD_AZURE" == "true" ]]; then
-    echo "Uploading Docker image to Azure GCR ..."
-    docker tag "$DOCKER_IMG_SPEC" "gcrmembers.azurecr.io/v-weihaocui/$DOCKER_IMG_SPEC"
-    docker push "gcrmembers.azurecr.io/v-weihaocui/$DOCKER_IMG_SPEC"
+    bash "${SCRIPT_DIR}"/az_upload.sh --image "$DOCKER_IMG_SPEC"
 fi

@@ -7,10 +7,6 @@ ENV BRT_BRANCH=${BRANCH}
 ENV BRT_UPDATE_BRT_ONLY=${UPDATE_BRT_ONLY}
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN echo "${BRT_BRANCH}"
-RUN echo "${BASE_IMAGE}"
-RUN echo "${BRT_UPDATE_BRT_ONLY}"
-
 COPY update.sh /tmp/update.sh
 
 RUN bash /tmp/update.sh --branch $BRT_BRANCH --brt_only ${BRT_UPDATE_BRT_ONLY}
