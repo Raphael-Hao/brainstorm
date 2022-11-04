@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Callable, List
+from typing import Callable, List, Union
 
 import torch
 
@@ -24,7 +24,7 @@ def make_jit_kernel(
     method="forward",
     opt_level=None,
     objective_func: str = "fastest",
-    rank: int = 1,
+    rank: Union[int, List[int]] = 1,
 ) -> Callable[..., None]:
     if opt_level is None:
         kernel = ModuleKernelFactory.make_kernel(
@@ -66,14 +66,15 @@ class HorizFusedKernelFactory:
         method,
         sample_inputs,
         objective_func: str = "fastest",
-        rank: int = 1,
+        ranks: List[int] = 1,
     ):
         assert len(modules) == len(
             sample_inputs
         ), "modules and sample_inputs must have the same length"
-
+        if isinstance(ranks, int):
+            ranks = [ranks] * len(modules)
         candidates = []
-        for m, sample_input in zip(modules, sample_inputs):
+        for m, sample_input, rank in zip(modules, sample_inputs, ranks):
             module_kernel = ModuleKernelFactory.make_kernel(
                 m, method, sample_input, objective_func, rank
             )

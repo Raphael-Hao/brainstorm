@@ -37,6 +37,7 @@ class TunedKernel(nn.Module):
         model: nn.Module,
         input_shape: torch.Size,
         output_shape: torch.Size,
+        rank:int = 1,
     ):
         super().__init__()
         if isinstance(model, nn.Sequential) and len(model) == 1:
@@ -68,7 +69,7 @@ class TunedKernel(nn.Module):
         for name, tensor in model.named_buffers():
             self.register_buffer(name.replace(".", "_"), tensor)
         sample_input = torch.randn(self.input_shape).cuda()
-        self.fused_kernel = make_jit_kernel(model, sample_input)
+        self.fused_kernel = make_jit_kernel(model, sample_input, rank=rank)
         # Make fused inputs
         self.inputs_templete = {}
         self.inputs_templete["forward"] = []
@@ -119,6 +120,7 @@ class FusedLayer(nn.Module):
         models: Union[List[nn.Module], nn.ModuleList],
         input_shapes: List[torch.Size],
         output_shapes: List[torch.Size],
+        ranks: Union[int, List[int]] = 1,
     ):
         super().__init__()
         self.input_shapes = input_shapes
@@ -166,6 +168,7 @@ class FusedLayer(nn.Module):
             sample_inputs,
             opt_level="horiz_fuse",
             objective_func=get_objective_func(),
+            rank=ranks,
         )
         # Make fused inputs
         self.inputs_templete = {}
