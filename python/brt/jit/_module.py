@@ -2,12 +2,14 @@
 # Licensed under the MIT license.
 
 from typing import Callable, List
+from abc import ABC, abstractstaticmethod
 
 import torch
+from torch import nn
 
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
-from brt.jit.modules import ModuleInfo
-from brt.jit.function_factory import make_jit_function
+from brt.jit.modules import AtomModule
+from brt.jit._function import make_jit_function
 
 
 __all__ = ["make_jit_module"]
@@ -23,3 +25,23 @@ def make_jit_module(modules, sample_inputs=None, mode="eval", opt_level="none"):
             assert len(modules) == 1, "only one module is supported for none opt mode"
 
     raise NotImplementedError("make_jit_module is not implemented yet.")
+
+
+class AtomModuleFactory:
+    @staticmethod
+    def produce(
+        module: nn.Module, sample_inputs=None, mode="eval", opt_level="none"
+    ) -> nn.Module:
+        self.make_
+
+
+class HorizFusedModuleFactory:
+    pass
+
+
+class HeteroFusedModuleFactory:
+    pass
+
+
+class HomoFusedModuleFactory:
+    pass

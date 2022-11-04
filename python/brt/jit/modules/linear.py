@@ -6,35 +6,35 @@ from typing import List, Tuple, Union
 import torch
 
 from brt.runtime import log
-from brt.jit.modules.base import ModuleInfo
+from brt.jit.modules.atom import AtomModule
 from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
 
 logger = log.get_logger(__file__)
 
 
-class LinearInfo(ModuleInfo):
+class LinearModule(AtomModule):
 
     _input_arg_indices = {"forward": [0]}
     _output_arg_indices = {"forward": [2]}
     _shared_arg_indices = {"forward": [0, 2]}
 
     _involved_module_cls = torch.nn.Linear
-    
+
     @classmethod
     def ismodule(cls, module: torch.nn.Module) -> bool:
         return isinstance(module, cls._involved_module_cls)
 
-    def make_kernel(
+    def _make_global_kernel(
         self,
+        sample_inputs: torch.Tensor,
         method: str,
-        sample_input: torch.Tensor,
         objective_func: str = "fastest",
         rank: int = 1,
     ) -> ModuleKernel:
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
-        sample_output = self.module(sample_input)
-        input_infos = {"input_0": list(sample_input.shape)}
+        sample_output = self.module(sample_inputs)
+        input_infos = {"input_0": list(sample_inputs.shape)}
         output_infos = {"output_0": list(sample_output.shape)}
         parameters = {
             "in_features": self.module.in_features,
@@ -49,7 +49,7 @@ class LinearInfo(ModuleInfo):
             parameters=parameters,
         ).load_from_db(objective_func, rank)
 
-    def extract_shared_arg_infos(
+    def _extract_shared_arg_infos(
         self, method: str, sample_input: torch.Tensor
     ) -> Tuple[List, List]:
         if method not in type(self)._shared_arg_indices:
@@ -60,7 +60,7 @@ class LinearInfo(ModuleInfo):
         ]
         return type(self)._shared_arg_indices[method], shared_arg_grans
 
-    def extract_arg_infos(self, method: str) -> Tuple[int, int, List, List]:
+    def _extract_arg_infos(self, method: str) -> Tuple[int, int, List, List]:
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
         if self.module.bias is None:
@@ -75,5 +75,6 @@ class LinearInfo(ModuleInfo):
             type(self)._output_arg_indices[method],
         )
 
-    def _get_module_name(self) -> str:
+    @property
+    def module_name(self) -> str:
         return "Linear" if self.module.bias is None else "LinearBias"

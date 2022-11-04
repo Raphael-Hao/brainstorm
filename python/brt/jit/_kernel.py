@@ -1,12 +1,14 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+__all__ = ["make_jit_kernel"]
+
 from typing import Callable, List, Union
 
 import torch
 
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
-from brt.jit.modules import ModuleInfoFactory
+from brt.jit.modules import JitModuleFactory
 from brt.jit.compiler import CUDACompiler
 from brt.jit.codegen import (
     ModuleKernel,
@@ -14,8 +16,6 @@ from brt.jit.codegen import (
     HeteroFusedKernel,
     HomoFusedKernel,
 )
-
-__all__ = ["make_jit_kernel"]
 
 
 def make_jit_kernel(
@@ -90,7 +90,7 @@ class HeteroFusedKernelFactory:
         method,
         sample_inputs,
         objective_func: str = "fastest",
-        rank: int = 1,
+        rank: Union[int, List[int]] = 1,
     ):
         assert len(modules) == len(
             sample_inputs
@@ -113,7 +113,7 @@ class HomoFusedKernelFactory:
         method,
         sample_inputs: List[List[torch.Tensor]],
         objective_func: str = "fastest",
-        rank: int = 1,
+        rank: Union[int, List[int]] = 1,
     ):
         HomoFusedKernelFactory.check_homogeneity(modules)
         candidate_module = modules[0]
@@ -129,11 +129,11 @@ class HomoFusedKernelFactory:
         ]
         shared_arg_indices = None
         shared_arg_grans = None
-        module_info = ModuleInfoFactory.produce(candidate_module)
+        module_info = JitModuleFactory.produce(candidate_module)
         (
             shared_arg_indices,
             shared_arg_grans,
-        ) = module_info.extract_shared_arg_infos(method, sample_inputs[0])
+        ) = module_info._extract_shared_arg_infos(method, sample_inputs[0])
         assert shared_arg_indices is not None, "shared_arg_indices is None"
         assert shared_arg_grans is not None, "shared_arg_grans is None"
 
@@ -168,9 +168,9 @@ class ModuleKernelFactory:
         method,
         sample_input,
         objective_func: str = "fastest",
-        rank: int = 1,
+        rank: Union[int, List[int]] = 1,
     ) -> ModuleKernel:
-        module_info = ModuleInfoFactory.produce(module)
+        module_info = JitModuleFactory.produce(module)
         return module_info.make_kernel(method, sample_input, objective_func, rank)
 
     @staticmethod
@@ -179,9 +179,9 @@ class ModuleKernelFactory:
         method,
         sample_inputs,
         objective_func: str = "fastest",
-        rank: int = 1,
+        rank: Union[int, List[int]] = 1,
     ) -> List[ModuleKernel]:
-        module_info = ModuleInfoFactory.produce(module)
+        module_info = JitModuleFactory.produce(module)
         return [
             module_info.make_kernel(method, sample_input, objective_func, rank)
             for sample_input in sample_inputs

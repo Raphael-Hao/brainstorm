@@ -3,13 +3,13 @@
 
 import torch
 from brt.runtime import log
-from brt.jit.modules.base import ModuleInfo
+from brt.jit.modules.atom import AtomModule
 from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
 
 logger = log.get_logger(__file__)
 
 
-class Conv2dElementWiseInfo(ModuleInfo):
+class Conv2dElementWiseModule(AtomModule):
 
     _input_arg_indices = {"forward": [0]}
     _output_arg_indices = {"forward": [2]}
@@ -34,10 +34,10 @@ class Conv2dElementWiseInfo(ModuleInfo):
                 return False
         return True
 
-    def make_kernel(
+    def _make_global_kernel(
         self,
+        sample_inputs: torch.Tensor,
         method: str,
-        sample_input: torch.Tensor,
         objective_func: str = "fastest",
         rank: int = 1,
     ) -> ModuleKernel:
@@ -55,8 +55,8 @@ class Conv2dElementWiseInfo(ModuleInfo):
         parameters["dilation"] = conv2d.dilation
         parameters["groups"] = conv2d.groups
 
-        sample_output = self.module(sample_input)
-        input_infos = {"input_0": list(sample_input.shape)}
+        sample_output = self.module(sample_inputs)
+        input_infos = {"input_0": list(sample_inputs.shape)}
         output_infos = {"output_0": list(sample_output.shape)}
         logger.debug(
             f"""
@@ -75,7 +75,7 @@ parameters: {parameters}
             parameters=parameters,
         ).load_from_db(objective_func, rank)
 
-    def extract_shared_arg_infos(self, method: str, sample_input: torch.Tensor):
+    def _extract_shared_arg_infos(self, method: str, sample_input: torch.Tensor):
         # Only support method == 'forward' actually
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
@@ -104,7 +104,8 @@ parameters: {parameters}
             type(self)._output_arg_indices[method],
         )
 
-    def _get_module_name(self) -> str:
+    @property
+    def module_name(self) -> str:
         if not isinstance(module, torch.nn.Sequential):
             module = torch.nn.Sequential(module)
         for i, sub_module in enumerate(module):

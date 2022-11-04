@@ -3,13 +3,13 @@
 
 import torch
 from brt.runtime import log
-from brt.jit.modules.base import ModuleInfo
+from brt.jit.modules.atom import AtomModule
 from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
 
 logger = log.get_logger(__file__)
 
 
-class ConvTranspose2dInfo(ModuleInfo):
+class JitConvTranspose2dModule(AtomModule):
     """Info for torch.nn.ConvTranspose2d kernel
 
     Method Args:
@@ -73,7 +73,7 @@ parameters: {parameters}
         ).load_from_db(objective_func, rank)
 
     @classmethod
-    def extract_shared_arg_infos(
+    def _extract_shared_arg_infos(
         cls, module: torch.nn.ConvTranspose2d, method: str, sample_input: torch.Tensor
     ):
         assert method in cls._shared_arg_indices, f"{method} is not supported"
