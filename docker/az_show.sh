@@ -4,17 +4,19 @@
 # \brief:
 # Author: raphael hao
 
+REGISTRY="gcrmembers"
+
 # view containers in the repository:
-az acr repository list --name gcrmembers -o tsv
+az acr repository list --name $REGISTRY -o tsv
 
 # get details about a repository:
-az acr repository show -n gcrmembers --repository "v-weihaocui/brt"
+az acr repository show -n $REGISTRY --repository "raphael/brt"
 
 # get details about a container image version:
-az acr repository show -n gcrmembers --image "v-weihaocui/brt:main"
+az acr repository show -n $REGISTRY --image "raphael/brt:main"
 
 # delete the whole repository:
-ac acr repository delete -n gcrmembers --repository "v-weihaocui/brt"
+az acr repository delete -n $REGISTRY --repository "raphael/brt"
 
 # delete a image:
-az acr repository delete -n gcrmembers --image "v-weihaocui/brt:main"
+az acr repository delete -n $REGISTRY --image "raphael/brt:main"

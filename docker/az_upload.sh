@@ -10,8 +10,9 @@ else
     echo "Please specify the image to upload"
     exit 1
 fi
+REGISTRY="gcrmembers"
 
-az acr login --name gcrmembers
+az acr login --name $REGISTRY
 echo "Uploading Docker image to Azure GCR ..."
-docker tag "$DOCKER_IMG_SPEC" "gcrmembers.azurecr.io/v-weihaocui/$DOCKER_IMG_SPEC"
-docker push "gcrmembers.azurecr.io/v-weihaocui/$DOCKER_IMG_SPEC"
+docker tag "$DOCKER_IMG_SPEC" "$REGISTRY.azurecr.io/raphael/$DOCKER_IMG_SPEC"
+docker push "$REGISTRY.azurecr.io/raphael/$DOCKER_IMG_SPEC"
