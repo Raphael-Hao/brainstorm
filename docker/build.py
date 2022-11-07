@@ -131,6 +131,7 @@ def build_docker():
         cmd.extend(["--build-arg", f"INSTALLER_IMAGE={installer_image}"])
     if args.type == "update":
         cmd.extend(["--build-arg", f"UPDATE_BRT_ONLY={args.update_brt}"])
+        cmd.append("--no-cache")
     cmd.extend(["-f", args.dockerfile])
     cmd.extend(["--progress=plain", args.context_path])
     print(" ".join(cmd))

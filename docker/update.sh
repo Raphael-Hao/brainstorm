@@ -20,9 +20,10 @@ fi
 cd /brainstorm_project/brainstorm
 git fetch
 git checkout -b "${BRT_BRANCH:-main}"
+git pull
 git submodule update --init --recursive
 
-if [[ "$BRT_ONLY" = "True" ]]; then
+if [[ "$BRT_ONLY" != "True" ]]; then
     cd 3rdparty/tvm || exit
     mkdir -p build && cd build || exit
     cp ../../../cmake/config/tvm.cmake config.cmake
