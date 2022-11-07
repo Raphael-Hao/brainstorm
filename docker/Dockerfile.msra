@@ -12,7 +12,7 @@ RUN apt-get -y update && apt-get install -y \
     ssh gcc libtinfo-dev zlib1g-dev build-essential \
     cmake libedit-dev libxml2-dev llvm tmux wget git
 
-RUN cmake
+RUN cmake --version
 
 # setup ssh key
 RUN mkdir -p /root/.ssh
