@@ -33,7 +33,7 @@ cd 3rdparty/tvm || exit
 mkdir -p build && cd build || exit
 cp ../../../cmake/config/tvm.cmake config.cmake
 cmake ..
-make install -j
+make VERBOSE=1 install -j
 cd ../python && pip install .
 
 cd /brainstorm_project/brainstorm || exit
