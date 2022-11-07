@@ -1,6 +1,8 @@
-ARG BASE_IMAGE=base/job/pytorch/1.11.0-cuda11.6:20220610T172305953
+ARG BASE_IMAGE
+ARG INSTALLER_IMAGE
 ARG VALIDATOR_IMAGE
-FROM ${BASE_IMAGE} AS base
+FROM $BASE_IMAGE AS base
+FROM $INSTALLER_IMAGE as installer
 FROM $VALIDATOR_IMAGE as validator
 
 FROM base
@@ -22,17 +24,21 @@ RUN mkdir -p /root/.ssh
 COPY "$BRT_SSH_KEY_FILE" /root/.ssh/
 RUN chmod 600 /root/.ssh/id_ed25519
 RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
-ENV PATH=/root/miniconda3/bin:/usr/local/cuda/bin:$PATH
+ENV PATH=/opt/miniconda3/bin:/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LD_LIBRARY_PATH}
 ENV LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LIBRARY_PATH}
 ENV CPLUS_INCLUDE_PATH=/usr/local/cuda/include:${CPLUS_INCLUDE_PATH}
-ENV BRT_CACHE_PATH=/root/brainstorm/.cache
+ENV BRT_CACHE_PATH=/brainstorm_project/brainstorm/.cache
+ENV SINGULARITY_PYTHON_PATH=/opt/miniconda3/bin/python
+
 
 COPY install.sh /tmp/install.sh
 
 RUN bash /tmp/install.sh --branch $BRT_BRANCH
 
-COPY --from=validator /validations /opt/microsoft/_singularity/validations/
-RUN /opt/microsoft/_singularity/validations/validator.sh
+COPY --from=installer /installer /opt/microsoft/_singularity/installations/
+RUN /opt/microsoft/_singularity/installations/singularity/installer.sh
 
-WORKDIR /root
+COPY --from=validator /validations /opt/microsoft/_singularity/validations/
+ENV SINGULARITY_IMAGE_ACCELERATOR="NVIDIA"
+RUN /opt/microsoft/_singularity/validations/validator.sh

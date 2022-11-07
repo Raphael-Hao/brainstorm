@@ -14,8 +14,14 @@ else
     exit 1
 fi
 
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/registry.config"
+if [[ "$1" == "--registry" ]]; then
+    REGISTRY="$2"
+    shift 2
+else
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/registry.config"
+    shift 1
+fi
 
 az acr login --name "$REGISTRY"
 echo "Uploading Docker image to Azure GCR ..."

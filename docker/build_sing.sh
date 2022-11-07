@@ -93,18 +93,47 @@ DOCKER_IMG_NAME=$(echo "${DOCKER_IMG_NAME}" | tr '[:upper:]' '[:lower:]')
 
 DOCKER_IMG_SPEC="${DOCKER_IMG_NAME}:${DOCKER_IMAGE_TAG}"
 
+SING_REGISTRY="singularitybase"
+VALIDATOR_IMAGE_REPO="validations/base/singularity-tests"
+INSTALLER_IMAGE_REPO="installer/base/singularity-installer"
+
+az acr login -n "${SING_REGISTRY}"
+
+VALIDATOR_IMAGE_TAG=$(az acr repository show-manifests \
+    --name $SING_REGISTRY \
+    --repository $VALIDATOR_IMAGE_REPO \
+    --orderby time_desc \
+    --query '[].{Tag:tags[0]}' \
+    --output tsv --top 1)
+
+VALIDATOR_IMAGE="${SING_REGISTRY}.azurecr.io/${VALIDATOR_IMAGE_REPO}:${VALIDATOR_IMAGE_TAG}"
+
+INSTALLER_IMAGE_TAG=$(az acr repository show-manifests \
+    --name $SING_REGISTRY \
+    --repository $INSTALLER_IMAGE_REPO \
+    --orderby time_desc \
+    --query '[].{Tag:tags[0]}' \
+    --output tsv --top 1)
+
+INSTALLER_IMAGE="${SING_REGISTRY}.azurecr.io/${INSTALLER_IMAGE_REPO}:${INSTALLER_IMAGE_TAG}"
+
 echo "Building Docker image: ${DOCKER_IMG_SPEC}..."
 echo "Docker image context path: ${DOCKER_CONTEXT_PATH}"
 echo "Docker image Dockerfile path: ${DOCKERFILE_PATH}"
 echo "Docker image base image: ${BASE_IMAGE}"
 echo "Using Branch of Brainstorm: ${BRANCH}"
 echo "Using SSH Key file: ${SSH_KEY_FILE} for accessing private git repos"
+echo "Using Validator image: ${VALIDATOR_IMAGE}"
+echo "Using Installer image: ${INSTALLER_IMAGE}"
 
-nvidia-docker build -t "$DOCKER_IMG_SPEC" \
+docker build -t "$DOCKER_IMG_SPEC" \
     --build-arg SSH_KEY_FILE="$SSH_KEY_PATH" \
     --build-arg BRANCH="$BRANCH" \
     --build-arg BASE_IMAGE="$BASE_IMAGE" \
+    --build-arg INSTALLER_IMAGE="$INSTALLER_IMAGE" \
+    --build-arg VALIDATOR_IMAGE="$VALIDATOR_IMAGE" \
     -f "$DOCKERFILE_PATH" \
+    --progress=plain \
     "$DOCKER_CONTEXT_PATH"
 
 if [[ "$UPLOAD_AZURE" == "true" ]]; then

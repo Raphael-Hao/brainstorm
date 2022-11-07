@@ -33,7 +33,10 @@ cd 3rdparty/tvm || exit
 mkdir -p build && cd build || exit
 cp ../../../cmake/config/tvm.cmake config.cmake
 cmake ..
-make VERBOSE=1 install -j
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH && \
+    ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
+    make install -j && \
+    rm -f /usr/local/cuda/lib64/stubs/libcuda.so.1
 cd ../python && pip install .
 
 cd /brainstorm_project/brainstorm || exit

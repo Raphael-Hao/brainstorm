@@ -6,6 +6,13 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+if [[ "$1" == "--registry" ]]; then
+    REGISTRY="$2"
+    shift 2
+else
+    echo "Please specify the image to upload"
+    exit 1
+fi
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/registry.config"
 
