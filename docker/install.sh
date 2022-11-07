@@ -14,17 +14,18 @@ fi
 
 cd /root
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
-    bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b &&
+    bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/miniconda3 &&
     rm -f Miniconda3-py38_4.10.3-Linux-x86_64.sh
+echo 'export PATH=/opt/miniconda3/bin:$PATH' >> /etc/profile
 
-cd /root
+mkdir -p /brainstorm_project && cd /brainstorm_project
 git clone git@github.com:Raphael-Hao/brainstorm.git \
     -b "${BRT_BRANCH:-main}" \
     --recursive --depth 1
 cd brainstorm
 
 pip install --upgrade pip
-conda install -y pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.3 -c pytorch
+pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 --extra-index-url https://download.pytorch.org/whl/cu113
 pip install -r requirements.txt
 
 cd 3rdparty/tvm || exit
@@ -35,5 +36,5 @@ cmake ..
 make install -j
 cd ../python && pip install .
 
-cd /root/brainstorm || exit
+cd /brainstorm_project/brainstorm || exit
 pip install -v --editable .

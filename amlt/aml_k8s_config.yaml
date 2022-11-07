@@ -10,8 +10,8 @@ target:
 
 environment:
   image: raphael/brt:dist
-  registry: gcrmembers
-  username: gcrmembers
+  registry: resrchvc4cr.azurecr.io
+  username: resrchvc4cr
   # setup:
     # The data will be downloaded to /tmp/ ONLY once per node.
     # - python download_pretrained_bert.py
@@ -25,12 +25,18 @@ environment:
 #     mount_dir: /mnt/data
 
 code:
-  local_dir: $CONFIG_DIR/sample/distributed
+  local_dir: $CONFIG_DIR/../sample/distributed
   # remote_dir: /root/code
+
+env_defaults:
+  USER: root
 
 jobs:
   - name: brt_dist
     sku: G4-V100-IB
+    submit_args:
+      container_args:
+        user: root
     command:
       # Note, please gives an unique job_name to avoid multiple jobs write to the same checkpoint file concurrently.
-      - python -c "import time; time.sleep(600)" # sleep 10 minutes
+    - sleep 2h # sleep 10 minutes

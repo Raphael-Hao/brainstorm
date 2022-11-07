@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=brt.msra:main
+ARG BASE_IMAGE=brt:main
 FROM ${BASE_IMAGE} AS base
 
 ARG BRANCH=main

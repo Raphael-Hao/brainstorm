@@ -17,7 +17,7 @@ RUN mkdir -p /root/.ssh
 COPY "$BRT_SSH_KEY_FILE" /root/.ssh/
 RUN chmod 600 /root/.ssh/id_ed25519
 RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
-ENV PATH=/root/miniconda3/bin:/usr/local/cuda/bin:$PATH
+ENV PATH=/opt/miniconda3/bin:/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LD_LIBRARY_PATH}
 ENV LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LIBRARY_PATH}
 ENV CPLUS_INCLUDE_PATH=/usr/local/cuda/include:${CPLUS_INCLUDE_PATH}

@@ -17,7 +17,7 @@ if [[ "$1" == "--brt_only" ]]; then
     shift 2
 fi
 
-cd /root/brainstorm
+cd /brainstorm_project/brainstorm
 git fetch
 git checkout -b "${BRT_BRANCH:-main}"
 git submodule update --init --recursive
@@ -31,5 +31,5 @@ if (("$BRT_ONLY" == 0)); then
     cd ../python && pip install .
 fi
 
-cd /root/brainstorm || exit
+cd /brainstorm_project/brainstorm || exit
 pip install -v --editable .

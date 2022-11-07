@@ -15,7 +15,7 @@ shift 1
 DOCKERFILE_PATH="${SCRIPT_DIR}/Dockerfile.${CONTAINER_TYPE}"
 
 if [[ "$1" == "--base-image" ]]; then
-    BASE_IMAGE=gcrmembers.azurecr.io/v-weihaocui/"$2"
+    BASE_IMAGE="$2"
     echo "Using base image: ${BASE_IMAGE}"
     shift 2
 else
