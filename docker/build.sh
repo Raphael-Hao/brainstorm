@@ -100,7 +100,7 @@ echo "Docker image base image: ${BASE_IMAGE}"
 echo "Using Branch of Brainstorm: ${BRANCH}"
 echo "Using SSH Key file: ${SSH_KEY_FILE} for accessing private git repos"
 
-nvidia-docker build -t "$DOCKER_IMG_SPEC" \
+docker build -t "$DOCKER_IMG_SPEC" \
     --build-arg SSH_KEY_FILE="$SSH_KEY_PATH" \
     --build-arg BRANCH="$BRANCH" \
     --build-arg BASE_IMAGE="$BASE_IMAGE" \

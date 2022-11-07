@@ -40,4 +40,5 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH && \
 cd ../python && pip install .
 
 cd /brainstorm_project/brainstorm || exit
+
 pip install -v --editable .

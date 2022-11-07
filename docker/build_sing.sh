@@ -126,8 +126,8 @@ echo "Using SSH Key file: ${SSH_KEY_FILE} for accessing private git repos"
 echo "Using Validator image: ${VALIDATOR_IMAGE}"
 echo "Using Installer image: ${INSTALLER_IMAGE}"
 
-docker build -t "$DOCKER_IMG_SPEC" \
-    --build-arg SSH_KEY_FILE="$SSH_KEY_PATH" \
+nvidia-docker build -t "$DOCKER_IMG_SPEC" \
+    --build-arg SSH_KEY_FILE="$SSH_KEY_FILE" \
     --build-arg BRANCH="$BRANCH" \
     --build-arg BASE_IMAGE="$BASE_IMAGE" \
     --build-arg INSTALLER_IMAGE="$INSTALLER_IMAGE" \

@@ -22,12 +22,15 @@ git fetch
 git checkout -b "${BRT_BRANCH:-main}"
 git submodule update --init --recursive
 
-if (("$BRT_ONLY" == 0)); then
+if [[ "$BRT_ONLY" = "True" ]]; then
     cd 3rdparty/tvm || exit
     mkdir -p build && cd build || exit
     cp ../../../cmake/config/tvm.cmake config.cmake
     cmake ..
-    make install -j
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH &&
+        ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 &&
+        make install -j &&
+        rm -f /usr/local/cuda/lib64/stubs/libcuda.so.1
     cd ../python && pip install .
 fi
 
