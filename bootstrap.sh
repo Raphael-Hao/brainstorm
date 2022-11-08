@@ -30,8 +30,8 @@ wget https://packages.microsoft.com/config/ubuntu/"${UBUNTU_DIST}"/packages-micr
 dpkg -i packages-microsoft-prod.deb && rm -f packages-microsoft-prod.deb
 apt-get update
 apt-get install -y \
-    blobfuse ssh gcc libtinfo-dev zlib1g-dev build-essential \
-    cmake libedit-dev libxml2-dev llvm tmux wget git
+    blobfuse gcc libtinfo-dev zlib1g-dev build-essential \
+    libedit-dev libxml2-dev llvm wget git
 
 mkdir -p ~/brainstorm_project && cd ~/brainstorm_project
 git clone git@github.com:Raphael-Hao/brainstorm.git \
@@ -65,3 +65,6 @@ cd ../python && pip install .
 cd ~/brainstorm_project/brainstorm || exit
 
 pip install -v --editable .
+
+git config --global user.name raphael
+git config --global user.email raphaelhao@outlook.com
