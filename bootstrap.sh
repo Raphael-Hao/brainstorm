@@ -16,9 +16,13 @@ sudo dpkg -i packages-microsoft-prod.deb
 sudo apt-get update
 sudo apt-get install blobfuse
 
-git clone git@github.com:Raphael-Hao/dotfile.git ~/dotfile
-cd ~/dotfile
-
+sudo mkdir /mnt/ramdisk
+sudo mount -t tmpfs -o size=16g tmpfs /mnt/ramdisk
+sudo mkdir /mnt/ramdisk/blobfusetmp
+sudo chown "$(whoami)" /mnt/ramdisk/blobfusetmp
+chmod 600 azure/blob/blobfuse.cfg
+mkdir ~/largedata
+blobfuse ~/datasets/swin_moe --tmp-path=/mnt/ramdisk/blobfusetmp  --config-file=azure/blob/blobfuse.cfg -o attr_timeout=240 -o entry_timeout=240 -o negative_timeout=120
 
 
 if [[ "$1" == "--branch" ]]; then
