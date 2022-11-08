@@ -108,5 +108,6 @@
         "**/3rdparty/tvm/**": true,
         "**/.cache/**": true,
         "**/build/**": true
-    }
+    },
+    "git.ignoreSubmodules": true
 }

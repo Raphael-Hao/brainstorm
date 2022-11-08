@@ -39,6 +39,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
+        in_flows = [in_flows] if self.flow_num == 1 else in_flows
         all_out_flows = []
         for flow_idx, in_flow in enumerate(in_flows):
             if self.route_logics[flow_idx] == "1d":
@@ -59,8 +60,8 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
                 raise ValueError("route_logic must be 1d or 2d")
 
             all_out_flows.append(out_flow)
-
-        return all_out_flows
+        all_out_flows = all_out_flows[0] if self.flow_num == 1 else all_out_flows
+        return all_out_flows, route_indices, loads, score
 
 
 @register_fabric("distributed_fused_combine")
@@ -75,9 +76,14 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
         )
         self.transform = True
 
-    def combine(
-        self, in_flows: List[torch.Tensor], route_indices, loads, score
+    def forward(
+        self,
+        in_flows: List[torch.Tensor],
+        route_indices: torch.Tensor,
+        loads: torch.Tensor,
+        score: torch.Tensor,
     ) -> List[torch.Tensor]:
+        in_flows = [in_flows] if self.flow_num == 1 else in_flows
         out_flows = []
         for _flow_idx, in_flow in enumerate(in_flows):
 
@@ -89,9 +95,6 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
                 out_flow = combine_with_src_indices(in_flow, route_indices, loads, None)
 
             out_flows.append(out_flow)
+        out_flows = out_flows[0] if self.flow_num == 1 else out_flows
 
         return out_flows
-
-    def pack_invalid_flow(self, in_flow):
-
-        return in_flow
