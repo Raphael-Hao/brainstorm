@@ -1,11 +1,13 @@
 from typing import List, Tuple, Union
 
 import torch
+# pylint: disable=no-name-in-module
 from brt._C.router import (
     dispatch_with_dst_indices_1d,
     dispatch_with_dst_indices_2d,
     combine_with_src_indices,
 )
+# pylint: enable=no-name-in-module
 from brt.runtime import log
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import CombineFabric, DispatchFabric

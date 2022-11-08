@@ -99,5 +99,14 @@
         "-p",
         "*_test.py"
     ],
-    "python.testing.pytestEnabled": false
+    "python.testing.pytestEnabled": false,
+    "files.watcherExclude": {
+        "**/.git/**": true,
+        "**/node_modules/*/**": true,
+        "**/.hg/store/**": true,
+        "**/3rdparty/dmlc-core/**": true,
+        "**/3rdparty/tvm/**": true,
+        "**/.cache/**": true,
+        "**/build/**": true
+    }
 }

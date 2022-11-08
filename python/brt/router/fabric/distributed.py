@@ -1,19 +1,97 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import List, Union
 
 import torch
-import torch.distributed as dist
+
+# pylint: disable=no-name-in-module
+from brt._C.router import (
+    dispatch_with_dst_indices_1d,
+    dispatch_with_dst_indices_2d,
+    combine_with_src_indices,
+)
+
+# pylint: enable=no-name-in-module
 from brt.router.fabric.base import register_fabric
-from brt.router.fabric.generic import DispatchFabric, CombineFabric
-from brt.router.fabric.fused import HomoFusedDispatchFabric, HomoFusedCombineFabric
+from brt.router.fabric.fused import FusedDispatchFabric, FusedCombineFabric
 
 
-@register_fabric("distributed_dispatch")
-class DistributedDispatchFabric(DispatchFabric):
-    def placement(self, src_index, dst_index):
-        pass
+@register_fabric("distributed_fused_dispatch")
+class DistributedFusedDispatchFabric(FusedDispatchFabric):
+    def __init__(
+        self,
+        flow_num: int,
+        capacity_padding=False,
+        route_logic: Union[str, List[str]] = "1d",
+        transform: Union[bool, List[bool]] = False,
+    ):
+        super().__init__(
+            flow_num=flow_num,
+            capacity_padding=capacity_padding,
+            route_logic=route_logic,
+            transform=transform,
+        )
+
+    def forward(
+        self,
+        in_flows: List[torch.Tensor],
+        route_indices: torch.Tensor,
+        loads: torch.Tensor,
+        score: torch.Tensor,
+    ) -> List[torch.Tensor]:
+        all_out_flows = []
+        for flow_idx, in_flow in enumerate(in_flows):
+            if self.route_logics[flow_idx] == "1d":
+                if self.transforms[flow_idx]:
+                    out_flow = dispatch_with_dst_indices_1d(
+                        in_flow, route_indices, loads, self.capacity_padding, score
+                    )
+                else:
+                    out_flow = dispatch_with_dst_indices_1d(
+                        in_flow, route_indices, loads, self.capacity_padding
+                    )
+            elif self.route_logics[flow_idx] == "2d":
+                in_flow = in_flow.transpose(0, 1).contiguous()
+                out_flow = dispatch_with_dst_indices_2d(
+                    in_flow, route_indices, loads, self.capacity_padding
+                )
+            else:
+                raise ValueError("route_logic must be 1d or 2d")
+
+            all_out_flows.append(out_flow)
+
+        return all_out_flows
 
 
-@register_fabric("distributed_combine")
-class CombineDispatchFabric(CombineFabric):
-    pass
+@register_fabric("distributed_fused_combine")
+class DistributedFusedCombineFabric(FusedCombineFabric):
+    def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
+        assert granularity_padding == False
+        super().__init__(
+            flow_num=flow_num,
+            reduction=reduction,
+            sparse=sparse,
+            granularity_padding=False,
+        )
+        self.transform = True
+
+    def combine(
+        self, in_flows: List[torch.Tensor], route_indices, loads, score
+    ) -> List[torch.Tensor]:
+        out_flows = []
+        for _flow_idx, in_flow in enumerate(in_flows):
+
+            if self.transform:
+                out_flow = combine_with_src_indices(
+                    in_flow, route_indices, loads, auto_pad=True, gates=score
+                )
+            else:
+                out_flow = combine_with_src_indices(in_flow, route_indices, loads, None)
+
+            out_flows.append(out_flow)
+
+        return out_flows
+
+    def pack_invalid_flow(self, in_flow):
+
+        return in_flow
