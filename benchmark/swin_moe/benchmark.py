@@ -4,50 +4,46 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu
 # --------------------------------------------------------
+import argparse
+import datetime
+import json
+import os
+import random
+import time
+import warnings
+from functools import partial
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
 from tutel_ea import system_init
 
 system_init.init_affinity_at_program_beginning()
 
-import os
-import time
-import pickle
-import json
-import string
-import random
-import argparse
-import datetime
+
 import numpy as np
-from functools import partial
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from timm.utils import accuracy, AverageMeter
-
-from config import get_config
-from models import build_model
-from data import build_loader
-from lr_scheduler import build_scheduler
-from optimizer import build_optimizer, set_weight_decay
-from logger import create_logger
-from utils import (
-    load_checkpoint,
-    save_checkpoint,
-    auto_resume_helper,
-    reduce_tensor,
-    create_ds_config,
-    NativeScalerWithGradNormCount,
-    load_pretrained,
-    hook_scale_grad,
-)
-
-import warnings
-from tutel_ea.moe import router_exporter
 from brt.runtime.benchmark import CUDATimer, deterministic_random_generator
 from brt.runtime.dump_trace import dump_trace
+from config import get_config
+from data import build_loader
+from logger import create_logger
+from lr_scheduler import build_scheduler
+from models import build_model
+from optimizer import build_optimizer, set_weight_decay
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from timm.utils import AverageMeter, accuracy
+from tutel_ea.moe import router_exporter
+from utils import (
+    NativeScalerWithGradNormCount,
+    auto_resume_helper,
+    create_ds_config,
+    hook_scale_grad,
+    load_checkpoint,
+    load_pretrained,
+    reduce_tensor,
+    save_checkpoint,
+)
 
 warnings.filterwarnings(
     "ignore",
@@ -136,24 +132,9 @@ def parse_option():
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--trace", action="store_true", default=False)
 
-    known_args, _ = parser.parse_known_args()
+    ds_init = None
 
-    if known_args.enable_deepspeed:
-        raise NotImplementedError("Tutel MoE not support deepspeed now")
-        try:
-            import deepspeed
-            from deepspeed import DeepSpeedConfig
-
-            parser = deepspeed.add_config_arguments(parser)
-            ds_init = deepspeed.initialize
-        except:
-            print("Please 'pip install deepspeed==0.4.5'")
-            ds_init = None
-            exit(0)
-    else:
-        ds_init = None
-
-    args, unparsed = parser.parse_known_args()
+    args, _unparsed = parser.parse_known_args()
 
     args.local_rank = int(os.environ["LOCAL_RANK"])
 
@@ -164,7 +145,7 @@ def parse_option():
 
 def main(args, config, ds_init):
     (
-        dataset_train,
+        _dataset_train,
         dataset_val,
         data_loader_train,
         data_loader_val,
@@ -269,7 +250,7 @@ def main(args, config, ds_init):
             debug(model, bs=1, iteration=1)
             dump_trace(model_without_ddp)
         if args.trace:
-            acc1, acc5, loss = validate(config, data_loader_val, model)
+            acc1, _acc5, _loss = validate(config, data_loader_val, model)
             logger.info(
                 f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
             )
@@ -280,7 +261,7 @@ def main(args, config, ds_init):
 
     if config.MODEL.PRETRAINED and (not config.MODEL.RESUME):
         load_pretrained(config, model_without_ddp, logger)
-        acc1, acc5, loss = validate(config, data_loader_val, model)
+        acc1, _acc5, _loss = validate(config, data_loader_val, model)
         logger.info(
             f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
         )
@@ -326,7 +307,7 @@ def main(args, config, ds_init):
             f"rank[{dist.get_rank()}] Save checkpoint takes {time.time() - tic}s"
         )
 
-        acc1, acc5, loss = validate(config, data_loader_val, model)
+        acc1, _acc5, _loss = validate(config, data_loader_val, model)
         logger.info(
             f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
         )
@@ -335,7 +316,7 @@ def main(args, config, ds_init):
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    logger.info("Training time {}".format(total_time_str))
+    logger.info(f"Training time {total_time_str}")
     logger.info(f"number of params: {n_parameters}")
     logger.info(f"number of GFLOPs: {flops / 1e9}")
 
@@ -584,15 +565,15 @@ def validate(config, data_loader, model):
 def throughput(data_loader, model, logger):
     model.eval()
 
-    for idx, (images, _) in enumerate(data_loader):
+    for _idx, (images, _) in enumerate(data_loader):
         images = images.cuda(non_blocking=True)
         batch_size = images.shape[0]
-        for i in range(50):
+        for _i in range(50):
             model(images)
         torch.cuda.synchronize()
         logger.info(f"throughput averaged with 30 times")
         tic1 = time.time()
-        for i in range(30):
+        for _i in range(30):
             model(images)
         torch.cuda.synchronize()
         tic2 = time.time()
@@ -601,17 +582,20 @@ def throughput(data_loader, model, logger):
         )
         return
 
+
 @torch.inference_mode()
 def debug(model, bs=1, iteration=1):
     model.eval()
     # timer = CUDATimer(1, 10, 5)
     timer = CUDATimer(0, 1, 1)
     inputs_generator = deterministic_random_generator(
-        [bs, 3, 192, 192],num=iteration, dtype=torch.float32, device="cuda"
+        [bs, 3, 192, 192], num=iteration, dtype=torch.float32, device="cuda"
     )
+
     def timer_func():
         for inputs in inputs_generator:
             model(inputs)
+
     timer.execute(timer_func, "debugging")
 
     return

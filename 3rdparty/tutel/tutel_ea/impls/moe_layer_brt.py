@@ -1,15 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import TYPE_CHECKING, Any, Optional, Tuple, Union, cast
+from typing import  Any, Optional, cast
 
 import copy
 import os
 import re
-import time
 import logging
-import collections
-import pickle
 
 import torch
 from torch import Tensor
@@ -19,7 +16,6 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 from brt.router import SwinMoEScatterRouter, GatherRouter
 
-from .fast_dispatch import fast_dispatcher
 from ..jit_kernels.gating import fast_cumsum_sub_one
 from . import communicate as C
 
@@ -242,7 +238,7 @@ class MOELayer(torch.nn.Module):
         self.skip_moe = int(os.environ.get("SKIP_MOE", "0")) != 0
 
         if not isinstance(experts, dict):
-            self.num_local_experts = len(self.experts)
+            self.num_local_experts = len(experts)
         else:
             self.num_local_experts = experts.get("count_per_node", 1)
             if not isinstance(self.num_local_experts, int):
@@ -664,8 +660,7 @@ class MOELayer(torch.nn.Module):
             else:
                 if C.get_world_rank(self.group) == 0:
                     logging.warning(
-                        "MoE is initialized to keep working on sample size = %s, while receiving sample size = %s (will slow down this forward step)"
-                        % (self.expected_sample_size, reshaped_input.size(0))
+                        f"MoE is initialized to keep working on sample size = {self.expected_sample_size}, while receiving sample size = {reshaped_input.size(0)} (will slow down this forward step)"
                     )
                 pad_input = torch.zeros(
                     [self.expected_sample_size, self.model_dim],
