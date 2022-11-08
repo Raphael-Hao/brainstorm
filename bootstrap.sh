@@ -36,7 +36,7 @@ apt-get install -y \
 mkdir -p ~/brainstorm_project && cd ~/brainstorm_project
 git clone git@github.com:Raphael-Hao/brainstorm.git \
     -b "${BRT_BRANCH:-main}" \
-    --recursive --depth 1
+    --recursive
 cd brainstorm
 
 mkdir /mnt/ramdisk
