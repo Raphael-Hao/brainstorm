@@ -1,5 +1,12 @@
 ARG BASE_IMAGE
-FROM ${BASE_IMAGE} AS base
+ARG INSTALLER_IMAGE
+ARG VALIDATOR_IMAGE
+FROM $BASE_IMAGE AS base
+FROM $INSTALLER_IMAGE as installer
+FROM $VALIDATOR_IMAGE as validator
+
+FROM base
+
 ARG SSH_KEY_FILE=./id_ed25519
 ARG BRANCH=main
 ENV BRT_SSH_KEY_FILE=${SSH_KEY_FILE}
@@ -12,8 +19,6 @@ RUN apt-get -y update && apt-get install -y \
     ssh gcc libtinfo-dev zlib1g-dev build-essential \
     cmake libedit-dev libxml2-dev llvm tmux wget git
 
-RUN cmake --version
-
 # setup ssh key
 RUN mkdir -p /root/.ssh
 COPY "$BRT_SSH_KEY_FILE" /root/.ssh/
@@ -23,11 +28,18 @@ ENV PATH=/opt/miniconda3/bin:/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LD_LIBRARY_PATH}
 ENV LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LIBRARY_PATH}
 ENV CPLUS_INCLUDE_PATH=/usr/local/cuda/include:${CPLUS_INCLUDE_PATH}
-ENV TORCH_CUDA_ARCH_LIST="6.0;6.1;6.2;7.0;7.2;7.5;8.0;8.6+PTX"
 ENV BRT_CACHE_PATH=/brainstorm_project/brainstorm/.cache
+ENV TORCH_CUDA_ARCH_LIST="6.0;6.1;6.2;7.0;7.2;7.5;8.0;8.6+PTX"
+ENV SINGULARITY_PYTHON_PATH=/opt/miniconda3/bin/python
+
 
 COPY install.sh /tmp/install.sh
 
 RUN bash /tmp/install.sh --branch $BRT_BRANCH
 
-WORKDIR /root
+COPY --from=installer /installer /opt/microsoft/_singularity/installations/
+RUN /opt/microsoft/_singularity/installations/singularity/installer.sh
+
+COPY --from=validator /validations /opt/microsoft/_singularity/validations/
+ENV SINGULARITY_IMAGE_ACCELERATOR="NVIDIA"
+RUN /opt/microsoft/_singularity/validations/validator.sh
