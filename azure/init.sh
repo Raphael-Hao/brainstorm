@@ -39,6 +39,8 @@ else
     fi
 fi
 
+git config --global user.name raphael
+git config --global user.email raphaelhao@outlook.com
 
 wget https://azcopyvnext.azureedge.net/release20221005/azcopy_linux_amd64_10.16.1.tar.gz -O azcopy.tar.gz
 mkdir -p azcopy && tar -xzvf azcopy.tar.gz -C "azcopy" --strip-components=1
