@@ -157,7 +157,7 @@ class TopKGate(torch.nn.Module):
         self.a2a_ffn_overlap_degree = a2a_ffn_overlap_degree
 
         self.scatter = SwinMoEScatterRouter(
-            fabric_type="fused_dispatch",
+            fabric_type="distributed_fused_dispatch",
             protocol_kwargs={
                 "top_k": self.top_k,
                 "capacity_factor": self.capacity_factor,
@@ -170,7 +170,7 @@ class TopKGate(torch.nn.Module):
             throttling=True,
         )
 
-        self.gather = GatherRouter(fabric_type="fused_combine")
+        self.gather = GatherRouter(fabric_type="distributed_fused_combine")
 
     def compute_sorted_location(self, x, importance_scores):
         sorted_x = x[importance_scores.argsort(dim=0)]
@@ -190,10 +190,20 @@ class TopKGate(torch.nn.Module):
 
         gates = F.softmax(logits, dim=1)
         dispatched_input, _loss = self.scatter(in_data, gates, logits_wo_noise, logits)
+        route_indices = dispatched_input.route_indices
+        in_loads = dispatched_input.in_loads
+        out_loads = dispatched_input.out_loads
+        score = dispatched_input.score
+
         dispatched_input = dispatched_input.reshape(1, self.num_global_experts, -1, M)
         expert_output = expert_fn(dispatched_input)
         expert_output = expert_output.to(in_data.dtype)
         expert_output = expert_output.view(-1, M)
+
+        expert_output.route_indices = route_indices
+        expert_output.in_loads = in_loads
+        expert_output.out_loads = out_loads
+        expert_output.score = score
         result_output = self.gather(expert_output)
         return result_output, 0
 

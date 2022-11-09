@@ -2,19 +2,19 @@
 # Licensed under the MIT license.
 from typing import List, Union
 
+import brt.runtime.distributed as brt_dist
 import torch
 
 # pylint: disable=no-name-in-module
 from brt._C.router import (
+    combine_with_src_indices,
     dispatch_with_dst_indices_1d,
     dispatch_with_dst_indices_2d,
-    combine_with_src_indices,
 )
-import brt.runtime.distributed as brt_dist
 
 # pylint: enable=no-name-in-module
 from brt.router.fabric.base import register_fabric
-from brt.router.fabric.fused import FusedDispatchFabric, FusedCombineFabric
+from brt.router.fabric.fused import FusedCombineFabric, FusedDispatchFabric
 
 
 @register_fabric("distributed_fused_dispatch")
