@@ -10,6 +10,7 @@ from brt._C.router import (
     dispatch_with_dst_indices_2d,
     combine_with_src_indices,
 )
+import brt.runtime.distributed as brt_dist
 
 # pylint: enable=no-name-in-module
 from brt.router.fabric.base import register_fabric
@@ -61,6 +62,9 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
 
             all_out_flows.append(out_flow)
         all_out_flows = all_out_flows[0] if self.flow_num == 1 else all_out_flows
+        all_out_flows, out_loads, reorder_indices = brt_dist.group_asymmetry_a2a(
+            all_out_flows, loads, locality_aware=True
+        )
         return all_out_flows, route_indices, loads, score
 
 
@@ -79,11 +83,11 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
     def forward(
         self,
         in_flows: List[torch.Tensor],
-        route_indices: torch.Tensor,
-        loads: torch.Tensor,
-        score: torch.Tensor,
     ) -> List[torch.Tensor]:
         in_flows = [in_flows] if self.flow_num == 1 else in_flows
+        route_indices = in_flows[0].route_indices
+        loads = in_flows[0].loads
+        score = in_flows[0].score
         out_flows = []
         for _flow_idx, in_flow in enumerate(in_flows):
 

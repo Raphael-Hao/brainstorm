@@ -4,7 +4,7 @@
 # \file: /distributed.pyi
 # \brief:
 # Author: raphael hao
-from typing import Tuple, overload, Literal
+from typing import Tuple, overload, Literal, List
 import torch
 
 def make_nccl_unique_id(world_rank: int) -> torch.Tensor: ...
@@ -15,6 +15,16 @@ def locality_reorder(
 def group_locality_reorder(
     loads: torch.Tensor, world_size: int, group_size: int = 1
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
+def exchange(in_data: torch.Tensor, reorder_indices: torch.Tensor) -> torch.Tensor: ...
+def batch_exchange(
+    in_datas: List[torch.Tensor], reorder_indices: torch.Tensor
+) -> List[torch.Tensor]: ...
+def reverse_exchange(
+    in_data: torch.Tensor, reorder_indices: torch.Tensor
+) -> torch.Tensor: ...
+def batch_reverse_exchange(
+    in_datas: List[torch.Tensor], reorder_indices: torch.Tensor
+) -> List[torch.Tensor]: ...
 @overload
 def asymmetry_all_to_all(
     in_data: torch.Tensor, send_sizes: torch.Tensor, locality_aware: Literal[False]
@@ -31,3 +41,8 @@ def group_asymmetry_all_to_all(
 def group_asymmetry_all_to_all(
     in_data: torch.Tensor, send_sizes: torch.Tensor, locality_aware: Literal[True]
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
+def batch_group_asymmetry_all_to_all(
+    in_datas: List[torch.Tensor],
+    send_sizes: torch.Tensor,
+    locality_aware: bool = False,
+) -> Tuple[List[torch.Tensor], torch.Tensor, torch.Tensor]: ...

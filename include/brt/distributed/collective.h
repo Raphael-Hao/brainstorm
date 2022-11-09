@@ -17,6 +17,8 @@ namespace brt {
 namespace distributed {
 void BroadCast(void* send_buffer, void* recv_buffer, const int& send_size_in_byte, const int& root,
                ncclComm_t comm, cudaStream_t stream);
+void Exchange(void* send_buffer, void* recv_buffer, const int& send_size_in_byte, const int& dest,
+              const int& source, ncclComm_t comm, cudaStream_t stream);
 void Scatter(void* send_buffer, void* recv_buffer, const int& send_size_in_byte, const int& root,
              const int& world_rank, const int& world_size, ncclComm_t comm, cudaStream_t stream);
 void Gather(void* sendbuf, void* recvbuf, const int& send_size_in_byte, const int& root,

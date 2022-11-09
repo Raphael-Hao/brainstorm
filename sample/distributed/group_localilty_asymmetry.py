@@ -52,6 +52,16 @@ print(out_data.shape)
 
 timer = CUDATimer(repeat=6, root=local_rank)
 
+def torch_symmetry_a2a(tensor, loads):
+    out_loads = torch.empty_like(loads)
+    dist.all_to_all_single(out_loads, loads)
+    torch.cuda.synchronize()
+    output = torch.empty_like(tensor)
+    dist.all_to_all_single(output, tensor)
+    return output
+
+timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
+
 timer.execute(
     lambda: brt_dist.group_asymmetry_a2a(tensor, loads),
     "brt.group_asymmetry_a2a",
@@ -82,13 +92,3 @@ timer.execute(
 # )
 
 
-def torch_symmetry_a2a(tensor, loads):
-    out_loads = torch.empty_like(loads)
-    dist.all_to_all_single(out_loads, loads)
-    torch.cuda.synchronize()
-    output = torch.empty_like(tensor)
-    dist.all_to_all_single(output, tensor)
-    return output
-
-
-timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")

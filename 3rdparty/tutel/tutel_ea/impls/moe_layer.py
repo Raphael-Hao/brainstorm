@@ -1,14 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import TYPE_CHECKING, Any, Optional, Tuple, Union, cast
+from typing import Any, Optional, cast
 
 import copy
 import os
 import re
-import time
 import logging
-import collections
 import pickle
 
 import torch

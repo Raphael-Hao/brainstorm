@@ -16,6 +16,14 @@ void BroadCast(void* send_buffer, void* recv_buffer, const int& send_size_in_byt
       ncclBroadcast(send_buffer, recv_buffer, send_size_in_byte, ncclChar, root, comm, stream));
 }
 
+void Exchange(void* send_buffer, void* recv_buffer, const int& send_size_in_byte, const int& dest,
+             const int& source, ncclComm_t comm, cudaStream_t stream) {
+  NCCL_CHECK(ncclGroupStart());
+  NCCL_CHECK(ncclSend(send_buffer, send_size_in_byte, ncclChar, dest, comm, stream));
+  NCCL_CHECK(ncclRecv(recv_buffer, send_size_in_byte, ncclChar, source, comm, stream));
+  NCCL_CHECK(ncclGroupEnd());
+}
+
 void Scatter(void* send_buffer, void* recv_buffer, const int& send_size_in_byte, const int& root,
              const int& world_rank, const int& world_size, ncclComm_t comm, cudaStream_t stream) {
   NCCL_CHECK(ncclGroupStart());
