@@ -270,227 +270,8 @@ def main(args, config, ds_init):
         throughput(data_loader_val, model, logger)
         return
 
-    logger.info("Start training")
-    start_time = time.time()
-    for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.EPOCHS):
-        data_loader_train.sampler.set_epoch(epoch + config.SEED)
-
-        print(f"Epoch[{epoch}] starting....")
-        train_one_epoch(
-            config,
-            model,
-            model_without_ddp,
-            criterion,
-            data_loader_train,
-            optimizer,
-            epoch,
-            mixup_fn,
-            lr_scheduler,
-            loss_scaler,
-        )
-        print(f"Epoch[{epoch}] ending....")
-
-        tic = time.time()
-        if epoch % config.SAVE_FREQ == 0 or epoch == (config.TRAIN.EPOCHS - 1):
-            save_checkpoint(
-                config,
-                epoch,
-                model_without_ddp,
-                max_accuracy,
-                optimizer,
-                lr_scheduler,
-                logger,
-                loss_scaler=loss_scaler,
-            )
-        print(f"rank[{dist.get_rank()}] Save checkpoint takes {time.time() - tic}s")
-        logger.info(
-            f"rank[{dist.get_rank()}] Save checkpoint takes {time.time() - tic}s"
-        )
-
-        acc1, _acc5, _loss = validate(config, data_loader_val, model)
-        logger.info(
-            f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-        )
-        max_accuracy = max(max_accuracy, acc1)
-        logger.info(f"Max accuracy: {max_accuracy:.2f}%")
-
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    logger.info(f"Training time {total_time_str}")
     logger.info(f"number of params: {n_parameters}")
     logger.info(f"number of GFLOPs: {flops / 1e9}")
-
-
-def train_one_epoch(
-    config,
-    model,
-    model_without_ddp,
-    criterion,
-    data_loader,
-    optimizer,
-    epoch,
-    mixup_fn,
-    lr_scheduler,
-    loss_scaler,
-):
-    model.train()
-    if loss_scaler is None:
-        model.zero_grad()
-        model.micro_steps = 0
-    else:
-        optimizer.zero_grad()
-
-    num_steps = len(data_loader)
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
-    loss_meter = AverageMeter()
-    loss_aux_meter = AverageMeter()
-    loss_cls_meter = AverageMeter()
-    norm_meter = AverageMeter()
-    scaler_meter = AverageMeter()
-
-    start = time.time()
-    end = time.time()
-    data_end = time.time()
-    for idx, (samples, targets) in enumerate(data_loader):
-        if epoch == config.TRAIN.START_EPOCH:
-            if idx < config.TRAIN.START_STEP:
-                lr_scheduler.step_update(
-                    (epoch * num_steps + idx) // config.TRAIN.ACCUMULATION_STEPS
-                )
-                logger.info(f"passing Epoch[{epoch}] Step[{idx}]")
-                continue
-        data_time.update(time.time() - data_end)
-        samples = samples.cuda(non_blocking=True)
-        targets = targets.cuda(non_blocking=True)
-
-        if mixup_fn is not None:
-            samples, targets = mixup_fn(samples, targets)
-
-        if loss_scaler is None:
-            if config.DPFP16:
-                samples = samples.half()
-            outputs, l_aux = model(samples)
-            loss_cls = criterion(outputs, targets)
-            loss = loss_cls + l_aux * config.TRAIN.MOE_LOSS_WEIGHT
-            loss = loss / config.TRAIN.ACCUMULATION_STEPS
-
-            model.backward(loss)
-            model.step()
-            if (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0:
-                # Deepspeed will call step() & model.zero_grad() automatic
-                lr_scheduler.step_update(
-                    (epoch * num_steps + idx) // config.TRAIN.ACCUMULATION_STEPS
-                )
-
-            grad_norm = -1
-            if config.DPFP16:
-                loss_scale_value = (
-                    model.optimizer.loss_scale
-                    if hasattr(model.optimizer, "loss_scale")
-                    else model.optimizer.cur_scale
-                )
-            else:
-                loss_scale_value = -1
-        else:
-            with torch.cuda.amp.autocast():
-                outputs, l_aux = model(samples)
-                loss_cls = criterion(outputs, targets)
-                loss = loss_cls + l_aux * config.TRAIN.MOE_LOSS_WEIGHT
-            loss = loss / config.TRAIN.ACCUMULATION_STEPS
-
-            # this attribute is added by timm on one optimizer (adahessian)
-            is_second_order = (
-                hasattr(optimizer, "is_second_order") and optimizer.is_second_order
-            )
-            grad_norm = loss_scaler(
-                loss,
-                optimizer,
-                clip_grad=config.TRAIN.CLIP_GRAD,
-                parameters=model.parameters(),
-                create_graph=is_second_order,
-                update_grad=(idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0,
-            )
-            if (idx + 1) % config.TRAIN.ACCUMULATION_STEPS == 0:
-                optimizer.zero_grad()
-                lr_scheduler.step_update(
-                    (epoch * num_steps + idx) // config.TRAIN.ACCUMULATION_STEPS
-                )
-            loss_scale_value = loss_scaler.state_dict()["scale"]
-
-        torch.cuda.synchronize()
-
-        loss_meter.update(
-            loss.item() * config.TRAIN.ACCUMULATION_STEPS, targets.size(0)
-        )  # todo: modify in 2022/02/24
-        loss_cls_meter.update(loss_cls.item(), targets.size(0))
-        if isinstance(l_aux, float):
-            loss_aux_meter.update(l_aux, targets.size(0))
-        else:
-            loss_aux_meter.update(l_aux.item(), targets.size(0))
-        if grad_norm is not None:  # loss_scaler return None if not update
-            norm_meter.update(grad_norm)
-        scaler_meter.update(loss_scale_value)
-        batch_time.update(time.time() - end)
-        end = time.time()
-        data_end = time.time()
-
-        if idx % config.PRINT_FREQ == 0:
-            lr = optimizer.param_groups[0]["lr"]
-            wd = optimizer.param_groups[0]["weight_decay"]
-            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-            etas = batch_time.avg * (num_steps - idx)
-            logger.info(
-                f"Train: [{epoch}/{config.TRAIN.EPOCHS}][{idx}/{num_steps}]\t"
-                f"eta {datetime.timedelta(seconds=int(etas))} lr {lr:.6f}\t wd {wd:.4f}\t"
-                f"time {batch_time.val:.4f} ({batch_time.avg:.4f})\t"
-                f"data_time {data_time.val:.4f} ({data_time.avg:.4f})\t"
-                f"loss {loss_meter.val:.4f} ({loss_meter.avg:.4f})\t"
-                f"loss-cls {loss_cls_meter.val:.4f} ({loss_cls_meter.avg:.4f})\t"
-                f"loss-aux {loss_aux_meter.val:.4f} ({loss_aux_meter.avg:.4f})\t"
-                f"grad_norm {norm_meter.val:.4f} ({norm_meter.avg:.4f})\t"
-                f"loss_scale {scaler_meter.val:.4f} ({scaler_meter.avg:.4f})\t"
-                f"mem {memory_used:.0f}MB"
-            )
-
-        if config.TRAIN.SAVE_STEP > 0 and (idx + 1) % config.TRAIN.SAVE_STEP == 0:
-            if (
-                config.TRAIN.ACCUMULATION_STEPS > 1
-                and (idx + 1) % config.TRAIN.ACCUMULATION_STEPS != 0
-            ):
-                pass
-            else:
-                tic = time.time()
-                save_checkpoint(
-                    config,
-                    epoch,
-                    model_without_ddp,
-                    -1.0,
-                    optimizer,
-                    lr_scheduler,
-                    logger,
-                    step=idx,
-                    loss_scaler=loss_scaler,
-                )
-                print(
-                    f"rank[{dist.get_rank()}] Save checkpoint takes {time.time() - tic}s"
-                )
-                logger.info(
-                    f"rank[{dist.get_rank()}] Save checkpoint takes {time.time() - tic}s"
-                )
-                batch_time.reset()
-                data_time.reset()
-                loss_meter.reset()
-                loss_cls_meter.reset()
-                loss_aux_meter.reset()
-                norm_meter.reset()
-                scaler_meter.reset()
-
-    epoch_time = time.time() - start
-    logger.info(
-        f"EPOCH {epoch} training takes {datetime.timedelta(seconds=int(epoch_time))}"
-    )
-
 
 @torch.no_grad()
 def validate(config, data_loader, model):
@@ -561,7 +342,7 @@ def validate(config, data_loader, model):
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def throughput(data_loader, model, logger):
     model.eval()
 
@@ -598,6 +379,18 @@ def debug(model, bs=1, iteration=1):
 
     timer.execute(timer_func, "debugging")
 
+    return
+
+@torch.inference_mode()
+def distributed_debug(model, bs=1, iteration=1):
+    model.eval()
+    # timer = CUDATimer(1, 10, 5)
+    timer = CUDATimer(0, 1, 1)
+    inputs_generator = deterministic_random_generator(
+        [bs, 3, 192, 192], num=iteration, dtype=torch.float32, device="cuda"
+    )
+    for inputs in inputs_generator:
+        model(inputs)
     return
 
 
