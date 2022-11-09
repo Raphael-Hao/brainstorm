@@ -7,7 +7,18 @@ import torch
 import torch.distributed as dist
 
 
+class DistributedInfo:
+    initialized = False
+    reorder_indices = None
+
+
+def is_initialized():
+    return DistributedInfo.initialized
+
+
 def init_nccl(group: dist.ProcessGroup):
+    if is_initialized():
+        return
     world_size = dist.get_world_size(group)
     world_rank = dist.get_rank(group)
     unique_id = C_dist.make_nccl_unique_id(world_rank)
@@ -15,19 +26,31 @@ def init_nccl(group: dist.ProcessGroup):
     C_dist.init_nccl(unique_id, world_rank, world_size)
 
 
+def get_reorder_indices():
+    return DistributedInfo.reorder_indices
+
+
+def set_reorder_indices(reorder_indices: torch.Tensor):
+    DistributedInfo.reorder_indices = reorder_indices
+
+
 def exchange(in_data: torch.Tensor, reorder_indices: torch.Tensor):
+    init_nccl()
     return C_dist.exchange(in_data, reorder_indices)
 
 
 def batch_exchange(in_datas: List[torch.Tensor], reorder_indices: torch.Tensor):
+    init_nccl()
     return C_dist.batch_exchange(in_datas, reorder_indices)
 
 
 def reverse_exchange(in_data: torch.Tensor, reorder_indices: torch.Tensor):
+    init_nccl()
     return C_dist.reverse_exchange(in_data, reorder_indices)
 
 
 def batch_reverse_exchange(in_datas: List[torch.Tensor], reorder_indices: torch.Tensor):
+    init_nccl()
     return C_dist.batch_reverse_exchange(in_datas, reorder_indices)
 
 
@@ -48,6 +71,7 @@ def asymmetry_a2a(
 def asymmetry_a2a(
     in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: bool = False
 ):
+    init_nccl()
     return C_dist.asymmetry_all_to_all(in_data, in_loads, locality_aware)
 
 
@@ -68,6 +92,7 @@ def group_asymmetry_a2a(
 def group_asymmetry_a2a(
     in_data: torch.Tensor, in_loads: torch.Tensor, locality_aware: bool = False
 ):
+    init_nccl()
     return C_dist.group_asymmetry_all_to_all(in_data, in_loads, locality_aware)
 
 
@@ -88,6 +113,7 @@ def batch_group_asymmetry_a2a(
 def batch_group_asymmetry_a2a(
     in_datas: List[torch.Tensor], in_loads: torch.Tensor, locality_aware: bool = False
 ):
+    init_nccl()
     out_datas, out_loads, reorder_indices = C_dist.batch_group_asymmetry_all_to_all(
         in_datas, in_loads, locality_aware
     )
@@ -95,3 +121,19 @@ def batch_group_asymmetry_a2a(
         return out_datas, out_loads, reorder_indices
     else:
         return out_datas, out_loads
+
+
+def size_known_group_asymmetry_all_to_all(
+    in_data: torch.Tensor, in_loads: torch.Tensor, out_loads: torch.Tensor
+):
+    init_nccl()
+    return C_dist.size_known_group_asymmetry_all_to_all(in_data, in_loads, out_loads)
+
+
+def batch_size_known_group_asymmetry_all_to_all(
+    in_datas: List[torch.Tensor], in_loads: torch.Tensor, out_loads: torch.Tensor
+):
+    init_nccl()
+    return C_dist.batch_size_known_group_asymmetry_all_to_all(
+        in_datas, in_loads, out_loads
+    )

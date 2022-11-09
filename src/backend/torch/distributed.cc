@@ -549,6 +549,89 @@ batch_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
     return {out_datas, recv_sizes, recv_sizes};
   }
 }
+static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
+                                                             const ::torch::Tensor& send_sizes,
+                                                             const ::torch::Tensor& recv_sizes) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+  const int total_slice_num = send_sizes.numel();
+  const int group_size = total_slice_num / world_size;
+
+  CHECK_ON_CUDA(in_data);
+
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+  auto recv_sizes_cpu = recv_sizes.cpu();
+  std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
+                                  recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
+
+  // Calculate the total size in byte
+  const int total_size_in_byte = in_data.numel() * in_data.element_size();
+  // Calculate the size of each grainularity in byte
+  const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+  // Calculate the slice and per slice size in byte
+  const int slice_size_in_byte = total_size_in_byte / total_slice_num;
+
+  ::torch::Tensor out_data =
+      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(in_data);
+  manager.RecordStorage(out_data);
+  distributed::GroupAsymmetryAllToAll(
+      in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec, recv_sizes_vec, grain_size_in_byte,
+      slice_size_in_byte, group_size, world_size, manager.GetComm(), manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
+  return out_data;
+}
+
+static std::vector<::torch::Tensor> batch_size_known_group_asymmetry_all_to_all(
+    const std::vector<::torch::Tensor>& in_datas, const ::torch::Tensor& send_sizes,
+    const ::torch::Tensor& recv_sizes) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+  const int total_slice_num = send_sizes.numel();
+  const int group_size = total_slice_num / world_size;
+
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+  auto recv_sizes_cpu = recv_sizes.cpu();
+  std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
+                                  recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
+  std::vector<::torch::Tensor> out_datas;
+  for (auto& in_data : in_datas) {
+    CHECK_ON_CUDA(in_data);
+    // Calculate the total size in byte
+    const int total_size_in_byte = in_data.numel() * in_data.element_size();
+    // Calculate the size of each grainularity in byte
+    const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+    // Calculate the slice and per slice size in byte
+    const int slice_size_in_byte = total_size_in_byte / total_slice_num;
+
+    ::torch::Tensor out_data =
+        ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+    manager.StartContext();
+    manager.WaitEvent(0);
+    manager.RecordStorage(in_data);
+    manager.RecordStorage(out_data);
+    distributed::GroupAsymmetryAllToAll(
+        in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec, recv_sizes_vec, grain_size_in_byte,
+        slice_size_in_byte, group_size, world_size, manager.GetComm(), manager.GetStream());
+    manager.RecordEvent(0);
+    manager.EndContext();
+    manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+    out_datas.push_back(out_data);
+  }
+  return out_datas;
+}
+
 }  // namespace torch
 }  // namespace backend
 }  // namespace brt
@@ -571,7 +654,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("reverse_exchange", &brt::backend::torch::reverse_exchange,
         "Data revrse exchange between ranks", pybind11::arg("in_data"),
         pybind11::arg("reorder_indices"));
-  m.def("reverse_batch_exchange", &brt::backend::torch::batch_reverse_exchange,
+  m.def("batch_reverse_exchange", &brt::backend::torch::batch_reverse_exchange,
         "Batched data reverse exchange between ranks", pybind11::arg("in_datas"),
         pybind11::arg("reorder_indices"));
   m.def("asymmetry_all_to_all", &brt::backend::torch::asymmetry_all_to_all, "asymmetry all to all",
@@ -583,4 +666,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("batch_group_asymmetry_all_to_all", &brt::backend::torch::batch_group_asymmetry_all_to_all,
         "asymmetry all to all", pybind11::arg("in_datas"), pybind11::arg("send_sizes"),
         pybind11::arg("locality_aware") = false);
+  m.def("size_known_group_asymmetry_all_to_all",
+        &brt::backend::torch::size_known_group_asymmetry_all_to_all,
+        "asymmetry all to all for send sizes and recv size are already known",
+        pybind11::arg("in_data"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
+  m.def("batch_size_known_group_asymmetry_all_to_all",
+        &brt::backend::torch::batch_size_known_group_asymmetry_all_to_all,
+        "batched asymmetry all to all for send sizes and recv size are already known",
+        pybind11::arg("in_datas"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
 }

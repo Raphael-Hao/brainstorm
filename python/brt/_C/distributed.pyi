@@ -46,3 +46,13 @@ def batch_group_asymmetry_all_to_all(
     send_sizes: torch.Tensor,
     locality_aware: bool = False,
 ) -> Tuple[List[torch.Tensor], torch.Tensor, torch.Tensor]: ...
+def size_known_group_asymmetry_all_to_all(
+    in_data: torch.Tensor,
+    send_sizes: torch.Tensor,
+    recv_sizes: torch.Tensor,
+) -> torch.Tensor: ...
+def batch_size_known_group_asymmetry_all_to_all(
+    in_datas: List[torch.Tensor],
+    send_sizes: torch.Tensor,
+    recv_sizes: torch.Tensor,
+) -> List[torch.Tensor]: ...

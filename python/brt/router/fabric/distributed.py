@@ -25,7 +25,9 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         capacity_padding=False,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
+        locality_aware: bool = False,
     ):
+        self.locality_aware = locality_aware
         super().__init__(
             flow_num=flow_num,
             capacity_padding=capacity_padding,
@@ -35,43 +37,59 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
 
     def forward(
         self,
-        in_flows: List[torch.Tensor],
+        in_flow: torch.Tensor,
         route_indices: torch.Tensor,
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
-        in_flows = [in_flows] if self.flow_num == 1 else in_flows
-        all_out_flows = []
-        for flow_idx, in_flow in enumerate(in_flows):
-            if self.route_logics[flow_idx] == "1d":
-                if self.transforms[flow_idx]:
-                    out_flow = dispatch_with_dst_indices_1d(
-                        in_flow, route_indices, loads, self.capacity_padding, score
-                    )
-                else:
-                    out_flow = dispatch_with_dst_indices_1d(
-                        in_flow, route_indices, loads, self.capacity_padding
-                    )
-            elif self.route_logics[flow_idx] == "2d":
-                in_flow = in_flow.transpose(0, 1).contiguous()
-                out_flow = dispatch_with_dst_indices_2d(
-                    in_flow, route_indices, loads, self.capacity_padding
+        if self.route_logics[0] == "1d":
+            if self.transforms[0]:
+                out_flow = dispatch_with_dst_indices_1d(
+                    in_flow, route_indices, loads, self.capacity_padding, score
                 )
             else:
-                raise ValueError("route_logic must be 1d or 2d")
+                out_flow = dispatch_with_dst_indices_1d(
+                    in_flow, route_indices, loads, self.capacity_padding
+                )
+        elif self.route_logics[0] == "2d":
+            in_flow = in_flow.transpose(0, 1).contiguous()
+            out_flow = dispatch_with_dst_indices_2d(
+                in_flow, route_indices, loads, self.capacity_padding
+            )
+        else:
+            raise ValueError("route_logic must be 1d or 2d")
 
-            all_out_flows.append(out_flow)
-        all_out_flows = all_out_flows[0] if self.flow_num == 1 else all_out_flows
-        all_out_flows, out_loads, reorder_indices = brt_dist.group_asymmetry_a2a(
-            all_out_flows, loads, locality_aware=True
+        a2a_resuslts = brt_dist.group_asymmetry_a2a(
+            out_flow, loads, self.locality_aware
         )
-        return all_out_flows, route_indices, loads, score
+        out_flow = a2a_resuslts[0]
+
+        if self.locality_aware:
+            route_indices, loads, score = brt_dist.batch_exchange(
+                [route_indices, loads, score], a2a_resuslts[2]
+            )
+            brt_dist.set_reorder_indices(a2a_resuslts[2])
+
+        out_flow.route_indices = route_indices
+        out_flow.in_loads = loads
+        out_flow.out_loads = a2a_resuslts[1]
+        out_flow.score = score
+
+        return out_flow
 
 
 @register_fabric("distributed_fused_combine")
 class DistributedFusedCombineFabric(FusedCombineFabric):
-    def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
+    def __init__(
+        self,
+        flow_num,
+        sparse,
+        reduction,
+        granularity_padding,
+        locality_aware: bool = False,
+    ) -> None:
         assert granularity_padding == False
+        self.locality_aware = locality_aware
         super().__init__(
             flow_num=flow_num,
             reduction=reduction,
@@ -82,23 +100,25 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
 
     def forward(
         self,
-        in_flows: List[torch.Tensor],
+        in_flow: torch.Tensor,
     ) -> List[torch.Tensor]:
-        in_flows = [in_flows] if self.flow_num == 1 else in_flows
-        route_indices = in_flows[0].route_indices
-        loads = in_flows[0].loads
-        score = in_flows[0].score
-        out_flows = []
-        for _flow_idx, in_flow in enumerate(in_flows):
+        route_indices = in_flow.route_indices
+        in_loads = in_flow.in_loads
+        out_loads = in_flow.out_loads
+        score = in_flow.score
+        in_flow = brt_dist.size_known_group_asymmetry_all_to_all(
+            in_flow, out_loads, in_loads
+        )
+        if self.transform:
+            out_flow = combine_with_src_indices(
+                in_flow, route_indices, in_loads, auto_pad=True, gates=score
+            )
+        else:
+            out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
 
-            if self.transform:
-                out_flow = combine_with_src_indices(
-                    in_flow, route_indices, loads, auto_pad=True, gates=score
-                )
-            else:
-                out_flow = combine_with_src_indices(in_flow, route_indices, loads, None)
+        if self.locality_aware:
+            reorder_indices = brt_dist.get_reorder_indices()
+            out_flow = brt_dist.exchange(out_flow, reorder_indices)
+            brt_dist.set_reorder_indices(None)
 
-            out_flows.append(out_flow)
-        out_flows = out_flows[0] if self.flow_num == 1 else out_flows
-
-        return out_flows
+        return out_flow

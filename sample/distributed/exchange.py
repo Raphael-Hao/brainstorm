@@ -14,39 +14,52 @@ torch.cuda.set_device(device)
 group = dist.group.WORLD
 brt_dist.init_nccl(group)
 
-grain_size = 4
-capacity = 4
-
-
 tensor = torch.arange(
-    local_rank * world_size * capacity * grain_size,
-    (local_rank + 1) * world_size * capacity * grain_size,
-    device=device,
-).reshape(-1, grain_size)
-loads = torch.randint(
-    capacity, capacity + 1, (world_size,), dtype=torch.int32, device=device
+    local_rank * world_size, (local_rank + 1) * world_size, device=device
 )
+if local_rank == 0:
+    indices = torch.randperm(world_size, dtype=torch.int32, device=device)
+    print(indices)
+else:
+    indices = torch.empty(world_size, dtype=torch.int32, device=device)
+dist.broadcast(indices, 0, group=group)
 
-
+tensor = brt_dist.exchange(tensor, indices)
 print(tensor)
-print(loads)
-out_data, out_loads = brt_dist.asymmetry_a2a(tensor, loads)
-print(out_data)
-print(out_loads)
+
+capacity = 2
+
+tensors = [
+    torch.arange(
+        local_rank * world_size * capacity + i * world_size,
+        local_rank * world_size * capacity + (i + 1) * world_size,
+        device=device,
+    )
+    for i in range(capacity)
+]
+if local_rank == 0:
+    indices = torch.randperm(world_size, dtype=torch.int32, device=device)
+    print(indices)
+else:
+    indices = torch.empty(world_size, dtype=torch.int32, device=device)
+dist.broadcast(indices, 0, group=group)
+
+tensors = brt_dist.batch_exchange(tensors, indices)
+tensors = brt_dist.batch_reverse_exchange(tensors, indices)
+print(tensors)
+
 
 timer = CUDATimer(repeat=2, root=local_rank)
-timer.execute(
-    lambda: brt_dist.asymmetry_a2a(tensor, loads), "brt.asymmetry_all_to_all"
-)
+# timer.execute(lambda: brt_dist.asymmetry_a2a(tensor, loads), "brt.asymmetry_all_to_all")
 
 
-def torch_symmetry_a2a(tensor, loads):
-    out_loads = torch.empty_like(loads)
-    dist.all_to_all_single(out_loads, loads)
-    # torch.cuda.synchronize()
-    output = torch.empty_like(tensor)
-    dist.all_to_all_single(output, tensor)
-    return output
+# def torch_symmetry_a2a(tensor, loads):
+#     out_loads = torch.empty_like(loads)
+#     dist.all_to_all_single(out_loads, loads)
+#     # torch.cuda.synchronize()
+#     output = torch.empty_like(tensor)
+#     dist.all_to_all_single(output, tensor)
+#     return output
 
 
-timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
+# timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
