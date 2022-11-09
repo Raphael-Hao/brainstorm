@@ -219,8 +219,9 @@ void CUDACompiler::HomoExecute(const std::vector<const void*>& shared_inputs_ptr
     ppargs[i] = &pargs[i];
   }
   for (int i = (int)kernel.arg_num; i < (int)pargs.size(); ++i) {
-    pargs[i] = (void*)active_blocks[i - kernel.arg_num];
-    ppargs[i] = &pargs[i];
+    // pargs[i] = (void*)active_blocks[i - kernel.arg_num];
+    // ppargs[i] = &pargs[i];
+    ppargs[i] = (void*)&active_blocks[i - kernel.arg_num];
   }
 
   CUfunction hfunc = Activate(fd, dev);

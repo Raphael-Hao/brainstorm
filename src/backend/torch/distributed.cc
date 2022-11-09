@@ -554,7 +554,6 @@ static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tens
                                                              const ::torch::Tensor& recv_sizes) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
-  auto& world_rank = manager.GetWorldRank();
   const int total_slice_num = send_sizes.numel();
   const int group_size = total_slice_num / world_size;
 
@@ -595,7 +594,6 @@ static std::vector<::torch::Tensor> batch_size_known_group_asymmetry_all_to_all(
     const ::torch::Tensor& recv_sizes) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
-  auto& world_rank = manager.GetWorldRank();
   const int total_slice_num = send_sizes.numel();
   const int group_size = total_slice_num / world_size;
 
