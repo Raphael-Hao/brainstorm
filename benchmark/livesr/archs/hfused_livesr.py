@@ -22,6 +22,7 @@ class hFusedLiveSR(nn.Module):
         self.subnet_bs = subnet_bs
         self.n_subnets = raw.n_subnets
         self.subnet_num_block = raw.subnet_num_block
+        self.num_feature = raw.num_feature
         self.classifier = raw.classifier
         self.scatter = ScatterRouter(
             protocol_type="label", protocol_kwargs={"flow_num": 10}
