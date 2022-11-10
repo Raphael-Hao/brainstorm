@@ -357,7 +357,7 @@ def distributed_debug(model, bs=1, iteration=1):
         [bs, 3, 192, 192], num=iteration, dtype=torch.float32, device="cuda"
     )
     for inputs in inputs_generator:
-        model(inputs)
+        print(model(inputs))
 
 
 if __name__ == "__main__":

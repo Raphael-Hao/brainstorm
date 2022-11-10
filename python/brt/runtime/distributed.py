@@ -7,32 +7,36 @@ import torch
 import torch.distributed as dist
 
 
-class DistributedInfo:
+class global_info:
     initialized = False
     reorder_indices = None
+    group = None
+    world_size = None
+    world_rank = None
 
 
 def is_initialized():
-    return DistributedInfo.initialized
+    return global_info.initialized
 
 
-def init_nccl(group: dist.ProcessGroup=None):
+def init_nccl(group: dist.ProcessGroup = None):
     if is_initialized():
         return
-    group = group or dist.group.WORLD
-    world_size = dist.get_world_size(group)
-    world_rank = dist.get_rank(group)
-    unique_id = C_dist.make_nccl_unique_id(world_rank)
-    dist.broadcast(unique_id, 0, group)
-    C_dist.init_nccl(unique_id, world_rank, world_size)
+    global_info.initialized = True
+    global_info.group = group or dist.group.WORLD
+    global_info.world_size = dist.get_world_size(group)
+    global_info.world_rank = dist.get_rank(group)
+    unique_id = C_dist.make_nccl_unique_id(global_info.world_rank)
+    dist.broadcast(unique_id, 0, global_info.group)
+    C_dist.init_nccl(unique_id, global_info.world_rank, global_info.world_size)
 
 
 def get_reorder_indices():
-    return DistributedInfo.reorder_indices
+    return global_info.reorder_indices
 
 
 def set_reorder_indices(reorder_indices: torch.Tensor):
-    DistributedInfo.reorder_indices = reorder_indices
+    global_info.reorder_indices = reorder_indices
 
 
 def exchange(in_data: torch.Tensor, reorder_indices: torch.Tensor):

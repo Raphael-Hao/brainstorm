@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import  Any, Optional, cast
+from typing import Any, Optional, cast
 
 import copy
 import os
@@ -18,6 +18,7 @@ from brt.router import SwinMoEScatterRouter, GatherRouter
 
 from ..jit_kernels.gating import fast_cumsum_sub_one
 from . import communicate as C
+from brt.runtime.distributed import global_info
 
 
 class PrimFwdAllgather(torch.autograd.Function):
@@ -108,6 +109,7 @@ class TopKGate(torch.nn.Module):
     def __init__(
         self,
         model_dim,
+        num_local_experts,
         num_global_experts,
         a2a_ffn_overlap_degree=1,
         capacity_factor=1.0,
@@ -134,6 +136,7 @@ class TopKGate(torch.nn.Module):
 
         self.capacity_factor = float(os.environ.get("CAP_FACTOR", capacity_factor))
         self.is_ones_gate = int(os.environ.get("ONES_GATE", 0)) == 1
+        self.num_local_experts = num_local_experts
         self.num_global_experts = num_global_experts
 
         self.normalize_gate = normalize_gate
@@ -195,9 +198,11 @@ class TopKGate(torch.nn.Module):
         out_loads = dispatched_input.out_loads
         score = dispatched_input.score
 
-        dispatched_input = dispatched_input.reshape(1, self.num_global_experts, -1, M)
+        dispatched_input = dispatched_input.reshape(
+            global_info.world_size, self.num_local_experts, -1, M
+        )
         expert_output = expert_fn(dispatched_input)
-        expert_output = expert_output.to(in_data.dtype)
+        expert_output = expert_output.to(in_data.dtype).contiguous()
         expert_output = expert_output.view(-1, M)
 
         expert_output.route_indices = route_indices
@@ -504,6 +509,7 @@ class MOELayer(torch.nn.Module):
                             original_shape, x = x.shape, x.reshape(
                                 self.local_experts, -1, self.model_dim
                             )
+                            print(original_shape)
                             with torch.cuda.amp.autocast(enabled=False):
                                 x = (
                                     torch.matmul(
@@ -594,6 +600,7 @@ class MOELayer(torch.nn.Module):
                     TopKGate(
                         model_dim=model_dim,
                         top_k=single_gate_type["k"],
+                        num_local_experts=self.num_local_experts,
                         num_global_experts=self.num_global_experts,
                         normalize_gate=normalize_gate,
                         batch_prioritized_routing=batch_prioritized_routing,
