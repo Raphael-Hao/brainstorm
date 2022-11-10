@@ -175,36 +175,14 @@ def main(args, config, ds_init):
     model.cuda(config.LOCAL_RANK)
     model_without_ddp = model
 
-    if config.ENABLE_DEEPSPEED:
-        skip = {}
-        skip_keywords = {}
-        if hasattr(model, "no_weight_decay"):
-            skip = model.no_weight_decay()
-        if hasattr(model, "no_weight_decay_keywords"):
-            skip_keywords = model.no_weight_decay_keywords()
-        parameters = set_weight_decay(model, skip, skip_keywords)
-        logger.info("========> DeepSpeed initializing......")
-        model, optimizer, _, _ = ds_init(
-            args=args,
-            model=model,
-            model_parameters=parameters,
-            dist_init_required=False,
-        )
-        logger.info("========> DeepSpeed initializd!!!!!!")
-        logger.info(
-            f"model.gradient_accumulation_steps() = {model.gradient_accumulation_steps()}"
-        )
-        assert model.gradient_accumulation_steps() == config.TRAIN.ACCUMULATION_STEPS
-        loss_scaler = None
-    else:
-        optimizer = build_optimizer(config, model)
-        model = torch.nn.parallel.DistributedDataParallel(
-            model,
-            device_ids=[config.LOCAL_RANK],
-            broadcast_buffers=False,
-            bucket_cap_mb=64,
-        )
-        loss_scaler = NativeScalerWithGradNormCount(args.custom_scaler)
+    optimizer = build_optimizer(config, model)
+    model = torch.nn.parallel.DistributedDataParallel(
+        model,
+        device_ids=[config.LOCAL_RANK],
+        broadcast_buffers=False,
+        bucket_cap_mb=64,
+    )
+    loss_scaler = NativeScalerWithGradNormCount(args.custom_scaler)
 
     if config.TRAIN.ACCUMULATION_STEPS > 1:
         lr_scheduler = build_scheduler(
@@ -223,19 +201,9 @@ def main(args, config, ds_init):
 
     max_accuracy = 0.0
 
-    if config.TRAIN.AUTO_RESUME:
-        resume_file = auto_resume_helper(config.OUTPUT, logger, config.ENABLE_DEEPSPEED)
-        if resume_file:
-            if config.MODEL.RESUME:
-                logger.warning(
-                    f"auto-resume changing resume file from {config.MODEL.RESUME} to {resume_file}"
-                )
-            config.defrost()
-            config.MODEL.RESUME = resume_file
-            config.freeze()
-            logger.info(f"auto resuming from {resume_file}")
-        else:
-            logger.info(f"no checkpoint found in {config.OUTPUT}, ignoring auto resume")
+    if args.debug:
+        distributed_debug(model)
+        return
 
     if config.MODEL.RESUME:
         max_accuracy = load_checkpoint(
@@ -272,6 +240,7 @@ def main(args, config, ds_init):
 
     logger.info(f"number of params: {n_parameters}")
     logger.info(f"number of GFLOPs: {flops / 1e9}")
+
 
 @torch.no_grad()
 def validate(config, data_loader, model):
@@ -379,19 +348,16 @@ def debug(model, bs=1, iteration=1):
 
     timer.execute(timer_func, "debugging")
 
-    return
 
 @torch.inference_mode()
 def distributed_debug(model, bs=1, iteration=1):
+
     model.eval()
-    # timer = CUDATimer(1, 10, 5)
-    timer = CUDATimer(0, 1, 1)
     inputs_generator = deterministic_random_generator(
         [bs, 3, 192, 192], num=iteration, dtype=torch.float32, device="cuda"
     )
     for inputs in inputs_generator:
         model(inputs)
-    return
 
 
 if __name__ == "__main__":

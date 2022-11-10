@@ -16,7 +16,9 @@ rm -rf /opt/miniconda3
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
     bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/miniconda3 &&
     rm -f Miniconda3-py38_4.10.3-Linux-x86_64.sh
+# shellcheck disable=SC2016
 echo 'export PATH=/opt/miniconda3/bin:$PATH' >>~/.bashrc
+# shellcheck disable=SC2016
 echo 'export PATH=/opt/miniconda3/bin:$PATH' >>~/.zshrc
 
 export PATH=/opt/miniconda3/bin:$PATH

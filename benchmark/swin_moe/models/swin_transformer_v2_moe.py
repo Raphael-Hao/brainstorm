@@ -18,6 +18,7 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import numpy as np
 from tutel_ea import moe as tutel_moe
 from tutel_ea.impls import moe_layer_brt as brt_moe
+from tutel_ea.impls import moe_layer_brt_dist as brt_dist_moe
 
 _shape_t = Union[int, List[int], torch.Size]
 
@@ -104,6 +105,8 @@ class MoEMlp(nn.Module):
             moe = tutel_moe
         elif MOE_LAYER_VENDOR == 'brt':
             moe = brt_moe
+        elif MOE_LAYER_VENDOR == 'brt_dist':
+            moe = brt_dist_moe
         else:
             raise ValueError(f'Unknown MOE layer vendor: {MOE_LAYER_VENDOR}')
 

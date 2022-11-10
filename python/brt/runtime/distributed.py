@@ -16,9 +16,10 @@ def is_initialized():
     return DistributedInfo.initialized
 
 
-def init_nccl(group: dist.ProcessGroup):
+def init_nccl(group: dist.ProcessGroup=None):
     if is_initialized():
         return
+    group = group or dist.group.WORLD
     world_size = dist.get_world_size(group)
     world_rank = dist.get_rank(group)
     unique_id = C_dist.make_nccl_unique_id(world_rank)
