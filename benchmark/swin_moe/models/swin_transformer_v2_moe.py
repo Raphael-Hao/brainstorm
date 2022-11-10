@@ -5,28 +5,22 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 
-import math
+from typing import Union, List
+
 import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
 import torch.utils.checkpoint as checkpoint
-from torch.nn.utils import weight_norm
-from torch import Tensor, Size
-from typing import Union, List
 
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import numpy as np
 from tutel_ea import moe as tutel_moe
 from tutel_ea.impls import moe_layer_brt as brt_moe
+from tutel_ea.impls import moe_layer_brt_dist as brt_dist_moe
 
-_shape_t = Union[int, List[int], Size]
-
-
-def print_rank(str):
-    # print(f"[{dist.get_rank()}]===>" + str)
-    pass
+_shape_t = Union[int, List[int], torch.Size]
 
 
 class LayerNorm2D(nn.Module):
@@ -48,10 +42,10 @@ class LayerNormFP32(nn.LayerNorm):
     def __init__(self, normalized_shape: _shape_t, eps: float = 1e-5, elementwise_affine: bool = True) -> None:
         super(LayerNormFP32, self).__init__(normalized_shape, eps, elementwise_affine)
 
-    def forward(self, input: Tensor) -> Tensor:
+    def forward(self, in_data: torch.Tensor) -> torch.Tensor:
         with torch.cuda.amp.autocast(enabled=False):
             return F.layer_norm(
-                input.float(), self.normalized_shape, self.weight.float(), self.bias.float(), self.eps).type_as(input)
+                in_data.float(), self.normalized_shape, self.weight.float(), self.bias.float(), self.eps).type_as(in_data)
 
 
 class Mlp(nn.Module):
@@ -106,10 +100,13 @@ class MoEMlp(nn.Module):
         self.dist_rank = dist.get_rank()
 
         MOE_LAYER_VENDOR = os.environ.get('MOE_LAYER_VENDOR', 'tutel')
+        print(f"======>[{self.dist_rank}] MOE_LAYER_VENDOR = {MOE_LAYER_VENDOR}")
         if MOE_LAYER_VENDOR == 'tutel':
             moe = tutel_moe
         elif MOE_LAYER_VENDOR == 'brt':
             moe = brt_moe
+        elif MOE_LAYER_VENDOR == 'brt_dist':
+            moe = brt_dist_moe
         else:
             raise ValueError(f'Unknown MOE layer vendor: {MOE_LAYER_VENDOR}')
 

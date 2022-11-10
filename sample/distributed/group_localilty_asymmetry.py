@@ -14,9 +14,9 @@ torch.cuda.set_device(device)
 group = dist.group.WORLD
 brt_dist.init_nccl(group)
 
-grain_size = 4
-capacity = 4
-group_size = 2
+grain_size = 768
+capacity = 1024
+group_size = 4
 
 tensor = torch.arange(
     local_rank * world_size * group_size * capacity * grain_size,
@@ -24,7 +24,7 @@ tensor = torch.arange(
     device=device,
 ).reshape(-1, grain_size)
 loads = torch.randint(
-    1, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
+    capacity, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
 ).reshape(-1, group_size)
 # print(tensor)
 all_in_loads = None
@@ -48,13 +48,29 @@ if local_rank == 0:
     all_out_loads = torch.stack(all_out_loads)
     print(f"all_out_loads: \n{all_out_loads}")
     print(f"reorder_indices: \n{reorder_indices}")
+print(out_data.shape)
 
-# timer = CUDATimer(repeat=2, root=local_rank)
+timer = CUDATimer(repeat=6, root=local_rank)
 
-# timer.execute(
-#     lambda: brt_dist.group_asymmetry_a2a(tensor, loads), "brt.asymmetry_all_to_all",
-# )
+def torch_symmetry_a2a(tensor, loads):
+    out_loads = torch.empty_like(loads)
+    dist.all_to_all_single(out_loads, loads)
+    torch.cuda.synchronize()
+    output = torch.empty_like(tensor)
+    dist.all_to_all_single(output, tensor)
+    return output
 
+timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
+
+timer.execute(
+    lambda: brt_dist.group_asymmetry_a2a(tensor, loads),
+    "brt.group_asymmetry_a2a",
+)
+
+timer.execute(
+    lambda: brt_dist.group_asymmetry_a2a(tensor, loads, locality_aware=True),
+    "brt.locality_group_asymmetry_a2a",
+)
 
 # def locality_aware_a2a(tensor, loads):
 #     out_data, out_loads, reorder_indices = brt_dist.asymmetry_a2a(
@@ -76,13 +92,3 @@ if local_rank == 0:
 # )
 
 
-# def torch_symmetry_a2a(tensor, loads):
-#     out_loads = torch.empty_like(loads)
-#     dist.all_to_all_single(out_loads, loads)
-#     torch.cuda.synchronize()
-#     output = torch.empty_like(tensor)
-#     dist.all_to_all_single(output, tensor)
-#     return output
-
-
-# timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")

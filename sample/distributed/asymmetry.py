@@ -43,7 +43,7 @@ timer.execute(
 def torch_symmetry_a2a(tensor, loads):
     out_loads = torch.empty_like(loads)
     dist.all_to_all_single(out_loads, loads)
-    torch.cuda.synchronize()
+    # torch.cuda.synchronize()
     output = torch.empty_like(tensor)
     dist.all_to_all_single(output, tensor)
     return output

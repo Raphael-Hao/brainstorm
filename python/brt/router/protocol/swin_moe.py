@@ -34,13 +34,13 @@ def get_compute_location_func(sorted=False, score=None):
 
         def compute_location(one_hot_mask):
             sorted_mask = one_hot_mask[importance_score.argsort(dim=0)]
-            dst_indices, loads = generate_dst_indices(sorted_mask)
+            dst_indices, loads = generate_dst_indices(sorted_mask, load_on_cpu=False)
             return dst_indices[importance_score.argsort(dim=0).argsort(dim=0)], loads
 
     else:
 
         def compute_location(one_hot_mask):
-            dst_indices, loads = generate_dst_indices(one_hot_mask)
+            dst_indices, loads = generate_dst_indices(one_hot_mask, load_on_cpu=False)
             return dst_indices, loads
 
     return compute_location
@@ -166,7 +166,7 @@ class SwinMoEProtocol(ProtocolBase):
         if remainder > 0:
             capacity = capacity + self.alignment - remainder
 
-        loads = acc_base.view(-1).cpu()
+        loads = acc_base.view(-1)
         capacity = torch.zeros_like(
             loads, dtype=loads.dtype, device=loads.device
         ).fill_(capacity)
