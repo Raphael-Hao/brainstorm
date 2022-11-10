@@ -7,6 +7,7 @@
 
 import os
 import time
+import math
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -31,70 +32,88 @@ def adaptive_load_checkpoint(
         ckpt_dir = "/".join(config.MODEL.RESUME.split("/")[:-1])
         dir_list = os.listdir(ckpt_dir)
         rank_files = [f for f in dir_list if ".pth" in f]
-
         original_ranks = sorted([int(f.split(".pth.rank")[1]) for f in rank_files])
         assert len(original_ranks) - 1 == original_ranks[-1]
         num_rank = len(original_ranks)
         local_expert_ckpt = config.MODEL.SWIN_V2_MOE.NUM_LOCAL_EXPERTS_IN_CKPT
-        checkpoint = []
-        for i in range(num_rank):
-            checkpoint.append(
-                torch.load(
-                    config.MODEL.RESUME + f".rank{i}", map_location="cpu"
-                )
-            )
-        if local_expert_ckpt < 0:
-            expert_span = -local_expert_ckpt
-            new_entry_weights = {}
-            for expert_main_rank in range(0, num_rank, expert_span):
-                expert_entries = [
-                    k
-                    for k in checkpoint[expert_main_rank]["model"].keys()
-                    if "._moe_layer.experts." in k
-                ]
-                for entry in expert_entries:
-                    tensors_to_concat = []
-
-                    entry_splits = entry.split("._moe_layer.experts.")
-                    varname = entry_splits[1].split(".")[1]
-                    new_entry_name = (
-                        entry_splits[0] + "._moe_layer.experts.0." + varname
-                    )
-                    for rank_id in range(
-                        expert_main_rank, expert_main_rank + expert_span
-                    ):
-                        tensor_name = (
-                            entry_splits[0] + "._moe_layer.experts.0." + varname
+        num_local_expert = config.MODEL.SWIN_V2_MOE.NUM_LOCAL_EXPERTS
+        expert_span = (
+            1 / local_expert_ckpt if local_expert_ckpt > 0 else -num_local_expert
+        )
+        checkpoints = {}
+        if expert_span > 1:
+            ckpt_base_id = num_local_expert * world_rank * expert_span
+            for i in range(num_local_expert):
+                checkpoints[i] = []
+                for j in range(expert_span):
+                    checkpoints[i].append(
+                        torch.load(
+                            config.MODEL.RESUME
+                            + f".rank{ckpt_base_id+i*expert_span+j}",
+                            map_location="cpu",
                         )
-                        # f'{rank_id%expert_span}.'+ \
-                        tensors_to_concat.append(
-                            checkpoint[rank_id]["model"][tensor_name]
-                        )
-                    if new_entry_name not in new_entry_weights:
-                        new_entry_weights[new_entry_name] = []
-                    new_entry_weights[new_entry_name].append(
-                        torch.cat(tensors_to_concat, 0)
                     )
-            state_dict = {}
-            for entry in checkpoint[0]["model"].keys():
-                if "._moe_layer.experts" in entry:
-                    continue
-                else:
-                    state_dict[entry] = checkpoint[0]["model"][entry]
-            for entry in new_entry_weights.keys():
-                if "_bias" in entry:
-                    state_dict[entry] = torch.stack(
-                        [
-                            torch.unsqueeze(x, dim=0)
-                            for x in new_entry_weights[entry]
-                        ]
-                    )
-                else:
-                    state_dict[entry] = torch.stack(new_entry_weights[entry])
         else:
-            raise NotImplementedError(
-                f"local_expert_ckpt > 0 has not implemented yet"
-            )
+            ckpt_ids = np.linspace(
+                num_local_expert * world_rank * expert_span,
+                num_local_expert * (world_rank + 1) * expert_span,
+                num_local_expert,
+                endpoint=False,
+            ).astype(int)
+            no_dump_ckpt_ids = set(ckpt_ids)
+            no_dump_ckpts = {
+                i: torch.load(
+                    config.MODEL.RESUME + f".rank{i}",
+                    map_location="cpu",
+                )
+                for i in no_dump_ckpt_ids
+            }
+            for i in range(num_local_expert):
+                checkpoints[i] = [no_dump_ckpts[ckpt_ids[i]]]
+        new_entry_weights = {}
+        for i in range(num_local_expert):
+            expert_entries = [
+                k
+                for k in checkpoints[num_local_expert]["model"].keys()
+                if "._moe_layer.experts." in k
+            ]
+            pass
+        for expert_main_rank in range(
+            ckpt_base_id, ckpt_base_id + num_ckpt, expert_span
+        ):
+            expert_entries = [
+                k
+                for k in checkpoint[expert_main_rank]["model"].keys()
+                if "._moe_layer.experts." in k
+            ]
+            for entry in expert_entries:
+                tensors_to_concat = []
+
+                entry_splits = entry.split("._moe_layer.experts.")
+                varname = entry_splits[1].split(".")[1]
+                new_entry_name = entry_splits[0] + "._moe_layer.experts.0." + varname
+                for rank_id in range(expert_main_rank, expert_main_rank + expert_span):
+                    tensor_name = entry_splits[0] + "._moe_layer.experts.0." + varname
+                    # f'{rank_id%expert_span}.'+ \
+                    tensors_to_concat.append(checkpoint[rank_id]["model"][tensor_name])
+                if new_entry_name not in new_entry_weights:
+                    new_entry_weights[new_entry_name] = []
+                new_entry_weights[new_entry_name].append(
+                    torch.cat(tensors_to_concat, 0)
+                )
+        state_dict = {}
+        for entry in checkpoint[0]["model"].keys():
+            if "._moe_layer.experts" in entry:
+                continue
+            else:
+                state_dict[entry] = checkpoint[0]["model"][entry]
+        for entry in new_entry_weights.keys():
+            if "_bias" in entry:
+                state_dict[entry] = torch.stack(
+                    [torch.unsqueeze(x, dim=0) for x in new_entry_weights[entry]]
+                )
+            else:
+                state_dict[entry] = torch.stack(new_entry_weights[entry])
         # delete relative_position_index since we always re-init it
         relative_position_index_keys = [
             k for k in state_dict.keys() if "relative_position_index" in k
