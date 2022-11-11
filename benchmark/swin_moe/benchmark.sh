@@ -25,4 +25,4 @@ torchrun --nproc_per_node="$PROC" \
     benchmark.py --cfg configs/"${EXPERT_NUM}"expert_"${GPU_NUM}"GPU.yaml \
     --batch-size 128 --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k --output ./results/MoE/ \
     --eval --single-gpu-eval --resume "${BRT_CACHE_PATH}"/ckpt/swin_moe/small_swin_moe_32GPU_16expert/model.pth \
-    --debug
+    --gather-ckpt

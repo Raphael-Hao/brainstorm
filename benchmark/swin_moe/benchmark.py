@@ -5,7 +5,6 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 import argparse
-import datetime
 import json
 import os
 import random
@@ -30,19 +29,17 @@ from data import build_loader
 from logger import create_logger
 from lr_scheduler import build_scheduler
 from models import build_model
-from optimizer import build_optimizer, set_weight_decay
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from optimizer import build_optimizer
 from timm.utils import AverageMeter, accuracy
 from tutel_ea.moe import router_exporter
 from utils import (
     NativeScalerWithGradNormCount,
-    auto_resume_helper,
     create_ds_config,
     hook_scale_grad,
     load_checkpoint,
     load_pretrained,
     reduce_tensor,
-    save_checkpoint,
+    gather_all_ckpts_into_one,
 )
 
 warnings.filterwarnings(
@@ -131,6 +128,7 @@ def parse_option():
     )
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--trace", action="store_true", default=False)
+    parser.add_argument("--gather-ckpt", action="store_true", default=False)
 
     ds_init = None
 
@@ -149,7 +147,7 @@ def main(args, config, ds_init):
         dataset_val,
         data_loader_train,
         data_loader_val,
-        mixup_fn,
+        _mixup_fn,
     ) = build_loader(config)
 
     logger.info(f"Creating model:{config.MODEL.TYPE}/{config.MODEL.NAME}")
@@ -191,22 +189,16 @@ def main(args, config, ds_init):
     else:
         lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train))
 
-    if config.AUG.MIXUP > 0.0:
-        # smoothing is handled with mixup label transform
-        criterion = SoftTargetCrossEntropy()
-    elif config.MODEL.LABEL_SMOOTHING > 0.0:
-        criterion = LabelSmoothingCrossEntropy(smoothing=config.MODEL.LABEL_SMOOTHING)
-    else:
-        criterion = torch.nn.CrossEntropyLoss()
-
-    max_accuracy = 0.0
-
     if args.debug:
         distributed_debug(model)
         return
 
+    if args.gather_ckpt:
+        gather_all_ckpts_into_one(config, model_without_ddp, logger)
+        return
+
     if config.MODEL.RESUME:
-        max_accuracy = load_checkpoint(
+        load_checkpoint(
             config,
             model_without_ddp,
             optimizer,
