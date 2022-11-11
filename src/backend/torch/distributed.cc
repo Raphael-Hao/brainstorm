@@ -94,8 +94,8 @@ static ::torch::Tensor exchange(const ::torch::Tensor& in_data,
   return out_data;
 }
 
-static std::vector<::torch::Tensor> batch_exchange(const std::vector<::torch::Tensor>& in_datas,
-                                                   const ::torch::Tensor& reorder_indices) {
+static std::vector<::torch::Tensor> batched_exchange(const std::vector<::torch::Tensor>& in_datas,
+                                                     const ::torch::Tensor& reorder_indices) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
@@ -161,7 +161,7 @@ static ::torch::Tensor reverse_exchange(const ::torch::Tensor& in_data,
   return out_data;
 }
 
-static std::vector<::torch::Tensor> batch_reverse_exchange(
+static std::vector<::torch::Tensor> batched_reverse_exchange(
     const std::vector<::torch::Tensor>& in_datas, const ::torch::Tensor& reorder_indices) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
@@ -432,8 +432,8 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
 }
 
 static std::tuple<std::vector<::torch::Tensor>, ::torch::Tensor, ::torch::Tensor>
-batch_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
-                                 const ::torch::Tensor& send_sizes, bool locality_aware = false) {
+batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
+                                   const ::torch::Tensor& send_sizes, bool locality_aware = false) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
@@ -589,7 +589,7 @@ static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tens
   return out_data;
 }
 
-static std::vector<::torch::Tensor> batch_size_known_group_asymmetry_all_to_all(
+static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_all(
     const std::vector<::torch::Tensor>& in_datas, const ::torch::Tensor& send_sizes,
     const ::torch::Tensor& recv_sizes) {
   auto& manager = NcclManager::GetManager();
@@ -646,13 +646,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("group_size") = 1);
   m.def("exchange", &brt::backend::torch::exchange, "Data exchange between ranks",
         pybind11::arg("in_data"), pybind11::arg("reorder_indices"));
-  m.def("batch_exchange", &brt::backend::torch::batch_exchange,
+  m.def("batched_exchange", &brt::backend::torch::batched_exchange,
         "Batched data exchange between ranks", pybind11::arg("in_datas"),
         pybind11::arg("reorder_indices"));
   m.def("reverse_exchange", &brt::backend::torch::reverse_exchange,
         "Data revrse exchange between ranks", pybind11::arg("in_data"),
         pybind11::arg("reorder_indices"));
-  m.def("batch_reverse_exchange", &brt::backend::torch::batch_reverse_exchange,
+  m.def("batched_reverse_exchange", &brt::backend::torch::batched_reverse_exchange,
         "Batched data reverse exchange between ranks", pybind11::arg("in_datas"),
         pybind11::arg("reorder_indices"));
   m.def("asymmetry_all_to_all", &brt::backend::torch::asymmetry_all_to_all, "asymmetry all to all",
@@ -661,15 +661,16 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("group_asymmetry_all_to_all", &brt::backend::torch::group_asymmetry_all_to_all,
         "asymmetry all to all", pybind11::arg("in_data"), pybind11::arg("send_sizes"),
         pybind11::arg("locality_aware") = false);
-  m.def("batch_group_asymmetry_all_to_all", &brt::backend::torch::batch_group_asymmetry_all_to_all,
-        "asymmetry all to all", pybind11::arg("in_datas"), pybind11::arg("send_sizes"),
+  m.def("batched_group_asymmetry_all_to_all",
+        &brt::backend::torch::batched_group_asymmetry_all_to_all, "asymmetry all to all",
+        pybind11::arg("in_datas"), pybind11::arg("send_sizes"),
         pybind11::arg("locality_aware") = false);
   m.def("size_known_group_asymmetry_all_to_all",
         &brt::backend::torch::size_known_group_asymmetry_all_to_all,
         "asymmetry all to all for send sizes and recv size are already known",
         pybind11::arg("in_data"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
-  m.def("batch_size_known_group_asymmetry_all_to_all",
-        &brt::backend::torch::batch_size_known_group_asymmetry_all_to_all,
+  m.def("batched_size_known_group_asymmetry_all_to_all",
+        &brt::backend::torch::batched_size_known_group_asymmetry_all_to_all,
         "batched asymmetry all to all for send sizes and recv size are already known",
         pybind11::arg("in_datas"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
 }

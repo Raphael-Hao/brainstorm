@@ -12,7 +12,7 @@ world_size = dist.get_world_size()
 device = torch.device("cuda", local_rank)
 torch.cuda.set_device(device)
 group = dist.group.WORLD
-brt_dist.init_nccl(group)
+brt_dist.is_nccl_activated(group)
 
 grain_size = 4
 capacity = 4

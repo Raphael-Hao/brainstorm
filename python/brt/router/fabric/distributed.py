@@ -65,7 +65,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         out_flow = a2a_resuslts[0]
 
         if self.locality_aware:
-            route_indices, loads, score = brt_dist.batch_exchange(
+            route_indices, loads, score = brt_dist.batched_exchange(
                 [route_indices, loads, score], a2a_resuslts[2]
             )
             brt_dist.set_reorder_indices(a2a_resuslts[2])

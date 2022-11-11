@@ -12,7 +12,7 @@ world_size = dist.get_world_size()
 device = torch.device("cuda", local_rank)
 torch.cuda.set_device(device)
 group = dist.group.WORLD
-brt_dist.init_nccl(group)
+brt_dist.is_nccl_activated(group)
 
 tensor = torch.arange(
     local_rank * world_size, (local_rank + 1) * world_size, device=device
@@ -44,8 +44,8 @@ else:
     indices = torch.empty(world_size, dtype=torch.int32, device=device)
 dist.broadcast(indices, 0, group=group)
 
-tensors = brt_dist.batch_exchange(tensors, indices)
-tensors = brt_dist.batch_reverse_exchange(tensors, indices)
+tensors = brt_dist.batched_exchange(tensors, indices)
+tensors = brt_dist.batched_reverse_exchange(tensors, indices)
 print(tensors)
 
 

@@ -12,17 +12,18 @@ world_size = dist.get_world_size()
 device = torch.device("cuda", local_rank)
 torch.cuda.set_device(device)
 group = dist.group.WORLD
-brt_dist.init_nccl(group)
+brt_dist.is_nccl_activated(group)
 
-grain_size = 768
-capacity = 1024
-group_size = 4
+grain_size = 4
+capacity = 4
+group_size = 8
 
 tensor = torch.arange(
     local_rank * world_size * group_size * capacity * grain_size,
     (local_rank + 1) * world_size * group_size * capacity * grain_size,
     device=device,
 ).reshape(-1, grain_size)
+print(f"{local_rank}==>: in_data: \n{tensor}")
 loads = torch.randint(
     capacity, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
 ).reshape(-1, group_size)
@@ -40,6 +41,8 @@ if local_rank == 0:
 out_data, out_loads, reorder_indices = brt_dist.group_asymmetry_a2a(
     tensor, loads, locality_aware=True
 )
+print(f"{local_rank}==>: out_data: \n{out_data}")
+
 all_out_loads = None
 if local_rank == 0:
     all_out_loads = [torch.empty_like(out_loads) for _ in range(world_size)]
