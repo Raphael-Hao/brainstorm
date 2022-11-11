@@ -8,6 +8,7 @@
 import json
 import os
 import time
+import pathlib
 
 import numpy as np
 import torch
@@ -18,16 +19,14 @@ from scipy import interpolate
 from torch._six import inf
 
 
-def gather_all_ckpts_into_one(
-    config, model_without_ddp, logger
-):
+def gather_all_ckpts_into_one(config, model_without_ddp, logger):
     global_rank = dist.get_rank()
     logger.info(
         f"==============> Rank[{global_rank}] gather all checkpoints into one...................."
     )
     ckpt_dir = "/".join(config.MODEL.RESUME.split("/")[:-1])
     dir_list = os.listdir(ckpt_dir)
-    rank_files = [f for f in dir_list if ".pth" in f]
+    rank_files = [f for f in dir_list if ".pth.rank" in f]
 
     ranks = sorted([int(f.split(".pth.rank")[1]) for f in rank_files])
     assert len(ranks) - 1 == ranks[-1]
@@ -52,20 +51,12 @@ def gather_all_ckpts_into_one(
 
                 entry_splits = entry.split("._moe_layer.experts.")
                 varname = entry_splits[1].split(".")[1]
-                new_entry_name = (
-                    entry_splits[0] + "._moe_layer.experts.0." + varname
-                )
+                new_entry_name = entry_splits[0] + "._moe_layer.experts.0." + varname
                 print(f"new_entry_name =======> {new_entry_name}")
-                for rank_id in range(
-                    expert_main_rank, expert_main_rank + expert_span
-                ):
-                    tensor_name = (
-                        entry_splits[0] + "._moe_layer.experts.0." + varname
-                    )
+                for rank_id in range(expert_main_rank, expert_main_rank + expert_span):
+                    tensor_name = entry_splits[0] + "._moe_layer.experts.0." + varname
                     # f'{rank_id%expert_span}.'+ \
-                    tensors_to_concat.append(
-                        checkpoint[rank_id]["model"][tensor_name]
-                    )
+                    tensors_to_concat.append(checkpoint[rank_id]["model"][tensor_name])
                 if new_entry_name not in new_entry_weights:
                     new_entry_weights[new_entry_name] = []
                 new_entry_weights[new_entry_name].append(
@@ -78,15 +69,10 @@ def gather_all_ckpts_into_one(
             else:
                 state_dict[entry] = checkpoint[0]["model"][entry]
         for entry in new_entry_weights.keys():
-            if "_bias" in entry:
-                state_dict[entry] = torch.stack(
-                    [torch.unsqueeze(x, dim=0) for x in new_entry_weights[entry]]
-                )
-            else:
-                state_dict[entry] = torch.stack(new_entry_weights[entry])
+            for i in range(len(new_entry_weights[entry])):
+                state_dict[f"{entry}.{i}"] = new_entry_weights[entry][i]
     else:
         raise NotImplementedError(f"local_expert_ckpt > 0 has not implemented yet")
-    torch.save(state_dict, config.MODEL.RESUME + ".allrank")
     # delete relative_position_index since we always re-init it
     relative_position_index_keys = [
         k for k in state_dict.keys() if "relative_position_index" in k
@@ -103,32 +89,37 @@ def gather_all_ckpts_into_one(
     attn_mask_keys = [k for k in state_dict.keys() if "attn_mask" in k]
     for k in attn_mask_keys:
         del state_dict[k]
-
-    msg = model_without_ddp.load_state_dict(state_dict, strict=False)
-    logger.info(msg)
-    for x in checkpoint:
-        del x["model"]
-
-    del checkpoint
-    torch.cuda.empty_cache()
+    torch.save(state_dict, config.MODEL.RESUME + ".all_in_one")
 
 
 def adaptive_load_checkpoint(
-    config, model_without_ddp, optimizer, lr_scheduler, logger, loss_scaler=None
+    config,
+    model_without_ddp: nn.Module,
+    optimizer,
+    lr_scheduler,
+    logger,
+    experts=None,
+    loss_scaler=None,
 ):
     world_rank = dist.get_rank()
     world_size = dist.get_world_size()
     logger.info(
-        f"==============> Rank[{world_rank}] Resuming form {config.MODEL.RESUME}...................."
+        f"==============> Rank[{world_rank}] Resuming form {config.MODEL.RESUME}.all_in_one...................."
     )
     if loss_scaler is not None:
         assert config.MODEL.RESUME.endswith(".pth")
-        ckpt_dir = "/".join(config.MODEL.RESUME.split("/")[:-1])
-        dir_list = os.listdir(ckpt_dir)
-        rank_files = [f for f in dir_list if ".pth" in f]
-        original_ranks = sorted([int(f.split(".pth.rank")[1]) for f in rank_files])
-        assert len(original_ranks) - 1 == original_ranks[-1]
-        num_rank = len(original_ranks)
+        ckpt_filepath_str = f"{config.MODEL.RESUME}.all_in_one"
+        ckpt_filepath = pathlib.Path(ckpt_filepath_str)
+        checkpoint = torch.load(ckpt_filepath, map_location="cpu")
+        expert_state_dict = {
+            k: checkpoint[k] for k in checkpoint.keys() if "._moe_layer.experts." in k
+        }
+        state_dict = {
+            k: checkpoint[k]
+            for k in checkpoint.keys()
+            if "._moe_layer.experts." not in k
+        }
+
         local_expert_ckpt = config.MODEL.SWIN_V2_MOE.NUM_LOCAL_EXPERTS_IN_CKPT
         num_local_expert = config.MODEL.SWIN_V2_MOE.NUM_LOCAL_EXPERTS
         expert_span = (
@@ -156,10 +147,7 @@ def adaptive_load_checkpoint(
             ).astype(int)
             no_dump_ckpt_ids = set(ckpt_ids)
             no_dump_ckpts = {
-                i: torch.load(
-                    config.MODEL.RESUME + f".rank{i}",
-                    map_location="cpu",
-                )
+                i: torch.load(config.MODEL.RESUME + f".rank{i}", map_location="cpu",)
                 for i in no_dump_ckpt_ids
             }
             for i in range(num_local_expert):
@@ -208,62 +196,11 @@ def adaptive_load_checkpoint(
                 )
             else:
                 state_dict[entry] = torch.stack(new_entry_weights[entry])
-        # delete relative_position_index since we always re-init it
-        relative_position_index_keys = [
-            k for k in state_dict.keys() if "relative_position_index" in k
-        ]
-        for k in relative_position_index_keys:
-            del state_dict[k]
-        # delete relative_coords_table since we always re-init it
-        relative_position_index_keys = [
-            k for k in state_dict.keys() if "relative_coords_table" in k
-        ]
-        for k in relative_position_index_keys:
-            del state_dict[k]
-        # delete attn_mask since we always re-init it
-        attn_mask_keys = [k for k in state_dict.keys() if "attn_mask" in k]
-        for k in attn_mask_keys:
-            del state_dict[k]
 
         msg = model_without_ddp.load_state_dict(state_dict, strict=False)
         logger.info(msg)
-        if type(checkpoint) == dict:
-            del checkpoint["model"]
-        elif type(checkpoint) == list:
-            for x in checkpoint:
-                del x["model"]
 
         max_accuracy = 0.0
-        if (
-            not config.EVAL_MODE
-            and "optimizer" in checkpoint
-            and "lr_scheduler" in checkpoint
-            and "epoch" in checkpoint
-        ):
-            optimizer.load_state_dict(checkpoint["optimizer"])
-            del checkpoint["optimizer"]
-            lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
-            config.defrost()
-            if "step" in checkpoint:
-                config.TRAIN.START_EPOCH = checkpoint["epoch"]
-                config.TRAIN.START_STEP = checkpoint["step"] + 1
-                logger.info("resuming from a step-based checkpoint")
-            else:
-                config.TRAIN.START_EPOCH = checkpoint["epoch"] + 1
-                logger.info("resuming from a epoch-based checkpoint")
-                assert (
-                    config.TRAIN.START_STEP == 0
-                ), "resuming from a epoch-based checkpoint"
-            config.freeze()
-            if "scaler" in checkpoint:
-                loss_scaler.load_state_dict(checkpoint["scaler"])
-            logger.info(
-                f"=> Rank[{world_rank}] loaded successfully "
-                f"'{config.MODEL.RESUME}' (epoch {checkpoint['epoch']})"
-            )
-            if "max_accuracy" in checkpoint:
-                max_accuracy = checkpoint["max_accuracy"]
-
         del checkpoint
         torch.cuda.empty_cache()
 
@@ -553,16 +490,14 @@ def load_pretrained(config, model, logger):
                     logger.info(
                         "Interpolate relative_position_bias_table using bicubic."
                     )
-                    S1 = int(L1**0.5)
-                    S2 = int(L2**0.5)
-                    relative_position_bias_table_pretrained_resized = (
-                        torch.nn.functional.interpolate(
-                            relative_position_bias_table_pretrained.permute(1, 0).view(
-                                1, nH1, S1, S1
-                            ),
-                            size=(S2, S2),
-                            mode=config.MODEL.RPE_INTERPOLATION,
-                        )
+                    S1 = int(L1 ** 0.5)
+                    S2 = int(L2 ** 0.5)
+                    relative_position_bias_table_pretrained_resized = torch.nn.functional.interpolate(
+                        relative_position_bias_table_pretrained.permute(1, 0).view(
+                            1, nH1, S1, S1
+                        ),
+                        size=(S2, S2),
+                        mode=config.MODEL.RPE_INTERPOLATION,
                     )
                     state_dict[
                         k
@@ -572,8 +507,8 @@ def load_pretrained(config, model, logger):
                         1, 0
                     )
                 elif config.MODEL.RPE_INTERPOLATION == "outer_mask":
-                    S1 = int(L1**0.5)
-                    S2 = int(L2**0.5)
+                    S1 = int(L1 ** 0.5)
+                    S2 = int(L2 ** 0.5)
                     pad_size = (S2 - S1) // 2
                     padding = (pad_size, pad_size, pad_size, pad_size)
 
@@ -590,11 +525,11 @@ def load_pretrained(config, model, logger):
                     state_dict[k] = new_rel_pos_bias
                 elif config.MODEL.RPE_INTERPOLATION == "geo":
                     logger.info("Interpolate relative_position_bias_table using geo.")
-                    src_size = int(L1**0.5)
-                    dst_size = int(L2**0.5)
+                    src_size = int(L1 ** 0.5)
+                    dst_size = int(L2 ** 0.5)
 
                     def geometric_progression(a, r, n):
-                        return a * (1.0 - r**n) / (1.0 - r)
+                        return a * (1.0 - r ** n) / (1.0 - r)
 
                     left, right = 1.01, 1.5
                     while right - left > 1e-6:
@@ -662,8 +597,8 @@ def load_pretrained(config, model, logger):
             logger.warning(f"Error in loading {k}, passing......")
         else:
             if L1 != L2:
-                S1 = int(L1**0.5)
-                S2 = int(L2**0.5)
+                S1 = int(L1 ** 0.5)
+                S2 = int(L2 ** 0.5)
                 absolute_pos_embed_pretrained = absolute_pos_embed_pretrained.reshape(
                     -1, S1, S1, C1
                 )
@@ -673,11 +608,11 @@ def load_pretrained(config, model, logger):
                 absolute_pos_embed_pretrained_resized = torch.nn.functional.interpolate(
                     absolute_pos_embed_pretrained, size=(S2, S2), mode="bicubic"
                 )
-                absolute_pos_embed_pretrained_resized = (
-                    absolute_pos_embed_pretrained_resized.permute(0, 2, 3, 1)
+                absolute_pos_embed_pretrained_resized = absolute_pos_embed_pretrained_resized.permute(
+                    0, 2, 3, 1
                 )
-                absolute_pos_embed_pretrained_resized = (
-                    absolute_pos_embed_pretrained_resized.flatten(1, 2)
+                absolute_pos_embed_pretrained_resized = absolute_pos_embed_pretrained_resized.flatten(
+                    1, 2
                 )
                 state_dict[k] = absolute_pos_embed_pretrained_resized
 
@@ -833,10 +768,10 @@ class NativeScalerWithGradNormCount:
 
     def __init__(self, custom_scaler=False):
         if custom_scaler:
-            self._scaler = GradScaler(growth_interval=128, init_scale=2.0**8)
+            self._scaler = GradScaler(growth_interval=128, init_scale=2.0 ** 8)
         else:
             self._scaler = torch.cuda.amp.GradScaler(
-                growth_interval=128, init_scale=2.0**8
+                growth_interval=128, init_scale=2.0 ** 8
             )
 
     def __call__(
