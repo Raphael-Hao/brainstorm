@@ -4,10 +4,11 @@
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 BRT_DIR=$(cd "${script_dir}/../../" && pwd)
+
 export BRT_CACHE_PATH=$BRT_DIR/.cache
 export BRT_CAPTURE_STATS=False # should be False for brt_dist or tutel
 export BRT_CAPTURED_FABRIC_TYPE=dispatch
-export MOE_LAYER_VENDOR=brt_dist # tutel, brt, or brt_dist
+export MOE_LAYER_VENDOR=brt #_dist # tutel, brt, or brt_dist
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <process number>"

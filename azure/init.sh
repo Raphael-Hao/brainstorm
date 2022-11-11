@@ -4,6 +4,9 @@
 # \brief:
 # Author: raphael hao
 
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+BRT_DIR=$(cd "${script_dir}/../" && pwd)
+
 is_root() {
     return "$(id -u)"
 }
