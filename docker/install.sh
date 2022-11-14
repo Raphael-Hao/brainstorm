@@ -12,19 +12,24 @@ if [[ "$1" == "--branch" ]]; then
     shift 2
 fi
 
-cd /root
-wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
-    bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b &&
-    rm -f Miniconda3-py38_4.10.3-Linux-x86_64.sh
+apt-get -y update && apt-get install -y \
+    ssh gcc libtinfo-dev zlib1g-dev build-essential \
+    cmake libedit-dev libxml2-dev llvm tmux wget git
 
 cd /root
+wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
+    bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/miniconda3 &&
+    rm -f Miniconda3-py38_4.10.3-Linux-x86_64.sh
+echo 'export PATH=/opt/miniconda3/bin:$PATH' >> /etc/profile
+
+mkdir -p /brainstorm_project && cd /brainstorm_project
 git clone git@github.com:Raphael-Hao/brainstorm.git \
     -b "${BRT_BRANCH:-main}" \
     --recursive --depth 1
 cd brainstorm
 
 pip install --upgrade pip
-conda install -y pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.3 -c pytorch
+pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 --extra-index-url https://download.pytorch.org/whl/cu113
 pip install -r requirements.txt
 
 cd 3rdparty/tvm || exit
@@ -32,8 +37,12 @@ cd 3rdparty/tvm || exit
 mkdir -p build && cd build || exit
 cp ../../../cmake/config/tvm.cmake config.cmake
 cmake ..
-make install -j
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH && \
+    ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
+    make install -j && \
+    rm -f /usr/local/cuda/lib64/stubs/libcuda.so.1
 cd ../python && pip install .
 
-cd /root/brainstorm || exit
+cd /brainstorm_project/brainstorm || exit
+
 pip install -v --editable .

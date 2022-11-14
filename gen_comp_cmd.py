@@ -1,7 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-# %%
 from distutils.dist import Distribution
 import subprocess
 import os
@@ -23,6 +22,7 @@ def is_ninja_available():
 
 
 def get_build_dir_with_tmp():
+    # pylint: disable=no-member
     # get build tmp dir from distutils build command
     dist = Distribution()
     build_cmd = dist.get_command_obj("build")
@@ -36,7 +36,6 @@ def get_build_dir_with_tmp():
     return pathlib.Path(build_cmd.build_base), pathlib.Path(build_cmd.build_temp)
 
 
-# %%
 def create_compile_commands_json():
     if not is_ninja_available():
         raise RuntimeError(
@@ -68,10 +67,8 @@ def create_compile_commands_json():
         # `error` is a CalledProcessError (which has an `ouput`) attribute, but
         # mypy thinks it's Optional[BaseException] and doesn't narrow
         if hasattr(error, "output") and error.output:  # type: ignore[union-attr]
-            message += f": {error.output.decode(*SUBPROCESS_DECODE_ARGS)}"  # type: ignore[union-attr]
+            message += f": {error.output.decode(*())}"  # type: ignore[union-attr]
         raise RuntimeError(message) from e
 
 
-# %%
 create_compile_commands_json()
-# %%

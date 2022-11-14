@@ -1,0 +1,12 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE} AS base
+
+ARG BRANCH=main
+ARG UPDATE_BRT_ONLY
+ENV BRT_BRANCH=${BRANCH}
+ENV BRT_UPDATE_BRT_ONLY=${UPDATE_BRT_ONLY}
+ENV DEBIAN_FRONTEND=noninteractive
+
+COPY update.sh /tmp/update.sh
+
+RUN bash /tmp/update.sh --branch $BRT_BRANCH --brt_only ${BRT_UPDATE_BRT_ONLY}
