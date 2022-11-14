@@ -81,6 +81,8 @@ benchmark/dynamic_routing/log.txt
 !3rdparty/dynamic_routing/datasets/README.md
 benchmark/msdnet/*.pth
 benchmark/msdnet/saveresult
+benchmark/classsr/datasets_2
+benchmark/classsr/experiments/pre_trained_models
 *.nsys-rep
 
 *.npy
