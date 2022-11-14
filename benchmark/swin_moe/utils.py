@@ -118,9 +118,9 @@ def adaptive_load_checkpoint(
     if experts_placement is None:
         experts_range = {2: 18, 3: 2}
         experts_placement = generate_experts_placement(experts_range, world_rank, local_expert_num)
-    logger.info(
-        f"==============> Rank[{world_rank}] Resuming form {config.MODEL.RESUME}.all_in_one...................."
-    )
+    # logger.info(
+    #     f"==============> Rank[{world_rank}] Resuming form {config.MODEL.RESUME}.all_in_one...................."
+    # )
     assert config.MODEL.RESUME.endswith(".pth")
     ckpt_filepath_str = f"{config.MODEL.RESUME}.all_in_one"
     ckpt_filepath = pathlib.Path(ckpt_filepath_str)

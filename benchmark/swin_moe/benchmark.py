@@ -57,7 +57,11 @@ def parse_option():
         "Swin Transformer training and evaluation script", add_help=False
     )
     parser.add_argument(
-        "--cfg", type=str, required=True, metavar="FILE", help="path to config file",
+        "--cfg",
+        type=str,
+        required=True,
+        metavar="FILE",
+        help="path to config file",
     )
     parser.add_argument(
         "--opts",
@@ -187,12 +191,16 @@ def main(args, config, ds_init):
         lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train))
 
     if args.debug:
-        distributed_debug(model)
+        adaptive_load_checkpoint(config, model_without_ddp, logger)
+        # distributed_debug(model)
+        acc1, _acc5, _loss = validate(config, data_loader_val, model)
+        logger.info(
+            f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
+        )
         return
 
     if args.gather_ckpt:
         # gather_all_ckpts_into_one(config, model_without_ddp, logger)
-        adaptive_load_checkpoint(config, model_without_ddp, logger)
         return
 
     if config.MODEL.RESUME:

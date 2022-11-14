@@ -8,7 +8,7 @@ BRT_DIR=$(cd "${script_dir}/../../" && pwd)
 export BRT_CACHE_PATH=$BRT_DIR/.cache
 export BRT_CAPTURE_STATS=False # should be False for brt_dist or tutel
 export BRT_CAPTURED_FABRIC_TYPE=dispatch
-export MOE_LAYER_VENDOR=brt #_dist # tutel, brt, or brt_dist
+export MOE_LAYER_VENDOR=brt #_dist #_dist # tutel, brt, or brt_dist
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <process number>"
@@ -23,6 +23,6 @@ torchrun --nproc_per_node="$PROC" \
     --nnode=1 --node_rank=0 \
     --master_addr=127.0.0.1 --master_port=6500 \
     benchmark.py --cfg configs/"${EXPERT_NUM}"expert_"${GPU_NUM}"GPU.yaml \
-    --batch-size 128 --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k --output ./results/MoE/ \
+    --batch-size 256 --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k --output ./results/MoE/ \
     --eval --single-gpu-eval --resume "${BRT_CACHE_PATH}"/ckpt/swin_moe/small_swin_moe_32GPU_16expert/model.pth \
-    --gather-ckpt
+    --debug

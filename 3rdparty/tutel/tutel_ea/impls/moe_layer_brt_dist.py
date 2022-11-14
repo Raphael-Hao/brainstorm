@@ -209,7 +209,7 @@ class TopKGate(torch.nn.Module):
         expert_output.in_loads = in_loads
         expert_output.out_loads = out_loads
         expert_output.score = score
-        print(f"loads: {in_loads}")
+        # print(f"loads: {in_loads}")
         result_output = self.gather(expert_output)
         return result_output, 0
 
