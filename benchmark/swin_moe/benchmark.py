@@ -40,6 +40,7 @@ from utils import (
     load_pretrained,
     reduce_tensor,
     gather_all_ckpts_into_one,
+    adaptive_load_checkpoint,
 )
 
 warnings.filterwarnings(
@@ -56,11 +57,7 @@ def parse_option():
         "Swin Transformer training and evaluation script", add_help=False
     )
     parser.add_argument(
-        "--cfg",
-        type=str,
-        required=True,
-        metavar="FILE",
-        help="path to config file",
+        "--cfg", type=str, required=True, metavar="FILE", help="path to config file",
     )
     parser.add_argument(
         "--opts",
@@ -194,7 +191,8 @@ def main(args, config, ds_init):
         return
 
     if args.gather_ckpt:
-        gather_all_ckpts_into_one(config, model_without_ddp, logger)
+        # gather_all_ckpts_into_one(config, model_without_ddp, logger)
+        adaptive_load_checkpoint(config, model_without_ddp, logger)
         return
 
     if config.MODEL.RESUME:
