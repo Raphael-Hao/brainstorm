@@ -52,7 +52,7 @@ $sudo_cmd mv azcopy/azcopy /usr/bin/azcopy && rm -rf azcopy.tar.gz azcopy
 UBUNTU_DIST=$(lsb_release -sr)
 wget https://packages.microsoft.com/config/ubuntu/"${UBUNTU_DIST}"/packages-microsoft-prod.deb
 $sudo_cmd dpkg -i packages-microsoft-prod.deb && rm -f packages-microsoft-prod.deb
-$sudo_cmd apt-get update && $sudo_cmd apt-get install blobfuse dotnet-sdk-6.0
+$sudo_cmd apt-get update && $sudo_cmd apt-get install -y blobfuse dotnet-sdk-6.0
 
 mkdir -p ../.vscode
 cp -r ./vscode/* ../.vscode/
