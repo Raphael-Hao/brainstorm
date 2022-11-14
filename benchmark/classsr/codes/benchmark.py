@@ -27,11 +27,11 @@ from models.archs.classSR_fused_rcan_arch import (
 
 from brt.runtime.benchmark import profile
 
-BRT_PROJECT_PATH = Path("/home/v-louyang/brainstorm_project/brainstorm/")
+BRT_PROJECT_PATH = Path("/home/ycwang/brainstorm_project/brainstorm/")
 # BRT_PROJECT_PATH = Path("/home/v-louyang/brainstorm_project/brainstorm/")
 IMAGE_PATH = (
     BRT_PROJECT_PATH
-    / "benchmark/classsr/datasets_2/AIC21_Track1_Vehicle_Counting/Dataset_A_Images/cam1/LQ/0001.png"
+    / "benchmark/classsr/datasets_2/1201.png"
 )
 
 logger = logging.getLogger("benchmark")
@@ -145,6 +145,7 @@ class ModuleFactory:
                 .eval()
             )
         elif module_type == "Horizontal Fused RCAN Model (fastest)":
+            import pdb; pdb.set_trace()
             model = (
                 Fused_ClassSR_RCAN(
                     cls["Raw RCAN Model"],
@@ -197,8 +198,8 @@ if __name__ == '__main__':
         # "Raw SRResNet Model",
         # "Raw RCAN Model",
         # "Horizontal Fused RCAN Model",
-        "Horizontal Fused RCAN Model (fastest)",
-        # "Vertical Fused RCAN Model",
+        # "Horizontal Fused RCAN Model (fastest)",
+        "Vertical Fused RCAN Model",
     ]
     for module_type in module_type_list:
         _ = ModuleFactory[module_type]

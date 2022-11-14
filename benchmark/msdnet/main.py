@@ -63,11 +63,11 @@ def main():
     else:
         IM_SIZE = 224
 
-    model = MSDNet(args)
+    model = MSDNet(args,True)
     n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
     torch.save(n_flops, os.path.join(args.save, "flops.pth"))
     del model
-    model = MSDNet(args)
+    model = MSDNet(args,False)
 
     if args.arch.startswith("alexnet") or args.arch.startswith("vgg"):
         model.features = torch.nn.DataParallel(model.features)
@@ -105,7 +105,8 @@ def main():
                 "MSDNet.pth",
             )
             del model
-            model = MSDNet(args)
+            model = MSDNet(args,True)
+            n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
             pretrained_dict = torch.load(
                 "MSDNet.pth"
             )

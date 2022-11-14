@@ -35,6 +35,7 @@ class classSR_3class_fused_rcan_net(nn.Module):
         self.gather_router = GatherRouter(fabric_type="combine")
 
     def forward(self, x, is_train=False):
+        import pdb; pdb.set_trace()
 
         weights = self.classifier(x.div(255.0))
         sr_xs = self.scatter_router(x, weights)

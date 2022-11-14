@@ -92,7 +92,12 @@ def parse_params(params: Dict[str, Any]):
         operator = nn.Sequential(*modules)
     elif module_name == "AdaptiveAvgPool2d":
         operator = nn.AdaptiveAvgPool2d(params["output_size"])
+    elif module_name == "MaxPool2d":
+        operator = nn.MaxPool2d(params["kernel_size"],params["stride"],params["padding"])
+    elif module_name == "AvgPool2d":
+        operator = nn.AvgPool2d(params["kernel_size"])
     else:
+        import pdb; pdb.set_trace()
         raise ValueError(f"Unsupported module type: {module_name}")
     input_infos = {"input_0": params.pop("input_shape")}
     output_infos = {"output_0": params.pop("output_shape")}

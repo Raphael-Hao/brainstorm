@@ -32,7 +32,8 @@ class RouterBase(nn.Module):
             "max for maximum"
             "cum for cumulative"
             self.capture_mode = capture_mode
-            captured_fabric_type = os.environ.get("BRT_CAPTURED_FABRIC_TYPE")
+            captured_fabric_type = os.environ.get("BRT_CAPTURED_FABRI_CTYPE")
+            captured_fabric_type="dispatch:combine"
             if captured_fabric_type is not None:
                 self.captured_fabric_type = captured_fabric_type.split(":")
             else:

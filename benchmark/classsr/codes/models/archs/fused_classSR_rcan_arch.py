@@ -161,6 +161,7 @@ class FusedResidualGroup(nn.Module):
         n_resblocks: int = 20,
     ) -> None:
         super().__init__()
+        import pdb; pdb.set_trace()
         self.body = nn.Sequential(
             *[FusedRCAB([m.body[i] for m in models], bs) for i in range(n_resblocks)],
             GroupFusedLayer(

@@ -109,7 +109,7 @@ class TVMTuner:
             [self.tvm_task], [self.tvm_task_weight]
         )
         self.option = auto_scheduler.TuningOptions(
-            num_measure_trials=2000,
+            num_measure_trials=1,
             runner=self.measure_ctx.runner,
             measure_callbacks=[auto_scheduler.RecordToFile(str(self.tune_log_file))],
         )

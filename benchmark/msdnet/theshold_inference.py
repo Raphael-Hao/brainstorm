@@ -9,6 +9,10 @@ import math
 from msdnet import MSDNet
 from adaptive_inference import Tester
 from brt.passes import (
+    HorizFusePass,
+    VerticalFusePass,
+    TracePass,
+    NoBatchPass,
     DeadPathEliminatePass,
     PermanentPathFoldPass,
     OnDemandMemoryPlanPass,
@@ -253,6 +257,8 @@ def threshold_dynamic_evaluate(
                             j
                         ].__class__
                     timer.execute(lambda: model_copy(input_var), "naive")
+                    timer.execute(lambda: model_copy(input_var), "naive2")
+                    
                     baseline_time.append(timer.avg)
                     output_naive = model_copy(input_var)
                     eliminate_pass = DeadPathEliminatePass(model_copy, runtime_load=1)
@@ -347,10 +353,24 @@ def threshold_dynamic_evaluate(
                         model_copy.scatters[j].__class__ = naive_backbone.scatters[
                             j
                         ].__class__
-                    timer.execute(lambda: model_copy(input_var), "naive")
-                    baseline_time.append(timer.avg)
+                    timer.execute(lambda: naive_backbone(input_var), "naive")
+                    timer.execute(lambda: model_copy(input_var), "naive2")
+                    
                     output_naive = model_copy(input_var)
-                    eliminate_pass = DeadPathEliminatePass(model_copy, runtime_load=1)
+                    
+                    raw_pass=NoBatchPass(model_copy)
+                    raw_pass.run_on_graph()
+                    raw_pass_graph=raw_pass.finalize()
+                    graph_drawer = FxGraphDrawer(raw_pass_graph, "raw_pass_graph")
+                    with open("raw_const.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: raw_pass_graph(input_var), "raw_pass_graph"
+                    )
+                    baseline_time.append(timer.avg)
+                    
+                    
+                    eliminate_pass = DeadPathEliminatePass(raw_pass_graph, runtime_load=1)
                     eliminate_pass.run_on_graph()
                     new_dce_backbone = eliminate_pass.finalize()
                     graph_drawer = FxGraphDrawer(new_dce_backbone, "new_backbone")
@@ -378,11 +398,12 @@ def threshold_dynamic_evaluate(
                     reorder_operator_pass.run_on_graph()
                     new_backbone = reorder_operator_pass.finalize()
                     timer.execute(lambda: new_backbone(input_var), "reorder_operator")
-                    output_dce = new_backbone(input_var)
+                    output_reorder = new_backbone(input_var)
                     reorder_operatorPass_time.append(timer.avg)
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("dce_trans.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
+                    
                     speed_up_of_deadpatheliminatepass.append(
                         baseline_time[-1] / DeadPathEliminatePass_time[-1]
                     )
@@ -435,6 +456,64 @@ def threshold_dynamic_evaluate(
 
         benchmarker.add_benchmark("all_opt", all_opt_benchmark)
 
+        
+        def fuse_benchmark():
+            from torch.fx.passes.graph_drawer import FxGraphDrawer
+
+            timer = CUDATimer(repeat=5)
+            naive_backbone = model1
+            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            targets = []
+            baseline_time = []
+            DeadPathEliminatePass_time = []
+            ConstProPass_time = []
+            reorder_operatorPass_time = []
+            speed_up_of_deadpatheliminatepass = []
+            speed_up_of_constpropogationpass = []
+            speed_up_of_reorder_operatorpass = []
+            for i, (input, target) in enumerate(test_loader):
+                targets.append(target)
+                with torch.no_grad():
+                    input_var = torch.autograd.Variable(input)
+                    import copy
+
+                    model_copy = copy.deepcopy(naive_backbone)
+                    ## to solve the decorator issue caused by DeepCopy
+                    model_copy.final_gather.__class__ = (
+                        naive_backbone.final_gather.__class__
+                    )
+                    for j in range(len(naive_backbone.scatters)):
+                        model_copy.scatters[j].__class__ = naive_backbone.scatters[
+                            j
+                        ].__class__
+                    timer.execute(lambda: naive_backbone(input_var), "naive")
+                    timer.execute(lambda: model_copy(input_var), "naive2")
+                    
+                    baseline_time.append(timer.avg)
+                    output_naive = model_copy(input_var)
+                    
+                    raw_pass=TracePass(model_copy)
+                    raw_pass.run_on_graph()
+                    raw_pass_graph=raw_pass.finalize()
+                    graph_drawer = FxGraphDrawer(raw_pass_graph, "raw_pass_graph")
+                    with open("raw_const.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: raw_pass_graph(input_var), "raw_pass_graph"
+                    )
+                    
+                    vertical_fuse_pass=VerticalFusePass(raw_pass_graph)
+                    vertical_fuse_pass.run_on_graph()
+                    new_backbone=vertical_fuse_pass.finalize()
+                    
+                    timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
+                    
+                if i % 10 == 0:
+                    print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    
+
+        benchmarker.add_benchmark("fuse", fuse_benchmark)
+        
         def memroy_plan_benchmark():
             timer = CUDATimer(repeat=5)
             backbone_input = model1.backbone_input.detach().cuda()

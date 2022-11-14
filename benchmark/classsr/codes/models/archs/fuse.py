@@ -39,6 +39,7 @@ class TunedKernel(nn.Module):
         output_shape: torch.Size,
     ):
         super().__init__()
+        import pdb;pdb.set_trace()
         if isinstance(model, nn.Sequential) and len(model) == 1:
             model = model[0]
         self.input_shape = input_shape
@@ -230,12 +231,14 @@ class GroupFusedLayer(nn.ModuleList):
         output_shapes: List[torch.Size],
         group_indices: List[List[int]],
     ):
+        import pdb;pdb.set_trace()
         super().__init__()
         self.group_indices = group_indices
         self.num_submodels = len(models)
         self.num_sublayers = len(self.group_indices)
         self.kernels = []
         for group_index in self.group_indices:
+            import pdb;pdb.set_trace()
             self.append(
                 FusedLayer(
                     [models[i] for i in group_index],

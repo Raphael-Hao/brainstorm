@@ -59,10 +59,10 @@ exp_group.add_argument(
     # 0.90728849,
     # 0.57961094]
     ##[0.1,0.1,0.2,0.3,0.3]
-    #     [0.96616900,
-    # 0.95113075,
-    # 0.80969042,
-    # 0.45410264]
+        [0.96616900,
+    0.95113075,
+    0.80969042,
+    0.45410264]
     ## 0.6 0.1 0.1 0.1 0.1
     #     [0.34071380,
     # 0.47392023,
@@ -77,7 +77,7 @@ exp_group.add_argument(
     #     [0.44246849,
     # 0.26682281,-1,-1]
     ##0.5 0.5 0 0 0
-    [0.44246858, -1, -1, -1]
+    # [0.44246858, -1, -1, -1]
     ##  shallow network to test for transform pass
     # [-1,-1,-1,-1]
     ## deeper network to test for transform pass
@@ -263,3 +263,5 @@ bench_arg_manager.add_item("memory_plan")
 bench_arg_manager.add_item("reorder_operator")
 bench_arg_manager.add_item("constant_propagation")
 bench_arg_manager.add_item("all_opt")
+bench_arg_manager.add_item("fuse")
+

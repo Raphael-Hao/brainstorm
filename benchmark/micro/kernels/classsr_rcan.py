@@ -109,7 +109,7 @@ def main():
                 logger.info(
                     "##########################################################"
                 )
-                # tvm_tuner.tune_netlet()
+                tvm_tuner.tune_netlet()
                 tvm_tuner.export_netlet_template("all")
                 tvm_tuner.insert_netlet_to_storage("all")
 
