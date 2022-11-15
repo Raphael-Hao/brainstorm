@@ -7,7 +7,6 @@ import copy
 import os
 import re
 import logging
-import pickle
 
 import torch
 from torch import Tensor
@@ -16,80 +15,9 @@ from torch.nn import ModuleList
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
-from ..impls.fast_dispatch import fast_dispatcher
+from .fast_dispatch import fast_dispatcher
 from ..jit_kernels.gating import fast_cumsum_sub_one
-from ..impls import communicate as C
-
-
-class router_exporter:
-    @staticmethod
-    def set_path(path):
-        global router_export_path
-        global router_result
-        global dump_id
-        dump_id = 0
-        router_export_path = path
-        router_result = []
-
-    @staticmethod
-    def get_path():
-        return router_export_path
-
-    @staticmethod
-    def is_enabled():
-        return "router_export_path" in globals()
-
-    @staticmethod
-    def new_entry():
-        global router_result
-        if len(router_result) >= 500:
-            router_exporter.dump()
-            router_result = []
-        router_result.append({"expert": {}, "input": None, "output": None})
-
-    @staticmethod
-    def set_input(input_tensor):
-        assert len(router_result) > 0
-        router_result[-1]["input"] = input_tensor.cpu()
-
-    @staticmethod
-    def set_output(output_tensor):
-        assert len(router_result) > 0
-        router_result[-1]["output"] = output_tensor.cpu()
-
-    @staticmethod
-    def set_layer_id(layer_id):
-        global _layer_id
-        _layer_id = layer_id
-
-    @staticmethod
-    def set_block_id(block_id):
-        global _block_id
-        _block_id = block_id
-
-    @staticmethod
-    def get_entry():
-        return (_layer_id, _block_id)
-
-    @staticmethod
-    def add_indices(indices):
-        assert len(router_result) > 0
-        router_result[-1]["expert"][router_exporter.get_entry()] = [
-            _.cpu() for _ in indices
-        ]
-
-    @staticmethod
-    def get_router_result():
-        return router_result
-
-    @staticmethod
-    def dump():
-        global dump_id
-        pickle.dump(
-            router_exporter.get_router_result(),
-            open(router_exporter.get_path() + f".{dump_id}", "wb"),
-        )
-        dump_id += 1
+from . import communicate as C
 
 
 class PrimFwdAllgather(torch.autograd.Function):
@@ -246,8 +174,6 @@ class TopKGate(torch.nn.Module):
         topk_logits, topk_indices = torch.topk(logits, self.top_k, dim=1)
 
         indices_s = [x.view(-1) for x in topk_indices.chunk(self.top_k, dim=1)]
-        if router_exporter.is_enabled():
-            router_exporter.add_indices(indices_s)
         masks_se = [
             one_hot_with_dtype(x, num_classes=self.num_global_experts, dtype=x.dtype)
             for x in indices_s
@@ -789,8 +715,8 @@ class MOELayer(torch.nn.Module):
                     torch.manual_seed(seeds[0] + gi)
                 if "fp32_gate" in kwargs:
                     logging.warning(
-                        f""""`fp32_gate` option in tutel.moe_layer has been deprecated, \
-                            please move this option to gate_type = {{.., "fp32_gate": {kwargs["fp32_gate"]}}} instead."""
+                        f"""`fp32_gate` option in tutel.moe_layer has been deprecated, \
+                        please move this option to gate_type = {{.., "fp32_gate": {kwargs["fp32_gate"]}}} instead."""
                     )
                     single_gate_type["fp32_gate"] = kwargs["fp32_gate"]
 
@@ -885,7 +811,7 @@ class MOELayer(torch.nn.Module):
             else:
                 if C.get_world_rank(self.group) == 0:
                     logging.warning(
-                        f"""MoE is initialized to keep working on sample size = {self.expected_sample_size},\
+                        f"""MoE is initialized to keep working on sample size = {self.expected_sample_size}, \
                             while receiving sample size = {reshaped_input.size(0)} (will slow down this forward step)"""
                     )
                 pad_input = torch.zeros(

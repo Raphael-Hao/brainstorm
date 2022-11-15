@@ -28,9 +28,7 @@ from config import get_config
 from data import build_loader
 from logger import create_logger
 from models import build_model
-from optimizer import build_optimizer
 from timm.utils import AverageMeter, accuracy
-from tutel_ea.moe import router_exporter
 from utils import (
     create_ds_config,
     hook_scale_grad,
@@ -106,12 +104,7 @@ def parse_option():
     parser.add_argument("--tag", help="tag of experiment")
     parser.add_argument("--eval", action="store_true", help="Perform evaluation only")
     parser.add_argument(
-        "--single-gpu-eval",
-        action="store_true",
-        help="whether to do eval on single GPU",
-    )
-    parser.add_argument(
-        "--throughput", action="store_true", help="Test throughput only"
+        "--throughput", action="store_true", help="Test throughput only", default=False
     )
     parser.add_argument("--custom_scaler", action="store_true", default=False)
 
@@ -120,12 +113,10 @@ def parse_option():
     parser.add_argument(
         "--zero_opt", type=int, default=0, help="zero_optimization level"
     )
-    parser.add_argument(
-        "--dpfp16", action="store_true", default=False, help="deepspeed fp16"
-    )
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--trace", action="store_true", default=False)
     parser.add_argument("--gather-ckpt", action="store_true", default=False)
+    parser.add_argument("--correctness", action="store_true", default=False)
 
     ds_init = None
 
@@ -142,14 +133,14 @@ def main(args, config, ds_init):
     (
         _dataset_train,
         dataset_val,
-        data_loader_train,
+        _data_loader_train,
         data_loader_val,
         _mixup_fn,
     ) = build_loader(config)
 
     logger.info(f"Creating model:{config.MODEL.TYPE}/{config.MODEL.NAME}")
     model = build_model(config)
-    logger.info(str(model))
+    # logger.info(str(model))
 
     # For Tutel MoE
     for name, param in model.named_parameters():
@@ -170,7 +161,6 @@ def main(args, config, ds_init):
     model.cuda(config.LOCAL_RANK)
     model_without_ddp = model
 
-    optimizer = build_optimizer(config, model)
     model = torch.nn.parallel.DistributedDataParallel(
         model,
         device_ids=[config.LOCAL_RANK],
@@ -191,32 +181,27 @@ def main(args, config, ds_init):
         gather_all_ckpts_into_one(config, model_without_ddp, logger)
         return
 
-    if config.MODEL.RESUME:
+    if args.correctness:
+        adaptive_load_checkpoint(config, model_without_ddp, logger)
+        check_correctness(model, args.batch_size)
+        return
+
+    if args.trace:
         adaptive_load_checkpoint(
             config,
             model_without_ddp,
             logger,
         )
-        if args.debug:
-            debug(model, bs=1, iteration=1)
-            dump_trace(model_without_ddp)
-        if args.trace:
-            acc1, _acc5, _loss = validate(config, data_loader_val, model)
-            logger.info(
-                f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-            )
-            dump_trace(model_without_ddp)
-
-        if config.EVAL_MODE:
-            return
-
-    if config.THROUGHPUT_MODE:
-        throughput(data_loader_val, model, logger)
+        acc1, _acc5, _loss = validate(config, data_loader_val, model)
+        logger.info(
+            f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
+        )
+        dump_trace(model_without_ddp)
         return
 
-    logger.info(f"number of params: {n_parameters}")
-    logger.info(f"number of GFLOPs: {flops / 1e9}")
-
+    if args.throughput:
+        throughput(data_loader_val, model, logger)
+        return
 
 @torch.no_grad()
 def validate(config, data_loader, model):
@@ -230,11 +215,6 @@ def validate(config, data_loader, model):
     acc5_meter = AverageMeter()
 
     end = time.time()
-    expert_export_path = os.getenv("EXPORT_EXPERT_PATH")
-
-    if expert_export_path:
-        print(f"Enable expert export to path {expert_export_path}")
-        router_exporter.set_path(expert_export_path)
 
     for idx, (images, target) in enumerate(data_loader):
         images = images.cuda(non_blocking=True)
@@ -242,12 +222,7 @@ def validate(config, data_loader, model):
 
         with torch.cuda.amp.autocast():
             # compute output
-            if router_exporter.is_enabled():
-                router_exporter.new_entry()
-                # router_exporter.set_input(images)
             output, l_aux = model(images)
-            if router_exporter.is_enabled():
-                router_exporter.set_output(output)
             # measure accuracy and record loss
             loss = criterion(output, target)
 
@@ -281,9 +256,6 @@ def validate(config, data_loader, model):
                 f"Mem {memory_used:.0f}MB"
             )
     logger.info(f" * Acc@1 {acc1_meter.avg:.3f} Acc@5 {acc5_meter.avg:.3f}")
-    if expert_export_path:
-        router_exporter.dump()
-        exit()
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
@@ -307,6 +279,21 @@ def throughput(data_loader, model, logger):
             f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
         )
         return
+
+
+@torch.inference_mode()
+def check_correctness(model, bs=1, iteration=10):
+    model.eval()
+    # timer = CUDATimer(1, 10, 5)
+    inputs_generator = deterministic_random_generator(
+        [bs, 3, 192, 192], num=iteration, dtype=torch.float32, device="cuda"
+    )
+
+    for inputs in inputs_generator:
+        outputs = model(inputs)
+        print(outputs[0])
+        print(outputs[0].sum(1))
+        input()
 
 
 @torch.inference_mode()

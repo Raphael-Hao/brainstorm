@@ -17,6 +17,7 @@ import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import numpy as np
 from tutel_ea import moe as tutel_moe
+from tutel_ea.impls import moe_layer_pt as pt_moe
 from tutel_ea.impls import moe_layer_brt as brt_moe
 from tutel_ea.impls import moe_layer_brt_dist as brt_dist_moe
 
@@ -103,6 +104,8 @@ class MoEMlp(nn.Module):
         print(f"======>[{self.dist_rank}] MOE_LAYER_VENDOR = {MOE_LAYER_VENDOR}")
         if MOE_LAYER_VENDOR == 'tutel':
             moe = tutel_moe
+        elif MOE_LAYER_VENDOR == 'pt':
+            moe = pt_moe
         elif MOE_LAYER_VENDOR == 'brt':
             moe = brt_moe
         elif MOE_LAYER_VENDOR == 'brt_dist':
@@ -179,7 +182,7 @@ class ConvMlp(nn.Module):
         x = x.view(B, H, W, C).permute(0, 3, 1, 2)  # B C H W
         x = self.conv_proj(x)
         if self.proj_ln:
-            x = self.proj_ln(x)
+            x = self.proj_ln(x) # pylint: disable=not-callable
         x = x.permute(0, 2, 3, 1)  # B H W C
         x = x.reshape(B, L, C)
         x = self.mlp(x)
@@ -1162,7 +1165,7 @@ class PatchEmbed(nn.Module):
             self.norm = None
 
     def forward(self, x):
-        B, C, H, W = x.shape
+        _B, _C, H, W = x.shape
         # FIXME look at relaxing size constraints
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
@@ -1206,7 +1209,7 @@ class ResNetDLNPatchEmbed(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
     def forward(self, x):
-        B, C, H, W = x.shape
+        _B, _C, H, W = x.shape
         # FIXME look at relaxing size constraints
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
@@ -1329,7 +1332,7 @@ class SwinV2TransformerMoE(nn.Module):
             dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
         elif droppath_rule == '2_3_trunc':
             dpr = [x.item() for x in torch.linspace(0, drop_path_rate, int(2 / 3 * sum(depths)))]
-            for ll in range(int(2 / 3 * sum(depths)), sum(depths)):
+            for _ll in range(int(2 / 3 * sum(depths)), sum(depths)):
                 dpr += [dpr[-1]]
         else:
             raise NotImplementedError
@@ -1483,7 +1486,7 @@ class SwinV2TransformerMoE(nn.Module):
             x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
         l_aux = 0.0
-        for i_layer, layer in enumerate(self.layers):
+        for _layer_id, layer in enumerate(self.layers):
             x, cur_l_aux = layer(x)
             l_aux = cur_l_aux + l_aux
 
@@ -1504,7 +1507,7 @@ class SwinV2TransformerMoE(nn.Module):
     def flops(self):
         flops = 0
         flops += self.patch_embed.flops()
-        for i, layer in enumerate(self.layers):
+        for _i, layer in enumerate(self.layers):
             flops += layer.flops()
         flops += self.num_features * self.patches_resolution[0] * self.patches_resolution[1] // (2 ** self.num_layers)
         flops += self.num_features * self.num_classes

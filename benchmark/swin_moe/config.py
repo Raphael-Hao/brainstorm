@@ -427,8 +427,6 @@ def update_config(config, args):
         config.MODEL.PRETRAINED = args.pretrained
     if args.resume:
         config.MODEL.RESUME = args.resume
-    if args.single_gpu_eval:
-        config.SINGLE_GPU_EVAL = True
     if args.accumulation_steps:
         config.TRAIN.ACCUMULATION_STEPS = args.accumulation_steps
     if args.use_checkpoint:
@@ -449,8 +447,6 @@ def update_config(config, args):
     config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG)
 
     # deepspeed
-    config.ENABLE_DEEPSPEED = args.enable_deepspeed
-    config.DPFP16 = args.dpfp16
     config.ZERO_OPT = args.zero_opt
 
     config.freeze()
