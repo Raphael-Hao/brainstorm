@@ -473,10 +473,93 @@ def threshold_dynamic_evaluate(
             speed_up_of_deadpatheliminatepass = []
             speed_up_of_constpropogationpass = []
             speed_up_of_reorder_operatorpass = []
+            
+            
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
                 with torch.no_grad():
                     input_var = torch.autograd.Variable(input.cuda())
+                    if i==0: continue
+                    print("i",i)
+                    import copy
+                    naive_backbone.cuda()
+                    naive_backbone.train(False)
+                    model_copy = copy.deepcopy(naive_backbone)
+                    model_copy.train(False)
+                    
+                    model_copy=model_copy.cuda()
+                    ## to solve the decorator issue caused by DeepCopy
+                    model_copy.final_gather.__class__ = (
+                        naive_backbone.final_gather.__class__
+                    )
+                    for j in range(len(naive_backbone.scatters)):
+                        model_copy.scatters[j].__class__ = naive_backbone.scatters[
+                            j
+                        ].__class__
+                    timer.execute(lambda: model_copy(input_var), "naive2")
+                    
+                    baseline_time.append(timer.avg)
+                    output_naive = model_copy(input_var)
+                    
+                    raw_pass=TracePass(model_copy)
+                    raw_pass.run_on_graph()
+                    raw_pass_graph=raw_pass.finalize()
+                    graph_drawer = FxGraphDrawer(raw_pass_graph, "raw_pass_graph")
+                    with open("raw_const.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: raw_pass_graph(input_var), "raw_pass_graph"
+                    )
+                    
+                    import pdb;pdb.set_trace()
+                    print("begin pass")
+                    vertical_fuse_pass=VerticalFusePass(raw_pass_graph)
+                    vertical_fuse_pass.run_on_graph()
+                    print("pass end")
+                    
+                    new_backbone=vertical_fuse_pass.finalize()
+                    graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    with open("fuse.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    
+                    print("begin test")
+                    timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
+                    output1=new_backbone(input_var)
+                    
+                    ## TODO check and add maxpool
+                    # print("outputnaive",output_naive)
+                    # print("output1",output1)
+                    import pdb;pdb.set_trace()
+                    
+                if i % 10 == 0:
+                    print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    
+
+        benchmarker.add_benchmark("vfuse", fuse_benchmark)
+        
+        
+        def hfuse_benchmark():
+            from torch.fx.passes.graph_drawer import FxGraphDrawer
+
+            timer = CUDATimer(repeat=5)
+            naive_backbone = model1
+            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            targets = []
+            baseline_time = []
+            DeadPathEliminatePass_time = []
+            ConstProPass_time = []
+            reorder_operatorPass_time = []
+            speed_up_of_deadpatheliminatepass = []
+            speed_up_of_constpropogationpass = []
+            speed_up_of_reorder_operatorpass = []
+            
+            
+            for i, (input, target) in enumerate(test_loader):
+                targets.append(target)
+                with torch.no_grad():
+                    input_var = torch.autograd.Variable(input.cuda())
+                    if i==1: continue
+                    print("i",i)
                     import copy
                     naive_backbone.train(False)
                     model_copy = copy.deepcopy(naive_backbone)
@@ -505,30 +588,29 @@ def threshold_dynamic_evaluate(
                         lambda: raw_pass_graph(input_var), "raw_pass_graph"
                     )
                     print("begin pass")
-                    vertical_fuse_pass=VerticalFusePass(raw_pass_graph)
+                    vertical_fuse_pass=HorizFusePass(raw_pass_graph)
                     vertical_fuse_pass.run_on_graph()
                     print("pass end")
                     
                     new_backbone=vertical_fuse_pass.finalize()
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-                    with open("fuse.svg", "wb") as f:
+                    with open("hfuse.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
                     
                     print("begin test")
                     timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
                     output1=new_backbone(input_var)
                     
-                    
                     ## TODO check and add maxpool
                     # print("outputnaive",output_naive)
                     # print("output1",output1)
-                    # import pdb;pdb.set_trace()
+                    import pdb;pdb.set_trace()
                     
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
                     
 
-        benchmarker.add_benchmark("fuse", fuse_benchmark)
+        benchmarker.add_benchmark("hfuse", hfuse_benchmark)
         
         def memroy_plan_benchmark():
             timer = CUDATimer(repeat=5)

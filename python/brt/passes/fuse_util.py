@@ -115,9 +115,9 @@ class TunedKernel(nn.Module):
                 ]
             )
         elif self.module_name in ["Conv2dBiasBatchNormReLU","Conv2dBatchNormReLU"]:
-            w_conv = self.get_parameter(f"0_weight").clone().view(model[0].out_channels, -1)
-            w_bn = torch.diag(self.get_parameter(f"1_weight").div(torch.sqrt(model[1].eps+ model[1].running_var)))
-            fusedweight=( torch.mm(w_bn, w_conv).view(model[0].weight.size()) )
+            w_conv = self.get_parameter(f"0_weight").clone().view(model[0].out_channels, -1).cuda()
+            w_bn = torch.diag(self.get_parameter(f"1_weight").div(torch.sqrt(model[1].eps+ model[1].running_var))).cuda()
+            fusedweight=( torch.mm(w_bn, w_conv).view(model[0].weight.size()).cuda() )
             if model[0].bias is not None and self.module_name=="Conv2dBiasBatchNormReLU":
                 b_conv = model[0].bias
                 self.inputs_templete["forward"].extend(
@@ -179,7 +179,7 @@ class TunedKernel(nn.Module):
         
         
         # import pdb; pdb.set_trace()
-        self.forward(sample_input)
+        # self.forward(sample_input)
         # import pdb; pdb.
         # set_trace()
 
