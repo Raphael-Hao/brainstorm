@@ -6,7 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from brt.jit import make_jit_kernel
-
+from brt.runtime.benchmark import (
+    BenchmarkArgumentManager,
+    Benchmarker,
+    CUDATimer,
+    MemoryStats,
+    profile,
+)
 
 class _ObjectiveFuncContext:
     curr = "fastest"
@@ -51,12 +57,26 @@ class TunedKernel(nn.Module):
             if isinstance(model[0], nn.Conv2d) and model[0].bias is not None:
                 if len(model) == 1:
                     self.module_name = "Conv2dBias"
-                elif isinstance(model[1], nn.ReLU):
+                elif len(model) == 2 and isinstance(model[1], nn.ReLU):
                     self.module_name = "Conv2dBiasReLU"
-                elif isinstance(model[1], nn.Sigmoid):
+                elif len(model) == 2 and isinstance(model[1], nn.Sigmoid):
                     self.module_name = "Conv2dBiasSigmoid"
+                elif len(model) == 3 and isinstance(model[1], nn.BatchNorm2d) and isinstance(model[2], nn.ReLU):
+                    self.module_name = "Conv2dBiasBatchNormReLU"
                 else:
                     raise NotImplementedError(f"{model}")
+            elif isinstance(model[0], nn.Conv2d) and model[0].bias is None:
+                if len(model) == 1:
+                    self.module_name = "Conv2d"
+                elif len(model) == 2 and isinstance(model[1], nn.ReLU):
+                    self.module_name = "Conv2dReLU"
+                elif len(model) == 2 and isinstance(model[1], nn.Sigmoid):
+                    self.module_name = "Conv2dSigmoid"
+                elif len(model) == 3 and isinstance(model[1], nn.BatchNorm2d) and isinstance(model[2], nn.ReLU):
+                    self.module_name = "Conv2dBatchNormReLU"
+                else:
+                    raise NotImplementedError(f"{model}")
+            
             else:
                 raise NotImplementedError(f"{model}")
         else:
@@ -68,6 +88,7 @@ class TunedKernel(nn.Module):
         for name, tensor in model.named_buffers():
             self.register_buffer(name.replace(".", "_"), tensor)
         sample_input = torch.randn(self.input_shape).cuda()
+        model=model.cuda()
         self.fused_kernel = make_jit_kernel(model, sample_input)
         # Make fused inputs
         self.inputs_templete = {}
@@ -83,6 +104,62 @@ class TunedKernel(nn.Module):
                 ]
             )
         elif self.module_name in ["Conv2dBiasReLU", "Conv2dBiasSigmoid"]:
+            ## TODO
+            self.inputs_templete["forward"].extend(
+                [
+                    None,
+                    self.get_parameter(f"0_weight"),
+                    # None,
+                    torch.empty(self.output_shape, device="cuda"),
+                    self.get_parameter(f"0_bias"),
+                ]
+            )
+        elif self.module_name in ["Conv2dBiasBatchNormReLU","Conv2dBatchNormReLU"]:
+            w_conv = self.get_parameter(f"0_weight").clone().view(model[0].out_channels, -1)
+            w_bn = torch.diag(self.get_parameter(f"1_weight").div(torch.sqrt(model[1].eps+ model[1].running_var)))
+            fusedweight=( torch.mm(w_bn, w_conv).view(model[0].weight.size()) )
+            if model[0].bias is not None and self.module_name=="Conv2dBiasBatchNormReLU":
+                b_conv = model[0].bias
+                self.inputs_templete["forward"].extend(
+                [
+                    None,
+                    fusedweight,
+                    # None,
+                    torch.empty(self.output_shape, device="cuda"),
+                    self.get_parameter(f"0_bias"),
+                    self.get_parameter(f"1_bias"),
+                ]
+            )
+            elif model[0].bias is None and self.module_name=="Conv2dBatchNormReLU":
+                b_conv = torch.zeros(model[0].weight.size(0) ).cuda()
+                b_conv = torch.mm(w_bn, b_conv.view(-1, 1)).view(-1).cuda()
+                b_bn = model[1].bias - model[1].weight.mul(model[1].running_mean).div(torch.sqrt(model[1].running_var + model[1].eps)).cuda()
+                fusedbias=( b_conv + b_bn ).cuda()
+                self.inputs_templete["forward"].extend(
+                [
+                    None,
+                    fusedweight,
+                    # None,
+                    torch.empty(self.output_shape, device="cuda"),
+                    fusedbias,
+                ]
+            )
+            else :
+                raise NotImplementedError(f"{self.module_name}")
+                
+            
+            
+            
+            # self.inputs_templete["forward"].extend(
+            #     [
+            #         None,
+            #         fusedweight,
+            #         # None,
+            #         torch.empty(self.output_shape, device="cuda"),
+            #         fusedbias,
+            #     ]
+            # )
+        elif self.module_name in ["Conv2dBatchNormReLU"]:
             self.inputs_templete["forward"].extend(
                 [
                     None,
@@ -95,7 +172,16 @@ class TunedKernel(nn.Module):
         else:
             raise NotImplementedError(f"{self.module_name}")
         # Test forward & warmup
+        # import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
+        # if (self.forward(sample_input)).equal(model(sample_input))==0:
+        #     raise NotImplementedError(f"{self.forward(sample_input)} != {model(sample_input)}")
+        
+        
+        # import pdb; pdb.set_trace()
         self.forward(sample_input)
+        # import pdb; pdb.
+        # set_trace()
 
     def forward(self, input: torch.Tensor):
         self.inputs_templete["forward"][0] = input

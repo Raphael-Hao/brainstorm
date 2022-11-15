@@ -63,10 +63,10 @@ class ConvBasic(nn.Module):
         
 
     def forward(self, x):
-        # if is_measure==True:
-        self.net[0].input_shape=x.size()
-        self.net[0].output_shape=self.net(x).size()
-            # write_json(self.net,x.size(),self.net(x).size())
+        if self.training==True:
+            self.net[0].input_shape=x.size()
+            self.net[0].output_shape=self.net(x).size()
+            write_json(self.net,x.size(),self.net(x).size())
         return self.net(x)
 class identity(nn.Module):
     def __init__(self):
@@ -119,27 +119,30 @@ class ConvBN(nn.Module):
 
 
     def forward(self, x):
-    
-        # import pdb;pdb.set_trace()
-        if len(self.net)==3:
-            self.net[0].input_shape=x.size()
-            self.net[0].output_shape=self.net(x).size()
-            # write_json(self.net,x.size(),self.net(x).size())
+        if self.training==False:
+            
             return self.net(x)
-        input=x.clone()
-        for i in range(len(self.net)):
-            x=self.net[i](x)
-            if i==2:
-                mid=x.clone()
-                self.net[0].input_shape=input.size()
-                self.net[0].output_shape=x.size()
-                # write_json(self.net,input.size(),x.size())
-            if i==5:
-                self.net[3].input_shape=mid.size()
-                self.net[3].output_shape=x.size()
-                # write_json(self.net[3:],mid.size(),x.size())
+        else:
+            # import pdb;pdb.set_trace()
+            if len(self.net)==3:
+                self.net[0].input_shape=x.size()
+                self.net[0].output_shape=self.net(x).size()
+                write_json(self.net,x.size(),self.net(x).size())
+                return self.net(x)
+            input=x.clone()
+            for i in range(len(self.net)):
+                x=self.net[i](x)
+                if i==2:
+                    mid=x.clone()
+                    self.net[0].input_shape=input.size()
+                    self.net[0].output_shape=x.size()
+                    write_json(self.net,input.size(),x.size())
+                if i==5:
+                    self.net[3].input_shape=mid.size()
+                    self.net[3].output_shape=x.size()
+                    write_json(self.net[3:],mid.size(),x.size())
 
-        return x
+            return x
 
 
 class ConvDownNormal(nn.Module):
@@ -195,22 +198,22 @@ class MSDNFirstLayer(nn.Module):
     def forward(self, x):
         res = []
         for i in range(len(self.layers)):
-            
-            if i==0:
-                input=x.clone()
-                for j in range(len(self.layers[i])):
-                    x=self.layers[i][j](x)
-                    if j==2:
-                        mid=x.clone()
-                        self.layers[i][0].input_shape=input.size()
-                        self.layers[i][0].output_shape=x.size()
-                        # write_json(self.layers[i],input.size(),x.size())
-                    if j==3:
-                        self.layers[i][3].input_shape=mid.size()
-                        self.layers[i][3].output_shape=x.size()
-                        # write_json(self.layers[i][3:],mid.size(),x.size())
-                res.append(x)
-                continue
+            if self.training:
+                if i==0:
+                    input=x.clone()
+                    for j in range(len(self.layers[i])):
+                        x=self.layers[i][j](x)
+                        if j==2:
+                            mid=x.clone()
+                            self.layers[i][0].input_shape=input.size()
+                            self.layers[i][0].output_shape=x.size()
+                            write_json(self.layers[i],input.size(),x.size())
+                        if j==3:
+                            self.layers[i][3].input_shape=mid.size()
+                            self.layers[i][3].output_shape=x.size()
+                            write_json(self.layers[i][3:],mid.size(),x.size())
+                    res.append(x)
+                    continue
             x = self.layers[i](x)
             res.append(x)
 
@@ -314,7 +317,7 @@ class ClassifierModule(nn.Module):
         self.linear = nn.Linear(channel, num_classes)
 
     def forward(self, x):
-        if is_measure:
+        if self.training:
             input=x[-1].clone()
             input_reserved=x[-1].clone()
             for i in range(len(self.m)):
@@ -333,8 +336,11 @@ class ClassifierModule(nn.Module):
 class MSDNet(nn.Module):
     def __init__(self, args,_is_measure=False):
         super(MSDNet, self).__init__()
-       
 
+        if _is_measure:
+            self.train(True)
+        else:
+            self.train(False)
         self.blocks = nn.ModuleList()
         self.classifier = nn.ModuleList()
         self.scatters = nn.ModuleList()
@@ -516,7 +522,7 @@ class MSDNet(nn.Module):
 
     def build_routers(self, thresholds: List[float]):
         assert len(thresholds) == self.nBlocks - 1
-        self.routers _initilized = True
+        self.routers_initilized = True
         self.scatters = nn.ModuleList()
 
         for i in range(self.nBlocks - 1):

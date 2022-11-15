@@ -69,12 +69,12 @@ def parse_params(params: Dict[str, Any]):
         norm = params.pop("norm")
         if norm == "SyncBatchNorm":
             modules.append(nn.BatchNorm2d(params["out_channels"]))
-            module_name += "BatchNorm"
+            module_name += "BatchNorm2d"
         elif norm is not None:
             assert False, f"Unsupported norm type {norm}"
         activation = params.pop("activation")
         if activation == "ReLU":
-            modules.append(nn.ReLU())
+            modules.append(nn.ReLU(inplace=True))
             module_name += "ReLU"
         elif activation == "PReLU":
             # Note: assert num_parameters == 1

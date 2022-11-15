@@ -343,8 +343,10 @@ def threshold_dynamic_evaluate(
                 with torch.no_grad():
                     input_var = torch.autograd.Variable(input)
                     import copy
-
+                    naive_backbone.train(False)
                     model_copy = copy.deepcopy(naive_backbone)
+                    model_copy.train(False)
+                    
                     ## to solve the decorator issue caused by DeepCopy
                     model_copy.final_gather.__class__ = (
                         naive_backbone.final_gather.__class__
@@ -358,7 +360,7 @@ def threshold_dynamic_evaluate(
                     
                     output_naive = model_copy(input_var)
                     
-                    raw_pass=NoBatchPass(model_copy)
+                    raw_pass=TracePass(model_copy)
                     raw_pass.run_on_graph()
                     raw_pass_graph=raw_pass.finalize()
                     graph_drawer = FxGraphDrawer(raw_pass_graph, "raw_pass_graph")
@@ -474,10 +476,12 @@ def threshold_dynamic_evaluate(
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
                 with torch.no_grad():
-                    input_var = torch.autograd.Variable(input)
+                    input_var = torch.autograd.Variable(input.cuda())
                     import copy
-
+                    naive_backbone.train(False)
                     model_copy = copy.deepcopy(naive_backbone)
+                    model_copy.train(False)
+                    model_copy=model_copy.cuda()
                     ## to solve the decorator issue caused by DeepCopy
                     model_copy.final_gather.__class__ = (
                         naive_backbone.final_gather.__class__
@@ -486,7 +490,6 @@ def threshold_dynamic_evaluate(
                         model_copy.scatters[j].__class__ = naive_backbone.scatters[
                             j
                         ].__class__
-                    timer.execute(lambda: naive_backbone(input_var), "naive")
                     timer.execute(lambda: model_copy(input_var), "naive2")
                     
                     baseline_time.append(timer.avg)
@@ -501,12 +504,25 @@ def threshold_dynamic_evaluate(
                     timer.execute(
                         lambda: raw_pass_graph(input_var), "raw_pass_graph"
                     )
-                    
+                    print("begin pass")
                     vertical_fuse_pass=VerticalFusePass(raw_pass_graph)
                     vertical_fuse_pass.run_on_graph()
-                    new_backbone=vertical_fuse_pass.finalize()
+                    print("pass end")
                     
+                    new_backbone=vertical_fuse_pass.finalize()
+                    graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    with open("fuse.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    
+                    print("begin test")
                     timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
+                    output1=new_backbone(input_var)
+                    
+                    
+                    ## TODO check and add maxpool
+                    # print("outputnaive",output_naive)
+                    # print("output1",output1)
+                    # import pdb;pdb.set_trace()
                     
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))

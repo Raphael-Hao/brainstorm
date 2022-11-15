@@ -107,6 +107,7 @@ def main():
             del model
             model = MSDNet(args,True)
             n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
+            model.train(False)
             pretrained_dict = torch.load(
                 "MSDNet.pth"
             )

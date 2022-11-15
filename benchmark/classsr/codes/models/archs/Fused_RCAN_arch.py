@@ -123,12 +123,17 @@ class FusedRCAN(nn.Module):
             input_shape=[bs, 3, 32, 32],
             output_shape=[bs, 3, 32, 32],
         )
+        
         logger.info("FusedRCAN.sub_mean builded")
         self.head = TunedKernel(
             model.head,
             input_shape=[bs, 3, 32, 32],
             output_shape=[bs, model.n_feat, 32, 32],
         )
+        sample_input = torch.randn([bs, 3, 32, 32]).cuda()
+        import pdb; pdb.set_trace()
+        self.head (sample_input)
+        import pdb; pdb.set_trace()
         logger.info("FusedRCAN.head builded")
         self.body = nn.Sequential(
             *[

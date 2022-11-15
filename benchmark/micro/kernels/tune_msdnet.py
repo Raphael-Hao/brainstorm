@@ -47,6 +47,7 @@ def main():
                 parameters,
                 operator,
             ) = parse_params(conv_param)
+            import pdb;pdb.set_trace()
             # logger.info(parameters)
             tvm_tuner.import_pt_netlet(
                 module_name,

@@ -39,7 +39,6 @@ class TunedKernel(nn.Module):
         output_shape: torch.Size,
     ):
         super().__init__()
-        import pdb;pdb.set_trace()
         if isinstance(model, nn.Sequential) and len(model) == 1:
             model = model[0]
         self.input_shape = input_shape
@@ -96,15 +95,18 @@ class TunedKernel(nn.Module):
         else:
             raise NotImplementedError(f"{self.module_name}")
         # Test forward & warmup
-        self.forward(sample_input)
+        # self.forward(sample_input)
 
     def forward(self, input: torch.Tensor):
+        print(f"Using kernel")
         self.inputs_templete["forward"][0] = input
         self.inputs_templete["forward"][2] = torch.empty(
             self.output_shape, device="cuda"
         )
         self.fused_kernel(*self.inputs_templete["forward"])
+        print(f"Using kernel done")
         output = self.inputs_templete["forward"][2]
+        import pdb;pdb.set_trace()
         # self.inputs_templete["forward"][0] = None
         # self.inputs_templete["forward"][2] = None
         return output
