@@ -89,6 +89,7 @@ def gather_all_ckpts_into_one(config, model_without_ddp, logger):
     attn_mask_keys = [k for k in state_dict.keys() if "attn_mask" in k]
     for k in attn_mask_keys:
         del state_dict[k]
+    print(f"saving to {config.MODEL.RESUME}.all_in_one")
     torch.save(state_dict, config.MODEL.RESUME + ".all_in_one")
 
 
@@ -117,10 +118,9 @@ def adaptive_load_checkpoint(
     world_rank = dist.get_rank()
     if experts_placement is None:
         experts_range = {2: 18, 3: 2}
-        experts_placement = generate_experts_placement(experts_range, world_rank, local_expert_num)
-    # logger.info(
-    #     f"==============> Rank[{world_rank}] Resuming form {config.MODEL.RESUME}.all_in_one...................."
-    # )
+        experts_placement = generate_experts_placement(
+            experts_range, world_rank, local_expert_num
+        )
     assert config.MODEL.RESUME.endswith(".pth")
     ckpt_filepath_str = f"{config.MODEL.RESUME}.all_in_one"
     ckpt_filepath = pathlib.Path(ckpt_filepath_str)
@@ -129,15 +129,11 @@ def adaptive_load_checkpoint(
     state_dict = {}
     for k in checkpoint.keys():
         if "._moe_layer.experts." in k:
-            print(f"all_expert_state_dict key: {k}")
             k_var_id = k.split("._moe_layer.experts.0.")
             k_list = k_var_id[0].split(".")
             var_name, expert_id = k_var_id[1].split(".")
             expert_k = (int(k_list[1]), int(k_list[3]))
             expert_id = int(expert_id)
-            print(
-                f"expert_k: {expert_k}, expert_var_name: {var_name}, expert_id: {expert_id}"
-            )
             if expert_k not in all_expert_state_dict:
                 all_expert_state_dict[expert_k] = {}
             if expert_id not in all_expert_state_dict[expert_k]:
@@ -463,14 +459,16 @@ def load_pretrained(config, model, logger):
                     logger.info(
                         "Interpolate relative_position_bias_table using bicubic."
                     )
-                    S1 = int(L1 ** 0.5)
-                    S2 = int(L2 ** 0.5)
-                    relative_position_bias_table_pretrained_resized = torch.nn.functional.interpolate(
-                        relative_position_bias_table_pretrained.permute(1, 0).view(
-                            1, nH1, S1, S1
-                        ),
-                        size=(S2, S2),
-                        mode=config.MODEL.RPE_INTERPOLATION,
+                    S1 = int(L1**0.5)
+                    S2 = int(L2**0.5)
+                    relative_position_bias_table_pretrained_resized = (
+                        torch.nn.functional.interpolate(
+                            relative_position_bias_table_pretrained.permute(1, 0).view(
+                                1, nH1, S1, S1
+                            ),
+                            size=(S2, S2),
+                            mode=config.MODEL.RPE_INTERPOLATION,
+                        )
                     )
                     state_dict[
                         k
@@ -480,8 +478,8 @@ def load_pretrained(config, model, logger):
                         1, 0
                     )
                 elif config.MODEL.RPE_INTERPOLATION == "outer_mask":
-                    S1 = int(L1 ** 0.5)
-                    S2 = int(L2 ** 0.5)
+                    S1 = int(L1**0.5)
+                    S2 = int(L2**0.5)
                     pad_size = (S2 - S1) // 2
                     padding = (pad_size, pad_size, pad_size, pad_size)
 
@@ -498,11 +496,11 @@ def load_pretrained(config, model, logger):
                     state_dict[k] = new_rel_pos_bias
                 elif config.MODEL.RPE_INTERPOLATION == "geo":
                     logger.info("Interpolate relative_position_bias_table using geo.")
-                    src_size = int(L1 ** 0.5)
-                    dst_size = int(L2 ** 0.5)
+                    src_size = int(L1**0.5)
+                    dst_size = int(L2**0.5)
 
                     def geometric_progression(a, r, n):
-                        return a * (1.0 - r ** n) / (1.0 - r)
+                        return a * (1.0 - r**n) / (1.0 - r)
 
                     left, right = 1.01, 1.5
                     while right - left > 1e-6:
@@ -570,8 +568,8 @@ def load_pretrained(config, model, logger):
             logger.warning(f"Error in loading {k}, passing......")
         else:
             if L1 != L2:
-                S1 = int(L1 ** 0.5)
-                S2 = int(L2 ** 0.5)
+                S1 = int(L1**0.5)
+                S2 = int(L2**0.5)
                 absolute_pos_embed_pretrained = absolute_pos_embed_pretrained.reshape(
                     -1, S1, S1, C1
                 )
@@ -581,11 +579,11 @@ def load_pretrained(config, model, logger):
                 absolute_pos_embed_pretrained_resized = torch.nn.functional.interpolate(
                     absolute_pos_embed_pretrained, size=(S2, S2), mode="bicubic"
                 )
-                absolute_pos_embed_pretrained_resized = absolute_pos_embed_pretrained_resized.permute(
-                    0, 2, 3, 1
+                absolute_pos_embed_pretrained_resized = (
+                    absolute_pos_embed_pretrained_resized.permute(0, 2, 3, 1)
                 )
-                absolute_pos_embed_pretrained_resized = absolute_pos_embed_pretrained_resized.flatten(
-                    1, 2
+                absolute_pos_embed_pretrained_resized = (
+                    absolute_pos_embed_pretrained_resized.flatten(1, 2)
                 )
                 state_dict[k] = absolute_pos_embed_pretrained_resized
 
@@ -741,10 +739,10 @@ class NativeScalerWithGradNormCount:
 
     def __init__(self, custom_scaler=False):
         if custom_scaler:
-            self._scaler = GradScaler(growth_interval=128, init_scale=2.0 ** 8)
+            self._scaler = GradScaler(growth_interval=128, init_scale=2.0**8)
         else:
             self._scaler = torch.cuda.amp.GradScaler(
-                growth_interval=128, init_scale=2.0 ** 8
+                growth_interval=128, init_scale=2.0**8
             )
 
     def __call__(

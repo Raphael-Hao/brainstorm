@@ -27,17 +27,13 @@ from brt.runtime.dump_trace import dump_trace
 from config import get_config
 from data import build_loader
 from logger import create_logger
-from lr_scheduler import build_scheduler
 from models import build_model
 from optimizer import build_optimizer
 from timm.utils import AverageMeter, accuracy
 from tutel_ea.moe import router_exporter
 from utils import (
-    NativeScalerWithGradNormCount,
     create_ds_config,
     hook_scale_grad,
-    load_checkpoint,
-    load_pretrained,
     reduce_tensor,
     gather_all_ckpts_into_one,
     adaptive_load_checkpoint,
@@ -181,14 +177,6 @@ def main(args, config, ds_init):
         broadcast_buffers=False,
         bucket_cap_mb=64,
     )
-    loss_scaler = NativeScalerWithGradNormCount(args.custom_scaler)
-
-    if config.TRAIN.ACCUMULATION_STEPS > 1:
-        lr_scheduler = build_scheduler(
-            config, optimizer, len(data_loader_train) // config.TRAIN.ACCUMULATION_STEPS
-        )
-    else:
-        lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train))
 
     if args.debug:
         adaptive_load_checkpoint(config, model_without_ddp, logger)
@@ -200,17 +188,14 @@ def main(args, config, ds_init):
         return
 
     if args.gather_ckpt:
-        # gather_all_ckpts_into_one(config, model_without_ddp, logger)
+        gather_all_ckpts_into_one(config, model_without_ddp, logger)
         return
 
     if config.MODEL.RESUME:
-        load_checkpoint(
+        adaptive_load_checkpoint(
             config,
             model_without_ddp,
-            optimizer,
-            lr_scheduler,
             logger,
-            loss_scaler=loss_scaler,
         )
         if args.debug:
             debug(model, bs=1, iteration=1)
@@ -224,13 +209,6 @@ def main(args, config, ds_init):
 
         if config.EVAL_MODE:
             return
-
-    if config.MODEL.PRETRAINED and (not config.MODEL.RESUME):
-        load_pretrained(config, model_without_ddp, logger)
-        acc1, _acc5, _loss = validate(config, data_loader_val, model)
-        logger.info(
-            f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-        )
 
     if config.THROUGHPUT_MODE:
         throughput(data_loader_val, model, logger)
