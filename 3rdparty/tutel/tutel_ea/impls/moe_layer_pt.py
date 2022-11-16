@@ -15,9 +15,49 @@ from torch.nn import ModuleList
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
-from .fast_dispatch import fast_dispatcher
-from ..jit_kernels.gating import fast_cumsum_sub_one
 from . import communicate as C
+
+
+def _one_hot_to_float(x, num_classes):
+    return F.one_hot(x, num_classes=num_classes).float()
+
+
+USE_EINSUM = False
+
+
+def _top_idx(source, k):
+    return torch.topk(source, k=k, dim=0, largest=False)[1]
+
+
+def einsum(rule, a, b):
+    if USE_EINSUM:
+        return torch.einsum(rule, a, b)
+    elif rule == "s,se->se":
+        return a.reshape(a.shape[0], -1) * b
+    elif rule == "se,sc->sec":
+        return a.unsqueeze(2) * b.unsqueeze(1)
+    elif rule == "se,se->s":
+        return torch.bmm(a.unsqueeze(1), b.unsqueeze(2)).reshape(-1)
+    elif rule == "sec,sm->ecm":
+        s = a.shape[0]
+        e = a.shape[1]
+        c = a.shape[2]
+        m = b.shape[1]
+        return torch.matmul(a.reshape(s, -1).t(), b).reshape(e, c, m)
+    elif rule == "sec,ecm->sm":
+        return torch.matmul(a.reshape(a.shape[0], -1), b.reshape(-1, b.shape[-1]))
+    elif rule == "ks,ksm->sm":
+        k = b.shape[0]
+        s = b.shape[1]
+        m = b.shape[2]
+        # [k, s] -> [s, k] -> [s, 1, k]
+        a = a.t().unsqueeze(1)
+        # [k,s,m] -> [k, sm] -> [sm, k] -> [s, m, k]
+        b = b.reshape(k, -1).t().reshape(s, m, k)
+        # bmm([s, 1, k], [s, m, k]^t) -> [s, m, 1]
+        return torch.bmm(a, b.transpose(1, 2)).squeeze(2)
+    else:
+        return torch.einsum(rule, a, b)
 
 
 class PrimFwdAllgather(torch.autograd.Function):
@@ -158,10 +198,11 @@ class TopKGate(torch.nn.Module):
 
     def compute_sorted_location(self, x, importance_scores):
         sorted_x = x[importance_scores.argsort(dim=0)]
-        sorted_cumsum = fast_cumsum_sub_one(sorted_x) * sorted_x
+        sorted_cumsum = (torch.cumsum(sorted_x, dim=0) - 1) * sorted_x
         return sorted_cumsum[importance_scores.argsort(dim=0).argsort(dim=0)]
 
     def apply_on_expert_fn(self, in_data, expert_fn, group, sharded_count):
+        S, M, GE = in_data.size(0), in_data.size(1), self.num_global_experts
         if self.input_dropout:
             in_data = self.input_dropout(in_data)
 
@@ -198,73 +239,38 @@ class TopKGate(torch.nn.Module):
                     gates, masks_se[0], self.num_global_experts, self.fp32_gate
                 )
 
+        capacity = self.top_k * int(
+            self.capacity_factor
+            * ((S + self.num_global_experts - 1) // self.num_global_experts)
+        )
+
         if self.batch_prioritized_routing:
             importance_scores = -1 * gates.max(dim=1)[0]
             self.compute_location = lambda x: self.compute_sorted_location(
                 x, importance_scores
             )
         else:
-            self.compute_location = fast_cumsum_sub_one
-
+            self.compute_location = lambda x: torch.cumsum(x, dim=0) - 1
         locations1 = self.compute_location(masks_se[0])
+        mask1 = ((locations1 < capacity) * masks_se[0]).type_as(masks_se[0])
+        locations1_s = torch.sum(locations1 * mask1, dim=1)
+        mask1_float = mask1.float()
 
-        locations_s = [torch.sum(locations1 * masks_se[0], dim=1).to(torch.int32)]
-
-        if self.top_k > 1:
-            acc_base = None
-
-            for k in range(1, self.top_k):
-                acc_base = (
-                    torch.sum(masks_se[k - 1], dim=0, keepdim=True)
-                    if acc_base is None
-                    else acc_base + torch.sum(masks_se[k - 1], dim=0, keepdim=True)
-                )
-                locations2 = self.compute_location(masks_se[k])
-                locations2 += acc_base
-                locations_s.append(
-                    torch.sum(locations2 * masks_se[k], dim=1).to(torch.int32)
-                )
-
-            # Normalize Gate
-            if self.normalize_gate:
-                denom_s = torch.clamp(
-                    sum(gates_s), min=torch.finfo(gates_s[0].dtype).eps
-                )
-                gates_s = [x / denom_s for x in gates_s]
-
-        indices_s = [x.to(torch.int32) for x in indices_s]
-
-        S, M, GE = in_data.size(0), in_data.size(1), self.num_global_experts
         world_size = C.get_world_size(group)
 
-        if not hasattr(self, "_fdr"):
-            capacity = self.top_k * int(
-                self.capacity_factor
-                * ((S + self.num_global_experts - 1) // self.num_global_experts)
-            )
-            self._fdr = fast_dispatcher(
-                num_global_experts=GE,
-                capacity=capacity,
-                model_dim=M,
-                dispatch_dtype=in_data.dtype,
-            )
-        else:
-            capacity = self._fdr.capacity
+        gates = gates * mask1_float
 
-        if self.is_ones_gate:
-            gates_s = [torch.ones_like(x) for x in gates_s]
-        self._fdr.update(
-            indices_s,
-            locations_s,
-            gates_s,
-            capacity=capacity,
-            is_postscore=self.is_postscore,
+        locations1_sc = _one_hot_to_float(locations1_s, capacity)
+
+        combine_weights = einsum("se,sc->sec", gates, locations1_sc)
+
+        dispatch_mask = combine_weights.bool()
+
+        dispatched_input = einsum(
+            "sec,sm->ecm", dispatch_mask.type_as(in_data), in_data
         )
-        dispatched_input = self._fdr.encode(in_data)
-        if sharded_count > 1:
-            dispatched_input = dispatched_input.reshape(world_size, 1, -1, M)
-        else:
-            dispatched_input = dispatched_input.reshape(world_size, -1, capacity, M)
+
+        dispatched_input = dispatched_input.reshape(world_size, -1, capacity, M)
 
         if self.a2a_ffn_overlap_degree == -1:
             expert_output = expert_fn(dispatched_input)
@@ -274,40 +280,16 @@ class TopKGate(torch.nn.Module):
             expert_output = expert_fn(_dispatched_input)
             expert_output = expert_output.to(in_data.dtype)
             expert_output = C.AllToAll.apply(group, expert_output)
-        else:
-            split_dim = 2
-
-            C.AllToAllStatus.init(
-                group, self.a2a_ffn_overlap_degree, split_dim, dispatched_input
-            )
-
-            # Implicit x.contiguous() in C.CurrentStreamRelease.forward() and C.CurrentStreamAcquire.backward()
-            dispatched_input_ready = C.CurrentStreamRelease.apply(dispatched_input, 0)
-            dispatched_input_scattered_after_a2a = C.AllToAllScatterAsync.apply(
-                dispatched_input_ready
-            )
-
-            expert_output_scattered = [
-                C.CurrentStreamRelease.apply(
-                    expert_fn(C.CurrentStreamAcquire.apply(x, i)).to(in_data.dtype), i
-                )
-                for i, x in enumerate(dispatched_input_scattered_after_a2a)
-            ]
-            expert_output_gathered_after_a2a = C.AllToAllGatherAsync.apply(
-                *expert_output_scattered
-            )
-            expert_output = C.CurrentStreamAcquire.apply(
-                expert_output_gathered_after_a2a, 0
-            )
 
         expert_output = expert_output.reshape(-1, GE, capacity, M)
 
         if expert_output.size(0) > 1:
             with torch.cuda.amp.autocast(enabled=False):
                 expert_output = torch.sum(expert_output, dim=0)
-        expert_output = expert_output.view(GE * self._fdr.capacity, M)
-
-        result_output = self._fdr.decode(expert_output)
+        expert_output = expert_output.view(GE * capacity, M)
+        result_output = einsum(
+            "sec,ecm->sm", combine_weights.type_as(in_data), expert_output
+        )
         return result_output, l_loss
 
 

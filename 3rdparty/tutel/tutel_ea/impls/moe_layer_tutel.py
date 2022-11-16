@@ -209,7 +209,6 @@ class TopKGate(torch.nn.Module):
         locations1 = self.compute_location(masks_se[0])
 
         locations_s = [torch.sum(locations1 * masks_se[0], dim=1).to(torch.int32)]
-
         if self.top_k > 1:
             acc_base = None
 

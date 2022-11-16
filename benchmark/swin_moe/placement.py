@@ -2,27 +2,13 @@
 # Licensed under the MIT license.
 from itertools import product
 
-import torch.nn as nn
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
 
-from brt.passes.base import PassBase, register_pass
-from brt.router import is_router
-
-
-def dump_scatter_trace(mod: nn.Module):
-    scatter_results = []
-    for m_name, m in mod.named_modules():
-        if is_router(m) and "scatter" in m._router_type:
-            scatter_results.append(np.array(m.ptu_decision_history, dtype=object))
-    return scatter_results
-    # np.save("scatter_results.npy", scatter_results, allow_pickle=True)
-
 
 def load_scatter_trace(trace_path):
     return np.load(trace_path, allow_pickle=True)
-
 
 class PlacementSolver:
     def __init__(
@@ -92,16 +78,6 @@ def main():
     solver.construct_objective()
     solver.add_constraints()
     solver.solve()
-
-
-@register_pass("pipline")
-class PipelinePass(PassBase):
-    pass
-
-
-@register_pass("sharded")
-class ShardedPass(PassBase):
-    pass
 
 
 if __name__ == "__main__":
