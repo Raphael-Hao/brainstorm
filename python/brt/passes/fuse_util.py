@@ -188,6 +188,13 @@ class TunedKernel(nn.Module):
         self.inputs_templete["forward"][2] = torch.empty(
             self.output_shape, device="cuda"
         )
+        # print("self inputs templete",self.input_shape)
+        # print("input shape",input.shape)
+        if input.size(0)==0:
+            import copy
+            newout_shape = copy.deepcopy(self.output_shape)
+            newout_shape[0]=0
+            return torch.zeros(newout_shape, device="cuda")
         self.fused_kernel(*self.inputs_templete["forward"])
         output = self.inputs_templete["forward"][2]
         # self.inputs_templete["forward"][0] = None
@@ -295,6 +302,8 @@ class FusedLayer(nn.Module):
             # self.inputs_templete["forward"][self.output_indices[i]] = torch.empty(
             #     self.output_shapes[i], device="cuda"
             # )
+        
+            
         self.fused_kernel(*self.inputs_templete["forward"])
         outputs = [
             self.inputs_templete["forward"][index] for index in self.output_indices

@@ -123,7 +123,6 @@ void CUDACompiler::StaticExecute(const std::vector<const void*>& ppargs, int fd,
   CUfunction hfunc = Activate(fd, dev);
   auto& blocks = kernels_[fd].blocks;
   auto& threads = kernels_[fd].threads;
-
   CHECK_EQ(0, cuLaunchKernel(hfunc, blocks.x, blocks.y, blocks.z, threads.x, threads.y, threads.z,
                              0, stream, (void**)ppargs.data(), nullptr));
 }

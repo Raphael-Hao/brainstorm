@@ -31,7 +31,7 @@ class VerticalFusePass(PassBase):
                 node_m = self.sub_modules[node.target]
                 if isinstance(node_m, nn.Conv2d):
                     # print("conv2d")
-                    print(node)
+                    # print(node)
                     if len(node.users)>1:
                         print("conv2d has users")
                         continue

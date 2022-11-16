@@ -467,19 +467,16 @@ def threshold_dynamic_evaluate(
             naive_backbone = switch_router_mode(naive_backbone, False).eval()
             targets = []
             baseline_time = []
-            DeadPathEliminatePass_time = []
-            ConstProPass_time = []
-            reorder_operatorPass_time = []
-            speed_up_of_deadpatheliminatepass = []
-            speed_up_of_constpropogationpass = []
-            speed_up_of_reorder_operatorpass = []
+            VerticalFusePass_time = []
+            HorizonFusePass_time = []
+            speed_up_of_verticalfusetepass = []
+            speed_up_of_horizfusepass = []
             
             
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
                 with torch.no_grad():
                     input_var = torch.autograd.Variable(input.cuda())
-                    if i==0: continue
                     print("i",i)
                     import copy
                     naive_backbone.cuda()
@@ -511,13 +508,15 @@ def threshold_dynamic_evaluate(
                         lambda: raw_pass_graph(input_var), "raw_pass_graph"
                     )
                     
-                    import pdb;pdb.set_trace()
                     print("begin pass")
                     vertical_fuse_pass=VerticalFusePass(raw_pass_graph)
                     vertical_fuse_pass.run_on_graph()
                     print("pass end")
                     
                     new_backbone=vertical_fuse_pass.finalize()
+                    output1=new_backbone(input_var)
+                    # import pdb;pdb.set_trace()
+                    
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("fuse.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
@@ -529,7 +528,6 @@ def threshold_dynamic_evaluate(
                     ## TODO check and add maxpool
                     # print("outputnaive",output_naive)
                     # print("output1",output1)
-                    import pdb;pdb.set_trace()
                     
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
