@@ -42,6 +42,16 @@ class ModuleBase(ABC):
         jit_kernel = CUDACompiler.generate_kernel(None, kernel_code)
         return jit_kernel
 
+    @abstractmethod
+    def _make_global_kernel(
+        self,
+        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        method: str = "forward",
+        objective_func: str = "fastest",
+        rank: Union[int, List[int]] = 1,
+    ) -> GlobalKernel:
+        raise NotImplementedError()
+
     # @abstractmethod
     def make_function(
         self,
@@ -60,16 +70,6 @@ class ModuleBase(ABC):
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> nn.Module:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def _make_global_kernel(
-        self,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
-        method: str = "forward",
-        objective_func: str = "fastest",
-        rank: Union[int, List[int]] = 1,
-    ) -> GlobalKernel:
         raise NotImplementedError()
 
     @abstractmethod

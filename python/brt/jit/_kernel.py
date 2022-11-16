@@ -171,7 +171,12 @@ class ModuleKernelFactory:
         rank: Union[int, List[int]] = 1,
     ) -> ModuleKernel:
         module_info = JitModuleFactory.produce(module)
-        return module_info.make_kernel(method, sample_input, objective_func, rank)
+        return module_info._make_global_kernel(
+            method=method,
+            sample_inputs=sample_input,
+            objective_func=objective_func,
+            rank=rank,
+        )
 
     @staticmethod
     def make_kernels(
@@ -183,6 +188,11 @@ class ModuleKernelFactory:
     ) -> List[ModuleKernel]:
         module_info = JitModuleFactory.produce(module)
         return [
-            module_info.make_kernel(method, sample_input, objective_func, rank)
+            module_info._make_global_kernel(
+                method=method,
+                sample_inputs=sample_input,
+                objective_func=objective_func,
+                rank=rank,
+            )
             for sample_input in sample_inputs
         ]

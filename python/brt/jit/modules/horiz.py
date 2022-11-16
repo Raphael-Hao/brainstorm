@@ -11,16 +11,16 @@ from brt.jit.modules.fused import FusedModule
 class HorizFusedModule(FusedModule):
     def _make_global_kernel(
         self,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: List[torch.Tensor],
         method: str = "forward",
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> HorizFusedKernel:
-        assert len(self.module) == len(
+        assert self.num_submodule == len(
             sample_inputs
         ), "modules and sample_inputs must have the same length"
         if isinstance(rank, int):
-            rank = [rank] * len(self.module)
+            rank = [rank] * self.num_submodule
         candidates = []
         for jsm, inp, rk in zip(self.jit_submodules, sample_inputs, rank):
             module_kernel = jsm._make_global_kernel(inp, method, objective_func, rk)
@@ -43,6 +43,6 @@ class HorizFusedModule(FusedModule):
 
     @property
     def module_name(self) -> str:
-        return "HorizFused_" + "_".join(
+        return f"HorizFused_{self.num_submodule}_" + "_".join(
             [jsm.module_name for jsm in self.jit_submodules]
         )
