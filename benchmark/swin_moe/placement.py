@@ -5,10 +5,12 @@ from itertools import product
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
+import argparse
 
 
 def load_scatter_trace(trace_path):
     return np.load(trace_path, allow_pickle=True)
+
 
 class PlacementSolver:
     def __init__(
@@ -30,14 +32,17 @@ class PlacementSolver:
 
     def solve(self):
         self.model.Params.LogToConsole = True
-        self.model.Params.MIPGap =0.001
+        self.model.Params.MIPGap = 0.001
         # self.model.Params.TimeLimit = 60
+        # self.model.Params.IterationLimit = 1
         self.model.optimize()
-        print("Obj: ",self.model.objVal)
+        print("Obj: ", self.model.objVal)
 
     def construct_variable(self):
         self.placements = [
-            self.model.addMVar((self.path_nums[i], self.nodes), vtype=GRB.BINARY, name=f"placement_{i}")
+            self.model.addMVar(
+                (self.path_nums[i], self.nodes), vtype=GRB.BINARY, name=f"placement_{i}"
+            )
             for i in range(self.scatter_num)
         ]
 
@@ -70,14 +75,31 @@ class PlacementSolver:
                     self.placements[i][:, j].sum() >= self.least_path_per_node
                 )
 
+    def export_results(self):
+        results = []
+        for i in range(self.scatter_num):
+            print(np.argmax(np.array(self.placements[i].x), axis=1))
+            results.append(np.argmax(np.array(self.placements[i].x), axis=1))
+        results = np.array(results)
+        np.save(f"results_{self.nodes}.npy", results)
+        # return results
+
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--nodes", type=int, default=4)
+    args = parser.parse_args()
+    least_path_per_node = 16 // args.nodes
     scatter_trace = load_scatter_trace("scatter_trace.npy")
-    solver = PlacementSolver(4, scatter_trace, least_path_per_node=4, mode="optimizer")
-    solver.construct_variable()
-    solver.construct_objective()
-    solver.add_constraints()
+
+    solver = PlacementSolver(
+        args.nodes, scatter_trace, least_path_per_node, mode="optimizer"
+    )
+    # solver.construct_variable()
+    # solver.construct_objective()
+    # solver.add_constraints()
     solver.solve()
+    solver.export_results()
 
 
 if __name__ == "__main__":

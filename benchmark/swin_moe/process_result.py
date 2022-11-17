@@ -19,7 +19,7 @@ for layer_id in range(layer_num - 1):
         token_num = np.intersect1d(
             trace_info[layer_id][cur_path], trace_info[layer_id + 1][post_path]
         ).size
-        print(f"layer {layer_id} path {cur_path} -> layer {layer_id + 1} path {post_path} token num {token_num}")
+        # print(f"layer {layer_id} path {cur_path} -> layer {layer_id + 1} path {post_path} token num {token_num}")
         scatter_trace[layer_id][cur_path, post_path] = token_num
 
 np.save("scatter_trace.npy", scatter_trace, allow_pickle=True)
@@ -31,7 +31,7 @@ import seaborn as sns
 for i in range(len(scatter_trace)):
     plt.figure()
     ax = sns.heatmap(scatter_trace[i], linewidth=0.5, cmap="YlGnBu")
-    plt.savefig(f"scatter_trace_{i}.png")
+    plt.savefig(f"figures/scatter_trace_{i}.png")
 
 
 # %%

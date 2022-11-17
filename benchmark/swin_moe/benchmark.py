@@ -187,6 +187,7 @@ def main(args, config, ds_init):
         return
 
     if args.trace:
+        print("===> Tracing model")
         adaptive_load_checkpoint(
             config,
             model_without_ddp,
@@ -196,6 +197,7 @@ def main(args, config, ds_init):
         logger.info(
             f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
         )
+        print("===> Tracing model done, dumping to file")
         dump_trace(model_without_ddp)
         return
 
