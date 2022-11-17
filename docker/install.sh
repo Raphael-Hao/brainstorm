@@ -12,11 +12,7 @@ if [[ "$1" == "--branch" ]]; then
     shift 2
 fi
 
-apt-get -y update && apt-get install -y \
-    ssh gcc libtinfo-dev zlib1g-dev build-essential \
-    cmake libedit-dev libxml2-dev llvm tmux wget git zsh
-
-curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 cd /root
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
