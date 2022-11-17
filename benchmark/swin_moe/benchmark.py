@@ -23,7 +23,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import CUDATimer, deterministic_random_generator
-from brt.runtime.dump_trace import dump_trace
+from brt.runtime.placement import dump_trace
 from config import get_config
 from data import build_loader
 from logger import create_logger
