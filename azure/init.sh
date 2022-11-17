@@ -45,6 +45,8 @@ fi
 git config --global user.name raphael
 git config --global user.email raphaelhao@outlook.com
 
+curl -sL https://aka.ms/InstallAzureCLIDeb | $sudo_cmd bash
+
 wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux -O azcopy.tar.gz
 mkdir -p azcopy && tar -xzvf azcopy.tar.gz -C "azcopy" --strip-components=1
 $sudo_cmd mv azcopy/azcopy /usr/bin/azcopy && rm -rf azcopy.tar.gz azcopy

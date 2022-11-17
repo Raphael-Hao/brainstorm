@@ -12,8 +12,6 @@ if [[ "$1" == "--branch" ]]; then
     shift 2
 fi
 
-curl -sL https://aka.ms/InstallAzureCLIDeb | bash
-
 cd /root
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
     bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/miniconda3 &&
