@@ -16,6 +16,8 @@ apt-get -y update && apt-get install -y \
     ssh gcc libtinfo-dev zlib1g-dev build-essential \
     cmake libedit-dev libxml2-dev llvm tmux wget git zsh
 
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
 cd /root
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
     bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/miniconda3 &&
