@@ -32,7 +32,7 @@ class PlacementSolver:
 
     def solve(self):
         self.model.Params.LogToConsole = True
-        self.model.Params.MIPGap = 0.001
+        self.model.Params.MIPGap = 0.05
         # self.model.Params.TimeLimit = 60
         # self.model.Params.IterationLimit = 1
         self.model.optimize()
