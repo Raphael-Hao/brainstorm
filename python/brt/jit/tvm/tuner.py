@@ -319,7 +319,8 @@ def _calcu_record_mp(
         score = sum(res.costs) / len(res.costs)
     elif objective_func == "most_efficient":
         num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
-        score = num_blocks * sum(res.costs) / len(res.costs)
+        num_threads = block_dim[0] * block_dim[1] * block_dim[2]
+        score = num_blocks * num_threads * sum(res.costs) / len(res.costs)
     else:
         raise ValueError(f"Unsupported {objective_func = }")
     return (score, grid_dim, block_dim)
