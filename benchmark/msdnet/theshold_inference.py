@@ -477,6 +477,8 @@ def threshold_dynamic_evaluate(
                 targets.append(target)
                 with torch.no_grad():
                     input_var = torch.autograd.Variable(input.cuda())
+                    if i==0:
+                        continue
                     print("i",i)
                     import copy
                     naive_backbone.cuda()
@@ -516,7 +518,6 @@ def threshold_dynamic_evaluate(
                     new_backbone=vertical_fuse_pass.finalize()
                     output1=new_backbone(input_var)
                     # import pdb;pdb.set_trace()
-                    
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("fuse.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())

@@ -179,7 +179,7 @@ class TunedKernel(nn.Module):
         
         
         # import pdb; pdb.set_trace()
-        # self.forward(sample_input)
+        self.forward(sample_input)
         # import pdb; pdb.
         # set_trace()
 
@@ -228,24 +228,30 @@ class FusedLayer(nn.Module):
         # Generate model name
         self.module_names = []
         for model in models:
-            if isinstance(model, nn.Conv2d) and model.bias is not None:
-                self.module_names.append("Conv2dBias")
-            elif isinstance(model, nn.Sequential):
-                if isinstance(model[0], nn.Conv2d) and model[0].bias is not None:
-                    if len(model) == 1:
-                        self.module_names.append("Conv2dBias")
-                    elif isinstance(model[1], nn.ReLU):
-                        self.module_names.append("Conv2dBiasReLU")
-                    elif isinstance(model[1], nn.Sigmoid):
-                        self.module_names.append("Conv2dBiasSigmoid")
-                    else:
-                        raise NotImplementedError(f"{models}")
+            if isinstance(model[0], nn.Conv2d) and model[0].bias is not None:
+                if len(model) == 1:
+                    self.module_names.append("Conv2dBias") 
+                elif len(model) == 2 and isinstance(model[1], nn.ReLU):
+                    self.module_names.append("Conv2dBiasReLU")
+                elif len(model) == 2 and isinstance(model[1], nn.Sigmoid):
+                    self.module_names.append("Conv2dBiasSigmoid")
+                elif len(model) == 3 and isinstance(model[1], nn.BatchNorm2d) and isinstance(model[2], nn.ReLU):
+                    self.module_names.append("Conv2dBiasBatchNormReLU")
                 else:
                     raise NotImplementedError(f"{models}")
-            elif isinstance(model, nn.AdaptiveAvgPool2d):
-                self.module_names.append("AdaptiveAvgPool2d")
+            elif isinstance(model[0], nn.Conv2d) and model[0].bias is None:
+                if len(model) == 1:
+                    self.module_names.append("Conv2d")
+                elif len(model) == 2 and isinstance(model[1], nn.ReLU):
+                    self.module_names.append("Conv2dReLU")
+                elif len(model) == 2 and isinstance(model[1], nn.Sigmoid):
+                    self.module_names.append("Conv2dSigmoid")
+                elif len(model) == 3 and isinstance(model[1], nn.BatchNorm2d) and isinstance(model[2], nn.ReLU):
+                    self.module_names.append("Conv2dBatchNormReLU")
+                else:
+                    raise NotImplementedError(f"{model}")
+            
             else:
-                self.module_names.append("ERROR")
                 raise NotImplementedError(f"{models}")
         # Make fused kernel
         for i, model in enumerate(models):
@@ -265,7 +271,7 @@ class FusedLayer(nn.Module):
         self.inputs_templete["forward"] = []
         self.input_indices = []
         self.output_indices = []
-        for i, (module_name, output_shape) in enumerate(zip(self.module_names, self.output_shapes)):
+        for i, (module_name, output_shape,iter_module) in enumerate(zip(self.module_names, self.output_shapes,models)):
             # TODO: module_name parser
             if module_name == "Conv2dBias":
                 self.input_indices.append(len(self.inputs_templete["forward"]))
@@ -291,6 +297,42 @@ class FusedLayer(nn.Module):
                         self.get_parameter(f"m{i}_0_bias"),
                     ]
                 )
+            elif module_name in ["Conv2dBiasBatchNormReLU","Conv2dBatchNormReLU"]:
+                self.input_indices.append(len(self.inputs_templete["forward"]))
+                self.output_indices.append(len(self.inputs_templete["forward"]) + 2)
+                w_conv = self.get_parameter(f"m{i}_0_weight").clone().view(iter_module[0].out_channels, -1).cuda()
+                w_bn = torch.diag(self.get_parameter(f"m{i}_1_weight").div(torch.sqrt(iter_module[1].eps+ iter_module[1].running_var))).cuda()
+                fusedweight=( torch.mm(w_bn, w_conv).view(iter_module[0].weight.size()).cuda() )
+                if iter_module[0].bias is not None and module_name=="Conv2dBiasBatchNormReLU":
+                    b_conv = iter_module[0].bias
+                    self.inputs_templete["forward"].extend(
+                    [
+                        None,
+                        fusedweight,
+                        # None,
+                        torch.empty(output_shape, device="cuda"),
+                        self.get_parameter(f"m{i}_0_bias"),
+                        self.get_parameter(f"m{i}_1_bias"),
+                    ]
+                )
+                elif iter_module[0].bias is None and module_name=="Conv2dBatchNormReLU":
+                    b_conv = torch.zeros(iter_module[0].weight.size(0) ).cuda()
+                    b_conv = torch.mm(w_bn, b_conv.view(-1, 1)).view(-1).cuda()
+                    b_bn = iter_module[1].bias - iter_module[1].weight.mul(iter_module[1].running_mean).div(torch.sqrt(iter_module[1].running_var + iter_module[1].eps)).cuda()
+                    fusedbias=( b_conv + b_bn ).cuda()
+                    self.inputs_templete["forward"].extend(
+                    [
+                        None,
+                        fusedweight,
+                        # None,
+                        torch.empty(output_shape, device="cuda"),
+                        fusedbias,
+                    ]
+                )
+                else :
+                    raise NotImplementedError(f"{self.module_names}")
+                
+            
             else:
                 raise NotImplementedError(f"{self.module_names}")
         # Test forward & warmup

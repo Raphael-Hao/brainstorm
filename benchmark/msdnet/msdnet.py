@@ -547,9 +547,7 @@ class MSDNet(nn.Module):
         )
 
     def forward(self, x,_is_measure=False):
-        global is_measure
         
-        is_measure = _is_measure
         res = []
         if not self.training and self.routers_initilized:
             ##the actual dynamic routing

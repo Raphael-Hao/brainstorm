@@ -23,7 +23,7 @@ class VerticalFusePass(PassBase):
     jit_need_modules = [nn.Conv2d, nn.Linear]
     native_modules = [nn.ReLU, nn.Tanh, nn.Sigmoid, nn.Softmax]
     
-
+    ## TODO may add maxpool and the first conv2d
     def run_on_graph(self):
         ## TODO
         for node in self.graph_mod.graph.nodes:

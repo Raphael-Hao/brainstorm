@@ -198,8 +198,8 @@ if __name__ == '__main__':
         # "Raw SRResNet Model",
         # "Raw RCAN Model",
         # "Horizontal Fused RCAN Model",
-        # "Horizontal Fused RCAN Model (fastest)",
-        "Vertical Fused RCAN Model",
+        "Horizontal Fused RCAN Model (fastest)",
+        # "Vertical Fused RCAN Model",
     ]
     for module_type in module_type_list:
         _ = ModuleFactory[module_type]

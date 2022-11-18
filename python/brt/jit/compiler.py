@@ -14,13 +14,13 @@ class CUDACompiler:
     def create_raw(source) -> Callable[..., None]:
         torch.cuda.init()
         kernel_type, __ctx__ = jit.inject_source(source)
-        fo = open("foo.txt", "w")
-        fo.write(source)
-        fo.write("......................................")
-        fo.write(kernel_type)
-        fo.write("......................................")
-        fo.write(str(__ctx__))
-        fo.close()
+        # fo = open("foo.txt", "w")
+        # fo.write(source)
+        # fo.write("......................................")
+        # fo.write(kernel_type)
+        # fo.write("......................................")
+        # fo.write(str(__ctx__))
+        # fo.close()
         # import pdb; pdb.set_trace()
         if kernel_type == "global" or kernel_type == "horiz_fuse":
 
