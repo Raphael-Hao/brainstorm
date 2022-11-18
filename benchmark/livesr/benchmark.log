@@ -66,3 +66,56 @@
 [W kineto_shim.cpp:337] Profiler is not initialized: skipping step() invocation
 2022-11-07 03:35:03,181 [INFO] benchmark: Profiling vFusedLiveSR
 2022-11-07 03:35:04,317 [INFO] benchmark: Profiling hFusedLiveSR
+
+
+8, 8
+2022-11-18 06:57:20,141 [INFO] benchmark: Start
+2022-11-18 06:57:21,170 [INFO] benchmark: LiveSR builded
+2022-11-18 06:58:12,890 [INFO] benchmark: vFusedLiveSR builded
+2022-11-18 06:58:50,085 [INFO] benchmark: hFusedLiveSR builded
+2022-11-18 06:58:50,090 [INFO] benchmark: * Start timeit: Run 1 times
+2022-11-18 06:58:50,412 [INFO] benchmark: LiveSR:		 414076.76006201655s in 1 runs (414076.76006201655s/run) (torch)
+2022-11-18 06:58:50,481 [INFO] benchmark: vFusedLiveSR:		 207015.78992884606s in 1 runs (207015.78992884606s/run) (torch)
+2022-11-18 06:58:50,538 [INFO] benchmark: hFusedLiveSR:		 160452.99998950213s in 1 runs (160452.99998950213s/run) (torch)
+2022-11-18 06:58:50,538 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-18 06:58:55,010 [INFO] benchmark: LiveSR:		 438246.5956005035s in 100 runs (4382.465956005035s/run) (torch)
+2022-11-18 06:58:57,570 [INFO] benchmark: vFusedLiveSR:		 251629.26890188828s in 100 runs (2516.292689018883s/run) (torch)
+2022-11-18 06:58:59,884 [INFO] benchmark: hFusedLiveSR:		 225895.569002023s in 100 runs (2258.95569002023s/run) (torch)
+2022-11-18 06:58:59,884 [INFO] benchmark: Profiling LiveSR
+2022-11-18 06:59:01,949 [INFO] benchmark: Profiling vFusedLiveSR
+2022-11-18 06:59:02,771 [INFO] benchmark: Profiling hFusedLiveSR
+
+8, 80
+2022-11-18 08:03:04,231 [INFO] benchmark: Start
+2022-11-18 08:03:05,511 [INFO] benchmark: LiveSR builded
+2022-11-18 08:11:01,579 [INFO] benchmark: vFusedLiveSR builded
+2022-11-18 08:16:55,612 [INFO] benchmark: hFusedLiveSR builded
+2022-11-18 08:16:55,621 [INFO] benchmark: * Start timeit: Run 1 times
+2022-11-18 08:16:56,800 [INFO] benchmark: LiveSR:		 2877706.7802730016s in 1 runs (2877706.7802730016s/run) (torch)
+2022-11-18 08:16:57,100 [INFO] benchmark: vFusedLiveSR:		 932644.4400358014s in 1 runs (932644.4400358014s/run) (torch)
+2022-11-18 08:16:57,268 [INFO] benchmark: hFusedLiveSR:		 502603.3500325866s in 1 runs (502603.3500325866s/run) (torch)
+2022-11-18 08:16:57,268 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-18 08:17:27,725 [INFO] benchmark: LiveSR:		 2986203.0301010236s in 100 runs (29862.030301010236s/run) (torch)
+2022-11-18 08:17:35,700 [INFO] benchmark: vFusedLiveSR:		 781175.0635999487s in 100 runs (7811.750635999487s/run) (torch)
+2022-11-18 08:17:40,813 [INFO] benchmark: hFusedLiveSR:		 499480.02060118597s in 100 runs (4994.80020601186s/run) (torch)
+2022-11-18 08:17:40,813 [INFO] benchmark: Profiling LiveSR
+2022-11-18 08:17:51,903 [INFO] benchmark: Profiling vFusedLiveSR
+2022-11-18 08:17:55,398 [INFO] benchmark: Profiling hFusedLiveSR
+
+8, 200
+2022-11-18 08:32:00,390 [INFO] benchmark: Start
+2022-11-18 08:32:02,207 [INFO] benchmark: LiveSR builded
+2022-11-18 08:51:33,726 [INFO] benchmark: vFusedLiveSR builded
+2022-11-18 09:06:43,792 [INFO] benchmark: hFusedLiveSR builded
+2022-11-18 09:06:43,858 [INFO] benchmark: * Start timeit: Run 1 times
+2022-11-18 09:06:46,292 [INFO] benchmark: LiveSR:		 7221432.999940589s in 1 runs (7221432.999940589s/run) (torch)
+2022-11-18 09:06:46,860 [INFO] benchmark: vFusedLiveSR:		 1790010.4098953307s in 1 runs (1790010.4098953307s/run) (torch)
+2022-11-18 09:06:47,228 [INFO] benchmark: hFusedLiveSR:		 1070290.3801575303s in 1 runs (1070290.3801575303s/run) (torch)
+2022-11-18 09:06:47,229 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-18 09:07:59,708 [INFO] benchmark: LiveSR:		 7102177.517602104s in 100 runs (71021.77517602104s/run) (torch)
+2022-11-18 09:08:17,572 [INFO] benchmark: vFusedLiveSR:		 1751645.9088015833s in 100 runs (17516.459088015832s/run) (torch)
+2022-11-18 09:08:29,372 [INFO] benchmark: hFusedLiveSR:		 1155920.6667996477s in 100 runs (11559.206667996477s/run) (torch)
+2022-11-18 09:08:29,372 [INFO] benchmark: Profiling LiveSR
+[W kineto_shim.cpp:337] Profiler is not initialized: skipping step() invocation
+2022-11-18 09:08:56,923 [INFO] benchmark: Profiling vFusedLiveSR
+2022-11-18 09:09:04,823 [INFO] benchmark: Profiling hFusedLiveSR

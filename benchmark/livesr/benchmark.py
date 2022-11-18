@@ -16,8 +16,8 @@ from dataset import get_dataloader
 DEFAULT_DATASET = Path("./dataset/cam1/LQ/")
 SUBNET_BATCH_SIZE = [6, 7, 12, 27, 8, 8, 8, 12, 12, 4]
 # SUBNET_NUM_BLOCK = 1
-SUBNET_NUM_BLOCK = 8
-NUM_FEATURE = 18
+SUBNET_NUM_BLOCK = 200
+NUM_FEATURE = 8
 
 logger = logging.getLogger("benchmark")
 logger.setLevel(logging.DEBUG)
@@ -48,28 +48,16 @@ for n in [1, 100]:
     for module_type in module_type_list:
         model = module_dict[module_type]
         x = input_tensor
-        time = timeit.timeit(
-            f"model(x)",
-            setup="from __main__ import model, x; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
-            number=n,
-        )
-        logger.info(f"{module_type}:\t\t {time}s in {n} runs ({time/n}s/run) (timeit tf32)")
-        time = timeit.timeit(
-            f"model(x)",
-            setup="from __main__ import model, x; import torch; torch.cuda.synchronize()",
-            number=n,
-        )
-        logger.info(f"{module_type}:\t\t {time}s in {n} runs ({time/n}s/run) (timeit)")
-        time = (
-            Timer(
-                f"model(x)",
-                setup="from __main__ import model, x; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
-            )
-            .timeit(n)
-            .mean
-            * 10e6
-        )
-        logger.info(f"{module_type}:\t\t {time}s in {n} runs ({time/n}s/run) (torch tf32)")
+        # time = (
+        #     Timer(
+        #         f"model(x)",
+        #         setup="from __main__ import model, x; import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
+        #     )
+        #     .timeit(n)
+        #     .mean
+        #     * 10e6
+        # )
+        # logger.info(f"{module_type}:\t\t {time}s in {n} runs ({time/n}s/run) (torch tf32)")
         time = (
             Timer(
                 f"model(x)",
