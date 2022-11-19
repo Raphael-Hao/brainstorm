@@ -336,7 +336,7 @@ class FusedLayer(nn.Module):
             else:
                 raise NotImplementedError(f"{self.module_names}")
         # Test forward & warmup
-        # self.forward(sample_inputs)
+        self.forward(sample_inputs)
 
     def forward(self, inputs: List[torch.Tensor]) -> List[torch.Tensor]:
         
