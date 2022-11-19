@@ -336,18 +336,26 @@ class FusedLayer(nn.Module):
             else:
                 raise NotImplementedError(f"{self.module_names}")
         # Test forward & warmup
-        self.forward(sample_inputs)
+        # self.forward(sample_inputs)
 
     def forward(self, inputs: List[torch.Tensor]) -> List[torch.Tensor]:
         
         ## TODO cope with bs==0
         for i in range(self.num_submodels):
-            self.inputs_templete["forward"][self.input_indices[i]] = inputs[i]
+            if inputs[i].size(0)==0:
+                self.inputs_templete["forward"][self.input_indices[i]] = torch.empty(self.input_shapes[i], device="cuda")
+            else:
+                self.inputs_templete["forward"][self.input_indices[i]] = inputs[i]
             # self.inputs_templete["forward"][self.output_indices[i]] = torch.empty(
             #     self.output_shapes[i], device="cuda"
             # )
         
+        # for input in inputs:
+        #     print("in shape",input.shape)
+        # for input in self.input_shapes:
+        #     print("sample in shape",input)   
             
+            ## TODO fix a bug in input shape
         self.fused_kernel(*self.inputs_templete["forward"])
         outputs = [
             self.inputs_templete["forward"][index] for index in self.output_indices

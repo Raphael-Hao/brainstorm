@@ -524,14 +524,20 @@ def threshold_dynamic_evaluate(
                     
                     print("begin test")
                     timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
+                    VerticalFusePass_time.append(timer.avg)
                     output1=new_backbone(input_var)
-                    
+                    speed_up_of_verticalfusetepass.append(
+                        baseline_time[-1] / VerticalFusePass_time[-1]
+                    )
                     ## TODO check and add maxpool
                     # print("outputnaive",output_naive)
                     # print("output1",output1)
                     
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    print("max of speed_up_of_verticalfusetepass",max(speed_up_of_verticalfusetepass))
+                    print("min of speed_up_of_verticalfusetepass",min(speed_up_of_verticalfusetepass))
+                    print("avg of speed_up_of_verticalfusetepass",sum(speed_up_of_verticalfusetepass)/len(speed_up_of_verticalfusetepass))
                     
 
         benchmarker.add_benchmark("vfuse", fuse_benchmark)
@@ -545,10 +551,10 @@ def threshold_dynamic_evaluate(
             naive_backbone = switch_router_mode(naive_backbone, False).eval()
             targets = []
             baseline_time = []
-            DeadPathEliminatePass_time = []
+            hfusePass_time = []
             ConstProPass_time = []
             reorder_operatorPass_time = []
-            speed_up_of_deadpatheliminatepass = []
+            speed_up_of_hfusepass = []
             speed_up_of_constpropogationpass = []
             speed_up_of_reorder_operatorpass = []
             
@@ -557,7 +563,8 @@ def threshold_dynamic_evaluate(
                 targets.append(target)
                 with torch.no_grad():
                     input_var = torch.autograd.Variable(input.cuda())
-                    if i==1: continue
+                    if i==0:
+                        continue
                     print("i",i)
                     import copy
                     naive_backbone.train(False)
@@ -598,7 +605,10 @@ def threshold_dynamic_evaluate(
                     
                     print("begin test")
                     timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
+                    hfusePass_time.append(timer.avg)
                     output1=new_backbone(input_var)
+                    speed_up_of_hfusepass.append(baseline_time[-1]/hfusePass_time[-1])
+                    # import pdb;pdb.set_trace()
                     
                     ## TODO check and add maxpool
                     # print("outputnaive",output_naive)
@@ -606,6 +616,9 @@ def threshold_dynamic_evaluate(
                     
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    print("max of speed_up_of_hfusepass",max(speed_up_of_hfusepass))
+                    print("min of speed_up_of_hfusepass",min(speed_up_of_hfusepass))
+                    print("avg of speed_up_of_hfusepass",sum(speed_up_of_hfusepass)/len(speed_up_of_hfusepass))
                     
 
         benchmarker.add_benchmark("hfuse", hfuse_benchmark)

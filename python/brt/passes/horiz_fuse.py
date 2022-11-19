@@ -135,7 +135,7 @@ class HorizFusePass(PassBase):
                     
                 outList.append(res)
                 queue=nextQueue	
-                print("queue",queue)
+                # print("queue",queue)
             return outList
 
             
@@ -146,7 +146,7 @@ class HorizFusePass(PassBase):
             out_list=BFS(node)
             break
         for i in range(len(out_list)):
-            print("level",i)
+            # print("level",i)
             
             fuse_sequece = []
             fuse_inputs_shape=[]
