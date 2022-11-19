@@ -8,7 +8,7 @@ from ast import arg
 from hashlib import new
 from turtle import pd
 from typing import Union
-
+import operator
 import torch
 from torch.fx import GraphModule
 import numpy as np
@@ -27,45 +27,6 @@ class HorizFusePass(PassBase):
         ## TODO
         self.graph_mod.graph.eliminate_dead_code()
         
-        def bfs(node, fa):
-            node_visited = {}
-            for node_1 in self.graph_mod.graph.nodes:
-                node_visited.update({node_1: []})
-            queue = []
-            queue.append(node)
-            seen = set()
-            while len(queue) > 0:
-                vetex = queue.pop(0)
-                if self.is_placeholder_node(vetex):
-                    continue
-                nodes = vetex.args[0]
-                if self.is_method_node(vetex) and not isinstance(nodes, list):
-                    nodes = []
-                    for arg in vetex.args:
-                        if isinstance(arg, torch.fx.node.Node):
-                            nodes.append(arg)
-                elif self.is_function_node(vetex) and not isinstance(nodes, list):
-                    nodes = []
-                    for arg in vetex.args:
-                        if isinstance(arg, torch.fx.node.Node):
-                            nodes.append(arg)
-                elif not isinstance(nodes, list):
-                    nodes = [nodes]
-                for w in nodes:
-                    if w not in seen:
-                        queue.append(w)
-                        seen.add(w)
-                    pre = node_visited[w].copy()
-                    pre.append(vetex)
-                    node_visited.update({w: pre})
-            edge_set = set()
-            for set_node in seen:
-                if len(set_node.users) > len(node_visited[set_node]):
-                    if self.is_scatter_node(set_node):
-                        continue
-                    edge_set.add(set_node)
-            return seen, edge_set, node_visited
-        
         
         def BFS(s):
             queue=[s]
@@ -81,6 +42,8 @@ class HorizFusePass(PassBase):
                 fuse_sequece = []
                 fuse_inputs_shape=[]
                 fuse_outputs_shape=[]
+                fuse_target=''
+                fuse_graphnode=[]
                 for i in range(len(queue)):
                     point=queue[i]		
                     res.append(point)
@@ -106,9 +69,23 @@ class HorizFusePass(PassBase):
                             fuse_inputs_shape.append(list(node_m.input_shape))
                             fuse_outputs_shape.append(list(node_m.output_shape))
                             fuse_sequece.append(sequence)
+                            fuse_graphnode.append([point,bn,activate])
+                            fuse_target+=point.target
                             queue[i]=activate
+                ## TODO deal with the bug of get item and change the implementation of the logic of add new module
                 if len(fuse_sequece)>0:
                     fuselayer=brt.passes.fuse_util.FusedLayer(fuse_sequece,fuse_inputs_shape,fuse_outputs_shape)
+                    construct_new_args = []
+                    for i,seq in enumerate(fuse_sequece):
+                        construct_new_args.append(fuse_graphnode[i][0].args[0])
+                    pre_node=outList[-1][-1]
+                    with self.graph_mod.graph.inserting_after(pre_node):
+                        new_args=(construct_new_args,)
+                        self.graph_mod.add_module(fuse_target.replace(".", "_"), fuselayer)
+                        self.sub_modules[fuse_target.replace(".", "_")]=fuselayer
+                        new_node_insert=self.graph_mod.graph.create_node('call_module', fuse_target.replace(".", "_"), args=new_args, kwargs={})
+                    res.append(new_node_insert)       
+                    
                 for i in range(len(queue)):
                     point=queue[i]		
                     for son in point.users:
@@ -144,125 +121,123 @@ class HorizFusePass(PassBase):
                         
                         
                         nextQueue.append(son)
+                # if len(fuse_sequece)>0:
+                #     for i,seq in enumerate(fuse_sequece):
+                #         conv=fuse_graphnode[i][0]
+                #         bn= fuse_graphnode[i][1]
+                #         activate= fuse_graphnode[i][2]
+                #         with self.graph_mod.graph.inserting_after(new_node_insert):
+                #             new_gititem=self.graph_mod.graph.call_function(operator.getitem, args=(new_node_insert,i))
+                #         activate.replace_all_uses_with(new_gititem)
+                #         self.graph_mod.graph.erase_node(activate)
+                #         self.graph_mod.graph.erase_node(bn)
+                #         self.graph_mod.graph.erase_node(conv)
+                    
                 outList.append(res)
                 queue=nextQueue	
                 print("queue",queue)
-            import pdb;pdb.set_trace()
             return outList
 
             
             
-            queue = []
-            queue.append(s)
-            seen = set()
-            seen.add(s)
-            level_fuse=[]
-            import pdb;pdb.set_trace()
-            while len(queue) > 0:
-                vetex = queue.pop(0)
-                nodes = vetex.users
-                vetex_next_level=[]
-                for w in nodes:
-                    if w not in seen:
-                        if w.op == 'call_module':
-                            node_m = self.sub_modules[w.target]
-                            if isinstance(node_m, nn.Conv2d) and node_m.bias is  None:
-                                if len(w.users)>1:
-                                    print("conv2d has users")
-                                    continue
-                                bn,=w.users
-                                if len(bn.users)>1:
-                                    print("bn has users")
-                                    continue
-                                activate,=bn.users
-                                bn_module = self.sub_modules[bn.target]
-                                activate_module = self.sub_modules[activate.target]
-                                
-                                sequence = nn.Sequential(node_m, bn_module, activate_module)
-                                
-                                continue 
-                            else:
-                                queue.append(w)
-                                seen.add(w)
-                        else:
-                            queue.append(w)
-                            seen.add(w)
-                if len(vetex_next_level)>0:
-                    level_fuse.append(vetex_next_level)
-                else:
-                    continue
-                print(vetex)
+            
         
         for node in self.graph_mod.graph.nodes:
-            BFS(node)
+            out_list=BFS(node)
             break
-        
-        for node in self.graph_mod.graph.nodes:
-            if node.op == 'call_module':
-                node_m = self.sub_modules[node.target]
-                if isinstance(node_m, nn.Conv2d):
-                    # print("conv2d")
-                    # print(node)
-                    if len(node.users)>1:
-                        print("conv2d has users")
-                        continue
-                    bn,=node.users
-                    if len(bn.users)>1:
-                        print("bn has users")
-                        continue
-                    if node_m.bias is not None:
-                        continue
-                    activate,=bn.users
-                    bn_module = self.sub_modules[bn.target]
-                    activate_module = self.sub_modules[activate.target]
-                    
-                    sequence = nn.Sequential(node_m, bn_module, activate_module)
-                    ## TODO
-                    new_module = brt.passes.fuse_util.TunedKernel(sequence,list(node_m.input_shape),list(node_m.output_shape))
-                    
-                    # sample_input=torch.randn(node_m.input_shape).cuda()
-                    # output=new_module(sample_input)
-                    
-                    
-                    self.sub_modules[node.target]=new_module
-                    activate.replace_all_uses_with(node)
+        for i in range(len(out_list)):
+            print("level",i)
+            
+            fuse_sequece = []
+            fuse_inputs_shape=[]
+            fuse_outputs_shape=[]
+            fuse_target=''
+            fuse_graphnode=[]
+            queue=out_list[i]
+            for j in range(len(queue)):
+                point=queue[j]		
+                if point.op == 'call_module':
+                    node_m = self.sub_modules[point.target]
+                    if isinstance(node_m, nn.Conv2d) and node_m.bias is  None:
+                        if len(point.users)>1:
+                            print("conv2d has users")
+                            continue
+                        bn,=point.users
+                        if len(bn.users)>1:
+                            print("bn has users")
+                            continue
+                        activate,=bn.users
+                        bn_module = self.sub_modules[bn.target]
+                        activate_module = self.sub_modules[activate.target]
+                        ## TODO construct and deal with the scatter node
+                        sequence = nn.Sequential(node_m, bn_module, activate_module)
+                        fuse_inputs_shape.append(list(node_m.input_shape))
+                        fuse_outputs_shape.append(list(node_m.output_shape))
+                        fuse_sequece.append(sequence)
+                        fuse_graphnode.append([point,bn,activate])
+                        fuse_target+=point.target    
+            if len(fuse_sequece)>0:
+                for j,seq in enumerate(fuse_sequece):
+                    conv=fuse_graphnode[j][0]
+                    bn= fuse_graphnode[j][1]
+                    activate= fuse_graphnode[j][2]
+                    node_insert=out_list[i][-1]
+                    with self.graph_mod.graph.inserting_after(node_insert):
+                        new_gititem=self.graph_mod.graph.call_function(operator.getitem, args=(node_insert,j))
+                    activate.replace_all_uses_with(new_gititem)
                     self.graph_mod.graph.erase_node(activate)
                     self.graph_mod.graph.erase_node(bn)
-                    with self.graph_mod.graph.inserting_before(node):
-                        self.graph_mod.add_module(node.target.replace(".", "_"), new_module)
-                        new_node_insert=self.graph_mod.graph.create_node('call_module', node.target.replace(".", "_"), args=node.args, kwargs=node.kwargs)
-                        node.replace_all_uses_with(new_node_insert)
-                    
-                    self.graph_mod.graph.erase_node(node)
-                    
-                    self.graph_mod.graph.lint()
-                    
-                # elif isinstance(node_m, nn.MaxPool2d):
-                    # print("maxpool2d")
-                    # if len(node.users)>1:
-                    #     print("maxpool2d has users")
-                    #     continue
-                    # activate,=node.users
-                    # activate_module = self.sub_modules[activate.target]
-                    # sequence = nn.Sequential(node_m, activate_module)
-                    # new_module = brt.passes.fuse_util.TunedKernel(sequence,list(node_m.input_shape),list(node_m.output_shape))
-                    # self.sub_modules[node.target]=new_module
-                    # activate.replace_all_uses_with(node)
-                    # self.graph_mod.graph.erase_node(activate)
-                    # self.graph_mod.graph.lint()
-                    
-                
-                    
-                
+                    self.graph_mod.graph.erase_node(conv)
             
-            
-            
-            self.graph_mod.recompile()
+        self.graph_mod.recompile()
+        # from torch.fx.passes.graph_drawer import FxGraphDrawer
         
+        # graph_drawer = FxGraphDrawer(self.graph_mod, "raw_pass_graph")
+        # with open("hfuse.svg", "wb") as f:
+        #     f.write(graph_drawer.get_dot_graph().create_svg())
+
             
         
     
     
     def finalize(self) -> GraphModule:
+        
+        ## TODO add topo sort
+        def topological():
+            in_degrees = dict((u, 0) for u in self.graph_mod.graph.nodes)
+            num = len(in_degrees)
+            for u in self.graph_mod.graph.nodes:
+                for v in u.users.copy().keys():
+                    in_degrees[v] += 1
+            Q = [u for u in in_degrees if in_degrees[u] == 0]
+            Seq = []
+            import torch.fx as fx
+
+            while Q:
+                u = Q.pop(0)
+                Seq.append(u)
+                for v in u.users.copy().keys():
+                    in_degrees[v] -= 1
+                    if in_degrees[v] == 0:
+                        Q.append(v)
+            if not len(Seq) == num:
+                raise Exception("failed to finish topological search")
+            return Seq
+
+        def topo_prepend():
+            topological_seq = topological()
+            i = 0
+            for front_node in self.graph_mod.graph.nodes:
+                new_node = topological_seq[i]
+                if new_node == front_node:
+                    i += 1
+                    continue
+                while not new_node == front_node:
+                    front_node.prepend(new_node)
+                    i += 1
+                    new_node = topological_seq[i]
+            return
+
+        topo_prepend()
         self.graph_mod.graph.lint()
         return super().finalize()

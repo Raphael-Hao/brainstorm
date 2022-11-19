@@ -339,6 +339,8 @@ class FusedLayer(nn.Module):
         self.forward(sample_inputs)
 
     def forward(self, inputs: List[torch.Tensor]) -> List[torch.Tensor]:
+        
+        ## TODO cope with bs==0
         for i in range(self.num_submodels):
             self.inputs_templete["forward"][self.input_indices[i]] = inputs[i]
             # self.inputs_templete["forward"][self.output_indices[i]] = torch.empty(
@@ -350,6 +352,14 @@ class FusedLayer(nn.Module):
         outputs = [
             self.inputs_templete["forward"][index] for index in self.output_indices
         ]
+        
+        
+        for i,input in  enumerate(inputs):
+            if input.size(0)==0:
+                import copy
+                newout_shape = copy.deepcopy(self.output_shapes[i])
+                newout_shape[0]=0
+                outputs[i]=torch.empty(newout_shape, device="cuda")
         # for i in range(self.num_submodels):
         #     self.inputs_templete["forward"][self.input_indices[i]] = None
         #     self.inputs_templete["forward"][self.output_indices[i]] = None

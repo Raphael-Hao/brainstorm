@@ -603,7 +603,6 @@ def threshold_dynamic_evaluate(
                     ## TODO check and add maxpool
                     # print("outputnaive",output_naive)
                     # print("output1",output1)
-                    import pdb;pdb.set_trace()
                     
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
