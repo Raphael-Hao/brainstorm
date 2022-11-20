@@ -468,10 +468,13 @@ def threshold_dynamic_evaluate(
             targets = []
             baseline_time = []
             VerticalFusePass_time = []
-            HorizonFusePass_time = []
             speed_up_of_verticalfusetepass = []
-            speed_up_of_horizfusepass = []
-            
+            ConstProPass_time = []
+            DeadPathEliminatePass_time=[]
+            reorder_operatorPass_time = []
+            speed_up_of_constpropogationpass = []
+            speed_up_of_reorder_operatorpass = []
+            speed_up_of_deadpatheliminatepass = []
             
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
@@ -485,7 +488,6 @@ def threshold_dynamic_evaluate(
                     naive_backbone.train(False)
                     model_copy = copy.deepcopy(naive_backbone)
                     model_copy.train(False)
-                    
                     model_copy=model_copy.cuda()
                     ## to solve the decorator issue caused by DeepCopy
                     model_copy.final_gather.__class__ = (
@@ -496,10 +498,8 @@ def threshold_dynamic_evaluate(
                             j
                         ].__class__
                     timer.execute(lambda: model_copy(input_var), "naive2")
-                    
                     baseline_time.append(timer.avg)
                     output_naive = model_copy(input_var)
-                    
                     raw_pass=TracePass(model_copy)
                     raw_pass.run_on_graph()
                     raw_pass_graph=raw_pass.finalize()
@@ -509,37 +509,73 @@ def threshold_dynamic_evaluate(
                     timer.execute(
                         lambda: raw_pass_graph(input_var), "raw_pass_graph"
                     )
-                    
-                    print("begin pass")
-                    vertical_fuse_pass=VerticalFusePass(raw_pass_graph)
+                    eliminate_pass = DeadPathEliminatePass(raw_pass_graph, runtime_load=1)
+                    eliminate_pass.run_on_graph()
+                    new_dce_backbone = eliminate_pass.finalize()
+                    graph_drawer = FxGraphDrawer(new_dce_backbone, "new_backbone")
+                    with open("_dce.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: new_dce_backbone(input_var), "dead_path_eliminated"
+                    )
+                    DeadPathEliminatePass_time.append(timer.avg)
+                    output_dce = new_dce_backbone(input_var)
+                    constant_propagation_pass = ConstantPropagationPass(
+                        new_dce_backbone, upper_perm_load=args.batch_size * n_batch
+                    )
+                    constant_propagation_pass.run_on_graph()
+                    new_backbone_const = constant_propagation_pass.finalize()
+                    graph_drawer = FxGraphDrawer(new_backbone_const, "new_backbone")
+                    with open("_dce_const.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: new_backbone_const(input_var), "constant_propagation"
+                    )
+                    ConstProPass_time.append(timer.avg)
+                    out_put_const = new_backbone_const(input_var)
+                    reorder_operator_pass = OperatorReorderPass(new_backbone_const, runtime_load=1)
+                    reorder_operator_pass.run_on_graph()
+                    new_backbone = reorder_operator_pass.finalize()
+                    timer.execute(lambda: new_backbone(input_var), "reorder_operator")
+                    output_reorder = new_backbone(input_var)
+                    reorder_operatorPass_time.append(timer.avg)
+                    graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    with open("_dce_const_reorder.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    vertical_fuse_pass=VerticalFusePass(new_backbone)
                     vertical_fuse_pass.run_on_graph()
-                    print("pass end")
-                    
                     new_backbone=vertical_fuse_pass.finalize()
                     output1=new_backbone(input_var)
-                    # import pdb;pdb.set_trace()
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-                    with open("fuse.svg", "wb") as f:
+                    with open("_dce_const_reorder_vfuse.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
-                    
-                    print("begin test")
                     timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
                     VerticalFusePass_time.append(timer.avg)
                     output1=new_backbone(input_var)
                     speed_up_of_verticalfusetepass.append(
                         baseline_time[-1] / VerticalFusePass_time[-1]
                     )
-                    ## TODO check and add maxpool
-                    # print("outputnaive",output_naive)
-                    # print("output1",output1)
+                    speed_up_of_deadpatheliminatepass.append(baseline_time[-1] / DeadPathEliminatePass_time[-1])
+                    speed_up_of_constpropogationpass.append(baseline_time[-1] / ConstProPass_time[-1])
+                    speed_up_of_reorder_operatorpass.append(baseline_time[-1] / reorder_operatorPass_time[-1])
+                    
+                    import pdb;pdb.set_trace()
                     
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    print("max speed up of dead_path_eliminate",max(speed_up_of_deadpatheliminatepass))
+                    print("max speed up of constpropogationpass",max(speed_up_of_constpropogationpass))
+                    print("max speed up of reorder_operatorpass",max(speed_up_of_reorder_operatorpass))
                     print("max of speed_up_of_verticalfusetepass",max(speed_up_of_verticalfusetepass))
+                    print("min speed up of dead_path_eliminate",min(speed_up_of_deadpatheliminatepass))
+                    print("min speed up of constpropogationpass",min(speed_up_of_constpropogationpass))
+                    print("min speed up of reorder_operatorpass",min(speed_up_of_reorder_operatorpass))
                     print("min of speed_up_of_verticalfusetepass",min(speed_up_of_verticalfusetepass))
+                    print("avg speed up of dead_path_eliminate",sum(speed_up_of_deadpatheliminatepass)/len(speed_up_of_deadpatheliminatepass))
+                    print("avg speed up of constpropogationpass",sum(speed_up_of_constpropogationpass)/len(speed_up_of_constpropogationpass))
+                    print("avg speed up of reorder_operatorpass",sum(speed_up_of_reorder_operatorpass)/len(speed_up_of_reorder_operatorpass))
                     print("avg of speed_up_of_verticalfusetepass",sum(speed_up_of_verticalfusetepass)/len(speed_up_of_verticalfusetepass))
-                    
-
+        
         benchmarker.add_benchmark("vfuse", fuse_benchmark)
         
         
@@ -553,18 +589,19 @@ def threshold_dynamic_evaluate(
             baseline_time = []
             hfusePass_time = []
             ConstProPass_time = []
+            DeadPathEliminatePass_time=[]
             reorder_operatorPass_time = []
             speed_up_of_hfusepass = []
             speed_up_of_constpropogationpass = []
             speed_up_of_reorder_operatorpass = []
+            speed_up_of_deadpatheliminatepass = []
             
             
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
                 with torch.no_grad():
                     input_var = torch.autograd.Variable(input.cuda())
-                    if i==0:
-                        continue
+                    
                     print("i",i)
                     import copy
                     naive_backbone.train(False)
@@ -583,41 +620,80 @@ def threshold_dynamic_evaluate(
                     
                     baseline_time.append(timer.avg)
                     output_naive = model_copy(input_var)
-                    
                     raw_pass=TracePass(model_copy)
                     raw_pass.run_on_graph()
                     raw_pass_graph=raw_pass.finalize()
                     graph_drawer = FxGraphDrawer(raw_pass_graph, "raw_pass_graph")
-                    with open("raw_const.svg", "wb") as f:
+                    with open("raw.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
                     timer.execute(
                         lambda: raw_pass_graph(input_var), "raw_pass_graph"
                     )
-                    print("begin pass")
-                    vertical_fuse_pass=HorizFusePass(raw_pass_graph)
-                    vertical_fuse_pass.run_on_graph()
-                    print("pass end")
-                    
-                    new_backbone=vertical_fuse_pass.finalize()
+                    eliminate_pass = DeadPathEliminatePass(raw_pass_graph, runtime_load=1)
+                    eliminate_pass.run_on_graph()
+                    new_dce_backbone = eliminate_pass.finalize()
+                    graph_drawer = FxGraphDrawer(new_dce_backbone, "new_backbone")
+                    with open("dce.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: new_dce_backbone(input_var), "dead_path_eliminated"
+                    )
+                    DeadPathEliminatePass_time.append(timer.avg)
+                    output_dce = new_dce_backbone(input_var)
+                    constant_propagation_pass = ConstantPropagationPass(
+                        new_dce_backbone, upper_perm_load=args.batch_size * n_batch
+                    )
+                    constant_propagation_pass.run_on_graph()
+                    new_backbone_const = constant_propagation_pass.finalize()
+                    graph_drawer = FxGraphDrawer(new_backbone_const, "new_backbone")
+                    with open("dce_const.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: new_backbone_const(input_var), "constant_propagation"
+                    )
+                    ConstProPass_time.append(timer.avg)
+                    out_put_const = new_backbone_const(input_var)
+                    reorder_operator_pass = OperatorReorderPass(new_backbone_const, runtime_load=1)
+                    reorder_operator_pass.run_on_graph()
+                    new_backbone = reorder_operator_pass.finalize()
+                    timer.execute(lambda: new_backbone(input_var), "reorder_operator")
+                    output_reorder = new_backbone(input_var)
+                    reorder_operatorPass_time.append(timer.avg)
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
-                    with open("hfuse.svg", "wb") as f:
+                    with open("dce_const_reorder.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
                     
-                    print("begin test")
+                    
+                    vertical_fuse_pass=HorizFusePass(new_backbone)
+                    vertical_fuse_pass.run_on_graph()
+                    new_backbone=vertical_fuse_pass.finalize()
+                    graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    with open("dce_const_reorder_hfuse.svg", "wb") as f:
+                        f.write(graph_drawer.get_dot_graph().create_svg())
                     timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
                     hfusePass_time.append(timer.avg)
                     output1=new_backbone(input_var)
                     speed_up_of_hfusepass.append(baseline_time[-1]/hfusePass_time[-1])
-                    # import pdb;pdb.set_trace()
-                    
-                    ## TODO check and add maxpool
-                    # print("outputnaive",output_naive)
-                    # print("output1",output1)
+                    speed_up_of_constpropogationpass.append(baseline_time[-1]/ConstProPass_time[-1])
+                    speed_up_of_reorder_operatorpass.append(baseline_time[-1]/reorder_operatorPass_time[-1])
+                    speed_up_of_deadpatheliminatepass.append(baseline_time[-1]/DeadPathEliminatePass_time[-1])
+                    import pdb;pdb.set_trace()
                     
                 if i % 10 == 0:
                     print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    print("max speed up of dead_path_eliminate",max(speed_up_of_deadpatheliminatepass))
+                    print("max speed up of constpropogationpass",max(speed_up_of_constpropogationpass))
+                    print("max speed up of reorder_operatorpass",max(speed_up_of_reorder_operatorpass))
                     print("max of speed_up_of_hfusepass",max(speed_up_of_hfusepass))
+                    
+                    print("min speed up of dead_path_eliminate",min(speed_up_of_deadpatheliminatepass))
+                    print("min speed up of constpropogationpass",min(speed_up_of_constpropogationpass))
+                    print("min speed up of reorder_operatorpass",min(speed_up_of_reorder_operatorpass))
                     print("min of speed_up_of_hfusepass",min(speed_up_of_hfusepass))
+                    
+                    print("avg speed up of dead_path_eliminate",sum(speed_up_of_deadpatheliminatepass)/len(speed_up_of_deadpatheliminatepass))
+                    print("avg speed up of constpropogationpass",sum(speed_up_of_constpropogationpass)/len(speed_up_of_constpropogationpass))
+                    print("avg speed up of reorder_operatorpass",sum(speed_up_of_reorder_operatorpass)/len(speed_up_of_reorder_operatorpass))
                     print("avg of speed_up_of_hfusepass",sum(speed_up_of_hfusepass)/len(speed_up_of_hfusepass))
                     
 

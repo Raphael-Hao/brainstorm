@@ -104,7 +104,6 @@ class TunedKernel(nn.Module):
                 ]
             )
         elif self.module_name in ["Conv2dBiasReLU", "Conv2dBiasSigmoid"]:
-            ## TODO
             self.inputs_templete["forward"].extend(
                 [
                     None,
@@ -146,19 +145,6 @@ class TunedKernel(nn.Module):
             )
             else :
                 raise NotImplementedError(f"{self.module_name}")
-                
-            
-            
-            
-            # self.inputs_templete["forward"].extend(
-            #     [
-            #         None,
-            #         fusedweight,
-            #         # None,
-            #         torch.empty(self.output_shape, device="cuda"),
-            #         fusedbias,
-            #     ]
-            # )
         elif self.module_name in ["Conv2dBatchNormReLU"]:
             self.inputs_templete["forward"].extend(
                 [

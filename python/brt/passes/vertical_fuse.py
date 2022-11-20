@@ -48,11 +48,6 @@ class VerticalFusePass(PassBase):
                     sequence = nn.Sequential(node_m, bn_module, activate_module)
                     ## TODO
                     new_module = brt.passes.fuse_util.TunedKernel(sequence,list(node_m.input_shape),list(node_m.output_shape))
-                    
-                    # sample_input=torch.randn(node_m.input_shape).cuda()
-                    # output=new_module(sample_input)
-                    
-                    
                     self.sub_modules[node.target]=new_module
                     activate.replace_all_uses_with(node)
                     self.graph_mod.graph.erase_node(activate)

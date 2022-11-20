@@ -61,10 +61,8 @@ class HorizFusePass(PassBase):
                             activate,=bn.users
                             node_visited.update({activate: 1})
                             node_visited.update({bn: 1})
-                            
                             bn_module = self.sub_modules[bn.target]
                             activate_module = self.sub_modules[activate.target]
-                            ## TODO construct and deal with the scatter node
                             sequence = nn.Sequential(node_m, bn_module, activate_module)
                             fuse_inputs_shape.append(list(node_m.input_shape))
                             fuse_outputs_shape.append(list(node_m.output_shape))
@@ -72,7 +70,6 @@ class HorizFusePass(PassBase):
                             fuse_graphnode.append([point,bn,activate])
                             fuse_target+=point.target
                             queue[i]=activate
-                ## TODO deal with the bug of get item and change the implementation of the logic of add new module
                 if len(fuse_sequece)>0:
                     fuselayer=brt.passes.fuse_util.FusedLayer(fuse_sequece,fuse_inputs_shape,fuse_outputs_shape)
                     construct_new_args = []
@@ -108,34 +105,13 @@ class HorizFusePass(PassBase):
                                             nextQueue.append(git2)
                                     break
                                 for son_son in son.users:
-                                    
-                                    # if self.is_scatter_node(son_son):
-                                    #     import pdb;pdb.set_trace()
-                                    #     continue
                                     if son_son.target==torch.cat or self.is_scatter_node(son_son):
                                         continue
-                                        
                                     nextQueue.append(son_son)
-                            
                             continue
-                        
-                        
                         nextQueue.append(son)
-                # if len(fuse_sequece)>0:
-                #     for i,seq in enumerate(fuse_sequece):
-                #         conv=fuse_graphnode[i][0]
-                #         bn= fuse_graphnode[i][1]
-                #         activate= fuse_graphnode[i][2]
-                #         with self.graph_mod.graph.inserting_after(new_node_insert):
-                #             new_gititem=self.graph_mod.graph.call_function(operator.getitem, args=(new_node_insert,i))
-                #         activate.replace_all_uses_with(new_gititem)
-                #         self.graph_mod.graph.erase_node(activate)
-                #         self.graph_mod.graph.erase_node(bn)
-                #         self.graph_mod.graph.erase_node(conv)
-                    
                 outList.append(res)
                 queue=nextQueue	
-                # print("queue",queue)
             return outList
 
             
@@ -146,8 +122,6 @@ class HorizFusePass(PassBase):
             out_list=BFS(node)
             break
         for i in range(len(out_list)):
-            # print("level",i)
-            
             fuse_sequece = []
             fuse_inputs_shape=[]
             fuse_outputs_shape=[]
@@ -190,19 +164,8 @@ class HorizFusePass(PassBase):
                     self.graph_mod.graph.erase_node(conv)
             
         self.graph_mod.recompile()
-        # from torch.fx.passes.graph_drawer import FxGraphDrawer
-        
-        # graph_drawer = FxGraphDrawer(self.graph_mod, "raw_pass_graph")
-        # with open("hfuse.svg", "wb") as f:
-        #     f.write(graph_drawer.get_dot_graph().create_svg())
 
-            
-        
-    
-    
     def finalize(self) -> GraphModule:
-        
-        ## TODO add topo sort
         def topological():
             in_degrees = dict((u, 0) for u in self.graph_mod.graph.nodes)
             num = len(in_degrees)
@@ -237,7 +200,6 @@ class HorizFusePass(PassBase):
                     i += 1
                     new_node = topological_seq[i]
             return
-
         topo_prepend()
         self.graph_mod.graph.lint()
         return super().finalize()
