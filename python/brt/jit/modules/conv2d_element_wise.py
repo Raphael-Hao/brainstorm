@@ -2,6 +2,8 @@
 # Licensed under the MIT license.
 
 import torch
+from torch import nn
+
 from brt.runtime import log
 from brt.jit.modules.atom import AtomModule
 from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
@@ -21,6 +23,11 @@ class Conv2dElementWiseModule(AtomModule):
         torch.nn.ReLU,
         torch.nn.Sigmoid,
     )
+
+    def __init__(self, module: nn.Module):
+        super().__init__(module)
+        if not isinstance(self.module, torch.nn.Sequential):
+            self.module = torch.nn.Sequential(self.module)
 
     @classmethod
     def ismodule(cls, module: torch.nn.Module):
@@ -89,7 +96,7 @@ parameters: {parameters}
 
         return type(self)._shared_arg_indices[method], shared_arg_grans
 
-    def extract_arg_infos(self, method: str):
+    def _extract_arg_infos(self, method: str):
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
         if "Bias" not in self.module_name:
@@ -106,9 +113,7 @@ parameters: {parameters}
 
     @property
     def module_name(self) -> str:
-        if not isinstance(module, torch.nn.Sequential):
-            module = torch.nn.Sequential(module)
-        for i, sub_module in enumerate(module):
+        for i, sub_module in enumerate(self.module):
             if i == 0:
                 module_name = "Conv2d"
                 if sub_module.bias is not None:
