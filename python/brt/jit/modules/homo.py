@@ -1,6 +1,7 @@
 from typing import List, Tuple, Union, Literal, Callable
 
 import torch
+from torch import autograd
 
 from brt.jit.codegen.homo_fused import HomoFusedKernel
 from brt.jit.modules.fused import FusedModule
@@ -29,7 +30,10 @@ class HomoFusedModule(FusedModule):
         assert shared_arg_indices is not None, "shared_arg_indices is None"
         assert shared_arg_grans is not None, "shared_arg_grans is None"
 
-        candidates = [jsm._make_global_kernel for jsm in self.jit_submodules]
+        candidates = []
+        for jsm, inp in zip(self.jit_submodules, sample_inputs):
+            module_kernel = jsm._make_global_kernel(inp, method, objective_func, rank)
+            candidates.append(module_kernel)
         fused_kernel = HomoFusedKernel(
             self.num_submodule,
             capacities,
@@ -38,6 +42,15 @@ class HomoFusedModule(FusedModule):
             candidates,
         )
         return fused_kernel
+
+    def make_function(
+        self,
+        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        mode: Literal["eval", "train"] = "eval",
+        objective_func: str = "fastest",
+        rank: Union[int, List[int]] = 1,
+    ) -> autograd.Function:
+        return super().make_function(sample_inputs, mode, objective_func, rank)
 
     @staticmethod
     def _check_homogeneity(modules: torch.nn.ModuleList):
@@ -63,7 +76,7 @@ class HomoFusedModule(FusedModule):
     def _extract_arg_infos(
         self,
         method: str,
-    ) -> Tuple[int, int, List, List]:
+    ) -> Tuple[int, int, List[int], List[int]]:
         raise NotImplementedError()
 
     @property

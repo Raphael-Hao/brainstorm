@@ -28,10 +28,10 @@ class AtomModule(ModuleBase):
 
     def make_function(
         self,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: torch.Tensor,
         mode: Literal["eval", "train"] = "eval",
         objective_func: str = "fastest",
-        rank: Union[int, List[int]] = 1,
+        rank: int = 1,
     ) -> autograd.Function:
         if mode == "eval":
             jit_kernel = self.make_kernel(
@@ -43,7 +43,10 @@ class AtomModule(ModuleBase):
                 input_arg_indices,
                 output_arg_indices,
             ) = self._extract_arg_infos("forward")
-            out_data = [torch.empty(shp, device="cuda") for shp in self._get_output_shape("forward", sample_inputs)]
+            out_data = [
+                torch.empty(shp, device="cuda")
+                for shp in self._get_output_shape("forward", sample_inputs)
+            ]
 
             class JitFunction(autograd.Function):
                 @staticmethod
@@ -62,6 +65,16 @@ class AtomModule(ModuleBase):
             raise NotImplementedError
         else:
             raise ValueError
+
+    def _get_output_shape(
+        self, method: str, sample_inputs: torch.Tensor
+    ) -> List[torch.Size]:
+        if method not in type(self)._shared_arg_indices:
+            raise NotImplementedError(f"{method} is not supported")
+        outputs = self.module.__getattribute__(method)(sample_inputs)
+        if not isinstance(outputs, tuple):
+            outputs = (outputs,)
+        return [o.shape for o in outputs]
 
     @classmethod
     @abstractmethod

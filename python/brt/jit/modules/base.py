@@ -84,20 +84,18 @@ class ModuleBase(ABC):
     def _extract_arg_infos(
         self,
         method: str,
-    ) -> Tuple[int, int, List, List]:
+    ) -> Tuple[int, int, List[int], List[int]]:
         raise NotImplementedError()
 
     # @abstractmethod
     def _extract_parameters(self) -> List[torch.nn.Parameter]:
         raise NotImplementedError()
 
-    def _get_output_shape(self, method: str, sample_inputs: torch.Tensor) -> torch.Size:
-        if method not in type(self)._shared_arg_indices:
-            raise NotImplementedError(f"{method} is not supported")
-        outputs = self.module.__getattribute__(method)(sample_inputs)
-        if not isinstance(outputs, tuple):
-            outputs = (outputs,)
-        return [o.shape for o in outputs]
+    @abstractmethod
+    def _get_output_shape(
+        self, method: str, sample_inputs: Union[torch.Tensor, List[torch.Tensor]]
+    ) -> List[torch.Size]:
+        raise NotImplementedError
 
     @property
     @abstractmethod

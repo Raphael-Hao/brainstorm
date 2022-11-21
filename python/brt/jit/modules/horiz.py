@@ -28,6 +28,15 @@ class HorizFusedModule(FusedModule):
         fused_kernel = HorizFusedKernel(candidates)
         return fused_kernel
 
+    def make_function(
+        self,
+        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        mode: Literal["eval", "train"] = "eval",
+        objective_func: str = "fastest",
+        rank: Union[int, List[int]] = 1,
+    ) -> autograd.Function:
+        pass
+
     def _extract_shared_arg_infos(
         self,
         method: str,
@@ -38,7 +47,7 @@ class HorizFusedModule(FusedModule):
     def _extract_arg_infos(
         self,
         method: str,
-    ) -> Tuple[int, int, List, List]:
+    ) -> Tuple[int, int, List[int], List[int]]:
         raise NotImplementedError()
 
     @property

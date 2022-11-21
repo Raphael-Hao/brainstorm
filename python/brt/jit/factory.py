@@ -33,25 +33,23 @@ def make_jit_kernel(
     objective_func: str = "fastest",
     rank: Union[int, List[int]] = 1,
 ) -> Callable[..., None]:
-    # TODO: hetero fuse & homo fuse
-    if opt_level in [None, "horiz_fuse"]:
-        return ModuleFactory.make_kernel(
-            modules,
-            sample_inputs=sample_inputs,
-            method=method,
-            opt_level=opt_level,
-            objective_func=objective_func,
-            rank=rank,
-        )
-    else:
+    if opt_level == "homo_fuse":
         return _make_jit_kernel(
-            modules,
+            modules=modules,
             sample_inputs=sample_inputs,
             method=method,
             opt_level=opt_level,
             objective_func=objective_func,
             rank=rank,
         )
+    return ModuleFactory.make_kernel(
+        modules,
+        sample_inputs=sample_inputs,
+        method=method,
+        opt_level=opt_level,
+        objective_func=objective_func,
+        rank=rank,
+    )
 
 
 def make_jit_function(

@@ -60,7 +60,7 @@ class LinearModule(AtomModule):
         ]
         return type(self)._shared_arg_indices[method], shared_arg_grans
 
-    def _extract_arg_infos(self, method: str) -> Tuple[int, int, List, List]:
+    def _extract_arg_infos(self, method: str) -> Tuple[int, int, List[int], List[int]]:
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
         if self.module.bias is None:
