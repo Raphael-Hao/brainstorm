@@ -52,7 +52,7 @@ class ModuleBase(ABC):
     ) -> GlobalKernel:
         raise NotImplementedError()
 
-    # @abstractmethod
+    @abstractmethod
     def make_function(
         self,
         sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
@@ -91,10 +91,13 @@ class ModuleBase(ABC):
     def _extract_parameters(self) -> List[torch.nn.Parameter]:
         raise NotImplementedError()
 
-    def _get_output_shape(self, method: str, sample_input: torch.Tensor) -> torch.Size:
+    def _get_output_shape(self, method: str, sample_inputs: torch.Tensor) -> torch.Size:
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
-        return self.module.__getattr__(method)(sample_input).shape
+        outputs = self.module.__getattribute__(method)(sample_inputs)
+        if not isinstance(outputs, tuple):
+            outputs = (outputs,)
+        return [o.shape for o in outputs]
 
     @property
     @abstractmethod
