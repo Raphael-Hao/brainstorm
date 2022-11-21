@@ -53,8 +53,6 @@
             "end": "",
             "blankLinesAfter": 1,
             "beforeHeader": [
-                // "#!/usr/bin/env python3",
-                // "# -*- coding:utf-8 -*-"
             ]
         },
         {
@@ -78,15 +76,6 @@
             "template": [
                 "Copyright (c) 2022 by Microsoft Corporation.",
                 "<<licensetext>>"
-                // "--------",
-                // "\\file: <<filerelativepath>>",
-                // "\\brief: ",
-                // "Created Date: <<filecreated('dddd, MMMM Do YYYY, h:mm:ss a')>>",
-                // "Author: <<author>>"
-                // "Email: <<authoremail>>",
-                // "--------",
-                // "Last Modified: ",
-                // "Modified By: "
             ]
         }
     ],
