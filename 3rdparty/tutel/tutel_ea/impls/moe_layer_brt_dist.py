@@ -158,7 +158,6 @@ class TopKGate(torch.nn.Module):
         )
 
         self.a2a_ffn_overlap_degree = a2a_ffn_overlap_degree
-
         self.scatter = SwinMoEScatterRouter(
             fabric_type="distributed_fused_dispatch",
             protocol_kwargs={

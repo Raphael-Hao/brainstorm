@@ -115,12 +115,12 @@ class MoEMlp(nn.Module):
 
         self._moe_layer = moe.moe_layer(
             # gate_type='Top%dGate' % top_value,
-            gate_type={'type': 'top', 'k': top_value},
+            gate_type={'type': 'top', 'k': top_value, 'fp32_gate': True},
             model_dim=model_dim,
             experts={'type': 'ffn', 'count_per_node': num_local_experts, 'hidden_size_per_expert': hidden_size,
                      'activation_fn': lambda x: F.gelu(x), 'implicit_dropout_p': moe_drop},
             capacity_factor=capacity_factor,
-            fp32_gate=True,
+            # fp32_gate=True,
             scan_expert_func=lambda name, param: setattr(param, 'skip_allreduce', True),
             seeds=(1, self.dist_rank + 1, self.dist_rank + 1),
             normalize_gate=normalize_gate,

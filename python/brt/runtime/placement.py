@@ -4,6 +4,7 @@
 import pathlib
 from typing import Dict, List, Tuple
 
+from collections import OrderedDict
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -45,7 +46,6 @@ def generate_rank_placement(
 ):
     experts_range = {2: 18, 3: 2}
     experts_keys = generate_experts_keys(experts_range)
-    print(len(experts_keys))
 
     assert placement_file is not None or global_expert_num is not None
     all_placement: List[np.ndarray] = []
@@ -56,8 +56,8 @@ def generate_rank_placement(
         all_placement = [placement for i in range(len(experts_keys))]
     else:
         all_placement = np.load(placement_file, allow_pickle=True)
-    rank_placement: Dict[Tuple[int, int], List[int]] = {}
-    placement_indices: Dict[Tuple[int, int], torch.Tensor] = {}
+    rank_placement: OrderedDict[Tuple[int, int], List[int]] = OrderedDict()
+    placement_indices: OrderedDict[Tuple[int, int], torch.Tensor] = OrderedDict()
     for idx, placement in enumerate(all_placement):
         expert_key = experts_keys[idx]
         placement_index = []
@@ -68,14 +68,16 @@ def generate_rank_placement(
         placement_index = np.concatenate(placement_index, axis=None)
         placement_indices[expert_key] = torch.from_numpy(placement_index)
 
-    if placement_file is None:
-        placement_indices = None
+    # if placement_file is None:
+    #     placement_indices = None
+
     return rank_placement, placement_indices
 
 
 def adaptive_load(
     model: nn.Module,
     checkpoint_file: str,
+    enable_locality=False,
     placement_file: str = None,
     global_expert_num: int = None,
 ):
@@ -84,27 +86,39 @@ def adaptive_load(
     rank_placement, placement_indices = generate_rank_placement(
         world_rank, world_size, placement_file, global_expert_num
     )
-    print(rank_placement)
-    print(placement_indices)
     adaptive_load_checkpoint(model, checkpoint_file, rank_placement)
-    adaptive_load_placement(model, placement_indices)
+    # adaptive_load_placement(model, placement_indices)
+    print(f"rank {world_rank} placement_indices is {placement_indices}")
+    locality_enabled_router = []
+    if enable_locality:
+        locality_enabled_router = [
+            next(iter(placement_indices.keys())),
+            next(reversed(placement_indices.keys())),
+        ]
+        print(f"locality_enabled_router: {locality_enabled_router}")
+    set_locality(model, locality_enabled_router)
 
 
 def adaptive_load_placement(
-    model: nn.Module, placement_indices: Dict[Tuple[int, int], torch.Tensor]
+    model: nn.Module,
+    placement_indices: "OrderedDict[Tuple[int, int], torch.Tensor]" = None,
 ):
     # layers.{layer_id}.blocks.{block_id}.mlp._moe_layer.scatter
+    if placement_indices is None:
+        return
     for _m_name, m in model.named_modules():
         if is_router(m) and "scatter" in m._router_type:
-            print(_m_name)
-            # m.placement_indices = placement_indices[(m.layer_id, m.block_id)]
-            # m.ptu_decision_history = m.placement_indices.tolist()
+            expert_key = tuple([int(_m_name.split(".")[i]) for i in [1, 3]])
+            print(
+                f"setting placement for {_m_name} with {placement_indices[expert_key]}"
+            )
+            m.fabric.placement_indices = placement_indices[expert_key]
 
 
 def adaptive_load_checkpoint(
     model: nn.Module,
     checkpoint_file: str,
-    rank_placement: Dict[Tuple[int, int], List[int]],
+    rank_placement: "OrderedDict[Tuple[int, int], List[int]]",
 ):
     ckpt_filepath = pathlib.Path(checkpoint_file)
     checkpoint = torch.load(ckpt_filepath, map_location="cpu")
@@ -150,6 +164,17 @@ def adaptive_load_checkpoint(
                     state_dict[entry] = torch.stack(tensors_to_concat[entry])
 
     msg = model.load_state_dict(state_dict, strict=False)
-    logger.info(msg)
+    # logger.info(msg)
     del checkpoint
     torch.cuda.empty_cache()
+
+
+def set_locality(model: nn.Module, locality_enabled_router: List[Tuple[int, int]]):
+    for _m_name, m in model.named_modules():
+        if is_router(m) and "scatter" in m._router_type:
+            expert_key = tuple([int(_m_name.split(".")[i]) for i in [1, 3]])
+            if expert_key in locality_enabled_router:
+                print(
+                    f"orginal locality for {_m_name}.fabric is {m.fabric.locality_aware}"
+                )
+                m.fabric.locality_aware = True

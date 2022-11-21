@@ -118,6 +118,7 @@ def parse_option():
     parser.add_argument("--gather-ckpt", action="store_true", default=False)
     parser.add_argument("--correctness", action="store_true", default=False)
     parser.add_argument("--placement", type=str, default=None)
+    parser.add_argument("--locality", action="store_true", default=False)
     ds_init = None
 
     args, _unparsed = parser.parse_known_args()
@@ -145,12 +146,8 @@ def main(args, config, ds_init):
     # For Tutel MoE
     for name, param in model.named_parameters():
         if hasattr(param, "skip_allreduce") and param.skip_allreduce is True:
-            print(f"===>[rank{dist.get_rank()}] {name} skipping all_reduce")
             model.add_param_to_skip_allreduce(name)
             param.register_hook(partial(hook_scale_grad, config.TRAIN.MOE_GRAD_SCALE))
-            print(
-                f"[{name}] skip_allreduce and div {config.TRAIN.MOE_GRAD_SCALE} for grad"
-            )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"number of params: {n_parameters}")
@@ -172,13 +169,13 @@ def main(args, config, ds_init):
 
         checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
         placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-        adaptive_load(model_without_ddp, checkpoint_file, placement_file)
-        # adaptive_load_checkpoint(config, model_without_ddp, logger)
-        # distributed_debug(model)
-        # acc1, _acc5, _loss = validate(config, data_loader_val, model)
-        # logger.info(
-        #     f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-        # )
+        # adaptive_load(model_without_ddp, checkpoint_file, global_expert_num=16)
+        adaptive_load(
+            model_without_ddp,
+            checkpoint_file,
+            enable_locality=args.locality,
+            placement_file=placement_file,
+        )
         return
 
     if args.gather_ckpt:
@@ -186,7 +183,16 @@ def main(args, config, ds_init):
         return
 
     if args.correctness:
-        adaptive_load_checkpoint(config, model_without_ddp, logger)
+        # adaptive_load_checkpoint(config, model_without_ddp, logger)
+        checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
+        placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
+        adaptive_load(
+            model_without_ddp,
+            checkpoint_file,
+            enable_locality=args.locality,
+            global_expert_num=16,
+        )
+        # adaptive_load(model_without_ddp, checkpoint_file, placement_file=placement_file)
         check_correctness(model, args.batch_size)
         return
 
@@ -208,6 +214,7 @@ def main(args, config, ds_init):
     if args.throughput:
         throughput(data_loader_val, model, logger)
         return
+
 
 @torch.no_grad()
 def validate(config, data_loader, model):
@@ -298,7 +305,7 @@ def check_correctness(model, bs=1, iteration=10):
     for inputs in inputs_generator:
         outputs = model(inputs)
         print(outputs[0])
-        print(outputs[0].sum(1))
+        print(outputs[0].sum())
         input()
 
 
@@ -332,8 +339,8 @@ def distributed_debug(model, bs=1, iteration=1):
 if __name__ == "__main__":
     args, config, ds_init = parse_option()
 
-    print("Environments:", os.environ)
-    print("Pytorch NCCL VERSION: ", torch.cuda.nccl.version())
+    # print("Environments:", os.environ)
+    # print("Pytorch NCCL VERSION: ", torch.cuda.nccl.version())
 
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         master_port = os.environ["MASTER_PORT"]
@@ -423,7 +430,7 @@ if __name__ == "__main__":
         logger.info(f"Full config saved to {path}")
 
     # print config
-    logger.info(config.dump())
-    logger.info(json.dumps(vars(args)))
+    # logger.info(config.dump())
+    # logger.info(json.dumps(vars(args)))
 
     main(args, config, ds_init)

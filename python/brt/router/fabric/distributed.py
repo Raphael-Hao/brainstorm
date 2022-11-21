@@ -34,6 +34,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
             route_logic=route_logic,
             transform=transform,
         )
+        self.register_buffer("placement_indices", None)
 
     def forward(
         self,
@@ -59,6 +60,22 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         else:
             raise ValueError("route_logic must be 1d or 2d")
 
+        if self.placement_indices is not None:
+            self.placement_indices = self.placement_indices.to(out_flow.device)
+            path_num = self.placement_indices.shape[0]
+            print("path_num", path_num)
+            origin_shape = out_flow.shape
+            print("origin_shape", origin_shape)
+            out_flow = out_flow.view(path_num, -1)
+            print("out_flow.shape", out_flow.shape)
+            out_flow = out_flow.index_select(0, self.placement_indices)
+            print("out_flow.shape", out_flow.shape)
+            out_flow = out_flow.view(origin_shape)
+            loads = loads.index_select(0, self.placement_indices)
+            route_indices = route_indices.index_select(0, self.placement_indices)
+            score = score.index_select(0, self.placement_indices)
+            input()
+
         a2a_resuslts = brt_dist.group_asymmetry_a2a(
             out_flow, loads, self.locality_aware
         )
@@ -68,6 +85,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
             route_indices, loads, score = brt_dist.batched_exchange(
                 [route_indices, loads, score], a2a_resuslts[2]
             )
+            print(f"reorder indices {a2a_resuslts[2]}")
             brt_dist.set_reorder_indices(a2a_resuslts[2])
 
         out_flow.route_indices = route_indices
@@ -118,6 +136,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
 
         if self.locality_aware:
             reorder_indices = brt_dist.get_reorder_indices()
+            print(f"reorder indices {reorder_indices}")
             out_flow = brt_dist.exchange(out_flow, reorder_indices)
             brt_dist.set_reorder_indices(None)
 

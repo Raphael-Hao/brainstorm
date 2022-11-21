@@ -5,7 +5,7 @@
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 BRT_DIR=$(cd "${script_dir}/../../" && pwd)
 
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
 export BRT_CACHE_PATH=$BRT_DIR/.cache
 export BRT_CAPTURE_STATS=False # should be False for brt_dist or tutel
 export BRT_CAPTURED_FABRIC_TYPE=dispatch
@@ -25,4 +25,4 @@ torchrun --nproc_per_node="$PROC" \
     benchmark.py --cfg configs/"${EXPERT_NUM}"expert_"${GPU_NUM}"GPU.yaml \
     --batch-size 128 --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k --output ./results/MoE/ \
     --eval --resume "${BRT_CACHE_PATH}"/ckpt/swin_moe/small_swin_moe_32GPU_16expert/model.pth \
-    --throughput
+    --correctness
