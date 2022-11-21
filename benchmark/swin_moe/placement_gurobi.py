@@ -23,7 +23,7 @@ class PlacementSolver:
         self.path_nums = [
             len(self.scatter_trace[i]) for i in range(self.scatter_num - 1)
         ]
-        self.path_nums.append(len(self.scatter_trace[self.scatter_num - ]))
+        self.path_nums.append(len(self.scatter_trace[self.scatter_num - 2]))
         self.mode = mode
         self.build_model()
 
