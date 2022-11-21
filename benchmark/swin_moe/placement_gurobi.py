@@ -18,9 +18,12 @@ class PlacementSolver:
     ):
         self.nodes = nodes
         self.scatter_trace = scatter_trace
-        self.scatter_num = len(self.scatter_trace)
+        self.scatter_num = len(self.scatter_trace) + 1
         self.least_path_per_node = least_path_per_node if least_path_per_node > 0 else 1
-        self.path_nums = [len(self.scatter_trace[i]) for i in range(self.scatter_num)]
+        self.path_nums = [
+            len(self.scatter_trace[i]) for i in range(self.scatter_num - 1)
+        ]
+        self.path_nums.append(len(self.scatter_trace[self.scatter_num - 1]))
         self.mode = mode
         self.build_model()
 
@@ -95,9 +98,6 @@ def main():
     solver = PlacementSolver(
         args.nodes, scatter_trace, least_path_per_node, mode="optimizer"
     )
-    # solver.construct_variable()
-    # solver.construct_objective()
-    # solver.add_constraints()
     solver.solve()
     solver.export_results()
 

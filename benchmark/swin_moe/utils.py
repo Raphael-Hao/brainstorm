@@ -168,12 +168,8 @@ def adaptive_load_checkpoint(
 
     msg = model_without_ddp.load_state_dict(state_dict, strict=False)
     logger.info(msg)
-
-    max_accuracy = 0.0
     del checkpoint
     torch.cuda.empty_cache()
-
-    return max_accuracy
 
 
 def load_checkpoint(

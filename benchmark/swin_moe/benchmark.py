@@ -23,7 +23,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import CUDATimer, deterministic_random_generator
-from brt.runtime.placement import dump_trace
+from brt.runtime.placement import dump_trace, adaptive_load
 from config import get_config
 from data import build_loader
 from logger import create_logger
@@ -117,7 +117,7 @@ def parse_option():
     parser.add_argument("--trace", action="store_true", default=False)
     parser.add_argument("--gather-ckpt", action="store_true", default=False)
     parser.add_argument("--correctness", action="store_true", default=False)
-
+    parser.add_argument("--placement", type=str, default=None)
     ds_init = None
 
     args, _unparsed = parser.parse_known_args()
@@ -169,12 +169,16 @@ def main(args, config, ds_init):
     )
 
     if args.debug:
-        adaptive_load_checkpoint(config, model_without_ddp, logger)
+
+        checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
+        placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
+        adaptive_load(model_without_ddp, checkpoint_file, placement_file)
+        # adaptive_load_checkpoint(config, model_without_ddp, logger)
         # distributed_debug(model)
-        acc1, _acc5, _loss = validate(config, data_loader_val, model)
-        logger.info(
-            f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-        )
+        # acc1, _acc5, _loss = validate(config, data_loader_val, model)
+        # logger.info(
+        #     f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
+        # )
         return
 
     if args.gather_ckpt:
