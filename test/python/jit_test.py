@@ -5,6 +5,8 @@ import torch.nn as nn
 from brt.jit import make_jit_function, make_jit_kernel
 
 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = False
 
 
 class CUDATimer:
@@ -33,7 +35,7 @@ class CUDATimer:
 class JitFunctionTest(unittest.TestCase):
     def test_moduel_kernel(self):
         cuda_timer = CUDATimer()
-        linear = nn.Linear(512, 1024).cuda()
+        linear = nn.Linear(512, 1024).cuda().eval()
         sample_inputs = torch.randn((16, 512)).cuda()
         pt_out_gpu = linear(sample_inputs)
         cuda_timer.start()
@@ -58,7 +60,7 @@ class JitFunctionTest(unittest.TestCase):
             )
         cuda_timer.stop(100, "brt_out_gpu")
 
-        self.assertTrue(torch.allclose(brt_out_gpu, pt_out_gpu))
+        self.assertTrue(torch.allclose(brt_out_gpu, pt_out_gpu, atol=1e-5))
 
     def test_horiz_fused_function(self):
         cuda_timer = CUDATimer()
@@ -99,7 +101,9 @@ class JitFunctionTest(unittest.TestCase):
 
         for i in range(4):
             self.assertTrue(
-                torch.allclose(sample_outputs[i], horiz_fused_inputs[2 + i * 4])
+                torch.allclose(
+                    sample_outputs[i], horiz_fused_inputs[2 + i * 4], atol=1e-5
+                )
             )
 
     def test_hetero_fused_function(self):
@@ -144,7 +148,9 @@ class JitFunctionTest(unittest.TestCase):
             if active != 0:
                 sample_out = linears[i](hetero_fused_inputs[i * 4])
                 self.assertTrue(
-                    torch.allclose(sample_out, hetero_fused_inputs[2 + i * 4])
+                    torch.allclose(
+                        sample_out, hetero_fused_inputs[2 + i * 4], atol=1e-5
+                    )
                 )
 
     def test_homo_fused_function(self):
@@ -189,8 +195,7 @@ class JitFunctionTest(unittest.TestCase):
                 start_idx += cap
             outputs = torch.cat(outputs)
         cuda_timer.stop(100, "brt_serial_fusion")
-
-        self.assertTrue(torch.allclose(outputs, shared_inputs[1]))
+        self.assertTrue(torch.allclose(outputs, shared_inputs[1], atol=1e-5))
 
 
 if __name__ == "__main__":
