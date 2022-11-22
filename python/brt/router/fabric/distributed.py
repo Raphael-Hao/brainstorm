@@ -80,6 +80,8 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
             out_flow, loads, self.locality_aware
         )
         out_flow = a2a_resuslts[0]
+        print(out_flow.sum(1))
+        input()
 
         if self.locality_aware:
             route_indices, loads, score = brt_dist.batched_exchange(

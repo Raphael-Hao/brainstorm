@@ -89,14 +89,14 @@ def adaptive_load(
     adaptive_load_checkpoint(model, checkpoint_file, rank_placement)
     # adaptive_load_placement(model, placement_indices)
     print(f"rank {world_rank} placement_indices is {placement_indices}")
-    locality_enabled_router = []
+    locality_enabled_router = {"scatter": [], "gather": []}
     if enable_locality:
-        locality_enabled_router = [
-            next(iter(placement_indices.keys())),
-            next(reversed(placement_indices.keys())),
-        ]
+        locality_enabled_router["scatter"].append(next(iter(placement_indices.keys())))
+        locality_enabled_router["gather"].append(
+            next(reversed(placement_indices.keys()))
+        )
         print(f"locality_enabled_router: {locality_enabled_router}")
-    set_locality(model, locality_enabled_router)
+    adaptive_set_locality(model, locality_enabled_router)
 
 
 def adaptive_load_placement(
@@ -169,12 +169,19 @@ def adaptive_load_checkpoint(
     torch.cuda.empty_cache()
 
 
-def set_locality(model: nn.Module, locality_enabled_router: List[Tuple[int, int]]):
+def adaptive_set_locality(
+    model: nn.Module, locality_enabled_router: Dict[str, Tuple[int, int]]
+):
     for _m_name, m in model.named_modules():
-        if is_router(m) and "scatter" in m._router_type:
+        if is_router(m):
             expert_key = tuple([int(_m_name.split(".")[i]) for i in [1, 3]])
-            if expert_key in locality_enabled_router:
+            if "scatter" in m._router_type and expert_key in locality_enabled_router["scatter"]:
                 print(
-                    f"orginal locality for {_m_name}.fabric is {m.fabric.locality_aware}"
-                )
+                        f"orginal locality for {_m_name}.fabric is {m.fabric.locality_aware}"
+                    )
+                m.fabric.locality_aware = True
+            if "gather" in m._router_type and expert_key in locality_enabled_router["gather"]:
+                print(
+                        f"orginal locality for {_m_name}.fabric is {m.fabric.locality_aware}"
+                    )
                 m.fabric.locality_aware = True

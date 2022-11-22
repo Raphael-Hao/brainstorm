@@ -180,9 +180,9 @@ class TopKGate(torch.nn.Module):
         self.vitmoe_loss = vitmoe_loss
         self.use_noise = use_noise
         if self.vitmoe_loss:
-            print(
-                "[warning] change use_noise in TopKGate to True because vitmoe_loss is set to True"
-            )
+            # print(
+            #     "[warning] change use_noise in TopKGate to True because vitmoe_loss is set to True"
+            # )
             self.use_noise = True
         self.batch_prioritized_routing = batch_prioritized_routing
         if int(os.environ.get("BATCH_PRIO", 0)) != 0:
