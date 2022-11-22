@@ -25,7 +25,7 @@ tensor = torch.arange(
 ).reshape(-1, grain_size)
 print(f"{local_rank}==>: in_data: \n{tensor}")
 loads = torch.randint(
-    capacity, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
+    0, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
 ).reshape(-1, group_size)
 # print(tensor)
 all_in_loads = None

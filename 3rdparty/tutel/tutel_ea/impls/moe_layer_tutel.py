@@ -269,7 +269,12 @@ class TopKGate(torch.nn.Module):
             expert_output = expert_fn(dispatched_input)
             expert_output = expert_output.to(in_data.dtype)
         elif self.a2a_ffn_overlap_degree == 1:
+            print(f"output shape: {dispatched_input.shape}")
+            print(f"dispatched_input: {dispatched_input}")
             _dispatched_input = C.AllToAll.apply(group, dispatched_input)
+            print(f"output shape: {_dispatched_input.shape}")
+            print(f"_dispatched_input: {_dispatched_input}")
+            input()
             expert_output = expert_fn(_dispatched_input)
             expert_output = expert_output.to(in_data.dtype)
             expert_output = C.AllToAll.apply(group, expert_output)

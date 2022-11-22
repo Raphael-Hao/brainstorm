@@ -79,7 +79,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         print("out_flow.shape", out_flow.shape)
         print("loads", loads)
         nodes_results = out_flow.chunk(2)
-        print(f"layer id: {self.expert_key} before a2a outflow: {nodes_results[0].sum(1), nodes_results[1].sum(1)}")
+        print(f"layer id: {self.expert_key} before a2a outflow: {out_flow}")
 
         a2a_resuslts = brt_dist.group_asymmetry_a2a(
             out_flow, loads, self.locality_aware
@@ -87,7 +87,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         out_flow = a2a_resuslts[0]
         print(f"out_flow.shape: {out_flow.shape}")
         nodes_results = out_flow.chunk(2)
-        print(f"layer id: {self.expert_key} after a2a outflow: {nodes_results[0].sum(1), nodes_results[1].sum(1)}")
+        print(f"layer id: {self.expert_key} after a2a outflow: {out_flow}")
         input()
 
         if self.locality_aware:
