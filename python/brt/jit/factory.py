@@ -15,7 +15,7 @@ from brt.jit.modules import (
     HomoFusedModule,
 )
 
-from ._kernel import make_jit_kernel as _make_jit_kernel
+# from ._kernel import make_jit_kernel as _make_jit_kernel
 
 __all__ = [
     "make_jit_kernel",
@@ -33,15 +33,6 @@ def make_jit_kernel(
     objective_func: str = "fastest",
     rank: Union[int, List[int]] = 1,
 ) -> Callable[..., None]:
-    if opt_level == "homo_fuse":
-        return _make_jit_kernel(
-            modules=modules,
-            sample_inputs=sample_inputs,
-            method=method,
-            opt_level=opt_level,
-            objective_func=objective_func,
-            rank=rank,
-        )
     return ModuleFactory.make_kernel(
         modules,
         sample_inputs=sample_inputs,

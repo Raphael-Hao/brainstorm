@@ -98,6 +98,17 @@ class HeteroFusedModule(FusedModule):
             output_arg_indices,
         )
 
+    def _get_output_shape(
+        self, method: str, sample_inputs: List[torch.Tensor]
+    ) -> List[torch.Size]:
+        return sum(
+            [
+                jsm._get_output_shape(method, sample_input)
+                for jsm, sample_input in zip(self.jit_submodules, sample_inputs)
+            ],
+            start=[],
+        )
+
     @property
     def module_name(self) -> str:
         return f"HeteroFused_{self.num_submodule}_" + "_".join(

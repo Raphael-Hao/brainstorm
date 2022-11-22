@@ -35,7 +35,34 @@ class HorizFusedModule(FusedModule):
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> autograd.Function:
-        pass
+        jit_kernel = self.make_kernel(
+            sample_inputs=sample_inputs,
+            method="forward",
+            objective_func=objective_func,
+            rank=rank,
+        )
+        (
+            input_arg_num,
+            total_arg_num,
+            input_arg_indices,
+            output_arg_indices,
+        ) = self._extract_arg_infos("forward")
+        out_data = [
+            torch.empty(shp).to("cuda")
+            for shp in self._get_output_shape("forward", sample_inputs)
+        ]
+
+        class JitFunction:
+            @staticmethod
+            def forward(*inputs):
+                inputs = list(inputs)
+                for i, out_index in enumerate(output_arg_indices):
+                    inputs.insert(out_index, out_data[i])
+                jit_kernel(*inputs)
+                outputs = [inputs[i] for i in output_arg_indices]
+                return tuple(outputs)
+
+        return JitFunction
 
     def _extract_shared_arg_infos(
         self,
@@ -48,7 +75,40 @@ class HorizFusedModule(FusedModule):
         self,
         method: str,
     ) -> Tuple[int, int, List[int], List[int]]:
-        raise NotImplementedError()
+        input_arg_num = 0
+        total_arg_num = 0
+        input_arg_indices = []
+        output_arg_indices = []
+        for jsm in self.jit_submodules:
+            (
+                sub_input_arg_num,
+                sub_total_arg_num,
+                sub_input_arg_indices,
+                sub_output_arg_indices,
+            ) = jsm._extract_arg_infos(method)
+            output_arg_indices.extend(
+                [i + total_arg_num for i in sub_output_arg_indices]
+            )
+            input_arg_indices.extend([i + total_arg_num for i in sub_input_arg_indices])
+            total_arg_num += sub_total_arg_num
+            input_arg_num += sub_input_arg_num
+        return (
+            input_arg_num,
+            total_arg_num,
+            input_arg_indices,
+            output_arg_indices,
+        )
+
+    def _get_output_shape(
+        self, method: str, sample_inputs: List[torch.Tensor]
+    ) -> List[torch.Size]:
+        return sum(
+            [
+                jsm._get_output_shape(method, sample_input)
+                for jsm, sample_input in zip(self.jit_submodules, sample_inputs)
+            ],
+            start=[],
+        )
 
     @property
     def module_name(self) -> str:

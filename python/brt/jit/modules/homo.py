@@ -2,12 +2,17 @@ from typing import List, Tuple, Union, Literal, Callable
 
 import torch
 from torch import autograd
+from torch import nn
 
 from brt.jit.codegen.homo_fused import HomoFusedKernel
 from brt.jit.modules.fused import FusedModule
 
 
 class HomoFusedModule(FusedModule):
+    def __init__(self, module: nn.ModuleList):
+        super().__init__(module)
+        self._check_homogeneity(self.module)
+
     def _make_global_kernel(
         self,
         sample_inputs: List[torch.Tensor],
@@ -15,7 +20,6 @@ class HomoFusedModule(FusedModule):
         objective_func: str = "fastest",
         rank: int = 1,
     ) -> HomoFusedKernel:
-        self._check_homogeneity(self.module)
         capacities = [
             sample_input[0].size(0)
             if isinstance(sample_input, (list, tuple))
@@ -31,8 +35,10 @@ class HomoFusedModule(FusedModule):
         assert shared_arg_grans is not None, "shared_arg_grans is None"
 
         candidates = []
-        for jsm, inp in zip(self.jit_submodules, sample_inputs):
-            module_kernel = jsm._make_global_kernel(inp, method, objective_func, rank)
+        for inp in sample_inputs:
+            module_kernel = self.jit_submodules[0]._make_global_kernel(
+                inp, method, objective_func, rank
+            )
             candidates.append(module_kernel)
         fused_kernel = HomoFusedKernel(
             self.num_submodule,
@@ -50,7 +56,55 @@ class HomoFusedModule(FusedModule):
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> autograd.Function:
-        return super().make_function(sample_inputs, mode, objective_func, rank)
+        raise NotImplementedError
+        jit_kernel = self.make_kernel(
+            sample_inputs=sample_inputs,
+            method="forward",
+            objective_func=objective_func,
+            rank=rank,
+        )
+
+        candidate = self.jit_submodules[0]
+        output_shape_dict = {
+            inp.shape[0]: candidate._get_output_shape("forward", inp)
+            for inp in sample_inputs
+        }
+        # for subclass in AtomModule.__subclasses__():
+        #     if subclass.ismodule(candidate_module):
+        #         output_init_func = subclass.get_output_init_func(
+        #             candidate_module, "forward"
+        #         )
+        (
+            input_arg_num,
+            total_arg_num,
+            input_indices,
+            output_indices,
+        ) = candidate._extract_arg_infos("forward")
+        out_data = [
+            torch.empty(shp).to("cuda")
+            for shp in self._get_output_shape("forward", sample_inputs)
+        ]
+
+        in_data_num = len(input_indices)
+        out_data_num = len(output_indices)
+
+        class JitFunction:
+            @staticmethod
+            def forward(*inputs, capacities):
+                inputs = list(inputs)
+                in_data = inputs[:in_data_num]
+                standalone_inputs = inputs[in_data_num:]
+                out_data = output_init_func(*in_data)
+                shared_inputs = in_data + out_data
+                jit_kernel(shared_inputs, standalone_inputs, capacities)
+                start_idx = in_data_num
+                outputs = []
+                for cap in capacities:
+                    outputs.append(shared_inputs[start_idx : start_idx + cap])
+                    start_idx += cap
+                return tuple(outputs)
+
+        return JitFunction
 
     @staticmethod
     def _check_homogeneity(modules: torch.nn.ModuleList):
@@ -78,6 +132,15 @@ class HomoFusedModule(FusedModule):
         method: str,
     ) -> Tuple[int, int, List[int], List[int]]:
         raise NotImplementedError()
+
+    def _get_output_shape(
+        self, method: str, sample_inputs: List[torch.Tensor]
+    ) -> List[torch.Size]:
+        candidate = self.jit_submodules[0]
+        return sum(
+            [candidate._get_output_shape(method, inp) for inp in sample_inputs],
+            start=[],
+        )
 
     @property
     def module_name(self) -> str:
