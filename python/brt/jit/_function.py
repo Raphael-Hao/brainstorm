@@ -3,8 +3,8 @@
 
 import torch
 
-from brt.jit.modules import ModuleInfo
-from brt.jit.kernel_factory import make_jit_kernel
+from brt.jit.modules import AtomModule
+from brt.jit._kernel import make_jit_kernel
 
 __all__ = ["make_jit_function"]
 
@@ -18,7 +18,7 @@ def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
 
         if opt_level is None:
             assert len(modules) == 1, "only one module is supported for none opt mode"
-            for subclass in ModuleInfo.__subclasses__():
+            for subclass in AtomModule.__subclasses__():
                 if subclass.ismodule(modules):
                     output_init_func = subclass.get_output_init_func(modules, "forward")
                     (
@@ -52,7 +52,7 @@ def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
             output_init_func = []
 
             for m in modules:
-                for subclass in ModuleInfo.__subclasses__():
+                for subclass in AtomModule.__subclasses__():
                     if subclass.ismodule(m):
                         output_init_func.append(
                             subclass.get_output_init_func(m, "forward")
@@ -106,7 +106,7 @@ def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
 
         elif opt_level == "homo_fuse":
             candidate_module = modules[0]
-            for subclass in ModuleInfo.__subclasses__():
+            for subclass in AtomModule.__subclasses__():
                 if subclass.ismodule(candidate_module):
                     output_init_func = subclass.get_output_init_func(
                         candidate_module, "forward"

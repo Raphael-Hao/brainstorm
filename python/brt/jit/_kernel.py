@@ -1,12 +1,14 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Callable, List
+__all__ = ["make_jit_kernel"]
+
+from typing import Callable, List, Union
 
 import torch
 
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
-from brt.jit.modules import ModuleInfo
+from brt.jit.modules import JitModuleFactory
 from brt.jit.compiler import CUDACompiler
 from brt.jit.codegen import (
     ModuleKernel,
@@ -15,8 +17,6 @@ from brt.jit.codegen import (
     HomoFusedKernel,
 )
 
-__all__ = ["make_jit_kernel"]
-
 
 def make_jit_kernel(
     modules,
@@ -24,7 +24,7 @@ def make_jit_kernel(
     method="forward",
     opt_level=None,
     objective_func: str = "fastest",
-    rank: int = 1,
+    rank: Union[int, List[int]] = 1,
 ) -> Callable[..., None]:
     if opt_level is None:
         kernel = ModuleKernelFactory.make_kernel(
@@ -66,14 +66,15 @@ class HorizFusedKernelFactory:
         method,
         sample_inputs,
         objective_func: str = "fastest",
-        rank: int = 1,
+        ranks: List[int] = 1,
     ):
         assert len(modules) == len(
             sample_inputs
         ), "modules and sample_inputs must have the same length"
-
+        if isinstance(ranks, int):
+            ranks = [ranks] * len(modules)
         candidates = []
-        for m, sample_input in zip(modules, sample_inputs):
+        for m, sample_input, rank in zip(modules, sample_inputs, ranks):
             module_kernel = ModuleKernelFactory.make_kernel(
                 m, method, sample_input, objective_func, rank
             )
@@ -89,7 +90,7 @@ class HeteroFusedKernelFactory:
         method,
         sample_inputs,
         objective_func: str = "fastest",
-        rank: int = 1,
+        rank: Union[int, List[int]] = 1,
     ):
         assert len(modules) == len(
             sample_inputs
@@ -112,7 +113,7 @@ class HomoFusedKernelFactory:
         method,
         sample_inputs: List[List[torch.Tensor]],
         objective_func: str = "fastest",
-        rank: int = 1,
+        rank: Union[int, List[int]] = 1,
     ):
         HomoFusedKernelFactory.check_homogeneity(modules)
         candidate_module = modules[0]
@@ -128,15 +129,11 @@ class HomoFusedKernelFactory:
         ]
         shared_arg_indices = None
         shared_arg_grans = None
-        for subclass in ModuleInfo.__subclasses__():
-            if subclass.ismodule(candidate_module):
-                (
-                    shared_arg_indices,
-                    shared_arg_grans,
-                ) = subclass.extract_shared_arg_infos(
-                    candidate_module, method, sample_inputs[0]
-                )
-                break
+        module_info = JitModuleFactory.produce(candidate_module)
+        (
+            shared_arg_indices,
+            shared_arg_grans,
+        ) = module_info._extract_shared_arg_infos(method, sample_inputs[0])
         assert shared_arg_indices is not None, "shared_arg_indices is None"
         assert shared_arg_grans is not None, "shared_arg_grans is None"
 
@@ -171,14 +168,15 @@ class ModuleKernelFactory:
         method,
         sample_input,
         objective_func: str = "fastest",
-        rank: int = 1,
+        rank: Union[int, List[int]] = 1,
     ) -> ModuleKernel:
-        for subclass in ModuleInfo.__subclasses__():
-            if subclass.ismodule(module):
-                return subclass.make_kernel(
-                    module, method, sample_input, objective_func, rank
-                )
-        raise ValueError(f"Unknown module type: {module}")
+        module_info = JitModuleFactory.produce(module)
+        return module_info._make_global_kernel(
+            method=method,
+            sample_inputs=sample_input,
+            objective_func=objective_func,
+            rank=rank,
+        )
 
     @staticmethod
     def make_kernels(
@@ -186,16 +184,15 @@ class ModuleKernelFactory:
         method,
         sample_inputs,
         objective_func: str = "fastest",
-        rank: int = 1,
+        rank: Union[int, List[int]] = 1,
     ) -> List[ModuleKernel]:
-        for subclass in ModuleInfo.__subclasses__():
-            if subclass.ismodule(module):
-                ret_kernels = []
-                for sample_input in sample_inputs:
-                    ret_kernels.append(
-                        subclass.make_kernel(
-                            module, method, sample_input, objective_func, rank
-                        )
-                    )
-                return ret_kernels
-        raise ValueError(f"Unknown module type: {module}")
+        module_info = JitModuleFactory.produce(module)
+        return [
+            module_info._make_global_kernel(
+                method=method,
+                sample_inputs=sample_input,
+                objective_func=objective_func,
+                rank=rank,
+            )
+            for sample_input in sample_inputs
+        ]
