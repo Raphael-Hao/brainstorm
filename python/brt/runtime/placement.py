@@ -56,8 +56,8 @@ def generate_rank_placement(
         all_placement = [placement for i in range(len(experts_keys))]
     else:
         all_placement = np.load(placement_file, allow_pickle=True)
-    rank_placement: OrderedDict[Tuple[int, int], List[int]] = OrderedDict()
-    placement_indices: OrderedDict[Tuple[int, int], torch.Tensor] = OrderedDict()
+    rank_placement: "OrderedDict[Tuple[int, int], List[int]]" = OrderedDict()
+    placement_indices: "OrderedDict[Tuple[int, int], torch.Tensor]" = OrderedDict()
     for idx, placement in enumerate(all_placement):
         expert_key = experts_keys[idx]
         placement_index = []
@@ -87,6 +87,7 @@ def adaptive_load(
         world_rank, world_size, placement_file, global_expert_num
     )
     adaptive_load_checkpoint(model, checkpoint_file, rank_placement)
+    debug_helper(model, placement_indices)
     # adaptive_load_placement(model, placement_indices)
     print(f"rank {world_rank} placement_indices is {placement_indices}")
     locality_enabled_router = {"scatter": [], "gather": []}
@@ -163,7 +164,7 @@ def adaptive_load_checkpoint(
                 else:
                     state_dict[entry] = torch.stack(tensors_to_concat[entry])
 
-    msg = model.load_state_dict(state_dict, strict=False)
+    model.load_state_dict(state_dict, strict=False)
     # logger.info(msg)
     del checkpoint
     torch.cuda.empty_cache()
@@ -175,13 +176,32 @@ def adaptive_set_locality(
     for _m_name, m in model.named_modules():
         if is_router(m):
             expert_key = tuple([int(_m_name.split(".")[i]) for i in [1, 3]])
-            if "scatter" in m._router_type and expert_key in locality_enabled_router["scatter"]:
+            if (
+                "scatter" in m._router_type
+                and expert_key in locality_enabled_router["scatter"]
+            ):
                 print(
-                        f"orginal locality for {_m_name}.fabric is {m.fabric.locality_aware}"
-                    )
+                    f"orginal locality for {_m_name}.fabric is {m.fabric.locality_aware}"
+                )
                 m.fabric.locality_aware = True
-            if "gather" in m._router_type and expert_key in locality_enabled_router["gather"]:
+            if (
+                "gather" in m._router_type
+                and expert_key in locality_enabled_router["gather"]
+            ):
                 print(
-                        f"orginal locality for {_m_name}.fabric is {m.fabric.locality_aware}"
-                    )
+                    f"orginal locality for {_m_name}.fabric is {m.fabric.locality_aware}"
+                )
                 m.fabric.locality_aware = True
+
+
+def debug_helper(
+    model: nn.Module,
+    placement_indices: "OrderedDict[Tuple[int, int], torch.Tensor]" = None,
+):
+    for _m_name, m in model.named_modules():
+        if is_router(m) and "scatter" in m._router_type:
+            expert_key = tuple([int(_m_name.split(".")[i]) for i in [1, 3]])
+            print(
+                f"setting debug info for {_m_name} with {expert_key}"
+            )
+            m.fabric.expert_key = expert_key

@@ -60,7 +60,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         else:
             raise ValueError("route_logic must be 1d or 2d")
 
-        if self.placement_indices is not None:
+        if self.placement_indices is not None:  # pylint: disable=E0203
             self.placement_indices = self.placement_indices.to(out_flow.device)
             path_num = self.placement_indices.shape[0]
             print("path_num", path_num)
@@ -76,11 +76,18 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
             score = score.index_select(0, self.placement_indices)
             input()
 
+        print("out_flow.shape", out_flow.shape)
+        print("loads", loads)
+        nodes_results = out_flow.chunk(2)
+        print(f"layer id: {self.expert_key} before a2a outflow: {nodes_results[0].sum(1), nodes_results[1].sum(1)}")
+
         a2a_resuslts = brt_dist.group_asymmetry_a2a(
             out_flow, loads, self.locality_aware
         )
         out_flow = a2a_resuslts[0]
-        print(out_flow.sum(1))
+        print(f"out_flow.shape: {out_flow.shape}")
+        nodes_results = out_flow.chunk(2)
+        print(f"layer id: {self.expert_key} after a2a outflow: {nodes_results[0].sum(1), nodes_results[1].sum(1)}")
         input()
 
         if self.locality_aware:

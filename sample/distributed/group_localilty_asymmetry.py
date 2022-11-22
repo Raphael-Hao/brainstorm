@@ -63,17 +63,17 @@ def torch_symmetry_a2a(tensor, loads):
     dist.all_to_all_single(output, tensor)
     return output
 
-timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
+# timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
 
-timer.execute(
-    lambda: brt_dist.group_asymmetry_a2a(tensor, loads),
-    "brt.group_asymmetry_a2a",
-)
+# timer.execute(
+#     lambda: brt_dist.group_asymmetry_a2a(tensor, loads),
+#     "brt.group_asymmetry_a2a",
+# )
 
-timer.execute(
-    lambda: brt_dist.group_asymmetry_a2a(tensor, loads, locality_aware=True),
-    "brt.locality_group_asymmetry_a2a",
-)
+# timer.execute(
+#     lambda: brt_dist.group_asymmetry_a2a(tensor, loads, locality_aware=True),
+#     "brt.locality_group_asymmetry_a2a",
+# )
 
 # def locality_aware_a2a(tensor, loads):
 #     out_data, out_loads, reorder_indices = brt_dist.asymmetry_a2a(
