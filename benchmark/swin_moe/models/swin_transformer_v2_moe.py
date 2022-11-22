@@ -5,21 +5,21 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 
-from typing import Union, List
-
 import os
+from typing import List, Union
+
+import brt.runtime.distributed as brt_dist
+import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
 import torch.utils.checkpoint as checkpoint
-
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-import numpy as np
-from tutel_ea.impls import moe_layer_tutel as tutel_moe
-from tutel_ea.impls import moe_layer_pt as pt_moe
 from tutel_ea.impls import moe_layer_brt as brt_moe
 from tutel_ea.impls import moe_layer_brt_dist as brt_dist_moe
+from tutel_ea.impls import moe_layer_pt as pt_moe
+from tutel_ea.impls import moe_layer_tutel as tutel_moe
 
 _shape_t = Union[int, List[int], torch.Size]
 
@@ -783,6 +783,9 @@ class SwinTransformerBlockPre(nn.Module):
         if self.is_moe:
             x, l_aux = self.mlp(x)
             x = self.gamma_2 * x
+            if self.mlp._moe_layer.gates[0].scatter.fabric.locality_aware:
+                reorder_indices = brt_dist.get_reorder_indices()
+                shortcut = brt_dist.exchange(shortcut, reorder_indices)
         else:
             x = self.mlp(x)
             l_aux = torch.zeros(1).to(x.device)
@@ -794,6 +797,12 @@ class SwinTransformerBlockPre(nn.Module):
         else:
             x = shortcut + self.drop_path(x)
 
+        if self.is_moe and self.mlp._moe_layer.gates[0].gather.fabric.locality_aware:
+            reorder_indices = brt_dist.get_reorder_indices()
+            x = brt_dist.reverse_exchange(x, reorder_indices)
+
+        if self.is_moe:
+            print(f"rank: {dist.get_rank()}, drop output: {x.sum()}")
         if self.endnorm:
             x = self.enorm(x)
 

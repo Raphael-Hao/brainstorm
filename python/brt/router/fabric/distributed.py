@@ -43,6 +43,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
+        # print(f"original in_flow: {in_flow}")
         if self.route_logics[0] == "1d":
             if self.transforms[0]:
                 out_flow = dispatch_with_dst_indices_1d(
@@ -76,25 +77,21 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
             score = score.index_select(0, self.placement_indices)
             input()
 
-        print("out_flow.shape", out_flow.shape)
-        print("loads", loads)
-        nodes_results = out_flow.chunk(2)
-        print(f"layer id: {self.expert_key} before a2a outflow: {out_flow}")
-
         a2a_resuslts = brt_dist.group_asymmetry_a2a(
             out_flow, loads, self.locality_aware
         )
         out_flow = a2a_resuslts[0]
-        print(f"out_flow.shape: {out_flow.shape}")
-        nodes_results = out_flow.chunk(2)
-        print(f"layer id: {self.expert_key} after a2a outflow: {out_flow}")
-        input()
+
 
         if self.locality_aware:
+            reorder_indices = a2a_resuslts[2]
+            origin_shape = out_flow.shape
+            out_flow = out_flow.view(reorder_indices.shape[0], -1)
+            out_flow = out_flow.index_select(0, reorder_indices)
+            out_flow = out_flow.view(origin_shape)
             route_indices, loads, score = brt_dist.batched_exchange(
                 [route_indices, loads, score], a2a_resuslts[2]
             )
-            print(f"reorder indices {a2a_resuslts[2]}")
             brt_dist.set_reorder_indices(a2a_resuslts[2])
 
         out_flow.route_indices = route_indices
@@ -133,9 +130,12 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
         in_loads = in_flow.in_loads
         out_loads = in_flow.out_loads
         score = in_flow.score
+        # print(f"gather in loads: {out_loads}, out loads: {in_loads}")
+        # print(f"in flow: {in_flow.sum(1)}")
         in_flow = brt_dist.size_known_group_asymmetry_all_to_all(
             in_flow, out_loads, in_loads
         )
+        # print(f"gather out flow: {in_flow.sum(1)}")
         if self.transform:
             out_flow = combine_with_src_indices(
                 in_flow, route_indices, in_loads, auto_pad=True, gates=score
@@ -143,10 +143,12 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
         else:
             out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
 
-        if self.locality_aware:
-            reorder_indices = brt_dist.get_reorder_indices()
-            print(f"reorder indices {reorder_indices}")
-            out_flow = brt_dist.exchange(out_flow, reorder_indices)
-            brt_dist.set_reorder_indices(None)
+        # if self.locality_aware:
+        #     reorder_indices = brt_dist.get_reorder_indices()
+        #     print(f"reorder indices {reorder_indices}")
+        #     out_flow = brt_dist.exchange(out_flow, reorder_indices)
+        #     brt_dist.set_reorder_indices(None)
 
+        # print(f"weighted out flow: {out_flow.sum(1)}")
+        # input()
         return out_flow

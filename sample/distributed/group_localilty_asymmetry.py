@@ -14,9 +14,9 @@ torch.cuda.set_device(device)
 group = dist.group.WORLD
 brt_dist.is_nccl_activated(group)
 
-grain_size = 4
+grain_size = 1
 capacity = 4
-group_size = 8
+group_size = 2
 
 tensor = torch.arange(
     local_rank * world_size * group_size * capacity * grain_size,
