@@ -40,6 +40,7 @@ def get_build_args():
     parser.add_argument("--context", type=str, default=None, help="Context path")
     parser.add_argument("--ssh-key", type=str, default="id_ed25519", help="SSH key")
     parser.add_argument("--update-brt", action="store_false", help="Only update brt")
+    parser.add_argument("--no-cache", action="store_true", help="Disable cache")
     args = parser.parse_args()
     if args.remote or args.upload:
         assert (
@@ -132,6 +133,8 @@ def build_docker():
     if args.type == "update":
         cmd.extend(["--build-arg", f"UPDATE_BRT_ONLY={args.update_brt}"])
         cmd.append("--no-cache")
+    if args.no_cache and "--no-cache" not in cmd:
+        cmd.extend(["--no-cache"])
     cmd.extend(["-f", args.dockerfile])
     cmd.extend(["--progress=plain", args.context_path])
     print(" ".join(cmd))

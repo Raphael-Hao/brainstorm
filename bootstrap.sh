@@ -16,7 +16,9 @@ rm -rf /opt/miniconda3
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
     bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/miniconda3 &&
     rm -f Miniconda3-py38_4.10.3-Linux-x86_64.sh
+# shellcheck disable=SC2016
 echo 'export PATH=/opt/miniconda3/bin:$PATH' >>~/.bashrc
+# shellcheck disable=SC2016
 echo 'export PATH=/opt/miniconda3/bin:$PATH' >>~/.zshrc
 
 export PATH=/opt/miniconda3/bin:$PATH
@@ -33,19 +35,14 @@ apt-get install -y \
     blobfuse gcc libtinfo-dev zlib1g-dev build-essential \
     libedit-dev libxml2-dev llvm wget git
 
+git config --global user.name raphael
+git config --global user.email raphaelhao@outlook.com
+
 mkdir -p ~/brainstorm_project && cd ~/brainstorm_project
 git clone git@github.com:Raphael-Hao/brainstorm.git \
     -b "${BRT_BRANCH:-main}" \
     --recursive
 cd brainstorm
-
-mkdir /mnt/ramdisk
-mount -t tmpfs -o size=16g tmpfs /mnt/ramdisk
-mkdir /mnt/ramdisk/blobfusetmp
-chown "$(whoami)" /mnt/ramdisk/blobfusetmp
-chmod 600 azure/blob/blobfuse.cfg
-mkdir ~/largedata
-blobfuse ~/largedata --tmp-path=/mnt/ramdisk/blobfusetmp --config-file=azure/blob/blobfuse.cfg -o attr_timeout=240 -o entry_timeout=240 -o negative_timeout=120
 
 pip install --upgrade pip
 pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 --extra-index-url https://download.pytorch.org/whl/cu113
@@ -66,5 +63,6 @@ cd ~/brainstorm_project/brainstorm || exit
 
 pip install -v --editable .
 
-git config --global user.name raphael
-git config --global user.email raphaelhao@outlook.com
+cd ~/brainstorm_project/brainstorm/azure/blob || exit
+bash mount.sh
+bash download_image.sh

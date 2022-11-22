@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Tuple, List
+from typing import Tuple
 
 import torch
 
