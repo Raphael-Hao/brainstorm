@@ -22,7 +22,6 @@ void NcclManager::Init(const ::torch::Tensor& unique_id_t, const int& world_rank
   world_size_ = world_size;
   ncclUniqueId nccl_unique_id;
   memcpy(&nccl_unique_id, (void*)unique_id_t.data_ptr(), sizeof(ncclUniqueId));
-  std::cout << "BRT NCCL Init world_rank: " << world_rank << " world_size: " << world_size << std::endl;
   NCCL_CHECK(ncclGroupStart());
   NCCL_CHECK(ncclCommInitRank(&comm_, world_size, nccl_unique_id, world_rank));
   NCCL_CHECK(ncclGroupEnd());

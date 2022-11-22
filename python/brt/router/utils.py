@@ -20,6 +20,7 @@ def generate_src_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor = None,
     index_gen_opt=True,
+    load_on_cpu=True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """generate source indices according to hot_mask
 
@@ -34,7 +35,7 @@ def generate_src_indices(
 
     if hot_mask.is_cuda and index_gen_opt:
         src_indices, loads = C_router.generate_src_indices(
-            hot_mask.to(torch.int32), supported_capacities
+            hot_mask.to(torch.int32), supported_capacities, load_on_cpu
         )
     else:
         src_indices = torch.zeros_like(hot_mask)
@@ -60,6 +61,7 @@ def generate_dst_indices(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor = None,
     index_gen_opt=True,
+    load_on_cpu=True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """generate destination indices according to hot_mask
 
@@ -72,7 +74,7 @@ def generate_dst_indices(
     """
     if hot_mask.is_cuda and index_gen_opt:
         dst_indices, loads = C_router.generate_dst_indices(
-            hot_mask.to(torch.int32), supported_capacities
+            hot_mask.to(torch.int32), supported_capacities, load_on_cpu
         )
     else:
         dst_indices = torch.cumsum(hot_mask, dim=0) * hot_mask
@@ -92,14 +94,15 @@ def generate_indices(
     supported_capacities: torch.Tensor = None,
     index_format: str = "src_index",
     index_gen_opt=True,
+    load_on_cpu=True,
 ):
     if index_format == "src_index":
         indices, loads = generate_src_indices(
-            hot_mask, supported_capacities, index_gen_opt
+            hot_mask, supported_capacities, index_gen_opt, load_on_cpu
         )
     elif index_format == "dst_index":
         indices, loads = generate_dst_indices(
-            hot_mask, supported_capacities, index_gen_opt
+            hot_mask, supported_capacities, index_gen_opt, load_on_cpu
         )
     else:
         raise ValueError(f"Unknown index format: {index_format}")

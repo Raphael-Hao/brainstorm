@@ -16,8 +16,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN echo "${BRT_BRANCH}"
 
 RUN apt-get -y update && apt-get install -y \
-    ssh gcc libtinfo-dev zlib1g-dev build-essential \
-    cmake libedit-dev libxml2-dev llvm tmux wget git
+    ssh openssh-server gcc libtinfo-dev zlib1g-dev build-essential \
+    cmake libedit-dev libxml2-dev llvm tmux wget git vim
+
+RUN mkdir /var/run/sshd
+RUN echo 'root:hellossh' | chpasswd
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' \
+    /etc/ssh/sshd_config
+
+#SSH login fix
+RUN sed 's@session\s*required\s*pam_loginuid.so@session optional \
+    pam_loginuid.so@g' -i /etc/pam.d/sshd
+
 
 # setup ssh key
 RUN mkdir -p /root/.ssh
@@ -43,3 +53,6 @@ RUN /opt/microsoft/_singularity/installations/singularity/installer.sh
 COPY --from=validator /validations /opt/microsoft/_singularity/validations/
 ENV SINGULARITY_IMAGE_ACCELERATOR="NVIDIA"
 RUN /opt/microsoft/_singularity/validations/validator.sh
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd","-D"]

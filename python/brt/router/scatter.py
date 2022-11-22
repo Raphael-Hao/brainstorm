@@ -140,7 +140,7 @@ class SwinMoEScatterRouter(RouterBase):
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
         throttling=False,
-        capturing=True,
+        capturing=False,
         capture_mode: str = "cum",
     ):
         super().__init__(capturing=capturing, capture_mode=capture_mode)
