@@ -87,7 +87,7 @@ class PlacementSolver:
             print(np.argmax(np.array(self.placements[i].x), axis=1))
             results.append(np.argmax(np.array(self.placements[i].x), axis=1))
         results = np.array(results)
-        np.save(f"placement.{self.nodes}.{gap:.3g}", results)
+        np.save(f"placement.{self.nodes}.{gap*100:.3g}", results)
         # return results
 
 
