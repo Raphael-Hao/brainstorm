@@ -43,7 +43,18 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
-        # print(f"original in_flow: {in_flow}")
+
+        if self.placement_indices is not None:  # pylint: disable=E0203
+            self.placement_indices = self.placement_indices.to(in_flow.device)
+            # print("path_num", path_num)
+            loads = loads.index_select(0, self.placement_indices)
+            # print("loads.shape", loads.shape)
+            # print("route_indices.shape", route_indices.shape)
+            route_indices = route_indices.index_select(1, self.placement_indices)
+            # print("route_indices.shape", route_indices.shape)
+            # print("score.shape", score.shape)
+            score = score.index_select(1, self.placement_indices)
+            # print("score.shape", score.shape)
         if self.route_logics[0] == "1d":
             if self.transforms[0]:
                 out_flow = dispatch_with_dst_indices_1d(
@@ -61,26 +72,26 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         else:
             raise ValueError("route_logic must be 1d or 2d")
 
-        if self.placement_indices is not None:  # pylint: disable=E0203
-            self.placement_indices = self.placement_indices.to(out_flow.device)
-            path_num = self.placement_indices.shape[0]
-            # print("path_num", path_num)
-            origin_shape = out_flow.shape
-            # print("origin_shape", origin_shape)
-            out_flow = out_flow.view(path_num, -1)
-            # print("out_flow.shape", out_flow.shape)
-            out_flow = out_flow.index_select(0, self.placement_indices)
-            # print("out_flow.shape", out_flow.shape)
-            out_flow = out_flow.view(origin_shape)
-            # print("loads.shape", loads.shape)
-            loads = loads.index_select(0, self.placement_indices)
-            # print("loads.shape", loads.shape)
-            # print("route_indices.shape", route_indices.shape)
-            route_indices = route_indices.index_select(1, self.placement_indices)
-            # print("route_indices.shape", route_indices.shape)
-            # print("score.shape", score.shape)
-            score = score.index_select(1, self.placement_indices)
-            # print("score.shape", score.shape)
+        # if self.placement_indices is not None:  # pylint: disable=E0203
+        #     self.placement_indices = self.placement_indices.to(out_flow.device)
+        #     path_num = self.placement_indices.shape[0]
+        #     # print("path_num", path_num)
+        #     origin_shape = out_flow.shape
+        #     # print("origin_shape", origin_shape)
+        #     out_flow = out_flow.view(path_num, -1)
+        #     # print("out_flow.shape", out_flow.shape)
+        #     out_flow = out_flow.index_select(0, self.placement_indices)
+        #     # print("out_flow.shape", out_flow.shape)
+        #     out_flow = out_flow.view(origin_shape)
+        #     # print("loads.shape", loads.shape)
+        #     loads = loads.index_select(0, self.placement_indices)
+        #     # print("loads.shape", loads.shape)
+        #     # print("route_indices.shape", route_indices.shape)
+        #     route_indices = route_indices.index_select(1, self.placement_indices)
+        #     # print("route_indices.shape", route_indices.shape)
+        #     # print("score.shape", score.shape)
+        #     score = score.index_select(1, self.placement_indices)
+        #     # print("score.shape", score.shape)
 
         a2a_resuslts = brt_dist.group_asymmetry_a2a(
             out_flow, loads, self.locality_aware
