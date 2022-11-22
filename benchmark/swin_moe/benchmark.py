@@ -5,7 +5,6 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 import argparse
-import datetime
 import json
 import os
 import random
@@ -24,25 +23,18 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import CUDATimer, deterministic_random_generator
-from brt.runtime.dump_trace import dump_trace
+from brt.runtime.placement import dump_trace, adaptive_load
 from config import get_config
 from data import build_loader
 from logger import create_logger
-from lr_scheduler import build_scheduler
 from models import build_model
-from optimizer import build_optimizer, set_weight_decay
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.utils import AverageMeter, accuracy
-from tutel_ea.moe import router_exporter
 from utils import (
-    NativeScalerWithGradNormCount,
-    auto_resume_helper,
     create_ds_config,
     hook_scale_grad,
-    load_checkpoint,
-    load_pretrained,
     reduce_tensor,
-    save_checkpoint,
+    gather_all_ckpts_into_one,
+    adaptive_load_checkpoint,
 )
 
 warnings.filterwarnings(
@@ -112,12 +104,7 @@ def parse_option():
     parser.add_argument("--tag", help="tag of experiment")
     parser.add_argument("--eval", action="store_true", help="Perform evaluation only")
     parser.add_argument(
-        "--single-gpu-eval",
-        action="store_true",
-        help="whether to do eval on single GPU",
-    )
-    parser.add_argument(
-        "--throughput", action="store_true", help="Test throughput only"
+        "--throughput", action="store_true", help="Test throughput only", default=False
     )
     parser.add_argument("--custom_scaler", action="store_true", default=False)
 
@@ -126,12 +113,12 @@ def parse_option():
     parser.add_argument(
         "--zero_opt", type=int, default=0, help="zero_optimization level"
     )
-    parser.add_argument(
-        "--dpfp16", action="store_true", default=False, help="deepspeed fp16"
-    )
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--trace", action="store_true", default=False)
-
+    parser.add_argument("--gather-ckpt", action="store_true", default=False)
+    parser.add_argument("--correctness", action="store_true", default=False)
+    parser.add_argument("--placement", type=str, default=None)
+    parser.add_argument("--locality", action="store_true", default=False)
     ds_init = None
 
     args, _unparsed = parser.parse_known_args()
@@ -147,24 +134,20 @@ def main(args, config, ds_init):
     (
         _dataset_train,
         dataset_val,
-        data_loader_train,
+        _data_loader_train,
         data_loader_val,
-        mixup_fn,
+        _mixup_fn,
     ) = build_loader(config)
 
     logger.info(f"Creating model:{config.MODEL.TYPE}/{config.MODEL.NAME}")
     model = build_model(config)
-    logger.info(str(model))
+    # logger.info(str(model))
 
     # For Tutel MoE
     for name, param in model.named_parameters():
         if hasattr(param, "skip_allreduce") and param.skip_allreduce is True:
-            print(f"===>[rank{dist.get_rank()}] {name} skipping all_reduce")
             model.add_param_to_skip_allreduce(name)
             param.register_hook(partial(hook_scale_grad, config.TRAIN.MOE_GRAD_SCALE))
-            print(
-                f"[{name}] skip_allreduce and div {config.TRAIN.MOE_GRAD_SCALE} for grad"
-            )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"number of params: {n_parameters}")
@@ -175,71 +158,71 @@ def main(args, config, ds_init):
     model.cuda(config.LOCAL_RANK)
     model_without_ddp = model
 
-    optimizer = build_optimizer(config, model)
     model = torch.nn.parallel.DistributedDataParallel(
         model,
         device_ids=[config.LOCAL_RANK],
         broadcast_buffers=False,
         bucket_cap_mb=64,
     )
-    loss_scaler = NativeScalerWithGradNormCount(args.custom_scaler)
-
-    if config.TRAIN.ACCUMULATION_STEPS > 1:
-        lr_scheduler = build_scheduler(
-            config, optimizer, len(data_loader_train) // config.TRAIN.ACCUMULATION_STEPS
-        )
-    else:
-        lr_scheduler = build_scheduler(config, optimizer, len(data_loader_train))
-
-    if config.AUG.MIXUP > 0.0:
-        # smoothing is handled with mixup label transform
-        criterion = SoftTargetCrossEntropy()
-    elif config.MODEL.LABEL_SMOOTHING > 0.0:
-        criterion = LabelSmoothingCrossEntropy(smoothing=config.MODEL.LABEL_SMOOTHING)
-    else:
-        criterion = torch.nn.CrossEntropyLoss()
-
-    max_accuracy = 0.0
 
     if args.debug:
-        distributed_debug(model)
+
+        checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
+        placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
+        # adaptive_load(model_without_ddp, checkpoint_file, global_expert_num=16)
+        adaptive_load(
+            model_without_ddp,
+            checkpoint_file,
+            enable_locality=args.locality,
+            placement_file=placement_file,
+        )
         return
 
-    if config.MODEL.RESUME:
-        max_accuracy = load_checkpoint(
+    if args.gather_ckpt:
+        gather_all_ckpts_into_one(config, model_without_ddp, logger)
+        return
+
+    if args.correctness:
+        # adaptive_load_checkpoint(config, model_without_ddp, logger)
+        checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
+        placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
+        MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
+        if MOE_LAYER_VENDOR == "brt_dist":
+            adaptive_load(
+                model_without_ddp,
+                checkpoint_file,
+                enable_locality=args.locality,
+                placement_file=placement_file,
+            )
+        else:
+            adaptive_load(
+                model_without_ddp,
+                checkpoint_file,
+                enable_locality=args.locality,
+                global_expert_num=16,
+            )
+
+        check_correctness(model, args.batch_size)
+        return
+
+    if args.trace:
+        print("===> Tracing model")
+        adaptive_load_checkpoint(
             config,
             model_without_ddp,
-            optimizer,
-            lr_scheduler,
             logger,
-            loss_scaler=loss_scaler,
         )
-        if args.debug:
-            debug(model, bs=1, iteration=1)
-            dump_trace(model_without_ddp)
-        if args.trace:
-            acc1, _acc5, _loss = validate(config, data_loader_val, model)
-            logger.info(
-                f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-            )
-            dump_trace(model_without_ddp)
-
-        if config.EVAL_MODE:
-            return
-
-    if config.MODEL.PRETRAINED and (not config.MODEL.RESUME):
-        load_pretrained(config, model_without_ddp, logger)
         acc1, _acc5, _loss = validate(config, data_loader_val, model)
         logger.info(
             f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
         )
-
-    if config.THROUGHPUT_MODE:
-        throughput(data_loader_val, model, logger)
+        print("===> Tracing model done, dumping to file")
+        dump_trace(model_without_ddp)
         return
 
-    logger.info(f"number of params: {n_parameters}")
-    logger.info(f"number of GFLOPs: {flops / 1e9}")
+    if args.throughput:
+        throughput(data_loader_val, model, logger)
+        return
 
 
 @torch.no_grad()
@@ -254,11 +237,6 @@ def validate(config, data_loader, model):
     acc5_meter = AverageMeter()
 
     end = time.time()
-    expert_export_path = os.getenv("EXPORT_EXPERT_PATH")
-
-    if expert_export_path:
-        print(f"Enable expert export to path {expert_export_path}")
-        router_exporter.set_path(expert_export_path)
 
     for idx, (images, target) in enumerate(data_loader):
         images = images.cuda(non_blocking=True)
@@ -266,12 +244,7 @@ def validate(config, data_loader, model):
 
         with torch.cuda.amp.autocast():
             # compute output
-            if router_exporter.is_enabled():
-                router_exporter.new_entry()
-                # router_exporter.set_input(images)
             output, l_aux = model(images)
-            if router_exporter.is_enabled():
-                router_exporter.set_output(output)
             # measure accuracy and record loss
             loss = criterion(output, target)
 
@@ -305,9 +278,6 @@ def validate(config, data_loader, model):
                 f"Mem {memory_used:.0f}MB"
             )
     logger.info(f" * Acc@1 {acc1_meter.avg:.3f} Acc@5 {acc5_meter.avg:.3f}")
-    if expert_export_path:
-        router_exporter.dump()
-        exit()
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
@@ -331,6 +301,21 @@ def throughput(data_loader, model, logger):
             f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
         )
         return
+
+
+@torch.inference_mode()
+def check_correctness(model, bs=1, iteration=10):
+    model.eval()
+    # timer = CUDATimer(1, 10, 5)
+    inputs_generator = deterministic_random_generator(
+        [bs, 3, 192, 192], num=iteration, dtype=torch.float32, device="cuda"
+    )
+
+    for inputs in inputs_generator:
+        outputs = model(inputs)
+        print(outputs[0])
+        print(outputs[0].sum())
+        input()
 
 
 @torch.inference_mode()
@@ -363,8 +348,8 @@ def distributed_debug(model, bs=1, iteration=1):
 if __name__ == "__main__":
     args, config, ds_init = parse_option()
 
-    print("Environments:", os.environ)
-    print("Pytorch NCCL VERSION: ", torch.cuda.nccl.version())
+    # print("Environments:", os.environ)
+    # print("Pytorch NCCL VERSION: ", torch.cuda.nccl.version())
 
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         master_port = os.environ["MASTER_PORT"]
@@ -454,7 +439,7 @@ if __name__ == "__main__":
         logger.info(f"Full config saved to {path}")
 
     # print config
-    logger.info(config.dump())
-    logger.info(json.dumps(vars(args)))
+    # logger.info(config.dump())
+    # logger.info(json.dumps(vars(args)))
 
     main(args, config, ds_init)

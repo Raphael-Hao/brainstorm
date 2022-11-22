@@ -75,7 +75,6 @@ def parse_option():
                         help='root of output folder, the full path is <output>/<model_name>/<tag> (default: output)')
     parser.add_argument('--tag', help='tag of experiment')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
-    parser.add_argument('--single-gpu-eval', action='store_true', help='whether to do eval on single GPU')
     parser.add_argument('--throughput', action='store_true', help='Test throughput only')
     parser.add_argument('--custom_scaler', action='store_true', default=False)
 

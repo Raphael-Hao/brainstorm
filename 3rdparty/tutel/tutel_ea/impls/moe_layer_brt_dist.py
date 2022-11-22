@@ -1,24 +1,23 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Any, Optional, cast
-
 import copy
+import logging
 import os
 import re
-import logging
+from typing import Any, Optional, cast
 
 import torch
-from torch import Tensor
 import torch.distributed as dist
-from torch.nn import ModuleList
 import torch.nn.functional as F
+from brt.router import GatherRouter, SwinMoEScatterRouter
+from brt.runtime.distributed import global_info
+from torch import Tensor
 from torch.distributions.normal import Normal
-from brt.router import SwinMoEScatterRouter, GatherRouter
+from torch.nn import ModuleList
 
 from ..jit_kernels.gating import fast_cumsum_sub_one
 from . import communicate as C
-from brt.runtime.distributed import global_info
 
 
 class PrimFwdAllgather(torch.autograd.Function):
@@ -143,9 +142,9 @@ class TopKGate(torch.nn.Module):
         self.vitmoe_loss = vitmoe_loss
         self.use_noise = use_noise
         if self.vitmoe_loss:
-            print(
-                "[warning] change use_noise in TopKGate to True because vitmoe_loss is set to True"
-            )
+            # print(
+            #     "[warning] change use_noise in TopKGate to True because vitmoe_loss is set to True"
+            # )
             self.use_noise = True
         self.batch_prioritized_routing = batch_prioritized_routing
         if int(os.environ.get("BATCH_PRIO", 0)) != 0:
@@ -158,7 +157,6 @@ class TopKGate(torch.nn.Module):
         )
 
         self.a2a_ffn_overlap_degree = a2a_ffn_overlap_degree
-
         self.scatter = SwinMoEScatterRouter(
             fabric_type="distributed_fused_dispatch",
             protocol_kwargs={
@@ -209,7 +207,7 @@ class TopKGate(torch.nn.Module):
         expert_output.in_loads = in_loads
         expert_output.out_loads = out_loads
         expert_output.score = score
-        print(f"loads: {in_loads}")
+        # print(f"loads: {in_loads}")
         result_output = self.gather(expert_output)
         return result_output, 0
 

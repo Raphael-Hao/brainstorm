@@ -2,22 +2,10 @@
 # Licensed under the MIT license.
 from itertools import product
 
-import torch.nn as nn
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
-
-from brt.passes.base import PassBase, register_pass
-from brt.router import is_router
-
-
-def dump_scatter_trace(mod: nn.Module):
-    scatter_results = []
-    for m_name, m in mod.named_modules():
-        if is_router(m) and "scatter" in m._router_type:
-            scatter_results.append(np.array(m.ptu_decision_history, dtype=object))
-    return scatter_results
-    # np.save("scatter_results.npy", scatter_results, allow_pickle=True)
+import argparse
 
 
 def load_scatter_trace(trace_path):
@@ -30,9 +18,12 @@ class PlacementSolver:
     ):
         self.nodes = nodes
         self.scatter_trace = scatter_trace
-        self.scatter_num = len(self.scatter_trace)
+        self.scatter_num = len(self.scatter_trace) + 1
         self.least_path_per_node = least_path_per_node if least_path_per_node > 0 else 1
-        self.path_nums = [len(self.scatter_trace[i]) for i in range(self.scatter_num)]
+        self.path_nums = [
+            len(self.scatter_trace[i]) for i in range(self.scatter_num - 1)
+        ]
+        self.path_nums.append(len(self.scatter_trace[self.scatter_num - 2]))
         self.mode = mode
         self.build_model()
 
@@ -44,14 +35,20 @@ class PlacementSolver:
 
     def solve(self):
         self.model.Params.LogToConsole = True
-        self.model.Params.MIPGap =0.001
+        self.model.Params.MIPGap = 0.05
         # self.model.Params.TimeLimit = 60
+        # self.model.Params.IterationLimit = 1
         self.model.optimize()
-        print("Obj: ",self.model.objVal)
+        print(
+            f"Obj: {self.model.objVal}, Gap: {self.model.MIPGap}",
+        )
+        return self.model.MIPGap
 
     def construct_variable(self):
         self.placements = [
-            self.model.addMVar((self.path_nums[i], self.nodes), vtype=GRB.BINARY, name=f"placement_{i}")
+            self.model.addMVar(
+                (self.path_nums[i], self.nodes), vtype=GRB.BINARY, name=f"placement_{i}"
+            )
             for i in range(self.scatter_num)
         ]
 
@@ -84,24 +81,28 @@ class PlacementSolver:
                     self.placements[i][:, j].sum() >= self.least_path_per_node
                 )
 
+    def export_results(self, gap):
+        results = []
+        for i in range(self.scatter_num):
+            print(np.argmax(np.array(self.placements[i].x), axis=1))
+            results.append(np.argmax(np.array(self.placements[i].x), axis=1))
+        results = np.array(results)
+        np.save(f"placement.{self.nodes}.{gap*100:.3g}", results)
+        # return results
+
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--nodes", type=int, default=4)
+    args = parser.parse_args()
+    least_path_per_node = 16 // args.nodes
     scatter_trace = load_scatter_trace("scatter_trace.npy")
-    solver = PlacementSolver(4, scatter_trace, least_path_per_node=4, mode="optimizer")
-    solver.construct_variable()
-    solver.construct_objective()
-    solver.add_constraints()
-    solver.solve()
 
-
-@register_pass("pipline")
-class PipelinePass(PassBase):
-    pass
-
-
-@register_pass("sharded")
-class ShardedPass(PassBase):
-    pass
+    solver = PlacementSolver(
+        args.nodes, scatter_trace, least_path_per_node, mode="optimizer"
+    )
+    gap = solver.solve()
+    solver.export_results(gap)
 
 
 if __name__ == "__main__":
