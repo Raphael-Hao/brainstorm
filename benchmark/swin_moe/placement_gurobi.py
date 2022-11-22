@@ -39,7 +39,10 @@ class PlacementSolver:
         # self.model.Params.TimeLimit = 60
         # self.model.Params.IterationLimit = 1
         self.model.optimize()
-        print("Obj: ", self.model.objVal)
+        print(
+            f"Obj: {self.model.objVal}, Gap: {self.model.MIPGap}",
+        )
+        return self.model.MIPGap
 
     def construct_variable(self):
         self.placements = [
@@ -78,13 +81,13 @@ class PlacementSolver:
                     self.placements[i][:, j].sum() >= self.least_path_per_node
                 )
 
-    def export_results(self):
+    def export_results(self, gap):
         results = []
         for i in range(self.scatter_num):
             print(np.argmax(np.array(self.placements[i].x), axis=1))
             results.append(np.argmax(np.array(self.placements[i].x), axis=1))
         results = np.array(results)
-        np.save(f"results_{self.nodes}.npy", results)
+        np.save(f"placement.{self.nodes}.{gap:.3g}", results)
         # return results
 
 
@@ -98,8 +101,8 @@ def main():
     solver = PlacementSolver(
         args.nodes, scatter_trace, least_path_per_node, mode="optimizer"
     )
-    solver.solve()
-    solver.export_results()
+    gap = solver.solve()
+    solver.export_results(gap)
 
 
 if __name__ == "__main__":
