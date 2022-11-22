@@ -3,9 +3,9 @@ from typing import List
 import torch
 from torch import nn
 
-from archs.nas_mdsr import SingleNetwork as NAS, ResBlock, Upsampler
+from archs.conv2d_mul_add import Conv2dMulAdd
 from archs.fuse import TunedKernel
-
+from archs.nas_mdsr import SingleNetwork as NAS, ResBlock, Upsampler
 
 class vFusedNAS(nn.Module):
     def __init__(self, raw: NAS, bs: int):
@@ -71,10 +71,11 @@ class vFusedResBlock(nn.Module):
         self.res_scale = raw.res_scale
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.res_scale != 1:
-            res = self.body(x).mul(self.res_scale)
-        else:
-            res = self.body(x)
+        # if self.res_scale != 1:
+            # res = self.body(x).mul(self.res_scale)
+        # else:
+            # res = self.body(x)
+        res = self.body(x).mul(self.res_scale)
         res += x
         return res
 
