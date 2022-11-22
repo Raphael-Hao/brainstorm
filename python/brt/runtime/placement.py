@@ -88,8 +88,7 @@ def adaptive_load(
     )
     adaptive_load_checkpoint(model, checkpoint_file, rank_placement)
     debug_helper(model, placement_indices)
-    # adaptive_load_placement(model, placement_indices)
-    print(f"rank {world_rank} placement_indices is {placement_indices}")
+    adaptive_load_placement(model, placement_indices)
     locality_enabled_router = {"scatter": [], "gather": []}
     if enable_locality:
         locality_enabled_router["scatter"].append(next(iter(placement_indices.keys())))
@@ -105,6 +104,7 @@ def adaptive_load_placement(
     placement_indices: "OrderedDict[Tuple[int, int], torch.Tensor]" = None,
 ):
     # layers.{layer_id}.blocks.{block_id}.mlp._moe_layer.scatter
+    print(f"loading placement_indices: {placement_indices}")
     if placement_indices is None:
         return
     for _m_name, m in model.named_modules():

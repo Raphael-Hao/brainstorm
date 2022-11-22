@@ -5,21 +5,66 @@
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 BRT_DIR=$(cd "${script_dir}/../../" && pwd)
 
-export CUDA_VISIBLE_DEVICES=0,1 #,2,3,4,5,6,7
-# export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
 export BRT_CACHE_PATH=$BRT_DIR/.cache
 export BRT_CAPTURE_STATS=False # should be False for brt_dist or tutel
 export BRT_CAPTURED_FABRIC_TYPE=dispatch
 
-if [[ $1 == "--gpus" ]]; then
-    GPUS=$2
-    GPU_NUM=$(($(echo "$GPUS" | tr -cd , | wc -c) + 1))
-    PROC=$GPU_NUM
-    shift 2
-else
-    echo "No GPU specified, Please specify GPUs like --gpus 0,1,2,3"
+LAUNCH_ARGS=()
+
+ARGUMENT_LIST=(
+    "gpus:"
+    "locality"
+    "placement:"
+    "port:"
+)
+
+# read arguments
+opts=$(
+    getopt \
+        --longoptions "$(printf "%s," "${ARGUMENT_LIST[@]}")" \
+        --name "$(basename "$0")" \
+        --options "" \
+        -- "$@"
+)
+
+eval set -- "$opts"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --gpus)
+        GPUS=$2
+        GPU_NUM=$(($(echo "$GPUS" | tr -cd , | wc -c) + 1))
+        shift 2
+        ;;
+
+    --locality)
+        LAUNCH_ARGS+=(--locality)
+        shift 1
+        ;;
+
+    --placement)
+        PLACEMENT=$2
+        LAUNCH_ARGS+=(--placement "$PLACEMENT")
+        shift 2
+        ;;
+
+    --port)
+        PORT=$2
+        shift 2
+        ;;
+    *)
+        break
+        ;;
+    esac
+done
+
+# check if the number of GPUs is specified
+if [ -z "$GPUS" ]; then
+    echo "Please specify the number of GPUs to use with --gpus"
+    exit 1
 fi
 
+PROC=$GPU_NUM
 export CUDA_VISIBLE_DEVICES=$GPUS
 
 EXPERT_NUM=$((16 / GPU_NUM))
@@ -30,28 +75,17 @@ else
     export MOE_LAYER_VENDOR=brt_dist
 fi
 
+if [ -z "$PORT" ]; then
+    PORT=$(((RANDOM % 10) + 6500))
+fi
 
-LAUNCH_ARGS=(
+LAUNCH_ARGS+=(
     --cfg configs/"${EXPERT_NUM}"expert_"${GPU_NUM}"GPU.yaml
     --batch-size 1 --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k
     --output ./results/MoE/
     --eval --resume "${BRT_CACHE_PATH}"/ckpt/swin_moe/small_swin_moe_32GPU_16expert/model.pth
-    --placement "./placement"
     --correctness
 )
-
-if [[ $1 == "--locality" ]]; then
-    LAUNCH_ARGS+=(--locality)
-    shift 1
-fi
-
-if [[ $1 == "--port" ]]; then
-    PORT=$2
-    shift 2
-else
-    PORT=$(((RANDOM % 10) + 6500))
-fi
-
 
 torchrun --nproc_per_node="$PROC" \
     --nnode=1 --node_rank=0 \

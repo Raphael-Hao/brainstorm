@@ -186,13 +186,22 @@ def main(args, config, ds_init):
         # adaptive_load_checkpoint(config, model_without_ddp, logger)
         checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
         placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-        adaptive_load(
-            model_without_ddp,
-            checkpoint_file,
-            enable_locality=args.locality,
-            global_expert_num=16,
-        )
-        # adaptive_load(model_without_ddp, checkpoint_file, placement_file=placement_file)
+        MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
+        if MOE_LAYER_VENDOR == "brt_dist":
+            adaptive_load(
+                model_without_ddp,
+                checkpoint_file,
+                enable_locality=args.locality,
+                placement_file=placement_file,
+            )
+        else:
+            adaptive_load(
+                model_without_ddp,
+                checkpoint_file,
+                enable_locality=args.locality,
+                global_expert_num=16,
+            )
+
         check_correctness(model, args.batch_size)
         return
 
