@@ -68,10 +68,10 @@ def generate_rank_placement(
         placement_index = np.concatenate(placement_index, axis=None)
         placement_indices[expert_key] = torch.from_numpy(placement_index)
 
-    # if placement_file is None:
-    #     placement_indices = None
+    if placement_file is None:
+        placement_indices = None
 
-    return rank_placement, placement_indices
+    return experts_keys, rank_placement, placement_indices
 
 
 def adaptive_load(
@@ -83,18 +83,16 @@ def adaptive_load(
 ):
     world_rank = dist.get_rank()
     world_size = dist.get_world_size()
-    rank_placement, placement_indices = generate_rank_placement(
+    experts_keys, rank_placement, placement_indices = generate_rank_placement(
         world_rank, world_size, placement_file, global_expert_num
     )
     adaptive_load_checkpoint(model, checkpoint_file, rank_placement)
-    debug_helper(model, placement_indices)
+    # debug_helper(model, placement_indices)
     adaptive_load_placement(model, placement_indices)
     locality_enabled_router = {"scatter": [], "gather": []}
     if enable_locality:
-        locality_enabled_router["scatter"].append(next(iter(placement_indices.keys())))
-        locality_enabled_router["gather"].append(
-            next(reversed(placement_indices.keys()))
-        )
+        locality_enabled_router["scatter"].append(experts_keys[0])
+        locality_enabled_router["gather"].append(experts_keys[-1])
         print(f"locality_enabled_router: {locality_enabled_router}")
     adaptive_set_locality(model, locality_enabled_router)
 
@@ -104,7 +102,6 @@ def adaptive_load_placement(
     placement_indices: "OrderedDict[Tuple[int, int], torch.Tensor]" = None,
 ):
     # layers.{layer_id}.blocks.{block_id}.mlp._moe_layer.scatter
-    print(f"loading placement_indices: {placement_indices}")
     if placement_indices is None:
         return
     for _m_name, m in model.named_modules():
@@ -171,7 +168,7 @@ def adaptive_load_checkpoint(
 
 
 def adaptive_set_locality(
-    model: nn.Module, locality_enabled_router: Dict[str, Tuple[int, int]]
+    model: nn.Module, locality_enabled_router: Dict[str, List[Tuple[int, int]]]
 ):
     for _m_name, m in model.named_modules():
         if is_router(m):
@@ -201,7 +198,5 @@ def debug_helper(
     for _m_name, m in model.named_modules():
         if is_router(m) and "scatter" in m._router_type:
             expert_key = tuple([int(_m_name.split(".")[i]) for i in [1, 3]])
-            print(
-                f"setting debug info for {_m_name} with {expert_key}"
-            )
+            print(f"setting debug info for {_m_name} with {expert_key}")
             m.fabric.expert_key = expert_key

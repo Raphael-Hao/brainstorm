@@ -80,7 +80,7 @@ static ::torch::Tensor exchange(const ::torch::Tensor& in_data,
   }
   CHECK_ON_CUDA(in_data);
 
-  ::torch::Tensor out_data = ::torch::zeros_like(in_data, in_data.options());
+  ::torch::Tensor out_data = ::torch::empty_like(in_data, in_data.options());
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -113,7 +113,7 @@ static std::vector<::torch::Tensor> batched_exchange(const std::vector<::torch::
   std::vector<::torch::Tensor> out_datas;
   for (auto& in_data : in_datas) {
     CHECK_ON_CUDA(in_data);
-    ::torch::Tensor out_data = ::torch::zeros_like(in_data, in_data.options());
+    ::torch::Tensor out_data = ::torch::empty_like(in_data, in_data.options());
 
     manager.StartContext();
     manager.WaitEvent(0);
@@ -147,7 +147,7 @@ static ::torch::Tensor reverse_exchange(const ::torch::Tensor& in_data,
   }
   CHECK_ON_CUDA(in_data);
 
-  ::torch::Tensor out_data = ::torch::zeros_like(in_data, in_data.options());
+  ::torch::Tensor out_data = ::torch::empty_like(in_data, in_data.options());
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -183,7 +183,7 @@ static std::vector<::torch::Tensor> batched_reverse_exchange(
   for (auto& in_data : in_datas) {
     CHECK_ON_CUDA(in_data);
 
-    ::torch::Tensor out_data = ::torch::zeros_like(in_data, in_data.options());
+    ::torch::Tensor out_data = ::torch::empty_like(in_data, in_data.options());
 
     manager.StartContext();
     manager.WaitEvent(0);
@@ -261,7 +261,7 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   int slice_size_in_byte = total_size_in_byte / slice_num;
 
   ::torch::Tensor out_data =
-      ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -376,7 +376,7 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
   const int slice_size_in_byte = total_size_in_byte / total_slice_num;
 
   ::torch::Tensor out_data =
-      ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -495,7 +495,7 @@ batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
     const int slice_size_in_byte = total_size_in_byte / total_slice_num;
 
     ::torch::Tensor out_data =
-        ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+        ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
     manager.StartContext();
     manager.WaitEvent(0);
     manager.RecordStorage(in_data);
@@ -574,7 +574,7 @@ static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tens
   const int slice_size_in_byte = total_size_in_byte / total_slice_num;
 
   ::torch::Tensor out_data =
-      ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -614,7 +614,7 @@ static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_al
     const int slice_size_in_byte = total_size_in_byte / total_slice_num;
 
     ::torch::Tensor out_data =
-        ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+        ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
     manager.StartContext();
     manager.WaitEvent(0);
     manager.RecordStorage(in_data);

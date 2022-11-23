@@ -182,26 +182,25 @@ def main(args, config, ds_init):
         gather_all_ckpts_into_one(config, model_without_ddp, logger)
         return
 
-    if args.correctness:
-        # adaptive_load_checkpoint(config, model_without_ddp, logger)
-        checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
+    checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
+    MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
+    if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
         placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-        MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
-        if MOE_LAYER_VENDOR == "brt_dist":
-            adaptive_load(
-                model_without_ddp,
-                checkpoint_file,
-                enable_locality=args.locality,
-                placement_file=placement_file,
-            )
-        else:
-            adaptive_load(
-                model_without_ddp,
-                checkpoint_file,
-                enable_locality=args.locality,
-                global_expert_num=16,
-            )
+        adaptive_load(
+            model_without_ddp,
+            checkpoint_file,
+            enable_locality=args.locality,
+            placement_file=placement_file,
+        )
+    else:
+        adaptive_load(
+            model_without_ddp,
+            checkpoint_file,
+            enable_locality=args.locality,
+            global_expert_num=16,
+        )
 
+    if args.correctness:
         check_correctness(model, args.batch_size)
         return
 
@@ -283,24 +282,60 @@ def validate(config, data_loader, model):
 
 @torch.inference_mode()
 def throughput(data_loader, model, logger):
-    model.eval()
+    max_batches = 180 if len(data_loader) > 180 else len(data_loader)
+    gpu_data = []
+    for idx, (images, _target) in enumerate(data_loader):
+        if idx == max_batches:
+            break
+        gpu_data.append(images.cuda())
+    batch_size = gpu_data[0].size(0)
+    torch.cuda.synchronize()
+    dist.barrier()
+    for idx in range(20):
+        model(gpu_data[idx])
+    torch.cuda.synchronize()
+    dist.barrier()
+    start = time.time()
+    for idx in range(max_batches):
+        model(gpu_data[idx])
+    torch.cuda.synchronize()
+    end = time.time()
+    logger.info(
+        f"Batch size: {batch_size}, Throughput: {max_batches * batch_size / (end - start)}"
+    )
+    # for _idx, (images, _) in enumerate(data_loader):
+    #     images = images.cuda(non_blocking=True)
+    #     batch_size = images.shape[0]
+    #     for _i in range(50):
+    #         model(images)
+    #     torch.cuda.synchronize()
+    #     logger.info(f"throughput averaged with 30 times")
+    #     tic1 = time.time()
+    #     for _i in range(30):
+    #         model(images)
+    #     torch.cuda.synchronize()
+    #     tic2 = time.time()
+    #     logger.info(
+    #         f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
+    #     )
+    #     return
 
-    for _idx, (images, _) in enumerate(data_loader):
-        images = images.cuda(non_blocking=True)
-        batch_size = images.shape[0]
-        for _i in range(50):
-            model(images)
-        torch.cuda.synchronize()
-        logger.info(f"throughput averaged with 30 times")
-        tic1 = time.time()
-        for _i in range(30):
-            model(images)
-        torch.cuda.synchronize()
-        tic2 = time.time()
-        logger.info(
-            f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
-        )
-        return
+    # for _idx, (images, _) in enumerate(data_loader):
+    #     images = images.cuda(non_blocking=True)
+    #     batch_size = images.shape[0]
+    #     for _i in range(50):
+    #         model(images)
+    #     torch.cuda.synchronize()
+    #     logger.info(f"throughput averaged with 30 times")
+    #     tic1 = time.time()
+    #     for _i in range(30):
+    #         model(images)
+    #     torch.cuda.synchronize()
+    #     tic2 = time.time()
+    #     logger.info(
+    #         f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
+    #     )
+    #     return
 
 
 @torch.inference_mode()
