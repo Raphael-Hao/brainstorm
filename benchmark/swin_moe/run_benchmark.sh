@@ -12,6 +12,7 @@ export BRT_CAPTURED_FABRIC_TYPE=dispatch
 LAUNCH_ARGS=()
 
 ARGUMENT_LIST=(
+    "vendor:"
     "gpus:"
     "locality"
     "placement:"
@@ -32,6 +33,10 @@ eval set -- "$opts"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+    --vendor)
+        VENDOR=$2
+        shift 2
+        ;;
     --gpus)
         GPUS=$2
         GPU_NUM=$(($(echo "$GPUS" | tr -cd , | wc -c) + 1))
@@ -39,6 +44,7 @@ while [[ $# -gt 0 ]]; do
         ;;
 
     --locality)
+        LOCALITY=1
         LAUNCH_ARGS+=(--locality)
         shift 1
         ;;
@@ -75,10 +81,22 @@ export CUDA_VISIBLE_DEVICES=$GPUS
 
 EXPERT_NUM=$((16 / GPU_NUM))
 
-if ((GPU_NUM == 1)); then
-    export MOE_LAYER_VENDOR=brt
+if [[ "${VENDOR}" == "brt" ]]; then
+    if ((GPU_NUM == 1)); then
+        export MOE_LAYER_VENDOR=brt
+    else
+        export MOE_LAYER_VENDOR=brt_dist
+    fi
 else
-    export MOE_LAYER_VENDOR=brt_dist
+    if [ -n "$LOCALITY" ] || [ -n "$PLACEMENT" ]; then
+        echo "locality should not be specified for non-brt vendor"
+        exit 1
+    fi
+    if [[ "${VENDOR}" == "tutel" ]]; then
+        export MOE_LAYER_VENDOR=tutel
+    elif [[ "${VENDOR}" == "pt" ]]; then
+        export MOE_LAYER_VENDOR=dispatch
+    fi
 fi
 
 if [ -z "$PORT" ]; then

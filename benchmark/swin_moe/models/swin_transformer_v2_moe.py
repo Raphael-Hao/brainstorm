@@ -136,7 +136,6 @@ class MoEMlp(nn.Module):
         self.dist_rank = dist.get_rank()
 
         MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
-        print(f"======>[{self.dist_rank}] MOE_LAYER_VENDOR = {MOE_LAYER_VENDOR}")
         if MOE_LAYER_VENDOR == "tutel":
             moe = tutel_moe
         elif MOE_LAYER_VENDOR == "pt":

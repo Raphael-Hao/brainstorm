@@ -22,7 +22,7 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-from brt.runtime.benchmark import CUDATimer, deterministic_random_generator
+from brt.runtime.benchmark import CUDATimer, deterministic_random_generator, profile_v2
 from brt.runtime.placement import dump_trace, adaptive_load
 from config import get_config
 from data import build_loader
@@ -113,10 +113,18 @@ def parse_option():
     parser.add_argument(
         "--zero_opt", type=int, default=0, help="zero_optimization level"
     )
-    parser.add_argument("--debug", action="store_true", default=False)
-    parser.add_argument("--trace", action="store_true", default=False)
-    parser.add_argument("--gather-ckpt", action="store_true", default=False)
-    parser.add_argument("--correctness", action="store_true", default=False)
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="throughput",
+        choices=[
+            "throughput",
+            "correctness",
+            "trace",
+            "gather-ckpt",
+            "profile",
+        ],
+    )
     parser.add_argument("--placement", type=str, default=None)
     parser.add_argument("--locality", action="store_true", default=False)
     ds_init = None
@@ -165,63 +173,49 @@ def main(args, config, ds_init):
         bucket_cap_mb=64,
     )
 
-    if args.debug:
-
-        checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
-        placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-        # adaptive_load(model_without_ddp, checkpoint_file, global_expert_num=16)
-        adaptive_load(
-            model_without_ddp,
-            checkpoint_file,
-            enable_locality=args.locality,
-            placement_file=placement_file,
-        )
-        return
-
-    if args.gather_ckpt:
+    if args.mode == "gather-ckpt":
         gather_all_ckpts_into_one(config, model_without_ddp, logger)
-        return
-
-    checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
-    MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
-    if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
-        placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-        adaptive_load(
-            model_without_ddp,
-            checkpoint_file,
-            enable_locality=args.locality,
-            placement_file=placement_file,
-        )
     else:
-        adaptive_load(
-            model_without_ddp,
-            checkpoint_file,
-            enable_locality=args.locality,
-            global_expert_num=16,
-        )
+        checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
+        MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
+        if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
+            placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
+            adaptive_load(
+                model_without_ddp,
+                checkpoint_file,
+                enable_locality=args.locality,
+                placement_file=placement_file,
+            )
+        else:
+            adaptive_load(
+                model_without_ddp,
+                checkpoint_file,
+                enable_locality=args.locality,
+                global_expert_num=16,
+            )
 
-    if args.correctness:
-        check_correctness(model, args.batch_size)
-        return
+        if args.mode == "correctness":
+            print("===> Running correctness test")
+            check_correctness(model, args.batch_size)
+        elif args.mode == "trace":
+            print("===> Tracing model")
+            adaptive_load_checkpoint(
+                config,
+                model_without_ddp,
+                logger,
+            )
+            acc1, _acc5, _loss = validate(config, data_loader_val, model)
+            logger.info(
+                f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
+            )
+            print("===> Tracing model done, dumping to file")
+            dump_trace(model_without_ddp)
 
-    if args.trace:
-        print("===> Tracing model")
-        adaptive_load_checkpoint(
-            config,
-            model_without_ddp,
-            logger,
-        )
-        acc1, _acc5, _loss = validate(config, data_loader_val, model)
-        logger.info(
-            f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-        )
-        print("===> Tracing model done, dumping to file")
-        dump_trace(model_without_ddp)
-        return
-
-    if args.throughput:
-        throughput(data_loader_val, model, logger)
-        return
+        elif args.mode == "throughput":
+            throughput(data_loader_val, model, logger)
+        elif args.mode == "profile":
+            gpu_data, _batch_size = get_benchmark_data(data_loader_val)
+            profile_v2(model, gpu_data, MOE_LAYER_VENDOR)
 
 
 @torch.no_grad()
@@ -280,62 +274,35 @@ def validate(config, data_loader, model):
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
-@torch.inference_mode()
-def throughput(data_loader, model, logger):
-    max_batches = 180 if len(data_loader) > 180 else len(data_loader)
+def get_benchmark_data(data_loader):
+    max_batches = 80 if len(data_loader) > 100 else len(data_loader)
     gpu_data = []
     for idx, (images, _target) in enumerate(data_loader):
         if idx == max_batches:
             break
         gpu_data.append(images.cuda())
     batch_size = gpu_data[0].size(0)
+    return gpu_data, batch_size
+
+
+@torch.inference_mode()
+def throughput(data_loader, model, logger):
+    gpu_data, batch_size = get_benchmark_data(data_loader)
     torch.cuda.synchronize()
     dist.barrier()
     for idx in range(20):
         model(gpu_data[idx])
     torch.cuda.synchronize()
     dist.barrier()
+    logger.info("Warmup done, start benchmarking")
     start = time.time()
-    for idx in range(max_batches):
-        model(gpu_data[idx])
+    for idx, data in enumerate(gpu_data):
+        model(data)
     torch.cuda.synchronize()
     end = time.time()
     logger.info(
-        f"Batch size: {batch_size}, Throughput: {max_batches * batch_size / (end - start)}"
+        f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
-    # for _idx, (images, _) in enumerate(data_loader):
-    #     images = images.cuda(non_blocking=True)
-    #     batch_size = images.shape[0]
-    #     for _i in range(50):
-    #         model(images)
-    #     torch.cuda.synchronize()
-    #     logger.info(f"throughput averaged with 30 times")
-    #     tic1 = time.time()
-    #     for _i in range(30):
-    #         model(images)
-    #     torch.cuda.synchronize()
-    #     tic2 = time.time()
-    #     logger.info(
-    #         f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
-    #     )
-    #     return
-
-    # for _idx, (images, _) in enumerate(data_loader):
-    #     images = images.cuda(non_blocking=True)
-    #     batch_size = images.shape[0]
-    #     for _i in range(50):
-    #         model(images)
-    #     torch.cuda.synchronize()
-    #     logger.info(f"throughput averaged with 30 times")
-    #     tic1 = time.time()
-    #     for _i in range(30):
-    #         model(images)
-    #     torch.cuda.synchronize()
-    #     tic2 = time.time()
-    #     logger.info(
-    #         f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
-    #     )
-    #     return
 
 
 @torch.inference_mode()
@@ -351,33 +318,6 @@ def check_correctness(model, bs=1, iteration=10):
         print(outputs[0])
         print(outputs[0].sum())
         input()
-
-
-@torch.inference_mode()
-def debug(model, bs=1, iteration=1):
-    model.eval()
-    # timer = CUDATimer(1, 10, 5)
-    timer = CUDATimer(0, 1, 1)
-    inputs_generator = deterministic_random_generator(
-        [bs, 3, 192, 192], num=iteration, dtype=torch.float32, device="cuda"
-    )
-
-    def timer_func():
-        for inputs in inputs_generator:
-            model(inputs)
-
-    timer.execute(timer_func, "debugging")
-
-
-@torch.inference_mode()
-def distributed_debug(model, bs=1, iteration=1):
-
-    model.eval()
-    inputs_generator = deterministic_random_generator(
-        [bs, 3, 192, 192], num=iteration, dtype=torch.float32, device="cuda"
-    )
-    for inputs in inputs_generator:
-        print(model(inputs))
 
 
 if __name__ == "__main__":

@@ -86,9 +86,9 @@ def adaptive_load(
     experts_keys, rank_placement, placement_indices = generate_rank_placement(
         world_rank, world_size, placement_file, global_expert_num
     )
-    adaptive_load_checkpoint(model, checkpoint_file, rank_placement)
+    adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
     # debug_helper(model, placement_indices)
-    adaptive_load_placement(model, placement_indices)
+    # adaptive_load_placement(model, placement_indices)
     locality_enabled_router = {"scatter": [], "gather": []}
     if enable_locality:
         locality_enabled_router["scatter"].append(experts_keys[0])
@@ -117,6 +117,7 @@ def adaptive_load_checkpoint(
     model: nn.Module,
     checkpoint_file: str,
     rank_placement: "OrderedDict[Tuple[int, int], List[int]]",
+    placement_indices: "OrderedDict[Tuple[int, int], torch.Tensor]" = None,
 ):
     ckpt_filepath = pathlib.Path(checkpoint_file)
     checkpoint = torch.load(ckpt_filepath, map_location="cpu")
@@ -160,6 +161,17 @@ def adaptive_load_checkpoint(
                     )
                 else:
                     state_dict[entry] = torch.stack(tensors_to_concat[entry])
+
+    if placement_indices is not None:
+        for k in placement_indices.keys():
+            print(f"setting placement for {k} with {placement_indices[k]}")
+            origin_wg_weight = state_dict[
+                f"layers.{k[0]}.blocks.{k[1]}.mlp._moe_layer.gates.0.wg.weight"
+            ]
+            new_wg_weight = torch.index_select(origin_wg_weight, 0, placement_indices[k])
+            state_dict[
+                f"layers.{k[0]}.blocks.{k[1]}.mlp._moe_layer.gates.0.wg.weight"
+            ] = new_wg_weight
 
     model.load_state_dict(state_dict, strict=False)
     # logger.info(msg)

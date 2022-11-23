@@ -101,7 +101,7 @@ def build_loader(config):
         shuffle=False,
         num_workers=config.DATA.NUM_WORKERS,
         pin_memory=config.DATA.PIN_MEMORY,
-        drop_last=False,
+        drop_last=True,
     )
 
     # setup mixup / cutmix
