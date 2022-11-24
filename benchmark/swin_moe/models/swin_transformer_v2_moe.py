@@ -9,6 +9,7 @@ import os
 from typing import List, Union
 
 import brt.runtime.distributed as brt_dist
+import brt.runtime.debuger as brt_debug
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -1526,6 +1527,7 @@ class BasicLayer(nn.Module):
     def forward(self, x):
         l_aux = 0.0
         ckpt_block = 0
+
         for idx, blk in enumerate(self.blocks):
             if (
                 self.use_checkpoint

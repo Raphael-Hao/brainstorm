@@ -8,7 +8,6 @@ from brt.runtime import log
 from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
-from brt.runtime.proto_tensor import make_proto_tensor_cls
 
 __all__ = [
     "ScatterRouter",
