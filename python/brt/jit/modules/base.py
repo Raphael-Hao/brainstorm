@@ -14,6 +14,10 @@ from brt.jit.compiler import CUDACompiler
 
 logger = log.get_logger(__file__)
 
+AtomModuleInputType = Union[torch.Tensor, List[torch.Tensor], Tuple[torch.Tensor]]
+FuseModuleInputType = List[AtomModuleInputType]
+ModuleInputType = Union[AtomModuleInputType, FuseModuleInputType]
+
 
 class ModuleBase(ABC):
     def __init__(self, module: Union[nn.Module, nn.ModuleList]):
@@ -21,7 +25,7 @@ class ModuleBase(ABC):
 
     def make_kernel(
         self,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: ModuleInputType,
         method: str = "forward",
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
@@ -45,7 +49,7 @@ class ModuleBase(ABC):
     @abstractmethod
     def _make_global_kernel(
         self,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: ModuleInputType,
         method: str = "forward",
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
@@ -55,7 +59,7 @@ class ModuleBase(ABC):
     @abstractmethod
     def make_function(
         self,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: ModuleInputType,
         mode: Literal["eval", "train"] = "eval",
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
@@ -65,8 +69,7 @@ class ModuleBase(ABC):
     # @abstractmethod
     def make_module(
         self,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
-        mode: Literal["eval", "train"] = "eval",
+        sample_inputs: ModuleInputType,
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> nn.Module:
@@ -76,7 +79,7 @@ class ModuleBase(ABC):
     def _extract_shared_arg_infos(
         self,
         method: str,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: ModuleInputType,
     ) -> Tuple[List, List]:
         raise NotImplementedError()
 
@@ -87,13 +90,11 @@ class ModuleBase(ABC):
     ) -> Tuple[int, int, List[int], List[int]]:
         raise NotImplementedError()
 
-    # @abstractmethod
-    def _extract_parameters(self) -> List[torch.nn.Parameter]:
-        raise NotImplementedError()
-
     @abstractmethod
     def _get_output_shape(
-        self, method: str, sample_inputs: Union[torch.Tensor, List[torch.Tensor]]
+        self,
+        method: str,
+        sample_inputs: ModuleInputType,
     ) -> List[torch.Size]:
         raise NotImplementedError
 

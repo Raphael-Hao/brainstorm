@@ -17,7 +17,7 @@ RUN echo "${BRT_BRANCH}"
 
 RUN apt-get -y update && apt-get install -y \
     ssh openssh-server gcc libtinfo-dev zlib1g-dev build-essential \
-    cmake libedit-dev libxml2-dev llvm tmux wget git vim
+    cmake libedit-dev libxml2-dev llvm tmux wget curl git vim zsh
 
 RUN mkdir /var/run/sshd
 RUN echo 'root:hellossh' | chpasswd

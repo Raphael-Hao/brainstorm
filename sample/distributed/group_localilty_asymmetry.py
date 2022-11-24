@@ -14,9 +14,9 @@ torch.cuda.set_device(device)
 group = dist.group.WORLD
 brt_dist.is_nccl_activated(group)
 
-grain_size = 4
+grain_size = 1
 capacity = 4
-group_size = 8
+group_size = 2
 
 tensor = torch.arange(
     local_rank * world_size * group_size * capacity * grain_size,
@@ -25,7 +25,7 @@ tensor = torch.arange(
 ).reshape(-1, grain_size)
 print(f"{local_rank}==>: in_data: \n{tensor}")
 loads = torch.randint(
-    capacity, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
+    0, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
 ).reshape(-1, group_size)
 # print(tensor)
 all_in_loads = None
@@ -63,17 +63,17 @@ def torch_symmetry_a2a(tensor, loads):
     dist.all_to_all_single(output, tensor)
     return output
 
-timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
+# timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
 
-timer.execute(
-    lambda: brt_dist.group_asymmetry_a2a(tensor, loads),
-    "brt.group_asymmetry_a2a",
-)
+# timer.execute(
+#     lambda: brt_dist.group_asymmetry_a2a(tensor, loads),
+#     "brt.group_asymmetry_a2a",
+# )
 
-timer.execute(
-    lambda: brt_dist.group_asymmetry_a2a(tensor, loads, locality_aware=True),
-    "brt.locality_group_asymmetry_a2a",
-)
+# timer.execute(
+#     lambda: brt_dist.group_asymmetry_a2a(tensor, loads, locality_aware=True),
+#     "brt.locality_group_asymmetry_a2a",
+# )
 
 # def locality_aware_a2a(tensor, loads):
 #     out_data, out_loads, reorder_indices = brt_dist.asymmetry_a2a(

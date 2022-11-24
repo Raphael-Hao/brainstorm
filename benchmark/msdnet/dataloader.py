@@ -108,7 +108,7 @@ def get_dataloaders(args):
                 sampler=torch.utils.data.sampler.SubsetRandomSampler(
                     train_set_index[-num_sample_valid:]
                 ),
-                num_workers=args.workers,
+                num_workers=0,
                 pin_memory=True,
             )
         if "test" in args.splits:

@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import  Any, Optional, cast
+from typing import Any, Optional, cast
 
 import copy
 import os
@@ -14,8 +14,8 @@ import torch.distributed as dist
 from torch.nn import ModuleList
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
-from brt.router import SwinMoEScatterRouter, GatherRouter
 
+from .fast_dispatch import fast_dispatcher
 from ..jit_kernels.gating import fast_cumsum_sub_one
 from . import communicate as C
 
@@ -156,29 +156,12 @@ class TopKGate(torch.nn.Module):
 
         self.a2a_ffn_overlap_degree = a2a_ffn_overlap_degree
 
-        self.scatter = SwinMoEScatterRouter(
-            fabric_type="fused_dispatch",
-            protocol_kwargs={
-                "top_k": self.top_k,
-                "capacity_factor": self.capacity_factor,
-                "gate_noise": self.use_noise,
-                "group": None,
-                "normalize_gate": self.normalize_gate,
-                "batch_prioritized_routing": self.batch_prioritized_routing,
-            },
-            fabric_kwargs={"capacity_padding": True},
-            throttling=True,
-        )
-
-        self.gather = GatherRouter(fabric_type="fused_combine")
-
     def compute_sorted_location(self, x, importance_scores):
         sorted_x = x[importance_scores.argsort(dim=0)]
         sorted_cumsum = fast_cumsum_sub_one(sorted_x) * sorted_x
         return sorted_cumsum[importance_scores.argsort(dim=0).argsort(dim=0)]
 
     def apply_on_expert_fn(self, in_data, expert_fn, group, sharded_count):
-        M = in_data.size(1)
         if self.input_dropout:
             in_data = self.input_dropout(in_data)
 
@@ -188,14 +171,168 @@ class TopKGate(torch.nn.Module):
         if self.training and self.use_noise:
             logits = logits + torch.randn_like(logits) / self.num_global_experts
 
+        topk_logits, topk_indices = torch.topk(logits, self.top_k, dim=1)
+
+        indices_s = [x.view(-1) for x in topk_indices.chunk(self.top_k, dim=1)]
+        masks_se = [
+            one_hot_with_dtype(x, num_classes=self.num_global_experts, dtype=x.dtype)
+            for x in indices_s
+        ]
+
         gates = F.softmax(logits, dim=1)
-        dispatched_input, _loss = self.scatter(in_data, gates, logits_wo_noise, logits)
-        dispatched_input = dispatched_input.reshape(1, self.num_global_experts, -1, M)
-        expert_output = expert_fn(dispatched_input)
-        expert_output = expert_output.to(in_data.dtype)
-        expert_output = expert_output.view(-1, M)
-        result_output = self.gather(expert_output)
-        return result_output, 0
+        gates_s = [(gates * x).sum(dim=1) for x in masks_se]
+
+        with torch.cuda.amp.autocast(enabled=False):
+            if self.num_global_experts <= 1:
+                l_loss = torch.sum(logits_wo_noise) * 0.0
+            elif self.vitmoe_loss:
+                gates_wo_noise = F.softmax(logits_wo_noise, dim=1)
+                l_loss = vitmoe_loss(
+                    gates_wo_noise,
+                    topk_logits,
+                    self.num_global_experts,
+                    self.use_global_loss,
+                )
+            else:
+                l_loss = load_balance(
+                    gates, masks_se[0], self.num_global_experts, self.fp32_gate
+                )
+
+        if self.batch_prioritized_routing:
+            importance_scores = -1 * gates.max(dim=1)[0]
+            self.compute_location = lambda x: self.compute_sorted_location(
+                x, importance_scores
+            )
+        else:
+            self.compute_location = fast_cumsum_sub_one
+
+        locations1 = self.compute_location(masks_se[0])
+
+        locations_s = [torch.sum(locations1 * masks_se[0], dim=1).to(torch.int32)]
+        if self.top_k > 1:
+            acc_base = None
+
+            for k in range(1, self.top_k):
+                acc_base = (
+                    torch.sum(masks_se[k - 1], dim=0, keepdim=True)
+                    if acc_base is None
+                    else acc_base + torch.sum(masks_se[k - 1], dim=0, keepdim=True)
+                )
+                locations2 = self.compute_location(masks_se[k])
+                locations2 += acc_base
+                locations_s.append(
+                    torch.sum(locations2 * masks_se[k], dim=1).to(torch.int32)
+                )
+
+            # Normalize Gate
+            if self.normalize_gate:
+                denom_s = torch.clamp(
+                    sum(gates_s), min=torch.finfo(gates_s[0].dtype).eps
+                )
+                gates_s = [x / denom_s for x in gates_s]
+
+        indices_s = [x.to(torch.int32) for x in indices_s]
+
+        S, M, GE = in_data.size(0), in_data.size(1), self.num_global_experts
+        world_size = C.get_world_size(group)
+
+        if not hasattr(self, "_fdr"):
+            capacity = self.top_k * int(
+                self.capacity_factor
+                * ((S + self.num_global_experts - 1) // self.num_global_experts)
+            )
+            self._fdr = fast_dispatcher(
+                num_global_experts=GE,
+                capacity=capacity,
+                model_dim=M,
+                dispatch_dtype=in_data.dtype,
+            )
+        else:
+            capacity = self._fdr.capacity
+
+        if self.is_ones_gate:
+            gates_s = [torch.ones_like(x) for x in gates_s]
+        self._fdr.update(
+            indices_s,
+            locations_s,
+            gates_s,
+            capacity=capacity,
+            is_postscore=self.is_postscore,
+        )
+        dispatched_input = self._fdr.encode(in_data)
+        if sharded_count > 1:
+            dispatched_input = dispatched_input.reshape(world_size, 1, -1, M)
+        else:
+            dispatched_input = dispatched_input.reshape(world_size, -1, capacity, M)
+
+        if self.a2a_ffn_overlap_degree == -1:
+            expert_output = expert_fn(dispatched_input)
+            expert_output = expert_output.to(in_data.dtype)
+        elif self.a2a_ffn_overlap_degree == 1:
+            _dispatched_input = C.AllToAll.apply(group, dispatched_input)
+            expert_output = expert_fn(_dispatched_input)
+            expert_output = expert_output.to(in_data.dtype)
+            expert_output = C.AllToAll.apply(group, expert_output)
+        else:
+            split_dim = 2
+
+            C.AllToAllStatus.init(
+                group, self.a2a_ffn_overlap_degree, split_dim, dispatched_input
+            )
+
+            # Implicit x.contiguous() in C.CurrentStreamRelease.forward() and C.CurrentStreamAcquire.backward()
+            dispatched_input_ready = C.CurrentStreamRelease.apply(dispatched_input, 0)
+            dispatched_input_scattered_after_a2a = C.AllToAllScatterAsync.apply(
+                dispatched_input_ready
+            )
+
+            expert_output_scattered = [
+                C.CurrentStreamRelease.apply(
+                    expert_fn(C.CurrentStreamAcquire.apply(x, i)).to(in_data.dtype), i
+                )
+                for i, x in enumerate(dispatched_input_scattered_after_a2a)
+            ]
+            expert_output_gathered_after_a2a = C.AllToAllGatherAsync.apply(
+                *expert_output_scattered
+            )
+            expert_output = C.CurrentStreamAcquire.apply(
+                expert_output_gathered_after_a2a, 0
+            )
+
+        expert_output = expert_output.reshape(-1, GE, capacity, M)
+
+        if expert_output.size(0) > 1:
+            with torch.cuda.amp.autocast(enabled=False):
+                expert_output = torch.sum(expert_output, dim=0)
+        expert_output = expert_output.view(GE * self._fdr.capacity, M)
+
+        result_output = self._fdr.decode(expert_output)
+        return result_output, l_loss
+
+
+class MegatronLMGate(torch.nn.Module):
+    """Megatron-LM Tensor Parallel over MoE Gate Type"""
+
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        self.l_zero = None
+        self._modules = dict()
+        self._parameters = dict()
+        self._buffers = dict()
+
+    def named_parameters(self):
+        return []
+
+    def apply_on_expert_fn(self, in_data, expert_fn, group, sharded_count):
+        if self.l_zero is None:
+            self.l_zero = torch.tensor(0, dtype=in_data.dtype, device=in_data.device)
+        assert sharded_count == 1
+        gathered_input = C.PreAllreduceSum.apply(group, in_data)
+        result_output = expert_fn(gathered_input)
+        result_output = C.PostAllreduceSum.apply(group, result_output)
+        return result_output, self.l_zero
 
 
 class MOELayer(torch.nn.Module):
@@ -562,7 +699,8 @@ class MOELayer(torch.nn.Module):
             )
             top_k = int(gate_type[3:-4])
             logging.warning(
-                f"gate_type value `{gate_type}` in tutel.moe_layer has been deprecated, please use gate_type = {{'type': 'top', 'k': {top_k}}} instead."
+                f"""gate_type value `{gate_type}` in tutel.moe_layer has been deprecated, \
+                    please use gate_type = {{'type': 'top', 'k': {top_k}}} instead."""
             )
             gate_type = {"type": "top", "k": top_k}
 
@@ -576,7 +714,8 @@ class MOELayer(torch.nn.Module):
                     torch.manual_seed(seeds[0] + gi)
                 if "fp32_gate" in kwargs:
                     logging.warning(
-                        f'`fp32_gate` option in tutel.moe_layer has been deprecated, please move this option to gate_type = {{.., "fp32_gate": {kwargs["fp32_gate"]}}} instead.'
+                        f"""`fp32_gate` option in tutel.moe_layer has been deprecated, \
+                        please move this option to gate_type = {{.., "fp32_gate": {kwargs["fp32_gate"]}}} instead."""
                     )
                     single_gate_type["fp32_gate"] = kwargs["fp32_gate"]
 
@@ -596,6 +735,17 @@ class MOELayer(torch.nn.Module):
                         **single_gate_type,
                     )
                 ]
+            elif single_gate_type["type"] == "megatron":
+                self.gates += [MegatronLMGate(**single_gate_type)]
+                assert isinstance(
+                    experts, dict
+                ), "Gate type `megatron` requires dict-type expert description."
+                assert (
+                    self.num_local_experts == 1
+                ), "Gate type `megatron` requires `count_per_node` == 1 in expert attributions."
+                assert (
+                    experts["type"] == "ffn"
+                ), "Gate type `megatron` requires `type` == `ffn` in expert attributions."
             else:
                 raise Exception("Unrecognized gate_type: %s" % single_gate_type)
 
@@ -629,9 +779,9 @@ class MOELayer(torch.nn.Module):
                 % param_type
             )
 
-    def forward(self, input: Tensor, gate_index=0, **kwargs: Any):
+    def forward(self, in_data: Tensor, gate_index=0, **kwargs: Any):
         if self.skip_moe:
-            result_output = input
+            result_output = in_data
             result_output.l_aux = None
             return (
                 self.result_func(result_output)
@@ -639,11 +789,11 @@ class MOELayer(torch.nn.Module):
                 else result_output
             )
 
-        original_shape, original_dtype = input.shape, input.dtype
+        original_shape, original_dtype = in_data.shape, in_data.dtype
         assert (
-            len(input.shape) >= 2
+            len(in_data.shape) >= 2
         ), "Input data must be at least 2D tensor: (s)amples, .., (m)odel_dim"
-        reshaped_input = input.reshape(-1, input.shape[-1])
+        reshaped_input = in_data.reshape(-1, in_data.shape[-1])
         reshaped_input_samples = reshaped_input.shape[0]
 
         self.expected_sample_size = self.expected_sample_size or reshaped_input.size(0)
@@ -660,7 +810,8 @@ class MOELayer(torch.nn.Module):
             else:
                 if C.get_world_rank(self.group) == 0:
                     logging.warning(
-                        f"MoE is initialized to keep working on sample size = {self.expected_sample_size}, while receiving sample size = {reshaped_input.size(0)} (will slow down this forward step)"
+                        f"""MoE is initialized to keep working on sample size = {self.expected_sample_size}, \
+                            while receiving sample size = {reshaped_input.size(0)} (will slow down this forward step)"""
                     )
                 pad_input = torch.zeros(
                     [self.expected_sample_size, self.model_dim],

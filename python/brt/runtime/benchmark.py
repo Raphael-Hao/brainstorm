@@ -1,9 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import Iterator
 
 import time
-import torch
 import argparse
+import torch
+import torch.distributed as dist
 import numpy as np
 from brt.runtime import BRT_LOG_PATH
 
@@ -30,7 +32,7 @@ def profile(func):
     torch.cuda.synchronize()
     with torch.inference_mode():
         profiler.start()
-        for i in range(12):
+        for _i in range(12):
             func()
             torch.cuda.synchronize()
             profiler.step()
@@ -79,12 +81,12 @@ class Timer:
 
     def execute(self, func, msg):
         with torch.inference_mode():
-            for i in range(self.warm_up):
+            for _i in range(self.warm_up):
                 func()
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
             self.start()
-            for i in range(self.repeat):
+            for _i in range(self.repeat):
                 self.step_start()
                 for _ in range(self.loop):
                     func()
@@ -173,7 +175,14 @@ class Benchmarker:
             getattr(self, item)()
 
 
-def deterministic_random_generator(shape, num=1, dtype=None, device=None, seed=0):
+def deterministic_random_generator(
+    shape, num=1, dtype=None, device=None, seed=None
+) -> Iterator[torch.Tensor]:
+    if seed is None:
+        if dist.is_initialized():
+            seed = dist.get_rank()
+        else:
+            seed = 0
     np.random.seed(seed)
     i = 0
     while i < num:

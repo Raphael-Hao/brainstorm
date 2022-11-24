@@ -89,7 +89,6 @@ class Tester(object):
         n_stage = self.args.nBlocks
         logits = [[] for _ in range(n_stage)]
         targets = []
-
         for i, (input, target) in enumerate(dataloader):
             targets.append(target)
             with torch.no_grad():

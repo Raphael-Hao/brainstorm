@@ -4,6 +4,9 @@
 # \brief:
 # Author: raphael hao
 
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+BRT_DIR=$(cd "${script_dir}/../" && pwd)
+
 is_root() {
     return "$(id -u)"
 }
@@ -42,16 +45,21 @@ fi
 git config --global user.name raphael
 git config --global user.email raphaelhao@outlook.com
 
-wget https://azcopyvnext.azureedge.net/release20221005/azcopy_linux_amd64_10.16.1.tar.gz -O azcopy.tar.gz
+curl -sL https://aka.ms/InstallAzureCLIDeb | $sudo_cmd bash
+
+wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux -O azcopy.tar.gz
 mkdir -p azcopy && tar -xzvf azcopy.tar.gz -C "azcopy" --strip-components=1
 $sudo_cmd mv azcopy/azcopy /usr/bin/azcopy && rm -rf azcopy.tar.gz azcopy
 
 UBUNTU_DIST=$(lsb_release -sr)
 wget https://packages.microsoft.com/config/ubuntu/"${UBUNTU_DIST}"/packages-microsoft-prod.deb
 $sudo_cmd dpkg -i packages-microsoft-prod.deb && rm -f packages-microsoft-prod.deb
-$sudo_cmd apt-get update && $sudo_cmd apt-get install blobfuse dotnet-sdk-6.0
+$sudo_cmd apt-get update && $sudo_cmd apt-get install -y blobfuse dotnet-sdk-6.0
 
 mkdir -p ../.vscode
-cp -r ./vscode/* ../.vscode/
+cp ./vscode/c_cpp_properties.json ../.vscode/c_cpp_properties.json
+cp ./vscode/settings_workspace.json ../.vscode/settings.json
+mkdir -p /root/.vscode-server/data/Machine/
+cp ./vscode/settings_global.json /root/.vscode-server/data/Machine/settings.json
 bash blob/mount.sh
 bash blob/prepare_dataset_ckpt.sh
