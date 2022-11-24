@@ -144,7 +144,9 @@ class JitKernelTest(unittest.TestCase):
             if active != 0:
                 sample_out = linears[i](hetero_fused_inputs[i * 4])
                 self.assertTrue(
-                    torch.allclose(sample_out, hetero_fused_inputs[2 + i * 4], atol=1e-6)
+                    torch.allclose(
+                        sample_out, hetero_fused_inputs[2 + i * 4], atol=1e-6
+                    )
                 )
 
     def test_homo_fused_kernel(self):
@@ -205,7 +207,7 @@ class JitFunctionTest(unittest.TestCase):
         cuda_timer.stop(100, "pt_out_gpu")
 
         module_function = make_jit_function(linear, sample_inputs=sample_inputs)
-        brt_out_gpu = module_function.forward(
+        brt_out_gpu = module_function.apply(
             sample_inputs, linear.weight.cuda(), linear.bias.cuda()
         )
         cuda_timer.start()
@@ -213,7 +215,7 @@ class JitFunctionTest(unittest.TestCase):
             brt_out_gpu = torch.empty_like(
                 pt_out_gpu, dtype=pt_out_gpu.dtype, device=pt_out_gpu.device
             )
-            brt_out_gpu = module_function.forward(
+            brt_out_gpu = module_function.apply(
                 sample_inputs, linear.weight.cuda(), linear.bias.cuda()
             )
         cuda_timer.stop(100, "brt_out_gpu")
@@ -232,7 +234,7 @@ class JitFunctionTest(unittest.TestCase):
             sample_outputs = [linears[i](sample_inputs[i]) for i in range(4)]
         cuda_timer.stop(10, "pt_serial")
 
-        horiz_fused_funciton = make_jit_function(
+        horiz_fused_function = make_jit_function(
             linears, sample_inputs=sample_inputs, opt_level="horiz_fuse"
         )
 
@@ -242,7 +244,7 @@ class JitFunctionTest(unittest.TestCase):
             horiz_fused_inputs.append(linears[i].weight)
             horiz_fused_inputs.append(linears[i].bias)
 
-        brt_outputs = horiz_fused_funciton.forward(*horiz_fused_inputs)
+        brt_outputs = horiz_fused_function.apply(*horiz_fused_inputs)
 
         cuda_timer.start()
         for i in range(10):
@@ -252,7 +254,7 @@ class JitFunctionTest(unittest.TestCase):
                 horiz_fused_inputs.append(linears[i].weight)
                 horiz_fused_inputs.append(linears[i].bias)
 
-            brt_outputs = horiz_fused_funciton.forward(*horiz_fused_inputs)
+            brt_outputs = horiz_fused_function.apply(*horiz_fused_inputs)
         cuda_timer.stop(10, "brt_horiz_fusion")
 
         for i in range(4):
@@ -280,11 +282,11 @@ class JitFunctionTest(unittest.TestCase):
                 hetero_fused_inputs.append(sample_inputs[i])
                 hetero_fused_inputs.append(linears[i].weight)
                 hetero_fused_inputs.append(linears[i].bias)
-        brt_outs = hetero_fused_function.forward(*hetero_fused_inputs, active_blocks=active_blocks)
+        brt_outs = hetero_fused_function.apply(*hetero_fused_inputs, active_blocks=active_blocks)
 
         cuda_timer.start()
         for i in range(100):
-            brt_outs = hetero_fused_function.forward(*hetero_fused_inputs, active_blocks=active_blocks)
+            brt_outs = hetero_fused_function.apply(*hetero_fused_inputs, active_blocks=active_blocks)
         cuda_timer.stop(100, "brt_hetero_fusion")
 
         for i, active in enumerate(active_blocks):
@@ -298,7 +300,7 @@ class JitFunctionTest(unittest.TestCase):
         cuda_timer = CUDATimer()
         linears = nn.ModuleList(nn.Linear(512, 1024) for _ in range(4)).cuda()
         sample_inputs = [torch.randn((2**i, 512)).cuda() for i in range(5)]
-        homo_fused_funciton = make_jit_function(
+        homo_fused_function = make_jit_function(
             linears, sample_inputs=sample_inputs, opt_level="homo_fuse"
         )
 
@@ -310,10 +312,10 @@ class JitFunctionTest(unittest.TestCase):
             standalone_inputs.append(linear.weight)
             standalone_inputs.append(linear.bias)
         capacities = [2, 8, 4, 2]
-        brt_outputs = homo_fused_funciton.forward(*shared_inputs, *standalone_inputs, capacities=capacities)
+        brt_outputs = homo_fused_function.apply(*shared_inputs, *standalone_inputs, capacities=capacities)
         cuda_timer.start()
         for i in range(100):
-            brt_outputs = homo_fused_funciton.forward(*shared_inputs, *standalone_inputs, capacities=capacities)
+            brt_outputs = homo_fused_function.apply(*shared_inputs, *standalone_inputs, capacities=capacities)
         cuda_timer.stop(100, "brt_homo_fusion")
 
         start_idx = 0
