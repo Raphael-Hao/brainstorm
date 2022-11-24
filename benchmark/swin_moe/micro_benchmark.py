@@ -24,6 +24,7 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import deterministic_random_generator, profile_v2
 from brt.runtime.placement import dump_trace, adaptive_load
+import brt.runtime.debug as brt_debug
 from config import get_config
 from data import build_loader
 from logger import create_logger
@@ -33,7 +34,6 @@ from utils import (
     create_ds_config,
     hook_scale_grad,
     reduce_tensor,
-    gather_all_ckpts_into_one,
     adaptive_load_checkpoint,
 )
 
@@ -121,7 +121,7 @@ def parse_option():
             "throughput",
             "correctness",
             "trace",
-            "gather-ckpt",
+            "gather-micro",
             "profile",
             "valid",
         ],
@@ -174,52 +174,52 @@ def main(args, config, ds_init):
         bucket_cap_mb=64,
     )
 
-    if args.mode == "gather-ckpt":
-        gather_all_ckpts_into_one(config, model_without_ddp, logger)
+    checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
+    MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
+    if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
+        placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
+        adaptive_load(
+            model_without_ddp,
+            checkpoint_file,
+            enable_locality=args.locality,
+            placement_file=placement_file,
+        )
     else:
-        checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
-        MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
-        if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
-            placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-            adaptive_load(
-                model_without_ddp,
-                checkpoint_file,
-                enable_locality=args.locality,
-                placement_file=placement_file,
-            )
-        else:
-            adaptive_load(
-                model_without_ddp,
-                checkpoint_file,
-                enable_locality=args.locality,
-                global_expert_num=16,
-            )
-        torch.cuda.synchronize()
-        dist.barrier()
-        if args.mode == "correctness":
-            print("===> Running correctness test")
-            check_correctness(model, args.batch_size)
-        elif args.mode == "trace":
-            print("===> Tracing model")
-            adaptive_load_checkpoint(
-                config,
-                model_without_ddp,
-                logger,
-            )
-            acc1, _acc5, _loss = validate(config, data_loader_val, model)
-            logger.info(
-                f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-            )
-            print("===> Tracing model done, dumping to file")
-            dump_trace(model_without_ddp)
+        adaptive_load(
+            model_without_ddp,
+            checkpoint_file,
+            enable_locality=args.locality,
+            global_expert_num=16,
+        )
+    torch.cuda.synchronize()
+    dist.barrier()
 
-        elif args.mode == "throughput":
-            throughput(data_loader_val, model, logger)
-        elif args.mode == "profile":
-            gpu_data, _batch_size = get_benchmark_data(data_loader_val, logger, 20)
-            profile_v2(model, gpu_data, MOE_LAYER_VENDOR)
-        elif args.mode == "valid":
-            validate(config, data_loader_val, model)
+    if args.mode == "gather-micro":
+        gather_micro_bench_data(data_loader_val, model, logger)
+    elif args.mode == "correctness":
+        print("===> Running correctness test")
+        check_correctness(model, args.batch_size)
+    elif args.mode == "trace":
+        print("===> Tracing model")
+        adaptive_load_checkpoint(
+            config,
+            model_without_ddp,
+            logger,
+        )
+        acc1, _acc5, _loss = validate(config, data_loader_val, model)
+        logger.info(
+            f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
+        )
+        print("===> Tracing model done, dumping to file")
+        dump_trace(model_without_ddp)
+
+    elif args.mode == "throughput":
+        throughput(data_loader_val, model, logger)
+    elif args.mode == "profile":
+        gpu_data, _batch_size = get_benchmark_data(data_loader_val, logger, 20)
+        profile_v2(model, gpu_data, MOE_LAYER_VENDOR)
+    else:
+        raise ValueError(f"Unknown mode: {args.mode}")
 
 
 @torch.no_grad()
@@ -294,6 +294,26 @@ def get_benchmark_data(data_loader, logger, num_batches=100):
 
 
 @torch.inference_mode()
+def gather_micro_bench_data(data_loader, model, logger):
+    brt_debug.set_one_off_profile_position(target=0)
+    bench_nums = len(data_loader)
+    data_iter = iter(data_loader)
+    batch_size = 0
+    for _idx in range(bench_nums):
+        logger.info(f"===> Gathering micro benchmark data {(_idx + 1)}/{bench_nums}")
+        images, _target = next(data_iter)
+        batch_size = images.size(0)
+        images = images.cuda(non_blocking=True)
+        model(images)
+    brt_debug.save_profile(profile_name=f"{batch_size}",profile_dir="datasets/swin_moe_micro_bench_data")
+    torch.cuda.synchronize()
+    dist.barrier()
+    logger.info(
+        f"Debug Profile done, total data capatured: Batch size: {batch_size}, Num batches: {bench_nums}"
+    )
+
+
+@torch.inference_mode()
 def throughput(data_loader, model, logger):
     bench_nums = 10
     gpu_data, batch_size = get_benchmark_data(data_loader, logger, bench_nums)
@@ -314,26 +334,6 @@ def throughput(data_loader, model, logger):
     logger.info(
         f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
-
-@torch.no_grad()
-def deprecated_throughput(data_loader, model, logger):
-    model.eval()
-    for idx, (images, _) in enumerate(data_loader):
-        images = images.cuda(non_blocking=True)
-        batch_size = images.shape[0]
-        for i in range(50):
-            model(images)
-        torch.cuda.synchronize()
-        logger.info(f"throughput averaged with 30 times")
-        tic1 = time.time()
-        for i in range(30):
-            model(images)
-        torch.cuda.synchronize()
-        tic2 = time.time()
-        logger.info(
-            f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
-        )
-        return
 
 
 @torch.inference_mode()
