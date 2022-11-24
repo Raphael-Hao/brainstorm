@@ -7,6 +7,50 @@ import torch
 import math
 from brt.router import ScatterRouter, GatherRouter
 
+is_measure = False
+
+
+def write_json(nn: nn.Module, shape_in, shape_out):
+    file_json = open("msdnet.json", "a+")
+    file_json.write("{")
+    conv_node = nn[0]
+    bias = "false"
+    if (
+        isinstance(conv_node, torch.nn.modules.conv.Conv2d)
+        and conv_node.bias is not None
+    ):
+        bias = "true"
+    if isinstance(conv_node, torch.nn.modules.pooling.MaxPool2d):
+
+        file_json.write(
+            f'"module_name": "MaxPool2d", "kernel_size": {conv_node.kernel_size}, "stride": {conv_node.stride}, "padding": {conv_node.padding}, "input_shape": {list(shape_in)}, "output_shape": {list(shape_out)}'
+        )
+    elif isinstance(conv_node, torch.nn.modules.pooling.AvgPool2d):
+        file_json.write(
+            f'"module_name": "AvgPool2d", "kernel_size": {conv_node.kernel_size}, "input_shape": {list(shape_in)}, "output_shape": {list(shape_out)}'
+        )
+
+    elif isinstance(conv_node, torch.nn.modules.conv.Conv2d):
+        file_json.write(
+            f'"module_name": "Conv2d", "in_channels": {conv_node.in_channels}, "out_channels": {conv_node.out_channels}, "kernel_size": {conv_node.kernel_size[0]}, "stride": {conv_node.stride[0]}, "padding": {conv_node.padding[0]}, "dilation": null, "groups": 1, "bias": {bias}, "padding_mode": "zeros", "norm": "SyncBatchNorm", "activation": "ReLU", "input_shape": {list(shape_in)}, "output_shape": {list(shape_out)}'
+        )
+    else:
+        raise ValueError("not support")
+    file_json.write("}" + "\n")
+
+    file_json.close()
+    return
+
+
+def write_shape(shape, name):
+    file_json = open("msdnet.json", "a+")
+    if name == "input":
+        file_json.write("input_shape:" + str(shape) + "\n")
+    else:
+        file_json.write("output_shape:" + str(shape) + "\n")
+    file_json.close()
+    return
+
 
 class ConvBasic(nn.Module):
     def __init__(self, nIn, nOut, kernel=3, stride=1, padding=1):
@@ -25,7 +69,20 @@ class ConvBasic(nn.Module):
         )
 
     def forward(self, x):
+        if self.training == True:
+            self.net[0].input_shape = x.size()
+            self.net[0].output_shape = self.net(x).size()
+            write_json(self.net, x.size(), self.net(x).size())
         return self.net(x)
+
+
+class identity(nn.Module):
+    def __init__(self):
+        super(identity, self).__init__()
+
+    def forward(self, x):
+        print(x)
+        return x
 
 
 class ConvBN(nn.Module):
@@ -40,6 +97,7 @@ class ConvBN(nn.Module):
         """
         super(ConvBN, self).__init__()
         layer = []
+        bottleneck_layer = []
         nInner = nIn
         if bottleneck is True:
             nInner = min(nInner, bnWidth * nOut)
@@ -48,7 +106,6 @@ class ConvBN(nn.Module):
             )
             layer.append(nn.BatchNorm2d(nInner))
             layer.append(nn.ReLU(True))
-
         if type == "normal":
             layer.append(
                 nn.Conv2d(nInner, nOut, kernel_size=3, stride=1, padding=1, bias=False)
@@ -61,13 +118,34 @@ class ConvBN(nn.Module):
             raise ValueError
 
         layer.append(nn.BatchNorm2d(nOut))
-        layer.append(nn.ReLU(True))
 
+        layer.append(nn.ReLU(True))
         self.net = nn.Sequential(*layer)
 
     def forward(self, x):
+        if self.training == False:
 
-        return self.net(x)
+            return self.net(x)
+        else:
+            if len(self.net) == 3:
+                self.net[0].input_shape = x.size()
+                self.net[0].output_shape = self.net(x).size()
+                write_json(self.net, x.size(), self.net(x).size())
+                return self.net(x)
+            input = x.clone()
+            for i in range(len(self.net)):
+                x = self.net[i](x)
+                if i == 2:
+                    mid = x.clone()
+                    self.net[0].input_shape = input.size()
+                    self.net[0].output_shape = x.size()
+                    write_json(self.net, input.size(), x.size())
+                if i == 5:
+                    self.net[3].input_shape = mid.size()
+                    self.net[3].output_shape = x.size()
+                    write_json(self.net[3:], mid.size(), x.size())
+
+            return x
 
 
 class ConvDownNormal(nn.Module):
@@ -122,6 +200,22 @@ class MSDNFirstLayer(nn.Module):
     def forward(self, x):
         res = []
         for i in range(len(self.layers)):
+            if self.training:
+                if i == 0:
+                    input = x.clone()
+                    for j in range(len(self.layers[i])):
+                        x = self.layers[i][j](x)
+                        if j == 2:
+                            mid = x.clone()
+                            self.layers[i][0].input_shape = input.size()
+                            self.layers[i][0].output_shape = x.size()
+                            write_json(self.layers[i], input.size(), x.size())
+                        if j == 3:
+                            self.layers[i][3].input_shape = mid.size()
+                            self.layers[i][3].output_shape = x.size()
+                            write_json(self.layers[i][3:], mid.size(), x.size())
+                    res.append(x)
+                    continue
             x = self.layers[i](x)
             res.append(x)
 
@@ -225,14 +319,30 @@ class ClassifierModule(nn.Module):
         self.linear = nn.Linear(channel, num_classes)
 
     def forward(self, x):
+        if self.training:
+            input = x[-1].clone()
+            input_reserved = x[-1].clone()
+            for i in range(len(self.m)):
+                input = self.m[i](input)
+                if i == 1:
+                    mid = input.clone()
+                if i == 2:
+                    self.m[2].input_shape = mid.size()
+                    self.m[2].output_shape = input.size()
+                    write_json(self.m[2:], mid.size(), input.size())
         res = self.m(x[-1])
         res = res.view(res.size(0), self.linear.in_features)
         return self.linear(res)
 
 
 class MSDNet(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, _is_measure=False):
         super(MSDNet, self).__init__()
+
+        if _is_measure:
+            self.train(True)
+        else:
+            self.train(False)
         self.blocks = nn.ModuleList()
         self.classifier = nn.ModuleList()
         self.scatters = nn.ModuleList()
@@ -400,6 +510,7 @@ class MSDNet(nn.Module):
             ConvBasic(interChannels1, interChannels2, kernel=3, stride=2, padding=1),
             nn.AvgPool2d(2),
         )
+
         return ClassifierModule(conv, interChannels2, num_classes)
 
     def _build_classifier_imagenet(self, nIn, num_classes):
@@ -408,6 +519,7 @@ class MSDNet(nn.Module):
             ConvBasic(nIn, nIn, kernel=3, stride=2, padding=1),
             nn.AvgPool2d(2),
         )
+
         return ClassifierModule(conv, nIn, num_classes)
 
     def build_routers(self, thresholds: List[float]):
@@ -436,7 +548,8 @@ class MSDNet(nn.Module):
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
 
-    def forward(self, x):
+    def forward(self, x, _is_measure=False):
+
         res = []
         if not self.training and self.routers_initilized:
             ##the actual dynamic routing
@@ -444,6 +557,7 @@ class MSDNet(nn.Module):
                 ## scatter all of the image
                 x = self.blocks[i](x)
                 tmp_res = self.classifier[i](x)
+
                 if i < self.nBlocks - 1:
                     # x : 4 256 96 56 56 tmp_res : 256 1000
                     ##build a tesnsor with the size(0) of bs
