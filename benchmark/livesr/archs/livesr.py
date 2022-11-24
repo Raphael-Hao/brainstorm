@@ -15,10 +15,11 @@ from archs.nas_mdsr import SingleNetwork as NAS_MDSR
 class LiveSR(nn.Module):
     """LiveSR using brainstorm"""
 
-    def __init__(self, n_subnets: int = 10, subnet_num_block: int = 8):
+    def __init__(self, n_subnets: int = 10, subnet_num_block: int = 8, num_feature=36):
         super().__init__()
         self.n_subnets = n_subnets
         self.subnet_num_block = subnet_num_block
+        self.num_feature = num_feature
         self.classifier = Classifier(n_subnets).eval()
         self.scatter = ScatterRouter(
             protocol_type="label", protocol_kwargs={"flow_num": 10}
@@ -26,7 +27,7 @@ class LiveSR(nn.Module):
         self.subnets = nn.ModuleList(
             NAS_MDSR(
                 num_block=self.subnet_num_block,
-                num_feature=36,
+                num_feature=num_feature,
                 num_channel=3,
                 scale=4,
                 output_filter=2,

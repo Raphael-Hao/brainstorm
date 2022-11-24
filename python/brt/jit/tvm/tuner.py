@@ -259,7 +259,7 @@ class TVMTuner:
             pool.clear()
         else:
             for inp, res in record_reader:
-                record_data.append(self._calcu_record(inp, res))
+                record_data.append(self._calcu_record(objective_func, inp, res))
         return record_data
 
     def _calcu_record(self, objective_func, inp, res):
@@ -271,6 +271,7 @@ class TVMTuner:
             score = sum(res.costs) / len(res.costs)
         elif objective_func == "most_efficient":
             num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
+            num_threads = block_dim[0] * block_dim[1] * block_dim[2]
             score = num_blocks * sum(res.costs) / len(res.costs)
         else:
             raise ValueError(f"Unsupported {objective_func = }")
@@ -315,12 +316,23 @@ def _calcu_record_mp(
     tvm_sch, tvm_args = compute_dag.apply_steps_from_state(input.state)
     tvm_ir = tvm.lower(tvm_sch, tvm_args, simple_mode=True)
     grid_dim, block_dim = parse_culaunch_config(tvm_ir)
+    costs = list(res.costs)
     if objective_func == "fastest":
-        score = sum(res.costs) / len(res.costs)
+        score = sum(costs) / len(costs)
     elif objective_func == "most_efficient":
         num_blocks = grid_dim[0] * grid_dim[1] * grid_dim[2]
-        num_threads = block_dim[0] * block_dim[1] * block_dim[2]
-        score = num_blocks * num_threads * sum(res.costs) / len(res.costs)
+        num_threads_per_block = block_dim[0] * block_dim[1] * block_dim[2]
+        if num_threads_per_block % 32 != 0:
+            score = float("inf")
+        else:
+            from math import ceil
+
+            # costs[0] *= num_blocks * ceil(num_threads_per_block / 32)
+            # costs[0] *= num_blocks * num_threads_per_block
+            score = (
+                sum(costs) / len(costs) * num_blocks * ceil(num_threads_per_block / 32)
+            )
+            # score = sum(costs) / len(costs) * num_blocks
     else:
         raise ValueError(f"Unsupported {objective_func = }")
     return (score, grid_dim, block_dim)
