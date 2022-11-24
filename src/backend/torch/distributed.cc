@@ -43,8 +43,10 @@ static void init_nccl(::torch::Tensor unique_id, const int& world_rank, const in
 static std::pair<::torch::Tensor, ::torch::Tensor> locality_reorder(const ::torch::Tensor& loads,
                                                                     const int& world_size) {
   CHECK_ON_CUDA(loads);
-  ::torch::Tensor reordered_loads = ::torch::empty_like(loads, loads.options());
-  ::torch::Tensor reorder_indices = ::torch::empty(world_size, loads.options());
+  ::torch::Tensor reordered_loads =
+      ::torch::empty_like(loads, loads.options(), ::torch::MemoryFormat::Contiguous);
+  ::torch::Tensor reorder_indices =
+      ::torch::empty(world_size, loads.options(), ::torch::MemoryFormat::Contiguous);
   distributed::LocalityReorder(loads.data_ptr<int>(), world_size, reorder_indices.data_ptr<int>(),
                                reordered_loads.data_ptr<int>(),
                                at::cuda::getCurrentCUDAStream().stream());
@@ -54,8 +56,10 @@ static std::pair<::torch::Tensor, ::torch::Tensor> locality_reorder(const ::torc
 static std::pair<::torch::Tensor, ::torch::Tensor> group_locality_reorder(
     const ::torch::Tensor& loads, const int& world_size, const int& group_size = 1) {
   CHECK_ON_CUDA(loads);
-  ::torch::Tensor reordered_loads = ::torch::empty_like(loads, loads.options());
-  ::torch::Tensor reorder_indices = ::torch::empty(world_size, loads.options());
+  ::torch::Tensor reordered_loads =
+      ::torch::empty_like(loads, loads.options(), ::torch::MemoryFormat::Contiguous);
+  ::torch::Tensor reorder_indices =
+      ::torch::empty(world_size, loads.options(), ::torch::MemoryFormat::Contiguous);
   distributed::GroupLocalityReorder(
       loads.data_ptr<int>(), group_size, world_size, reorder_indices.data_ptr<int>(),
       reordered_loads.data_ptr<int>(), at::cuda::getCurrentCUDAStream().stream());
@@ -67,6 +71,7 @@ static ::torch::Tensor exchange(const ::torch::Tensor& in_data,
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
 
   ::torch::Tensor reorder_indices_cpu = reorder_indices.to(::torch::kCPU);
   auto reorder_indices_cpu_ptr = reorder_indices_cpu.data_ptr<int>();
@@ -80,7 +85,10 @@ static ::torch::Tensor exchange(const ::torch::Tensor& in_data,
   }
   CHECK_ON_CUDA(in_data);
 
-  ::torch::Tensor out_data = ::torch::empty_like(in_data, in_data.options());
+  ::torch::Tensor out_data =
+      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+  // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
+  //                                              at::cuda::getCurrentCUDAStream());
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -99,6 +107,7 @@ static std::vector<::torch::Tensor> batched_exchange(const std::vector<::torch::
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
 
   ::torch::Tensor reorder_indices_cpu = reorder_indices.to(::torch::kCPU);
   auto reorder_indices_cpu_ptr = reorder_indices_cpu.data_ptr<int>();
@@ -113,8 +122,10 @@ static std::vector<::torch::Tensor> batched_exchange(const std::vector<::torch::
   std::vector<::torch::Tensor> out_datas;
   for (auto& in_data : in_datas) {
     CHECK_ON_CUDA(in_data);
-    ::torch::Tensor out_data = ::torch::empty_like(in_data, in_data.options());
-
+    ::torch::Tensor out_data =
+        ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+    // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
+    //                                              at::cuda::getCurrentCUDAStream());
     manager.StartContext();
     manager.WaitEvent(0);
     manager.RecordStorage(in_data);
@@ -134,6 +145,7 @@ static ::torch::Tensor reverse_exchange(const ::torch::Tensor& in_data,
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
 
   ::torch::Tensor reorder_indices_cpu = reorder_indices.to(::torch::kCPU);
   auto reorder_indices_cpu_ptr = reorder_indices_cpu.data_ptr<int>();
@@ -147,7 +159,8 @@ static ::torch::Tensor reverse_exchange(const ::torch::Tensor& in_data,
   }
   CHECK_ON_CUDA(in_data);
 
-  ::torch::Tensor out_data = ::torch::empty_like(in_data, in_data.options());
+  ::torch::Tensor out_data =
+      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -166,6 +179,7 @@ static std::vector<::torch::Tensor> batched_reverse_exchange(
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
 
   CHECK_ON_CUDA(reorder_indices);
 
@@ -183,7 +197,8 @@ static std::vector<::torch::Tensor> batched_reverse_exchange(
   for (auto& in_data : in_datas) {
     CHECK_ON_CUDA(in_data);
 
-    ::torch::Tensor out_data = ::torch::empty_like(in_data, in_data.options());
+    ::torch::Tensor out_data =
+        ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
 
     manager.StartContext();
     manager.WaitEvent(0);
@@ -209,7 +224,8 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(send_sizes);
 
-  ::torch::Tensor recv_sizes = ::torch::empty_like(send_sizes, send_sizes.options());
+  ::torch::Tensor recv_sizes =
+      ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -227,8 +243,8 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   ::torch::Tensor all_recv_sizes;
   if (locality_aware) {
     if (world_rank == 0) {
-      all_recv_sizes =
-          ::torch::empty({send_sizes.numel() * manager.GetWorldSize()}, send_sizes.options());
+      all_recv_sizes = ::torch::empty({send_sizes.numel() * manager.GetWorldSize()},
+                                      send_sizes.options(), ::torch::MemoryFormat::Contiguous);
       manager.RecordStorage(all_recv_sizes);
     }
     manager.StartContext();
@@ -276,7 +292,8 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
 
   ::torch::Tensor reorder_indices;
   ::torch::Tensor all_reordered_loads;
-  ::torch::Tensor reordered_loads = ::torch::empty_like(send_sizes, send_sizes.options());
+  ::torch::Tensor reordered_loads =
+      ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
 
   if (locality_aware) {
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
@@ -286,7 +303,8 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
       reorder_indices = reorder_results.second;
       manager.RecordStorage(all_reordered_loads);
     } else {
-      reorder_indices = ::torch::empty_like(send_sizes, send_sizes.options());
+      reorder_indices =
+          ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
     }
     manager.ExternalRecordEvent(1, at::cuda::getCurrentCUDAStream());
     manager.StartContext();
@@ -321,13 +339,18 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
+
   const int total_slice_num = send_sizes.numel();
   const int group_size = total_slice_num / world_size;
 
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(send_sizes);
 
-  ::torch::Tensor recv_sizes = ::torch::empty_like(send_sizes, send_sizes.options());
+  ::torch::Tensor recv_sizes =
+      ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
+  // at::cuda::CUDACachingAllocator::recordStream(recv_sizes.storage().data_ptr(),
+  //                                              at::cuda::getCurrentCUDAStream());
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -344,13 +367,16 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
   ::torch::Tensor all_recv_sizes;
   if (locality_aware) {
     if (world_rank == 0) {
-      all_recv_sizes =
-          ::torch::empty({send_sizes.numel() * manager.GetWorldSize()}, send_sizes.options());
-      manager.RecordStorage(all_recv_sizes);
+      all_recv_sizes = ::torch::empty({send_sizes.numel() * manager.GetWorldSize()},
+                                      send_sizes.options(), ::torch::MemoryFormat::Contiguous);
+      // at::cuda::CUDACachingAllocator::recordStream(all_recv_sizes.storage().data_ptr(),
+      //                                              at::cuda::getCurrentCUDAStream());
     }
     manager.StartContext();
     manager.WaitEvent(1);
+    manager.RecordStorage(recv_sizes);
     if (world_rank == 0) {
+      manager.RecordStorage(all_recv_sizes);
       distributed::Gather(recv_sizes.data_ptr(), all_recv_sizes.data_ptr(), recv_sizes.nbytes(), 0,
                           world_rank, world_size, manager.GetComm(), manager.GetStream());
     } else {
@@ -377,6 +403,8 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
 
   ::torch::Tensor out_data =
       ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+  // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
+  //                                              at::cuda::getCurrentCUDAStream());
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -391,17 +419,25 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
 
   ::torch::Tensor reorder_indices;
   ::torch::Tensor all_reordered_loads;
-  ::torch::Tensor reordered_loads = ::torch::empty_like(send_sizes, send_sizes.options());
-
+  ::torch::Tensor reordered_loads =
+      ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
+  // at::cuda::CUDACachingAllocator::recordStream(reordered_loads.storage().data_ptr(),
+  //                                              at::cuda::getCurrentCUDAStream());
   if (locality_aware) {
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
     if (world_rank == 0) {
       auto reorder_results = group_locality_reorder(all_recv_sizes, world_size, group_size);
       all_reordered_loads = reorder_results.first;
       reorder_indices = reorder_results.second;
-      manager.RecordStorage(all_reordered_loads);
+      // at::cuda::CUDACachingAllocator::recordStream(all_reordered_loads.storage().data_ptr(),
+      //                                              at::cuda::getCurrentCUDAStream());
+      // at::cuda::CUDACachingAllocator::recordStream(reorder_indices.storage().data_ptr(),
+      //                                              at::cuda::getCurrentCUDAStream());
     } else {
-      reorder_indices = ::torch::empty(world_size, send_sizes.options());
+      reorder_indices =
+          ::torch::empty(world_size, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
+      // at::cuda::CUDACachingAllocator::recordStream(reorder_indices.storage().data_ptr(),
+      //                                              at::cuda::getCurrentCUDAStream());
     }
     manager.ExternalRecordEvent(1, at::cuda::getCurrentCUDAStream());
     manager.StartContext();
@@ -409,6 +445,7 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
     manager.RecordStorage(reorder_indices);
     manager.RecordStorage(reordered_loads);
     if (world_rank == 0) {
+      manager.RecordStorage(all_reordered_loads);
       distributed::Scatter(all_reordered_loads.data_ptr(), reordered_loads.data_ptr(),
                            reordered_loads.nbytes(), 0, world_rank, world_size, manager.GetComm(),
                            manager.GetStream());
@@ -424,6 +461,7 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
   }
 
+  ::torch::cuda::synchronize();
   if (locality_aware) {
     return {out_data, reordered_loads, reorder_indices};
   } else {
@@ -439,10 +477,12 @@ batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
   auto& world_rank = manager.GetWorldRank();
   const int total_slice_num = send_sizes.numel();
   const int group_size = total_slice_num / world_size;
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
 
   CHECK_ON_CUDA(send_sizes);
 
-  ::torch::Tensor recv_sizes = ::torch::empty_like(send_sizes, send_sizes.options());
+  ::torch::Tensor recv_sizes =
+      ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -459,8 +499,8 @@ batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
   ::torch::Tensor all_recv_sizes;
   if (locality_aware) {
     if (world_rank == 0) {
-      all_recv_sizes =
-          ::torch::empty({send_sizes.numel() * manager.GetWorldSize()}, send_sizes.options());
+      all_recv_sizes = ::torch::empty({send_sizes.numel() * manager.GetWorldSize()},
+                                      send_sizes.options(), ::torch::MemoryFormat::Contiguous);
       manager.RecordStorage(all_recv_sizes);
     }
     manager.StartContext();
@@ -510,7 +550,8 @@ batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
   }
   ::torch::Tensor reorder_indices;
   ::torch::Tensor all_reordered_loads;
-  ::torch::Tensor reordered_loads = ::torch::empty_like(send_sizes, send_sizes.options());
+  ::torch::Tensor reordered_loads =
+      ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
 
   if (locality_aware) {
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
@@ -520,7 +561,8 @@ batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
       reorder_indices = reorder_results.second;
       manager.RecordStorage(all_reordered_loads);
     } else {
-      reorder_indices = ::torch::empty(world_size, send_sizes.options());
+      reorder_indices =
+          ::torch::empty(world_size, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
     }
     manager.ExternalRecordEvent(1, at::cuda::getCurrentCUDAStream());
     manager.StartContext();
@@ -556,6 +598,7 @@ static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tens
   auto& world_size = manager.GetWorldSize();
   const int total_slice_num = send_sizes.numel();
   const int group_size = total_slice_num / world_size;
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
 
   CHECK_ON_CUDA(in_data);
 
@@ -575,6 +618,9 @@ static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tens
 
   ::torch::Tensor out_data =
       ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+  // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
+  //                                              at::cuda::getCurrentCUDAStream());
+
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -596,6 +642,7 @@ static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_al
   auto& world_size = manager.GetWorldSize();
   const int total_slice_num = send_sizes.numel();
   const int group_size = total_slice_num / world_size;
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
 
   auto send_sizes_cpu = send_sizes.cpu();
   std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
@@ -615,6 +662,8 @@ static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_al
 
     ::torch::Tensor out_data =
         ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+    // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
+    //                                              at::cuda::getCurrentCUDAStream());
     manager.StartContext();
     manager.WaitEvent(0);
     manager.RecordStorage(in_data);

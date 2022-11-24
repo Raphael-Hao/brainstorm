@@ -7,8 +7,8 @@ import torch
 
 # pylint: disable=no-name-in-module
 from brt._C.router import (
-    combine_with_src_indices,
-    dispatch_with_dst_indices_1d,
+    combine_with_src_indices,  # dispatch_with_dst_indices_1d,
+    padded_dispatch_with_dst_indices_1d,
     dispatch_with_dst_indices_2d,
 )
 
@@ -55,16 +55,18 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         #     # print("score.shape", score.shape)
         #     score = score.index_select(1, self.placement_indices)
         #     # print("score.shape", score.shape)
-
+        capacity = loads.capacity
+        # print("capacity", capacity)
         if self.route_logics[0] == "1d":
             if self.transforms[0]:
-                out_flow = dispatch_with_dst_indices_1d(
-                    in_flow, route_indices, loads, self.capacity_padding, score
+                out_flow = padded_dispatch_with_dst_indices_1d(
+                    in_flow, route_indices, loads, capacity, score
                 )
             else:
-                out_flow = dispatch_with_dst_indices_1d(
-                    in_flow, route_indices, loads, self.capacity_padding
+                out_flow = padded_dispatch_with_dst_indices_1d(
+                    in_flow, route_indices, loads, capacity
                 )
+            # print(out_flow)
         elif self.route_logics[0] == "2d":
             in_flow = in_flow.transpose(0, 1).contiguous()
             out_flow = dispatch_with_dst_indices_2d(
@@ -73,12 +75,10 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         else:
             raise ValueError("route_logic must be 1d or 2d")
 
-
         a2a_resuslts = brt_dist.group_asymmetry_a2a(
             out_flow, loads, self.locality_aware
         )
         out_flow = a2a_resuslts[0]
-
 
         if self.locality_aware:
             reorder_indices = a2a_resuslts[2]

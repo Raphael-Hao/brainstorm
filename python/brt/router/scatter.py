@@ -192,11 +192,13 @@ class SwinMoEScatterRouter(RouterBase):
         route_indices = self.coordinate_index_format(
             route_indices, loads, self.protocol.index_format, self.fabric.index_format
         )
+        capacity = loads.capacity
 
         if self.throttling:
             real_loads = torch.minimum(loads, capacities)
         else:
             real_loads = loads
+        real_loads.capacity = capacity
         self.capture_flow_stats(self.fabric_type, in_flows, route_indices, real_loads)
         out_flows = self.fabric(in_flows, route_indices, real_loads, new_score)
         return out_flows, loss

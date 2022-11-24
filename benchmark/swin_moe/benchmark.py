@@ -22,7 +22,7 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-from brt.runtime.benchmark import CUDATimer, deterministic_random_generator, profile_v2
+from brt.runtime.benchmark import deterministic_random_generator, profile_v2
 from brt.runtime.placement import dump_trace, adaptive_load
 from config import get_config
 from data import build_loader
@@ -123,6 +123,7 @@ def parse_option():
             "trace",
             "gather-ckpt",
             "profile",
+            "valid",
         ],
     )
     parser.add_argument("--placement", type=str, default=None)
@@ -193,7 +194,8 @@ def main(args, config, ds_init):
                 enable_locality=args.locality,
                 global_expert_num=16,
             )
-
+        torch.cuda.synchronize()
+        dist.barrier()
         if args.mode == "correctness":
             print("===> Running correctness test")
             check_correctness(model, args.batch_size)
@@ -214,8 +216,10 @@ def main(args, config, ds_init):
         elif args.mode == "throughput":
             throughput(data_loader_val, model, logger)
         elif args.mode == "profile":
-            gpu_data, _batch_size = get_benchmark_data(data_loader_val)
+            gpu_data, _batch_size = get_benchmark_data(data_loader_val, logger, 20)
             profile_v2(model, gpu_data, MOE_LAYER_VENDOR)
+        elif args.mode == "valid":
+            validate(config, data_loader_val, model)
 
 
 @torch.no_grad()
@@ -274,24 +278,31 @@ def validate(config, data_loader, model):
     return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
 
 
-def get_benchmark_data(data_loader):
-    max_batches = 80 if len(data_loader) > 100 else len(data_loader)
+def get_benchmark_data(data_loader, logger, num_batches=100):
+    max_batches = num_batches if len(data_loader) > num_batches else len(data_loader)
+    logger.info(
+        f"===> Preparing benchmark data, get first {max_batches} batches from data loader of length {len(data_loader)}"
+    )
     gpu_data = []
     for idx, (images, _target) in enumerate(data_loader):
         if idx == max_batches:
             break
         gpu_data.append(images.cuda())
     batch_size = gpu_data[0].size(0)
+    logger.info(f"===> Benchmark data prepared, batch size {batch_size}")
     return gpu_data, batch_size
 
 
 @torch.inference_mode()
 def throughput(data_loader, model, logger):
-    gpu_data, batch_size = get_benchmark_data(data_loader)
+    bench_nums = 10
+    gpu_data, batch_size = get_benchmark_data(data_loader, logger, bench_nums)
+    bench_nums = len(gpu_data)
     torch.cuda.synchronize()
+    logger.info("===> Start throughput benchmark")
     dist.barrier()
     for idx in range(20):
-        model(gpu_data[idx])
+        model(gpu_data[idx % bench_nums])
     torch.cuda.synchronize()
     dist.barrier()
     logger.info("Warmup done, start benchmarking")
@@ -303,6 +314,26 @@ def throughput(data_loader, model, logger):
     logger.info(
         f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
+
+@torch.no_grad()
+def deprecated_throughput(data_loader, model, logger):
+    model.eval()
+    for idx, (images, _) in enumerate(data_loader):
+        images = images.cuda(non_blocking=True)
+        batch_size = images.shape[0]
+        for i in range(50):
+            model(images)
+        torch.cuda.synchronize()
+        logger.info(f"throughput averaged with 30 times")
+        tic1 = time.time()
+        for i in range(30):
+            model(images)
+        torch.cuda.synchronize()
+        tic2 = time.time()
+        logger.info(
+            f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
+        )
+        return
 
 
 @torch.inference_mode()

@@ -1,8 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-import os
+
 import torch
-import torch.nn.functional as F
 import torch.distributed as dist
 
 from brt.runtime import log
@@ -19,17 +18,17 @@ def _get_world_size(group=None):
         return 1
 
 
-def _simple_all_reduce(input, group=None, op=torch.distributed.ReduceOp.SUM):
+def _simple_all_reduce(in_data, group=None, op=torch.distributed.ReduceOp.SUM):
     world_size = _get_world_size(group)
     if world_size == 1:
-        return input
-    output = torch.clone(input, memory_format=torch.contiguous_format)
+        return in_data
+    output = torch.clone(in_data, memory_format=torch.contiguous_format)
     dist.all_reduce(output, op=op, group=group)
     return output
 
 
-def get_compute_location_func(sorted=False, score=None):
-    if sorted:
+def get_compute_location_func(score_sorted=False, score=None):
+    if score_sorted:
         importance_score = -1 * score.max(dim=1)[0]
 
         def compute_location(one_hot_mask):
@@ -165,8 +164,8 @@ class SwinMoEProtocol(ProtocolBase):
         remainder = capacity % self.alignment
         if remainder > 0:
             capacity = capacity + self.alignment - remainder
-
         loads = acc_base.view(-1)
+        loads.capacity = capacity
         capacity = torch.zeros_like(
             loads, dtype=loads.dtype, device=loads.device
         ).fill_(capacity)

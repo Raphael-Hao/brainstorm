@@ -6,7 +6,6 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 BRT_DIR=$(cd "${script_dir}/../../" && pwd)
 
 export BRT_CACHE_PATH=$BRT_DIR/.cache
-export BRT_CAPTURE_STATS=False # should be False for brt_dist or tutel
 export BRT_CAPTURED_FABRIC_TYPE=dispatch
 
 LAUNCH_ARGS=()
@@ -18,6 +17,7 @@ ARGUMENT_LIST=(
     "placement:"
     "port:"
     "mode:"
+    "blocking"
 )
 
 # read arguments
@@ -64,11 +64,21 @@ while [[ $# -gt 0 ]]; do
         LAUNCH_ARGS+=(--mode "$MODE")
         shift 2
         ;;
+    --blocking)
+        export CUDA_LAUNCH_BLOCKING=1
+        shift 1
+        ;;
     *)
         break
         ;;
     esac
 done
+
+if [[ "${MODE}" == "trace" ]]; then
+    export BRT_CAPTURE_STATS=True # should be False for brt_dist or tutel
+else
+    export BRT_CAPTURE_STATS=False # should be False for brt_dist or tutel
+fi
 
 # check if the number of GPUs is specified
 if [ -z "$GPUS" ]; then
@@ -92,11 +102,7 @@ else
         echo "locality should not be specified for non-brt vendor"
         exit 1
     fi
-    if [[ "${VENDOR}" == "tutel" ]]; then
-        export MOE_LAYER_VENDOR=tutel
-    elif [[ "${VENDOR}" == "pt" ]]; then
-        export MOE_LAYER_VENDOR=dispatch
-    fi
+    export MOE_LAYER_VENDOR=$VENDOR
 fi
 
 if [ -z "$PORT" ]; then
@@ -105,7 +111,7 @@ fi
 
 LAUNCH_ARGS+=(
     --cfg configs/"${EXPERT_NUM}"expert_"${GPU_NUM}"GPU.yaml
-    --batch-size 128 --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k
+    --batch-size 256 --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k
     --output ./results/MoE/
     --eval --resume "${BRT_CACHE_PATH}"/ckpt/swin_moe/small_swin_moe_32GPU_16expert/model.pth
 )

@@ -1154,6 +1154,7 @@ class SwinTransformerBlockPre(nn.Module):
             if self.post_locality_aware:
                 reorder_indices = brt_dist.get_reorder_indices()
                 x = brt_dist.reverse_exchange(x, reorder_indices)
+                brt_dist.set_reorder_indices(None)
 
         # if self.is_moe:
         #     print(f"rank: {dist.get_rank()}, drop output: {x.sum()}")
@@ -1534,6 +1535,7 @@ class BasicLayer(nn.Module):
                 x, cur_l_aux = checkpoint.checkpoint(blk, x)
                 ckpt_block += 1
             else:
+                # print(f"======> forwarding {idx}th block, is_moe: {blk.is_moe}")
                 x, cur_l_aux = blk(x)
             l_aux = cur_l_aux * self.aux_loss_scale[idx] + l_aux
         if self.downsample is not None:
@@ -2027,6 +2029,7 @@ class SwinV2TransformerMoE(nn.Module):
         x = self.pos_drop(x)
         l_aux = 0.0
         for _layer_id, layer in enumerate(self.layers):
+            # print(f"=====> forwarding layer {_layer_id}")
             x, cur_l_aux = layer(x)
             l_aux = cur_l_aux + l_aux
 
