@@ -4,6 +4,7 @@
 import json
 from typing import Dict, List, Union, Any
 
+import torch
 import torch.nn as nn
 
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
@@ -13,7 +14,6 @@ from brt.jit.codegen import ModuleKernel
 from brt.runtime import log
 
 from param_parser import parse_params
-from conv2d_mul_add import Conv2dMulAdd
 
 logger = log.get_logger()
 logger.setLevel("INFO")
@@ -30,6 +30,35 @@ all_conv_params = [
 # f"""{{"module_name": "Conv2d", "in_channels": {num_channels}, "out_channels": {num_channels}, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": "ReLU", "input_shape": [{bs}, {num_channels}, 32, 32], "output_shape": [{bs}, {num_channels}, 32, 32]}}\n"""
 # for bs in unique_bs
 # ]
+
+
+class Conv2dMulAdd(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        padding,
+        bias=True,
+        scale=1,
+    ) -> None:
+        super().__init__()
+        self.conv2d = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=bias,
+        )
+        self.scale = scale
+
+    def forward(self, x: torch.Tensor, add: torch.Tensor):
+        x = self.conv2d(x)
+        x = x * self.scale
+        x = x + add
+        return x
 
 
 def main():

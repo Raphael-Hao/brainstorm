@@ -119,3 +119,18 @@
 [W kineto_shim.cpp:337] Profiler is not initialized: skipping step() invocation
 2022-11-18 09:08:56,923 [INFO] benchmark: Profiling vFusedLiveSR
 2022-11-18 09:09:04,823 [INFO] benchmark: Profiling hFusedLiveSR
+
+8, 80
+(base) FAREAST.v-louyang@GCRAZGDL1202:~/brainstorm_project/brainstorm/benchmark/livesr$ python benchmark.py 
+2022-11-23 14:33:11,179 [INFO] benchmark: Start
+2022-11-23 14:33:12,455 [INFO] benchmark: LiveSR builded
+2022-11-23 14:40:40,771 [INFO] benchmark: vFusedLiveSR builded
+2022-11-23 14:40:52,673 [INFO] benchmark: hFusedLiveSR builded
+2022-11-23 14:40:52,678 [INFO] benchmark: * Start timeit: Run 10 times
+2022-11-23 14:40:56,481 [INFO] benchmark: LiveSR:                2904373.4109727666 us/run
+2022-11-23 14:40:57,228 [INFO] benchmark: vFusedLiveSR:          522518.5810122639 us/run
+2022-11-23 14:46:36,313 [INFO] benchmark: hFusedLiveSR:          208324.79500677437 us/run
+2022-11-23 14:46:36,313 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-23 14:47:05,461 [INFO] benchmark: LiveSR:                2854828.7181998603 us/run
+2022-11-23 14:47:10,328 [INFO] benchmark: vFusedLiveSR:          476188.47369449213 us/run
+2022-11-23 14:47:12,498 [INFO] benchmark: hFusedLiveSR:          211142.73819839582 us/run
