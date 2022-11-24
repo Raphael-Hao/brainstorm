@@ -66,5 +66,5 @@ def save_profile(profile_name: str = "profile", profile_dir: str = "./"):
     profile_dir_path = profile_dir_path / f"world_size_{dist.get_world_size()}"
     profile_dir_path.mkdir(parents=True, exist_ok=True)
     profile_file_path = profile_dir_path / f"rank{dist.get_rank()}_{profile_name}.npy"
-    np.save(profile_file_path, GlobalDebugerInfo.profile_datas)
+    np.save(profile_file_path, GlobalDebugerInfo.profile_datas, allow_pickle=True)
     reset_global_debuger_info()

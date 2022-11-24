@@ -20,20 +20,20 @@ system_init.init_affinity_at_program_beginning()
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import deterministic_random_generator, profile_v2
-from brt.runtime.placement import dump_trace, adaptive_load
+from brt.runtime.placement import dump_trace, adaptive_load, generate_experts_keys
+from brt.runtime.pkg_info import BRT_CACHE_PATH
 import brt.runtime.debug as brt_debug
 from config import get_config
 from data import build_loader
 from logger import create_logger
 from models import build_model
-from timm.utils import AverageMeter, accuracy
 from utils import (
     create_ds_config,
     hook_scale_grad,
-    reduce_tensor,
     adaptive_load_checkpoint,
 )
 from models.swin_transformer_v2_moe import SwinV2TransformerMoE
@@ -143,7 +143,7 @@ def parse_option():
 def main(args, config, ds_init):
     (
         _dataset_train,
-        dataset_val,
+        _dataset_val,
         _data_loader_train,
         data_loader_val,
         _mixup_fn,
@@ -207,10 +207,7 @@ def main(args, config, ds_init):
             model_without_ddp,
             logger,
         )
-        acc1, _acc5, _loss = micro_bench(config, data_loader_val, model)
-        logger.info(
-            f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
-        )
+        micro_bench(config, model, data_loader_val, logger, 0, 1)
         print("===> Tracing model done, dumping to file")
         dump_trace(model_without_ddp)
 
@@ -224,12 +221,57 @@ def main(args, config, ds_init):
 
 
 @torch.no_grad()
-def micro_bench(model, gpu_data, logger, num_warmup=20, num_iter=100):
-    pass
+def micro_bench(
+    config,
+    model_no_ddp: SwinV2TransformerMoE,
+    gpu_data,
+    logger,
+    moe_layer_start,
+    moe_layer_end,
+):
+    experts_range = {2: 18, 3: 2}
+    experts_keys = generate_experts_keys(experts_range)
+    start_moe_keys = experts_keys[moe_layer_start]
+    end_moe_keys = experts_keys[moe_layer_end]
+    assert start_moe_keys[0] == end_moe_keys[0]
+    moe_blocks = model_no_ddp.layers[start_moe_keys[0]].blocks[
+        start_moe_keys[1] : end_moe_keys[1]
+    ]
+
+    class MoEBlockWrapper(nn.Module):
+        def __init__(self, blocks):
+            super().__init__()
+            self.moe_blocks = blocks
+
+        def forward(self, x):
+            for moe_block in self.moe_blocks:
+                x, _aux = moe_block(x)
+            return x
+
+    micro_moe_block = MoEBlockWrapper(moe_blocks)
+    micro_moe_block_ddp = torch.nn.parallel.DistributedDataParallel(
+        micro_moe_block,
+        device_ids=[config.LOCAL_RANK],
+        broadcast_buffers=False,
+        bucket_cap_mb=64,
+    )
+    gpu_data = load_micro_bench_data("swin_moe_micro_bench_data", 100, 128, logger)
+    for in_data in gpu_data:
+        micro_moe_block_ddp(in_data)
 
 
-def load_micro_bench_data(data_dir, logger):
-    pass
+def load_micro_bench_data(data_dir: str, num_batches, bs: int, logger):
+    logger.info(f"Loading micro-bench data from {data_dir}")
+    data_dir_path = BRT_CACHE_PATH / f"datasets/{data_dir}"
+    data_file_path = (
+        data_dir_path
+        / f"world_size_{dist.get_world_size()}"
+        / f"rank{dist.get_rank()}_{bs}.npy"
+    )
+    data = np.load(data_file_path, allow_pickle=True)
+    num_batches = min(num_batches, len(data))
+    data_on_gpu = [torch.from_numpy(d).cuda() for d in data[:num_batches]]
+    return data_on_gpu
 
 
 def get_benchmark_data(data_loader, logger, num_batches=100):
