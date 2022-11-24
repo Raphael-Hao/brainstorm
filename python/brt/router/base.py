@@ -150,7 +150,7 @@ class RouterBase(nn.Module):
 
     def capture_laod_from_protocol(self, loads: torch.Tensor):
 
-        loads_np = loads.numpy()
+        loads_np = loads.cpu().numpy()
         if self.history_len == 0:
             self.load_history = np.zeros_like(loads_np, dtype=np.float64)
 

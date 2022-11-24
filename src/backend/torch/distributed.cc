@@ -45,9 +45,9 @@ static std::pair<::torch::Tensor, ::torch::Tensor> locality_reorder(const ::torc
   CHECK_ON_CUDA(loads);
   ::torch::Tensor reordered_loads = ::torch::empty_like(loads, loads.options());
   ::torch::Tensor reorder_indices = ::torch::empty(world_size, loads.options());
-  brt::distributed::LocalityReorder(
-      loads.data_ptr<int>(), world_size, reorder_indices.data_ptr<int>(),
-      reordered_loads.data_ptr<int>(), at::cuda::getCurrentCUDAStream().stream());
+  distributed::LocalityReorder(loads.data_ptr<int>(), world_size, reorder_indices.data_ptr<int>(),
+                               reordered_loads.data_ptr<int>(),
+                               at::cuda::getCurrentCUDAStream().stream());
   return {reordered_loads, reorder_indices};
 }
 
@@ -56,10 +56,147 @@ static std::pair<::torch::Tensor, ::torch::Tensor> group_locality_reorder(
   CHECK_ON_CUDA(loads);
   ::torch::Tensor reordered_loads = ::torch::empty_like(loads, loads.options());
   ::torch::Tensor reorder_indices = ::torch::empty(world_size, loads.options());
-  brt::distributed::GroupLocalityReorder(
+  distributed::GroupLocalityReorder(
       loads.data_ptr<int>(), group_size, world_size, reorder_indices.data_ptr<int>(),
       reordered_loads.data_ptr<int>(), at::cuda::getCurrentCUDAStream().stream());
   return {reordered_loads, reorder_indices};
+}
+
+static ::torch::Tensor exchange(const ::torch::Tensor& in_data,
+                                const ::torch::Tensor& reorder_indices) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+
+  ::torch::Tensor reorder_indices_cpu = reorder_indices.to(::torch::kCPU);
+  auto reorder_indices_cpu_ptr = reorder_indices_cpu.data_ptr<int>();
+  int& src_rank = reorder_indices_cpu_ptr[world_rank];
+  int dst_rank;
+  for (int i = 0; i < world_size; ++i) {
+    if (reorder_indices_cpu_ptr[i] == world_rank) {
+      dst_rank = i;
+      break;
+    }
+  }
+  CHECK_ON_CUDA(in_data);
+
+  ::torch::Tensor out_data = ::torch::zeros_like(in_data, in_data.options());
+
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(in_data);
+  manager.RecordStorage(out_data);
+  distributed::Exchange(in_data.data_ptr(), out_data.data_ptr(), in_data.nbytes(), dst_rank,
+                        src_rank, manager.GetComm(), manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+  return out_data;
+}
+
+static std::vector<::torch::Tensor> batched_exchange(const std::vector<::torch::Tensor>& in_datas,
+                                                     const ::torch::Tensor& reorder_indices) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+
+  ::torch::Tensor reorder_indices_cpu = reorder_indices.to(::torch::kCPU);
+  auto reorder_indices_cpu_ptr = reorder_indices_cpu.data_ptr<int>();
+  int& src_rank = reorder_indices_cpu_ptr[world_rank];
+  int dst_rank;
+  for (int i = 0; i < world_size; ++i) {
+    if (reorder_indices_cpu_ptr[i] == world_rank) {
+      dst_rank = i;
+      break;
+    }
+  }
+  std::vector<::torch::Tensor> out_datas;
+  for (auto& in_data : in_datas) {
+    CHECK_ON_CUDA(in_data);
+    ::torch::Tensor out_data = ::torch::zeros_like(in_data, in_data.options());
+
+    manager.StartContext();
+    manager.WaitEvent(0);
+    manager.RecordStorage(in_data);
+    manager.RecordStorage(out_data);
+    distributed::Exchange(in_data.data_ptr(), out_data.data_ptr(), in_data.nbytes(), dst_rank,
+                          src_rank, manager.GetComm(), manager.GetStream());
+    manager.RecordEvent(0);
+    manager.EndContext();
+    manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+    out_datas.push_back(out_data);
+  }
+  return out_datas;
+}
+
+static ::torch::Tensor reverse_exchange(const ::torch::Tensor& in_data,
+                                        const ::torch::Tensor& reorder_indices) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+
+  ::torch::Tensor reorder_indices_cpu = reorder_indices.to(::torch::kCPU);
+  auto reorder_indices_cpu_ptr = reorder_indices_cpu.data_ptr<int>();
+  int& dst_rank = reorder_indices_cpu_ptr[world_rank];
+  int src_rank;
+  for (int i = 0; i < world_size; ++i) {
+    if (reorder_indices_cpu_ptr[i] == world_rank) {
+      src_rank = i;
+      break;
+    }
+  }
+  CHECK_ON_CUDA(in_data);
+
+  ::torch::Tensor out_data = ::torch::zeros_like(in_data, in_data.options());
+
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(in_data);
+  manager.RecordStorage(out_data);
+  distributed::Exchange(in_data.data_ptr(), out_data.data_ptr(), in_data.nbytes(), dst_rank,
+                        src_rank, manager.GetComm(), manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+  return out_data;
+}
+
+static std::vector<::torch::Tensor> batched_reverse_exchange(
+    const std::vector<::torch::Tensor>& in_datas, const ::torch::Tensor& reorder_indices) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+
+  CHECK_ON_CUDA(reorder_indices);
+
+  ::torch::Tensor reorder_indices_cpu = reorder_indices.to(::torch::kCPU);
+  auto reorder_indices_cpu_ptr = reorder_indices_cpu.data_ptr<int>();
+  int& dst_rank = reorder_indices_cpu_ptr[world_rank];
+  int src_rank;
+  for (int i = 0; i < world_size; ++i) {
+    if (reorder_indices_cpu_ptr[i] == world_rank) {
+      src_rank = i;
+      break;
+    }
+  }
+  std::vector<::torch::Tensor> out_datas;
+  for (auto& in_data : in_datas) {
+    CHECK_ON_CUDA(in_data);
+
+    ::torch::Tensor out_data = ::torch::zeros_like(in_data, in_data.options());
+
+    manager.StartContext();
+    manager.WaitEvent(0);
+    manager.RecordStorage(in_data);
+    manager.RecordStorage(out_data);
+    distributed::Exchange(in_data.data_ptr(), out_data.data_ptr(), in_data.nbytes(), dst_rank,
+                          src_rank, manager.GetComm(), manager.GetStream());
+    manager.RecordEvent(0);
+    manager.EndContext();
+    manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+    out_datas.push_back(out_data);
+  }
+  return out_datas;
 }
 
 static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& in_data,
@@ -124,7 +261,7 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   int slice_size_in_byte = total_size_in_byte / slice_num;
 
   ::torch::Tensor out_data =
-      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+      ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -146,16 +283,6 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
     if (world_rank == 0) {
       auto reorder_results = locality_reorder(all_recv_sizes, world_size);
       all_reordered_loads = reorder_results.first;
-      // printf("rank: %d, all recv sizes: [", world_rank);
-      // for (int i = 0; i < all_recv_sizes.numel(); ++i) {
-      //   printf("%d, ", all_recv_sizes[i].item<int>());
-      // }
-      // printf("]\n");
-      // printf("rank: %d, all reordered loads: [", world_rank);
-      // for (int i = 0; i < all_reordered_loads.numel(); ++i) {
-      //   printf("%d, ", all_reordered_loads[i].item<int>());
-      // }
-      // printf("]\n");
       reorder_indices = reorder_results.second;
       manager.RecordStorage(all_reordered_loads);
     } else {
@@ -187,6 +314,7 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
     return {out_data, recv_sizes};
   }
 }
+
 static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
                                                                const ::torch::Tensor& send_sizes,
                                                                bool locality_aware = false) {
@@ -248,7 +376,7 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
   const int slice_size_in_byte = total_size_in_byte / total_slice_num;
 
   ::torch::Tensor out_data =
-      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+      ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -302,6 +430,206 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
     return {out_data, recv_sizes};
   }
 }
+
+static std::tuple<std::vector<::torch::Tensor>, ::torch::Tensor, ::torch::Tensor>
+batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
+                                   const ::torch::Tensor& send_sizes, bool locality_aware = false) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+  const int total_slice_num = send_sizes.numel();
+  const int group_size = total_slice_num / world_size;
+
+  CHECK_ON_CUDA(send_sizes);
+
+  ::torch::Tensor recv_sizes = ::torch::empty_like(send_sizes, send_sizes.options());
+
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(send_sizes);
+  manager.RecordStorage(recv_sizes);
+
+  distributed::AllToAll(send_sizes.data_ptr(), recv_sizes.data_ptr(),
+                        send_sizes.nbytes() / world_size, world_size, manager.GetComm(),
+                        manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
+  ::torch::Tensor all_recv_sizes;
+  if (locality_aware) {
+    if (world_rank == 0) {
+      all_recv_sizes =
+          ::torch::empty({send_sizes.numel() * manager.GetWorldSize()}, send_sizes.options());
+      manager.RecordStorage(all_recv_sizes);
+    }
+    manager.StartContext();
+    manager.WaitEvent(1);
+    if (world_rank == 0) {
+      distributed::Gather(recv_sizes.data_ptr(), all_recv_sizes.data_ptr(), recv_sizes.nbytes(), 0,
+                          world_rank, world_size, manager.GetComm(), manager.GetStream());
+    } else {
+      distributed::Gather(recv_sizes.data_ptr(), nullptr, recv_sizes.nbytes(), 0, world_rank,
+                          world_size, manager.GetComm(), manager.GetStream());
+    }
+    manager.RecordEvent(1);
+    manager.EndContext();
+  }
+
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+  auto recv_sizes_cpu = recv_sizes.cpu();
+  std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
+                                  recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
+
+  std::vector<::torch::Tensor> out_datas;
+  for (auto& in_data : in_datas) {
+    CHECK_ON_CUDA(in_data);
+
+    // Calculate the total size in byte
+    const int total_size_in_byte = in_data.numel() * in_data.element_size();
+    // Calculate the size of each grainularity in byte
+    const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+    // Calculate the slice and per slice size in byte
+    const int slice_size_in_byte = total_size_in_byte / total_slice_num;
+
+    ::torch::Tensor out_data =
+        ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+    manager.StartContext();
+    manager.WaitEvent(0);
+    manager.RecordStorage(in_data);
+    manager.RecordStorage(out_data);
+    distributed::GroupAsymmetryAllToAll(
+        in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec, recv_sizes_vec, grain_size_in_byte,
+        slice_size_in_byte, group_size, world_size, manager.GetComm(), manager.GetStream());
+    manager.RecordEvent(0);
+    manager.EndContext();
+    manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+    out_datas.push_back(out_data);
+  }
+  ::torch::Tensor reorder_indices;
+  ::torch::Tensor all_reordered_loads;
+  ::torch::Tensor reordered_loads = ::torch::empty_like(send_sizes, send_sizes.options());
+
+  if (locality_aware) {
+    manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
+    if (world_rank == 0) {
+      auto reorder_results = group_locality_reorder(all_recv_sizes, world_size, group_size);
+      all_reordered_loads = reorder_results.first;
+      reorder_indices = reorder_results.second;
+      manager.RecordStorage(all_reordered_loads);
+    } else {
+      reorder_indices = ::torch::empty(world_size, send_sizes.options());
+    }
+    manager.ExternalRecordEvent(1, at::cuda::getCurrentCUDAStream());
+    manager.StartContext();
+    manager.WaitEvent(1);
+    manager.RecordStorage(reorder_indices);
+    manager.RecordStorage(reordered_loads);
+    if (world_rank == 0) {
+      distributed::Scatter(all_reordered_loads.data_ptr(), reordered_loads.data_ptr(),
+                           reordered_loads.nbytes(), 0, world_rank, world_size, manager.GetComm(),
+                           manager.GetStream());
+    } else {
+      distributed::Scatter(nullptr, reordered_loads.data_ptr(), reordered_loads.nbytes(), 0,
+                           world_rank, world_size, manager.GetComm(), manager.GetStream());
+    }
+
+    distributed::BroadCast(reorder_indices.data_ptr(), reorder_indices.data_ptr(),
+                           reorder_indices.nbytes(), 0, manager.GetComm(), manager.GetStream());
+    manager.RecordEvent(1);
+    manager.EndContext();
+    manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
+  }
+
+  if (locality_aware) {
+    return {out_datas, reordered_loads, reorder_indices};
+  } else {
+    return {out_datas, recv_sizes, recv_sizes};
+  }
+}
+static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
+                                                             const ::torch::Tensor& send_sizes,
+                                                             const ::torch::Tensor& recv_sizes) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  const int total_slice_num = send_sizes.numel();
+  const int group_size = total_slice_num / world_size;
+
+  CHECK_ON_CUDA(in_data);
+
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+  auto recv_sizes_cpu = recv_sizes.cpu();
+  std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
+                                  recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
+
+  // Calculate the total size in byte
+  const int total_size_in_byte = in_data.numel() * in_data.element_size();
+  // Calculate the size of each grainularity in byte
+  const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+  // Calculate the slice and per slice size in byte
+  const int slice_size_in_byte = total_size_in_byte / total_slice_num;
+
+  ::torch::Tensor out_data =
+      ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(in_data);
+  manager.RecordStorage(out_data);
+  distributed::GroupAsymmetryAllToAll(
+      in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec, recv_sizes_vec, grain_size_in_byte,
+      slice_size_in_byte, group_size, world_size, manager.GetComm(), manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
+  return out_data;
+}
+
+static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_all(
+    const std::vector<::torch::Tensor>& in_datas, const ::torch::Tensor& send_sizes,
+    const ::torch::Tensor& recv_sizes) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  const int total_slice_num = send_sizes.numel();
+  const int group_size = total_slice_num / world_size;
+
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+  auto recv_sizes_cpu = recv_sizes.cpu();
+  std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
+                                  recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
+  std::vector<::torch::Tensor> out_datas;
+  for (auto& in_data : in_datas) {
+    CHECK_ON_CUDA(in_data);
+    // Calculate the total size in byte
+    const int total_size_in_byte = in_data.numel() * in_data.element_size();
+    // Calculate the size of each grainularity in byte
+    const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+    // Calculate the slice and per slice size in byte
+    const int slice_size_in_byte = total_size_in_byte / total_slice_num;
+
+    ::torch::Tensor out_data =
+        ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+    manager.StartContext();
+    manager.WaitEvent(0);
+    manager.RecordStorage(in_data);
+    manager.RecordStorage(out_data);
+    distributed::GroupAsymmetryAllToAll(
+        in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec, recv_sizes_vec, grain_size_in_byte,
+        slice_size_in_byte, group_size, world_size, manager.GetComm(), manager.GetStream());
+    manager.RecordEvent(0);
+    manager.EndContext();
+    manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+    out_datas.push_back(out_data);
+  }
+  return out_datas;
+}
+
 }  // namespace torch
 }  // namespace backend
 }  // namespace brt
@@ -316,10 +644,33 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("group_locality_reorder", &brt::backend::torch::group_locality_reorder,
         "group locality reorder", pybind11::arg("loads"), pybind11::arg("wolrd_size"),
         pybind11::arg("group_size") = 1);
+  m.def("exchange", &brt::backend::torch::exchange, "Data exchange between ranks",
+        pybind11::arg("in_data"), pybind11::arg("reorder_indices"));
+  m.def("batched_exchange", &brt::backend::torch::batched_exchange,
+        "Batched data exchange between ranks", pybind11::arg("in_datas"),
+        pybind11::arg("reorder_indices"));
+  m.def("reverse_exchange", &brt::backend::torch::reverse_exchange,
+        "Data revrse exchange between ranks", pybind11::arg("in_data"),
+        pybind11::arg("reorder_indices"));
+  m.def("batched_reverse_exchange", &brt::backend::torch::batched_reverse_exchange,
+        "Batched data reverse exchange between ranks", pybind11::arg("in_datas"),
+        pybind11::arg("reorder_indices"));
   m.def("asymmetry_all_to_all", &brt::backend::torch::asymmetry_all_to_all, "asymmetry all to all",
         pybind11::arg("in_data"), pybind11::arg("send_sizes"),
         pybind11::arg("locality_aware") = false);
   m.def("group_asymmetry_all_to_all", &brt::backend::torch::group_asymmetry_all_to_all,
         "asymmetry all to all", pybind11::arg("in_data"), pybind11::arg("send_sizes"),
         pybind11::arg("locality_aware") = false);
+  m.def("batched_group_asymmetry_all_to_all",
+        &brt::backend::torch::batched_group_asymmetry_all_to_all, "asymmetry all to all",
+        pybind11::arg("in_datas"), pybind11::arg("send_sizes"),
+        pybind11::arg("locality_aware") = false);
+  m.def("size_known_group_asymmetry_all_to_all",
+        &brt::backend::torch::size_known_group_asymmetry_all_to_all,
+        "asymmetry all to all for send sizes and recv size are already known",
+        pybind11::arg("in_data"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
+  m.def("batched_size_known_group_asymmetry_all_to_all",
+        &brt::backend::torch::batched_size_known_group_asymmetry_all_to_all,
+        "batched asymmetry all to all for send sizes and recv size are already known",
+        pybind11::arg("in_datas"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
 }

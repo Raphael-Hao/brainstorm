@@ -1,0 +1,102 @@
+{
+    "psi-header.config": {
+        "forceToTop": true,
+        "blankLinesAfter": 1,
+        "license": "Custom"
+    },
+    "psi-header.changes-tracking": {
+        "isActive": true,
+        "modAuthor": "Modified By: ",
+        "modDate": "Last Modified: ",
+        "modDateFormat": "dddd, MMMM Do YYYY, h:mm:ss a",
+        "include": [
+            "cpp",
+            "c",
+            "shellscript",
+            "python",
+            "go"
+        ],
+        "exclude": [
+            "markdown",
+            "json",
+            "plaintext"
+        ],
+        "excludeGlob": [
+            "out/**",
+            "src/**/*.xyz",
+            "build/**"
+        ],
+        "autoHeader": "manualSave"
+    },
+    "psi-header.license-text": [
+        "Licensed under the MIT license."
+    ],
+    "psi-header.variables": [
+        [
+            "company",
+            "Mogic"
+        ],
+        [
+            "author",
+            "raphael hao"
+        ],
+        [
+            "authoremail",
+            "raphaelhao@outlook.com"
+        ]
+    ],
+    "psi-header.lang-config": [
+        {
+            "language": "python",
+            "begin": "",
+            "prefix": "# ",
+            "end": "",
+            "blankLinesAfter": 1,
+            "beforeHeader": [
+            ]
+        },
+        {
+            "language": "shellscript",
+            "begin": "",
+            "prefix": "# ",
+            "end": "",
+            "blankLinesAfter": 1,
+            "beforeHeader": [
+                "#!/usr/bin/env bash"
+            ]
+        },
+        {
+            "language": "*",
+            "begin": "/*!"
+        }
+    ],
+    "psi-header.templates": [
+        {
+            "language": "*",
+            "template": [
+                "Copyright (c) 2022 by Microsoft Corporation.",
+                "<<licensetext>>"
+            ]
+        }
+    ],
+    "python.testing.unittestEnabled": true,
+    "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./test/python",
+        "-p",
+        "*_test.py"
+    ],
+    "python.testing.pytestEnabled": false,
+    "files.watcherExclude": {
+        "**/.git/**": true,
+        "**/node_modules/*/**": true,
+        "**/.hg/store/**": true,
+        "**/3rdparty/dmlc-core/**": true,
+        "**/3rdparty/tvm/**": true,
+        "**/.cache/**": true,
+        "**/build/**": true
+    },
+    "git.ignoreSubmodules": true
+}

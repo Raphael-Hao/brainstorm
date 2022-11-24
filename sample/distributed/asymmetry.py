@@ -12,7 +12,7 @@ world_size = dist.get_world_size()
 device = torch.device("cuda", local_rank)
 torch.cuda.set_device(device)
 group = dist.group.WORLD
-brt_dist.init_nccl(group)
+brt_dist.is_nccl_activated(group)
 
 grain_size = 4
 capacity = 4
@@ -43,7 +43,7 @@ timer.execute(
 def torch_symmetry_a2a(tensor, loads):
     out_loads = torch.empty_like(loads)
     dist.all_to_all_single(out_loads, loads)
-    torch.cuda.synchronize()
+    # torch.cuda.synchronize()
     output = torch.empty_like(tensor)
     dist.all_to_all_single(output, tensor)
     return output

@@ -1,15 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import TYPE_CHECKING, Any, Optional, Tuple, Union, cast
+from typing import  Any, Optional, cast
 
 import copy
 import os
 import re
-import time
 import logging
-import collections
-import pickle
 
 import torch
 from torch import Tensor
@@ -19,24 +16,23 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 from brt.router import SwinMoEScatterRouter, GatherRouter
 
-from .fast_dispatch import fast_dispatcher
 from ..jit_kernels.gating import fast_cumsum_sub_one
 from . import communicate as C
 
 
 class PrimFwdAllgather(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input):
-        ctx.input_shape = input.shape
+    def forward(ctx, in_data):
+        ctx.input_shape = in_data.shape
         num_nodes = dist.get_world_size()
         output = torch.empty(
-            [num_nodes, input.numel()], device=input.device, dtype=input.dtype
+            [num_nodes, in_data.numel()], device=in_data.device, dtype=in_data.dtype
         )
         tensor_list = [
             x.contiguous() for x in torch.chunk(output, chunks=num_nodes, dim=0)
         ]
-        dist.all_gather(tensor_list=tensor_list, tensor=input.contiguous())
-        output = output.view([input.shape[0] * num_nodes] + list(input.shape[1:]))
+        dist.all_gather(tensor_list=tensor_list, tensor=in_data.contiguous())
+        output = output.view([in_data.shape[0] * num_nodes] + list(in_data.shape[1:]))
         return output
 
     @staticmethod
@@ -144,9 +140,9 @@ class TopKGate(torch.nn.Module):
         self.vitmoe_loss = vitmoe_loss
         self.use_noise = use_noise
         if self.vitmoe_loss:
-            print(
-                "[warning] change use_noise in TopKGate to True because vitmoe_loss is set to True"
-            )
+            # print(
+            #     "[warning] change use_noise in TopKGate to True because vitmoe_loss is set to True"
+            # )
             self.use_noise = True
         self.batch_prioritized_routing = batch_prioritized_routing
         if int(os.environ.get("BATCH_PRIO", 0)) != 0:
@@ -181,22 +177,22 @@ class TopKGate(torch.nn.Module):
         sorted_cumsum = fast_cumsum_sub_one(sorted_x) * sorted_x
         return sorted_cumsum[importance_scores.argsort(dim=0).argsort(dim=0)]
 
-    def apply_on_expert_fn(self, input, expert_fn, group, sharded_count):
-        M = input.size(1)
+    def apply_on_expert_fn(self, in_data, expert_fn, group, sharded_count):
+        M = in_data.size(1)
         if self.input_dropout:
-            input = self.input_dropout(input)
+            in_data = self.input_dropout(in_data)
 
         with torch.cuda.amp.autocast(enabled=False):
-            logits = self.wg.float()(input.float())
+            logits = self.wg.float()(in_data.float())
         logits_wo_noise = logits
         if self.training and self.use_noise:
             logits = logits + torch.randn_like(logits) / self.num_global_experts
 
         gates = F.softmax(logits, dim=1)
-        dispatched_input, l_loss = self.scatter(input, gates, logits_wo_noise, logits)
+        dispatched_input, _loss = self.scatter(in_data, gates, logits_wo_noise, logits)
         dispatched_input = dispatched_input.reshape(1, self.num_global_experts, -1, M)
         expert_output = expert_fn(dispatched_input)
-        expert_output = expert_output.to(input.dtype)
+        expert_output = expert_output.to(in_data.dtype)
         expert_output = expert_output.view(-1, M)
         result_output = self.gather(expert_output)
         return result_output, 0
@@ -242,7 +238,7 @@ class MOELayer(torch.nn.Module):
         self.skip_moe = int(os.environ.get("SKIP_MOE", "0")) != 0
 
         if not isinstance(experts, dict):
-            self.num_local_experts = len(self.experts)
+            self.num_local_experts = len(experts)
         else:
             self.num_local_experts = experts.get("count_per_node", 1)
             if not isinstance(self.num_local_experts, int):
@@ -664,8 +660,7 @@ class MOELayer(torch.nn.Module):
             else:
                 if C.get_world_rank(self.group) == 0:
                     logging.warning(
-                        "MoE is initialized to keep working on sample size = %s, while receiving sample size = %s (will slow down this forward step)"
-                        % (self.expected_sample_size, reshaped_input.size(0))
+                        f"MoE is initialized to keep working on sample size = {self.expected_sample_size}, while receiving sample size = {reshaped_input.size(0)} (will slow down this forward step)"
                     )
                 pad_input = torch.zeros(
                     [self.expected_sample_size, self.model_dim],
