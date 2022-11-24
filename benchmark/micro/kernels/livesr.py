@@ -4,6 +4,7 @@
 import json
 from typing import Dict, List, Union, Any
 
+import torch
 import torch.nn as nn
 
 from brt.runtime import BRT_KERNEL_TEMPLATE_PATH, BRT_LOG_PATH
@@ -17,13 +18,47 @@ from param_parser import parse_params
 logger = log.get_logger()
 logger.setLevel("INFO")
 
+subnet_bs = [6, 7, 12, 27, 8, 8, 8, 12, 12, 4]
+unique_bs = sorted(set(subnet_bs))
+num_channels = 8
+
 all_conv_params = [
-    f"""{{"module_name": "Conv2d", "in_channels": 36, "out_channels": 36, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": null, "input_shape": [{bs}, 36, 32, 32], "output_shape": [{bs}, 36, 32, 32]}}\n"""
-    for bs in set([6, 7, 12, 27, 8, 8, 8, 12, 12, 4])
-    ] + [
-    f"""{{"module_name": "Conv2d", "in_channels": 36, "out_channels": 36, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": "ReLU", "input_shape": [{bs}, 36, 32, 32], "output_shape": [{bs}, 36, 32, 32]}}\n"""
-    for bs in set([6, 7, 12, 27, 8, 8, 8, 12, 12, 4])
+    f"""{{"module_name": "Conv2d", "in_channels": {num_channels}, "out_channels": {num_channels}, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": null, "input_shape": [{bs}, {num_channels}, 32, 32], "output_shape": [{bs}, {num_channels}, 32, 32]}}\n"""
+    for bs in unique_bs
 ]
+#  + [
+# f"""{{"module_name": "Conv2d", "in_channels": {num_channels}, "out_channels": {num_channels}, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": "ReLU", "input_shape": [{bs}, {num_channels}, 32, 32], "output_shape": [{bs}, {num_channels}, 32, 32]}}\n"""
+# for bs in unique_bs
+# ]
+
+
+class Conv2dMulAdd(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        padding,
+        bias=True,
+        scale=1,
+    ) -> None:
+        super().__init__()
+        self.conv2d = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=bias,
+        )
+        self.scale = scale
+
+    def forward(self, x: torch.Tensor, add: torch.Tensor):
+        x = self.conv2d(x)
+        x = x * self.scale
+        x = x + add
+        return x
 
 
 def main():
@@ -37,7 +72,20 @@ def main():
             parameters,
             operator,
         ) = parse_params(conv_param)
-        # logger.info(parameters)
+
+        module_name = "Conv2dBiasMulAdd"
+        operator = Conv2dMulAdd(
+            in_channels=parameters["in_channels"],
+            out_channels=parameters["out_channels"],
+            kernel_size=parameters["kernel_size"],
+            stride=parameters["stride"],
+            padding=parameters["padding"],
+            bias=True,
+            scale=1,
+        )
+        input_infos['input_1'] = input_infos['input_0']
+
+        logger.info(parameters)
         tvm_tuner.import_pt_netlet(
             module_name,
             "forward",
@@ -86,6 +134,7 @@ def main():
         #     # print(f"    {tvm_tuner.tune_log_file}")
         #     module_function = None
 
+        # if True:
         if module_function is not None:
             logger.info("##########################################################")
             logger.info(
@@ -93,6 +142,7 @@ def main():
             )
             logger.info("##########################################################")
             tvm_tuner.insert_top_n_netlet_to_storage("fastest", 5)
+            tvm_tuner.insert_top_n_netlet_to_storage("most_efficient", 5)
         else:
             logger.info("##########################################################")
             logger.info(
@@ -100,8 +150,9 @@ def main():
             )
             logger.info("##########################################################")
             tvm_tuner.tune_netlet()
-            tvm_tuner.export_netlet_template("all", range(1, 5))
-            tvm_tuner.insert_netlet_to_storage("all", range(1, 5))
+            tvm_tuner.export_netlet_template("all")
+            tvm_tuner.insert_top_n_netlet_to_storage("fastest", 5)
+            tvm_tuner.insert_top_n_netlet_to_storage("most_efficient", 5)
 
         # module_function = ModuleKernel(
         #     module_name,

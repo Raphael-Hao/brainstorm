@@ -11,6 +11,9 @@ __all__ = [
     "HorizFusedModule",
     "HeteroFusedModule",
     "HomoFusedModule",
+    "ModuleInputType",
+    "AtomModuleInputType",
+    "FuseModuleInputType",
 ]
 
 
@@ -26,3 +29,9 @@ from brt.jit.modules.fused import FusedModule
 from brt.jit.modules.horiz import HorizFusedModule
 from brt.jit.modules.hetero import HeteroFusedModule
 from brt.jit.modules.homo import HomoFusedModule
+
+from brt.jit.modules.base import (
+    ModuleInputType,
+    AtomModuleInputType,
+    FuseModuleInputType,
+)
