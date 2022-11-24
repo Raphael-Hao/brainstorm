@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Literal, Optional
 
 import torch
 from torch import nn
@@ -84,6 +84,44 @@ parameters: {parameters}
             parameters=parameters,
         ).load_from_db(objective_func, rank)
 
+    def make_module(
+        self,
+        sample_inputs: torch.Tensor,
+        objective_func: str = "fastest",
+        rank: Union[int, List[int]] = 1,
+    ) -> nn.Module:
+        jit_function = self.make_function(
+            sample_inputs=sample_inputs,
+            mode="eval",
+            objective_func=objective_func,
+            rank=rank,
+        )
+        module_name = "BRT." + self.module_name
+        extra_repr = self.module[0].extra_repr()
+
+        class JitConv2dElemwiseModule(nn.Module):
+            def __init__(self, weight: torch.Tensor, bias: torch.Tensor = None) -> None:
+                super().__init__()
+                self._extra_repr = extra_repr
+                self.function = jit_function
+                self.register_parameter("weight", weight)
+                self.register_parameter("bias", bias)
+                self.forward(sample_inputs)
+
+            def forward(self, input: torch.Tensor):
+                if self.bias is not None:
+                    return self.function.apply(input, self.weight, self.bias)[0]
+                else:
+                    return self.function.apply(input, self.weight)[0]
+
+            def _get_name(self):
+                return module_name
+
+            def extra_repr(self):
+                return self._extra_repr
+
+        return JitConv2dElemwiseModule(*self._extract_parameters_and_buffers())
+
     def _extract_shared_arg_infos(self, method: str, sample_input: torch.Tensor):
         # Only support method == 'forward' actually
         if method not in type(self)._shared_arg_indices:
@@ -112,6 +150,12 @@ parameters: {parameters}
             type(self)._input_arg_indices[method],
             type(self)._output_arg_indices[method],
         )
+
+    def _extract_parameters_and_buffers(self) -> List[Optional[torch.Tensor]]:
+        ret = [self.module[0].weight]
+        if self.module[0].bias is not None:
+            ret.append(self.module[0].bias)
+        return ret
 
     @property
     def module_name(self) -> str:

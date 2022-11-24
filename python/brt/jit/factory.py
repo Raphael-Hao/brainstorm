@@ -64,7 +64,6 @@ def make_jit_function(
 def make_jit_module(
     modules: Union[nn.Module, nn.ModuleList],
     sample_inputs,
-    mode: Literal["eval", "train"] = "eval",
     opt_level: Union[str, None] = None,
     objective_func: str = "fastest",
     rank: Union[int, List[int]] = 1,
@@ -72,7 +71,6 @@ def make_jit_module(
     return ModuleFactory.make_module(
         modules,
         sample_inputs=sample_inputs,
-        mode=mode,
         opt_level=opt_level,
         objective_func=objective_func,
         rank=rank,
@@ -118,7 +116,6 @@ class ModuleFactory:
     def make_module(
         modules,
         sample_inputs,
-        mode: Literal["eval", "train"] = "eval",
         opt_level=None,
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
@@ -126,7 +123,6 @@ class ModuleFactory:
         jit_module = JitModuleFactory.produce(modules, opt_level)
         return jit_module.make_module(
             sample_inputs=sample_inputs,
-            mode=mode,
             objective_func=objective_func,
             rank=rank,
         )
