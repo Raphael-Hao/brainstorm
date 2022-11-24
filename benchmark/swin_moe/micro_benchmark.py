@@ -36,6 +36,7 @@ from utils import (
     reduce_tensor,
     adaptive_load_checkpoint,
 )
+from models.swin_transformer_v2_moe import SwinV2TransformerMoE
 
 warnings.filterwarnings(
     "ignore",
@@ -206,7 +207,7 @@ def main(args, config, ds_init):
             model_without_ddp,
             logger,
         )
-        acc1, _acc5, _loss = validate(config, data_loader_val, model)
+        acc1, _acc5, _loss = micro_bench(config, data_loader_val, model)
         logger.info(
             f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%"
         )
@@ -223,59 +224,12 @@ def main(args, config, ds_init):
 
 
 @torch.no_grad()
-def validate(config, data_loader, model):
-    criterion = torch.nn.CrossEntropyLoss()
-    model.eval()
+def micro_bench(model, gpu_data, logger, num_warmup=20, num_iter=100):
+    pass
 
-    batch_time = AverageMeter()
-    loss_meter = AverageMeter()
-    loss_aux_meter = AverageMeter()
-    acc1_meter = AverageMeter()
-    acc5_meter = AverageMeter()
 
-    end = time.time()
-
-    for idx, (images, target) in enumerate(data_loader):
-        images = images.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True)
-
-        with torch.cuda.amp.autocast():
-            # compute output
-            output, l_aux = model(images)
-            # measure accuracy and record loss
-            loss = criterion(output, target)
-
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
-
-        acc1 = reduce_tensor(acc1)
-        acc5 = reduce_tensor(acc5)
-        loss = reduce_tensor(loss)
-
-        loss_meter.update(loss.item(), target.size(0))
-        if isinstance(l_aux, float):
-            loss_aux_meter.update(l_aux, target.size(0))
-        else:
-            loss_aux_meter.update(l_aux.item(), target.size(0))
-        acc1_meter.update(acc1.item(), target.size(0))
-        acc5_meter.update(acc5.item(), target.size(0))
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-
-        if idx % config.PRINT_FREQ == 0:
-            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-            logger.info(
-                f"Test: [{idx}/{len(data_loader)}]\t"
-                f"Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t"
-                f"Loss-Cls {loss_meter.val:.4f} ({loss_meter.avg:.4f})\t"
-                f"Loss-Aux {loss_aux_meter.val:.4f} ({loss_aux_meter.avg:.4f})\t"
-                f"Acc@1 {acc1_meter.val:.3f} ({acc1_meter.avg:.3f})\t"
-                f"Acc@5 {acc5_meter.val:.3f} ({acc5_meter.avg:.3f})\t"
-                f"Mem {memory_used:.0f}MB"
-            )
-    logger.info(f" * Acc@1 {acc1_meter.avg:.3f} Acc@5 {acc5_meter.avg:.3f}")
-    return acc1_meter.avg, acc5_meter.avg, loss_meter.avg
+def load_micro_bench_data(data_dir, logger):
+    pass
 
 
 def get_benchmark_data(data_loader, logger, num_batches=100):
@@ -305,7 +259,9 @@ def gather_micro_bench_data(data_loader, model, logger):
         batch_size = images.size(0)
         images = images.cuda(non_blocking=True)
         model(images)
-    brt_debug.save_profile(profile_name=f"{batch_size}",profile_dir="datasets/swin_moe_micro_bench_data")
+    brt_debug.save_profile(
+        profile_name=f"{batch_size}", profile_dir="datasets/swin_moe_micro_bench_data"
+    )
     torch.cuda.synchronize()
     dist.barrier()
     logger.info(
