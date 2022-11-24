@@ -23,6 +23,7 @@ BRT_PKG_PATH = pathlib.Path(__file__).parent.parent
 BRT_CACHE_PATH = pathlib.Path(
     os.getenv("BRT_CACHE_PATH", str(HOME_PATH / ".cache/brt"))
 ).absolute()
+
 BRT_LOG_PATH = pathlib.Path(
     os.getenv("BRT_LOG_PATH", str(BRT_CACHE_PATH / "log"))
 ).absolute()

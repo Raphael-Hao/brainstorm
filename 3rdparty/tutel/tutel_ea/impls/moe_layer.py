@@ -94,17 +94,17 @@ class router_exporter:
 
 class PrimFwdAllgather(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input):
-        ctx.input_shape = input.shape
+    def forward(ctx, in_data):
+        ctx.input_shape = in_data.shape
         num_nodes = dist.get_world_size()
         output = torch.empty(
-            [num_nodes, input.numel()], device=input.device, dtype=input.dtype
+            [num_nodes, in_data.numel()], device=in_data.device, dtype=in_data.dtype
         )
         tensor_list = [
             x.contiguous() for x in torch.chunk(output, chunks=num_nodes, dim=0)
         ]
-        dist.all_gather(tensor_list=tensor_list, tensor=input.contiguous())
-        output = output.view([input.shape[0] * num_nodes] + list(input.shape[1:]))
+        dist.all_gather(tensor_list=tensor_list, tensor=in_data.contiguous())
+        output = output.view([in_data.shape[0] * num_nodes] + list(in_data.shape[1:]))
         return output
 
     @staticmethod
@@ -233,12 +233,12 @@ class TopKGate(torch.nn.Module):
         sorted_cumsum = fast_cumsum_sub_one(sorted_x) * sorted_x
         return sorted_cumsum[importance_scores.argsort(dim=0).argsort(dim=0)]
 
-    def apply_on_expert_fn(self, input, expert_fn, group, sharded_count):
+    def apply_on_expert_fn(self, in_data, expert_fn, group, sharded_count):
         if self.input_dropout:
-            input = self.input_dropout(input)
+            in_data = self.input_dropout(in_data)
 
         with torch.cuda.amp.autocast(enabled=False):
-            logits = self.wg.float()(input.float())
+            logits = self.wg.float()(in_data.float())
         logits_wo_noise = logits
         if self.training and self.use_noise:
             logits = logits + torch.randn_like(logits) / self.num_global_experts
@@ -308,7 +308,7 @@ class TopKGate(torch.nn.Module):
 
         indices_s = [x.to(torch.int32) for x in indices_s]
 
-        S, M, GE = input.size(0), input.size(1), self.num_global_experts
+        S, M, GE = in_data.size(0), in_data.size(1), self.num_global_experts
         world_size = C.get_world_size(group)
 
         if not hasattr(self, "_fdr"):
@@ -320,7 +320,7 @@ class TopKGate(torch.nn.Module):
                 num_global_experts=GE,
                 capacity=capacity,
                 model_dim=M,
-                dispatch_dtype=input.dtype,
+                dispatch_dtype=in_data.dtype,
             )
         else:
             capacity = self._fdr.capacity
@@ -334,7 +334,7 @@ class TopKGate(torch.nn.Module):
             capacity=capacity,
             is_postscore=self.is_postscore,
         )
-        dispatched_input = self._fdr.encode(input)
+        dispatched_input = self._fdr.encode(in_data)
         if sharded_count > 1:
             dispatched_input = dispatched_input.reshape(world_size, 1, -1, M)
         else:
@@ -342,11 +342,11 @@ class TopKGate(torch.nn.Module):
 
         if self.a2a_ffn_overlap_degree == -1:
             expert_output = expert_fn(dispatched_input)
-            expert_output = expert_output.to(input.dtype)
+            expert_output = expert_output.to(in_data.dtype)
         elif self.a2a_ffn_overlap_degree == 1:
             _dispatched_input = C.AllToAll.apply(group, dispatched_input)
             expert_output = expert_fn(_dispatched_input)
-            expert_output = expert_output.to(input.dtype)
+            expert_output = expert_output.to(in_data.dtype)
             expert_output = C.AllToAll.apply(group, expert_output)
         else:
             split_dim = 2
@@ -363,7 +363,7 @@ class TopKGate(torch.nn.Module):
 
             expert_output_scattered = [
                 C.CurrentStreamRelease.apply(
-                    expert_fn(C.CurrentStreamAcquire.apply(x, i)).to(input.dtype), i
+                    expert_fn(C.CurrentStreamAcquire.apply(x, i)).to(in_data.dtype), i
                 )
                 for i, x in enumerate(dispatched_input_scattered_after_a2a)
             ]
@@ -400,11 +400,11 @@ class MegatronLMGate(torch.nn.Module):
     def named_parameters(self):
         return []
 
-    def apply_on_expert_fn(self, input, expert_fn, group, sharded_count):
+    def apply_on_expert_fn(self, in_data, expert_fn, group, sharded_count):
         if self.l_zero is None:
-            self.l_zero = torch.tensor(0, dtype=input.dtype, device=input.device)
+            self.l_zero = torch.tensor(0, dtype=in_data.dtype, device=in_data.device)
         assert sharded_count == 1
-        gathered_input = C.PreAllreduceSum.apply(group, input)
+        gathered_input = C.PreAllreduceSum.apply(group, in_data)
         result_output = expert_fn(gathered_input)
         result_output = C.PostAllreduceSum.apply(group, result_output)
         return result_output, self.l_zero
@@ -774,7 +774,8 @@ class MOELayer(torch.nn.Module):
             )
             top_k = int(gate_type[3:-4])
             logging.warning(
-                f"gate_type value `{gate_type}` in tutel.moe_layer has been deprecated, please use gate_type = {{'type': 'top', 'k': {top_k}}} instead."
+                f"""gate_type value `{gate_type}` in tutel.moe_layer has been deprecated, \
+                    please use gate_type = {{'type': 'top', 'k': {top_k}}} instead."""
             )
             gate_type = {"type": "top", "k": top_k}
 
@@ -788,7 +789,8 @@ class MOELayer(torch.nn.Module):
                     torch.manual_seed(seeds[0] + gi)
                 if "fp32_gate" in kwargs:
                     logging.warning(
-                        f'`fp32_gate` option in tutel.moe_layer has been deprecated, please move this option to gate_type = {{.., "fp32_gate": {kwargs["fp32_gate"]}}} instead.'
+                        f""""`fp32_gate` option in tutel.moe_layer has been deprecated, \
+                            please move this option to gate_type = {{.., "fp32_gate": {kwargs["fp32_gate"]}}} instead."""
                     )
                     single_gate_type["fp32_gate"] = kwargs["fp32_gate"]
 
@@ -852,9 +854,9 @@ class MOELayer(torch.nn.Module):
                 % param_type
             )
 
-    def forward(self, input: Tensor, gate_index=0, **kwargs: Any):
+    def forward(self, in_data: Tensor, gate_index=0, **kwargs: Any):
         if self.skip_moe:
-            result_output = input
+            result_output = in_data
             result_output.l_aux = None
             return (
                 self.result_func(result_output)
@@ -862,11 +864,11 @@ class MOELayer(torch.nn.Module):
                 else result_output
             )
 
-        original_shape, original_dtype = input.shape, input.dtype
+        original_shape, original_dtype = in_data.shape, in_data.dtype
         assert (
-            len(input.shape) >= 2
+            len(in_data.shape) >= 2
         ), "Input data must be at least 2D tensor: (s)amples, .., (m)odel_dim"
-        reshaped_input = input.reshape(-1, input.shape[-1])
+        reshaped_input = in_data.reshape(-1, in_data.shape[-1])
         reshaped_input_samples = reshaped_input.shape[0]
 
         self.expected_sample_size = self.expected_sample_size or reshaped_input.size(0)
@@ -883,7 +885,8 @@ class MOELayer(torch.nn.Module):
             else:
                 if C.get_world_rank(self.group) == 0:
                     logging.warning(
-                        f"MoE is initialized to keep working on sample size = {self.expected_sample_size}, while receiving sample size = {reshaped_input.size(0)} (will slow down this forward step)"
+                        f"""MoE is initialized to keep working on sample size = {self.expected_sample_size},\
+                            while receiving sample size = {reshaped_input.size(0)} (will slow down this forward step)"""
                     )
                 pad_input = torch.zeros(
                     [self.expected_sample_size, self.model_dim],

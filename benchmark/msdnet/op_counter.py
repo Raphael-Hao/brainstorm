@@ -163,6 +163,9 @@ def measure_model(model, H, W):
                 restore_forward(child)
 
     modify_forward(model)
+    model.measure=True
     model.forward(data)
+    model.measure=False
+    
     restore_forward(model)
     return cls_ops, cls_params

@@ -3,7 +3,7 @@ DATA:
   IMG_SIZE: 192
 MODEL:
   TYPE: swinv2_moe
-  NAME: swinv2_moe_small_pre_nattn_cpb_patch4_window12_192_s2it2_s3b1_top1_vitmoeloss_GwoN_bpr_cap125_moedrop01_nobias_22k_32gpu_16exp
+  NAME: swinv2_moe_22k_32gpu_16exp
   DROP_PATH_RATE: 0.2
   SWIN_V2_MOE:
     EMBED_DIM: 96

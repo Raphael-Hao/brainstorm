@@ -263,3 +263,7 @@ bench_arg_manager.add_item("memory_plan")
 bench_arg_manager.add_item("reorder_operator")
 bench_arg_manager.add_item("constant_propagation")
 bench_arg_manager.add_item("all_opt")
+bench_arg_manager.add_item("vfuse")
+bench_arg_manager.add_item("hfuse")
+
+

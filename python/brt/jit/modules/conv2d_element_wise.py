@@ -165,5 +165,8 @@ parameters: {parameters}
                 if sub_module.bias is not None:
                     module_name += "Bias"
             elif isinstance(sub_module, type(self)._optional_succeed_module_cls):
-                module_name += type(sub_module).__name__
+                if isinstance(sub_module, torch.nn.BatchNorm2d):
+                    module_name += "BatchNorm"
+                else:
+                    module_name += type(sub_module).__name__
         return module_name
