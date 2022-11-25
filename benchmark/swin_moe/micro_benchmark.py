@@ -23,9 +23,9 @@ import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-from brt.runtime.benchmark import deterministic_random_generator, profile_v2
+from brt.runtime.benchmark import deterministic_random_generator
 from brt.runtime.placement import (
-    dump_trace,
+    dump_trace,  # pylint: disable=unused-import
     adaptive_load,
     generate_experts_keys,
     adaptive_micro_bench_load,
@@ -40,7 +40,6 @@ from models import build_model
 from utils import (
     create_ds_config,
     hook_scale_grad,
-    adaptive_load_checkpoint,
 )
 from models.micro_swin_v2_moe import MicroSwinV2TransformerMoE
 
@@ -127,6 +126,7 @@ def parse_option():
             "gather-micro",
             "profile",
             "valid",
+            "micro-bench",
         ],
     )
     parser.add_argument("--placement", type=str, default=None)
@@ -243,22 +243,23 @@ def micro_bench(
         adaptive_micro_bench_load(
             model_without_ddp, placement, end_moe_keys, checkpoint_file, 16
         )
-        torch.cuda.synchronize()
-        logger.info("===> Start throughput benchmark")
-        dist.barrier()
-        for _idx in range(20):
-            micro_moe_block_ddp(in_data)
-        torch.cuda.synchronize()
-        dist.barrier()
-        logger.info("Warmup done, start benchmarking")
-        start = time.time()
-        for _idx in range(100):
-            micro_moe_block_ddp(in_data)
-        torch.cuda.synchronize()
-        end = time.time()
-        logger.info(
-            f"Batch size: {config.DATA.BATCH_SIZE}, Throughput: { 100*config.DATA.BATCH_SIZE / (end - start)}"
-        )
+        print(micro_moe_block_ddp(in_data).sum())
+        # torch.cuda.synchronize()
+        # logger.info("===> Start throughput benchmark")
+        # dist.barrier()
+        # for _idx in range(20):
+        #     micro_moe_block_ddp(in_data)
+        # torch.cuda.synchronize()
+        # dist.barrier()
+        # logger.info("Warmup done, start benchmarking")
+        # start = time.time()
+        # for _idx in range(100):
+        #     micro_moe_block_ddp(in_data)
+        # torch.cuda.synchronize()
+        # end = time.time()
+        # logger.info(
+        #     f"Batch size: {config.DATA.BATCH_SIZE}, Throughput: { 100*config.DATA.BATCH_SIZE / (end - start)}"
+        # )
 
 
 def load_micro_bench_data(data_dir: str, bs: int, logger):
@@ -270,7 +271,8 @@ def load_micro_bench_data(data_dir: str, bs: int, logger):
         / f"rank{dist.get_rank()}_{bs}.npz"
     )
     data = np.load(data_file_path, allow_pickle=True)
-    data_on_gpu = [torch.from_numpy(d).cuda() for d in data]
+    numpy_data = list(data.values())
+    data_on_gpu = [torch.from_numpy(d).cuda() for d in numpy_data]
     return data_on_gpu
 
 

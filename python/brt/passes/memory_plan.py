@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import typing
-from typing import Union, Dict, List, Callable, Set, Tuple, Any
+from typing import Union, Dict, List, Callable, Set, Tuple
 
 from collections import OrderedDict
 import re
@@ -10,10 +10,26 @@ import torch
 import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
-from brt.passes.utils import debug_node
+from brt.passes.utils import debug_node # pylint: disable=unused-import
 from brt.runtime import log
 from brt.runtime.tensor_group import TensorGroupManager, TensorGroup
-from brt.runtime.memory_planner import *
+from brt.runtime.memory_planner import (
+    GroupedOnDemandLoader,
+    GroupedOnDemandGuarder,
+    GroupedOnDemandUnloader,
+    GroupedPredictGuarder,
+    GroupedPredictLoader,
+    GroupedPredictUnloader,
+    OnDemandGuarder,
+    OnDemandLoader,
+    OnDemandUnloader,
+    PredictGuarder,
+    PredictLoader,
+    PredictUnloader,
+    InitialLoader,
+    GroupedInitialLoader,
+    MemoryPlanContext,
+)
 
 PLGT = Tuple[
     List[Node],
@@ -23,7 +39,7 @@ PLGT = Tuple[
 
 logger = log.get_logger(__file__)
 
-__all__ = ["OnDemandMemoryPlan", "PredictMemoryPlan"]
+__all__ = ["OnDemandMemoryPlanPass", "PredictMemoryPlanPass"]
 
 
 @register_pass("MemoryPlan")
@@ -168,7 +184,7 @@ class MemoryPlanPass(PassBase):
         head_node_include=True,
     ):
         sorted_traveled_nodes = self.sort_nodes(traveled_nodes)
-        first_node, last_node = sorted_traveled_nodes[0], sorted_traveled_nodes[-1]
+        first_node, _last_node = sorted_traveled_nodes[0], sorted_traveled_nodes[-1]
         if head_node is None:
             if head_node_include:
                 head_node = first_node
@@ -324,7 +340,7 @@ class MemoryPlanPass(PassBase):
 
     def is_params_and_buffer_all_collected(self):
         origin_all_params = dict(self.graph_mod.named_parameters())
-        for k, v in origin_all_params.items():
+        for k, _v in origin_all_params.items():
             if k not in self.all_collected_params:
                 logger.debug(f"Parameter {k} is not collected.")
                 return False

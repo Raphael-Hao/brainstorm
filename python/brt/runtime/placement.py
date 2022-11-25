@@ -104,7 +104,6 @@ def adaptive_micro_bench_load(
     new_placement: List[List[int]],
     target_expert_key: Tuple[int, int],
     checkpoint_file: str,
-    placement_file: str = None,
     global_expert_num: int = None,
 ):
     # world_rank = dist.get_rank()
@@ -112,15 +111,14 @@ def adaptive_micro_bench_load(
     world_rank = 1
     world_size = 2
     _experts_keys, rank_placement, placement_indices = generate_rank_placement(
-        world_rank, world_size, placement_file, global_expert_num
+        world_rank, world_size, None, global_expert_num
     )
     rank_placement[target_expert_key] = list(new_placement[world_rank])
-    placement_indices[target_expert_key] = list(
-        itertools.chain.from_iterable(*new_placement)
-    )
-    print(f"placement_indices: {placement_indices}")
-    print(f"rank_placement: {rank_placement}")
-    # adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
+    placement_index = np.array(list(itertools.chain.from_iterable(new_placement)))
+    placement_indices[target_expert_key] = torch.from_numpy(placement_index)
+    # print(f"placement_indices: {placement_indices}")
+    # print(f"rank_placement: {rank_placement}")
+    adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
 
 
 def generate_rank_placement(
