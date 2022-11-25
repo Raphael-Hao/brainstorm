@@ -18,40 +18,43 @@ from param_parser import parse_params
 logger = log.get_logger()
 logger.setLevel("INFO")
 
-subnet_bs = [6, 7, 12, 27, 8, 8, 8, 12, 12, 4]
-unique_bs = sorted(set(subnet_bs))
-num_channels = 8
-
-all_conv_params = [
-    f"""{{"module_name": "Conv2d", "in_channels": {num_channels}, "out_channels": {num_channels}, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": null, "input_shape": [{bs}, {num_channels}, 32, 32], "output_shape": [{bs}, {num_channels}, 32, 32]}}\n"""
-    for bs in unique_bs
+all_subnet_bs = [
+    [19, 25, 18, 36],
+    [9, 32, 18, 16, 18, 7],
+    [21, 8, 16, 11, 20, 8, 7, 15],
+    [6, 7, 12, 27, 8, 8, 8, 12, 12, 4],
 ]
-#  + [
-# f"""{{"module_name": "Conv2d", "in_channels": {num_channels}, "out_channels": {num_channels}, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": "ReLU", "input_shape": [{bs}, {num_channels}, 32, 32], "output_shape": [{bs}, {num_channels}, 32, 32]}}\n"""
-# for bs in unique_bs
-# ]
+all_num_channels = [
+    8, 12, 16, 20
+]
+
+
+def conv_params(subnet_bs, num_channels):
+    unique_bs = sorted(set(subnet_bs))
+    return (
+        [
+            f"""{{"module_name": "Conv2dMulAdd", "in_channels": {num_channels}, "out_channels": {num_channels}, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": null, "input_shape": [{bs}, {num_channels}, 32, 32], "output_shape": [{bs}, {num_channels}, 32, 32]}}\n"""
+            for bs in unique_bs
+        ]
+        + [
+            f"""{{"module_name": "Conv2d", "in_channels": {num_channels}, "out_channels": {num_channels}, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": null, "input_shape": [{bs}, {num_channels}, 32, 32], "output_shape": [{bs}, {num_channels}, 32, 32]}}\n"""
+            for bs in unique_bs
+        ]
+        + [
+            f"""{{"module_name": "Conv2d", "in_channels": {num_channels}, "out_channels": {num_channels}, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1, "bias": true, "padding_mode": "zeros", "norm": null, "activation": "ReLU", "input_shape": [{bs}, {num_channels}, 32, 32], "output_shape": [{bs}, {num_channels}, 32, 32]}}\n"""
+            for bs in unique_bs
+        ]
+    )
 
 
 class Conv2dMulAdd(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride,
-        padding,
-        bias=True,
+        conv2d,
         scale=1,
     ) -> None:
         super().__init__()
-        self.conv2d = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            padding=padding,
-            bias=bias,
-        )
+        self.conv2d = conv2d
         self.scale = scale
 
     def forward(self, x: torch.Tensor, add: torch.Tensor):
@@ -61,9 +64,9 @@ class Conv2dMulAdd(nn.Module):
         return x
 
 
-def main():
+def tune(subnet_bs, num_channels):
     tvm_tuner = TVMTuner()
-    for line in all_conv_params:
+    for line in conv_params(subnet_bs, num_channels):
         conv_param = json.loads(line)
         (
             module_name,
@@ -73,17 +76,12 @@ def main():
             operator,
         ) = parse_params(conv_param)
 
-        module_name = "Conv2dBiasMulAdd"
-        operator = Conv2dMulAdd(
-            in_channels=parameters["in_channels"],
-            out_channels=parameters["out_channels"],
-            kernel_size=parameters["kernel_size"],
-            stride=parameters["stride"],
-            padding=parameters["padding"],
-            bias=True,
-            scale=1,
-        )
-        input_infos['input_1'] = input_infos['input_0']
+        if module_name == "Conv2dBiasMulAdd":
+            operator = Conv2dMulAdd(
+                operator,
+                scale=1,
+            )
+            input_infos["input_1"] = input_infos["input_0"]
 
         logger.info(parameters)
         tvm_tuner.import_pt_netlet(
@@ -114,7 +112,7 @@ def main():
             parameters,
         )
         try:
-            module_function.load_from_db("most_efficient")
+            # module_function.load_from_db("most_efficient")
             module_function.load_from_db("fastest")
         except ValueError:
             module_function = None
@@ -150,28 +148,14 @@ def main():
             )
             logger.info("##########################################################")
             tvm_tuner.tune_netlet()
-            tvm_tuner.export_netlet_template("all")
-            tvm_tuner.insert_top_n_netlet_to_storage("fastest", 5)
-            tvm_tuner.insert_top_n_netlet_to_storage("most_efficient", 5)
+            tvm_tuner.export_netlet_template("fastest")
+            tvm_tuner.insert_top_n_netlet_to_storage("fastest", 1)
+            # tvm_tuner.insert_top_n_netlet_to_storage("most_efficient", 5)
 
-        # module_function = ModuleKernel(
-        #     module_name,
-        #     "forward",
-        #     None,
-        #     "CUDA_GPU",
-        #     input_infos,
-        #     output_infos,
-        #     parameters,
-        # )
-        # module_function.load_from_db("most_efficient")
-
-        # file_name = make_fname(
-        #     module_name, "forward", input_infos, output_infos, parameters
-        # )
-        # template_file_loaded = BRT_KERNEL_TEMPLATE_PATH / f"{file_name}_loaded.cu"
-        # template_file_loaded.write_text(module_function.get_code()[0])
     print("Done!")
 
 
 if __name__ == "__main__":
-    main()
+    for subnet_bs in all_subnet_bs:
+        for num_channels in all_num_channels:
+            tune(subnet_bs, num_channels)

@@ -8,7 +8,7 @@ def parse_params(params: Dict[str, Any]):
     module_name = params.pop("module_name")
     if module_name is None:
         module_name = "Conv2d"
-    if module_name in ["Conv2d", "ConvTranspose2d"]:
+    if module_name in ["Conv2d", "ConvTranspose2d", "Conv2dMulAdd"]:
         # default value
         params["kernel_size"] = _pair(params["kernel_size"])
         if params["stride"] == None:
@@ -33,7 +33,7 @@ def parse_params(params: Dict[str, Any]):
             params["output_padding"] = 0
         # generate module_name & operator
         modules = []
-        if module_name == "Conv2d":
+        if module_name in ["Conv2d", "Conv2dMulAdd"]:
             modules.append(
                 nn.Conv2d(
                     in_channels=params["in_channels"],
@@ -48,7 +48,7 @@ def parse_params(params: Dict[str, Any]):
                 )
             )
             params.pop("padding_mode")
-        else:
+        elif module_name == "ConvTranspose2d":
             modules.append(
                 nn.ConvTranspose2d(
                     in_channels=params["in_channels"],
