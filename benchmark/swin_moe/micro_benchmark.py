@@ -5,6 +5,7 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 import argparse
+import itertools
 import json
 import os
 import random
@@ -18,30 +19,27 @@ from tutel_ea import system_init
 system_init.init_affinity_at_program_beginning()
 
 
+import brt.runtime.debug as brt_debug
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+import torch.nn as nn
 from brt.runtime.benchmark import deterministic_random_generator
+from brt.runtime.pkg_info import BRT_CACHE_PATH
+from brt.runtime.placement import dump_trace  # pylint: disable=unused-import
 from brt.runtime.placement import (
-    dump_trace,  # pylint: disable=unused-import
     adaptive_load,
-    generate_experts_keys,
     adaptive_micro_bench_load,
+    generate_experts_keys,
     generate_posible_placement,
 )
-from brt.runtime.pkg_info import BRT_CACHE_PATH
-import brt.runtime.debug as brt_debug
 from config import get_config
 from data import build_loader
 from logger import create_logger
 from models import build_model
-from utils import (
-    create_ds_config,
-    hook_scale_grad,
-)
 from models.micro_swin_v2_moe import MicroSwinV2TransformerMoE
+from utils import create_ds_config, hook_scale_grad
 
 warnings.filterwarnings(
     "ignore",
@@ -198,7 +196,7 @@ def main(args, config, ds_init):
         micro_bench(config, model_without_ddp, 0, 1, checkpoint_file, logger)
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def micro_bench(
     config,
     model_without_ddp: MicroSwinV2TransformerMoE,
@@ -215,6 +213,7 @@ def micro_bench(
     moe_blocks = model_without_ddp.layers[start_moe_keys[0]].blocks[
         start_moe_keys[1] : end_moe_keys[1]
     ]
+    logger.info(moe_blocks)
 
     class MoEBlockWrapper(nn.Module):
         def __init__(self, blocks):
@@ -233,33 +232,54 @@ def micro_bench(
         broadcast_buffers=False,
         bucket_cap_mb=64,
     )
+    micro_moe_block_ddp.eval()
     gpu_data = load_micro_bench_data(
         "swin_moe_micro_bench_data", config.DATA.BATCH_SIZE, logger
     )
     in_data = gpu_data[moe_layer_start]
 
     possible_placement = generate_posible_placement(16, dist.get_world_size())
-    for placement in possible_placement:
+    best_throughput = 0
+    best_placement = None
+    worst_throughput = 1e10
+    worst_placement = None
+    placement_num = len(possible_placement)
+    for idx, placement in enumerate(possible_placement):
         adaptive_micro_bench_load(
             model_without_ddp, placement, end_moe_keys, checkpoint_file, 16
         )
-        print(micro_moe_block_ddp(in_data).sum())
-        # torch.cuda.synchronize()
-        # logger.info("===> Start throughput benchmark")
-        # dist.barrier()
-        # for _idx in range(20):
-        #     micro_moe_block_ddp(in_data)
-        # torch.cuda.synchronize()
-        # dist.barrier()
-        # logger.info("Warmup done, start benchmarking")
-        # start = time.time()
-        # for _idx in range(100):
-        #     micro_moe_block_ddp(in_data)
-        # torch.cuda.synchronize()
-        # end = time.time()
-        # logger.info(
-        #     f"Batch size: {config.DATA.BATCH_SIZE}, Throughput: { 100*config.DATA.BATCH_SIZE / (end - start)}"
-        # )
+        torch.cuda.synchronize()
+        logger.info("===> Start throughput benchmark")
+        dist.barrier()
+        for _idx in range(20):
+            micro_moe_block_ddp(in_data)
+        torch.cuda.synchronize()
+        dist.barrier()
+        logger.info("Warmup done, start benchmarking")
+        start = time.time()
+        for _idx in range(200):
+            micro_moe_block_ddp(in_data)
+        torch.cuda.synchronize()
+        dist.barrier()
+        end = time.time()
+        throughput = config.DATA.BATCH_SIZE * 200 / (end - start)
+        if best_throughput < throughput:
+            best_throughput = throughput
+            best_placement = np.array(list(itertools.chain.from_iterable(placement)))
+            if dist.get_rank() == 0:
+                np.savetxt(
+                    "best_placement.csv", best_placement, fmt="%s", delimiter=","
+                )
+        if worst_throughput > throughput:
+            worst_throughput = throughput
+            worst_placement = np.array(list(itertools.chain.from_iterable(placement)))
+            if dist.get_rank() == 0:
+                np.savetxt(
+                    "worst_placement.csv", worst_placement, fmt="%s", delimiter=","
+                )
+        logger.info(
+            f"{idx}/{placement_num} ===> Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {best_throughput/worst_throughput:.2f}"
+        )
 
 
 def load_micro_bench_data(data_dir: str, bs: int, logger):

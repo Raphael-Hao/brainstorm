@@ -116,8 +116,6 @@ def adaptive_micro_bench_load(
     rank_placement[target_expert_key] = list(new_placement[world_rank])
     placement_index = np.array(list(itertools.chain.from_iterable(new_placement)))
     placement_indices[target_expert_key] = torch.from_numpy(placement_index)
-    # print(f"placement_indices: {placement_indices}")
-    # print(f"rank_placement: {rank_placement}")
     adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
 
 
@@ -247,7 +245,7 @@ def adaptive_load_checkpoint(
 
     if placement_indices is not None:
         for k in placement_indices.keys():
-            print(f"setting placement for {k} with {placement_indices[k]}")
+            # print(f"setting placement for {k} with {placement_indices[k]}")
             origin_wg_weight = state_dict[
                 f"layers.{k[0]}.blocks.{k[1]}.mlp._moe_layer.gates.0.wg.weight"
             ]
