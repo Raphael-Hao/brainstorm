@@ -1529,7 +1529,7 @@ class BasicLayer(nn.Module):
         ckpt_block = 0
         for idx, blk in enumerate(self.blocks):
             if blk.is_moe:
-                brt_debug.one_targeted_profile(x)
+                brt_debug.targeted_profile(x)
             if (
                 self.use_checkpoint
                 and not blk.is_moe

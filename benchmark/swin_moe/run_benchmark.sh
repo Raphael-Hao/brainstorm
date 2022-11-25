@@ -18,6 +18,7 @@ ARGUMENT_LIST=(
     "port:"
     "mode:"
     "blocking"
+    "bs:"
 )
 
 # read arguments
@@ -68,6 +69,10 @@ while [[ $# -gt 0 ]]; do
         export CUDA_LAUNCH_BLOCKING=1
         shift 1
         ;;
+    --bs)
+        BS=$2
+        shift 2
+        ;;
     *)
         break
         ;;
@@ -105,18 +110,25 @@ else
     export MOE_LAYER_VENDOR=$VENDOR
 fi
 
+if [ -z "$BS" ]; then
+    BS=128
+    echo "Batch size is not specified, using default value $BS"
+fi
+
 if [ -z "$PORT" ]; then
     PORT=$(((RANDOM % 10) + 6500))
+    echo "Port is not specified, using random generated port: $PORT"
 fi
 
 LAUNCH_ARGS+=(
     --cfg configs/"${EXPERT_NUM}"expert_"${GPU_NUM}"GPU.yaml
-    --batch-size 256 --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k
+    --batch-size "$BS"
+    --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k
     --output ./results/MoE/
-    --eval --resume "${BRT_CACHE_PATH}"/ckpt/swin_moe/small_swin_moe_32GPU_16expert/model.pth
+    --resume "${BRT_CACHE_PATH}"/ckpt/swin_moe/small_swin_moe_32GPU_16expert/model.pth
 )
 
-echo "${LAUNCH_ARGS[@]}"
+echo "Final launch args:" "${LAUNCH_ARGS[@]}"
 
 torchrun --nproc_per_node="$PROC" \
     --nnode=1 --node_rank=0 \

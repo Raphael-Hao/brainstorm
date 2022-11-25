@@ -36,7 +36,7 @@ from utils import (
     hook_scale_grad,
     adaptive_load_checkpoint,
 )
-from models.swin_transformer_v2_moe import SwinV2TransformerMoE
+from models.micro_swin_v2_moe import MicroSwinV2TransformerMoE
 
 warnings.filterwarnings(
     "ignore",
@@ -103,10 +103,6 @@ def parse_option():
         help="root of output folder, the full path is <output>/<model_name>/<tag> (default: output)",
     )
     parser.add_argument("--tag", help="tag of experiment")
-    parser.add_argument("--eval", action="store_true", help="Perform evaluation only")
-    parser.add_argument(
-        "--throughput", action="store_true", help="Test throughput only", default=False
-    )
     parser.add_argument("--custom_scaler", action="store_true", default=False)
 
     # deepspeed
@@ -136,6 +132,9 @@ def parse_option():
     args.local_rank = int(os.environ["LOCAL_RANK"])
 
     config = get_config(args)
+    config.defrost()
+    config.MODEL.TYPE = "micro_swinv2_moe"
+    config.freeze()
 
     return args, config, ds_init
 
@@ -202,11 +201,6 @@ def main(args, config, ds_init):
         check_correctness(model, args.batch_size)
     elif args.mode == "trace":
         print("===> Tracing model")
-        adaptive_load_checkpoint(
-            config,
-            model_without_ddp,
-            logger,
-        )
         micro_bench(config, model, data_loader_val, logger, 0, 1)
         print("===> Tracing model done, dumping to file")
         dump_trace(model_without_ddp)
@@ -223,7 +217,7 @@ def main(args, config, ds_init):
 @torch.no_grad()
 def micro_bench(
     config,
-    model_no_ddp: SwinV2TransformerMoE,
+    model_no_ddp: MicroSwinV2TransformerMoE,
     gpu_data,
     logger,
     moe_layer_start,
@@ -255,22 +249,39 @@ def micro_bench(
         broadcast_buffers=False,
         bucket_cap_mb=64,
     )
-    gpu_data = load_micro_bench_data("swin_moe_micro_bench_data", 100, 128, logger)
-    for in_data in gpu_data:
+    gpu_data = load_micro_bench_data(
+        "swin_moe_micro_bench_data", config.DATA.BATCH_SIZE, logger
+    )
+    in_data = gpu_data[moe_layer_start]
+
+    torch.cuda.synchronize()
+    logger.info("===> Start throughput benchmark")
+    dist.barrier()
+    for _idx in range(20):
         micro_moe_block_ddp(in_data)
+    torch.cuda.synchronize()
+    dist.barrier()
+    logger.info("Warmup done, start benchmarking")
+    start = time.time()
+    for _idx in range(100):
+        micro_moe_block_ddp(in_data)
+    torch.cuda.synchronize()
+    end = time.time()
+    logger.info(
+        f"Batch size: {config.DATA.BATCH_SIZE}, Throughput: { 100*config.DATA.BATCH_SIZE / (end - start)}"
+    )
 
 
-def load_micro_bench_data(data_dir: str, num_batches, bs: int, logger):
+def load_micro_bench_data(data_dir: str, bs: int, logger):
     logger.info(f"Loading micro-bench data from {data_dir}")
     data_dir_path = BRT_CACHE_PATH / f"datasets/{data_dir}"
     data_file_path = (
         data_dir_path
         / f"world_size_{dist.get_world_size()}"
-        / f"rank{dist.get_rank()}_{bs}.npy"
+        / f"rank{dist.get_rank()}_{bs}.npz"
     )
     data = np.load(data_file_path, allow_pickle=True)
-    num_batches = min(num_batches, len(data))
-    data_on_gpu = [torch.from_numpy(d).cuda() for d in data[:num_batches]]
+    data_on_gpu = [torch.from_numpy(d).cuda() for d in data]
     return data_on_gpu
 
 
@@ -291,8 +302,8 @@ def get_benchmark_data(data_loader, logger, num_batches=100):
 
 @torch.inference_mode()
 def gather_micro_bench_data(data_loader, model, logger):
-    brt_debug.set_one_off_profile_position(target=0)
-    bench_nums = len(data_loader)
+    brt_debug.set_targeted_profile_position(target=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    bench_nums = 1
     data_iter = iter(data_loader)
     batch_size = 0
     for _idx in range(bench_nums):

@@ -1,10 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+import itertools
 import pathlib
+from collections import OrderedDict
 from typing import Dict, List, Tuple
 
-from collections import OrderedDict
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -22,6 +23,56 @@ all dynamic models.
 """
 
 
+def sorted_k_even_partitions(seq, k, length):
+    """Returns a list of all unique k-partitions of `seq`.
+
+    Each partition is a list of parts, and each part is a tuple.
+
+    The parts in each individual partition will be sorted in shortlex
+    order (i.e., by length first, then lexicographically).
+
+    The overall list of partitions will then be sorted by the length
+    of their first part, the length of their second part, ...,
+    the length of their last part, and then lexicographically.
+    """
+    n = len(seq)
+    groups = []  # a list of lists, currently empty
+
+    def generate_partitions(i):
+        if i >= n:
+            yield list(map(tuple, groups))
+        else:
+            if n - i > (k - len(groups)) * length:
+                for group in groups:
+                    if len(group) < length:
+                        group.append(seq[i])
+                        yield from generate_partitions(i + 1)
+                        group.pop()
+                    # else:
+                    #     group.append(seq[i])
+                    #     yield from generate_partitions(i + 1)
+                    #     group.pop()
+
+            if len(groups) < k:
+                groups.append([seq[i]])
+                yield from generate_partitions(i + 1)
+                groups.pop()
+
+    result = generate_partitions(0)
+
+    # Sort the parts in each partition in shortlex order
+    result = [sorted(ps, key=lambda p: (len(p), p)) for ps in result]
+    # Sort partitions by the length of each part, then lexicographically.
+    result = sorted(result, key=lambda ps: (*map(len, ps), ps))
+
+    all_ordered_partitions = []
+
+    for partition in result:
+        all_ordered_partitions.extend(list(itertools.permutations(partition)))
+
+    return all_ordered_partitions
+
+
 def dump_trace(mod: nn.Module):
     scatter_results = []
     for _m_name, m in mod.named_modules():
@@ -36,6 +87,33 @@ def generate_experts_keys(experts_range: Dict[int, int]):
         for block_id in range(1, block_num, 2):
             experts_keys.append((layer_id, block_id))
     return experts_keys
+
+
+def generate_posible_placement(expert_num: int, world_size: int):
+    assert expert_num % world_size == 0
+    all_experts = list(range(expert_num))
+    possible_placement = sorted_k_even_partitions(
+        all_experts, world_size, expert_num // world_size
+    )
+    return possible_placement
+
+
+def adaptive_micro_bench_load(
+    model: nn.Module,
+    new_placement: List[List[int]],
+    target_expert_key: Tuple[int,int],
+    checkpoint_file: str,
+    placement_file: str = None,
+    global_expert_num: int = None,
+):
+    world_rank = dist.get_rank()
+    world_size = dist.get_world_size()
+    _experts_keys, rank_placement, placement_indices = generate_rank_placement(
+        world_rank, world_size, placement_file, global_expert_num
+    )
+    rank_placement[target_expert_key] = new_placement[world_rank]
+    placement_indices[target_expert_key] = list(itertools.chain.from_iterable(new_placement))
+    adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
 
 
 def generate_rank_placement(
@@ -68,8 +146,8 @@ def generate_rank_placement(
         placement_index = np.concatenate(placement_index, axis=None)
         placement_indices[expert_key] = torch.from_numpy(placement_index)
 
-    if placement_file is None:
-        placement_indices = None
+    # if placement_file is None:
+    #     placement_indices = None
 
     return experts_keys, rank_placement, placement_indices
 
@@ -168,7 +246,9 @@ def adaptive_load_checkpoint(
             origin_wg_weight = state_dict[
                 f"layers.{k[0]}.blocks.{k[1]}.mlp._moe_layer.gates.0.wg.weight"
             ]
-            new_wg_weight = torch.index_select(origin_wg_weight, 0, placement_indices[k])
+            new_wg_weight = torch.index_select(
+                origin_wg_weight, 0, placement_indices[k]
+            )
             state_dict[
                 f"layers.{k[0]}.blocks.{k[1]}.mlp._moe_layer.gates.0.wg.weight"
             ] = new_wg_weight
