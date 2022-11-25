@@ -24,7 +24,13 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import deterministic_random_generator, profile_v2
-from brt.runtime.placement import dump_trace, adaptive_load, generate_experts_keys
+from brt.runtime.placement import (
+    dump_trace,
+    adaptive_load,
+    generate_experts_keys,
+    adaptive_micro_bench_load,
+    generate_posible_placement,
+)
 from brt.runtime.pkg_info import BRT_CACHE_PATH
 import brt.runtime.debug as brt_debug
 from config import get_config
@@ -176,59 +182,37 @@ def main(args, config, ds_init):
 
     checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
     MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
-    if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
-        placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-        adaptive_load(
-            model_without_ddp,
-            checkpoint_file,
-            enable_locality=args.locality,
-            placement_file=placement_file,
-        )
-    else:
+    assert MOE_LAYER_VENDOR in ["brt_dist"]
+
+    if args.mode == "gather-micro":
         adaptive_load(
             model_without_ddp,
             checkpoint_file,
             enable_locality=args.locality,
             global_expert_num=16,
         )
-    torch.cuda.synchronize()
-    dist.barrier()
-
-    if args.mode == "gather-micro":
+        torch.cuda.synchronize()
+        dist.barrier()
         gather_micro_bench_data(data_loader_val, model, logger)
-    elif args.mode == "correctness":
-        print("===> Running correctness test")
-        check_correctness(model, args.batch_size)
-    elif args.mode == "trace":
-        print("===> Tracing model")
-        micro_bench(config, model, data_loader_val, logger, 0, 1)
-        print("===> Tracing model done, dumping to file")
-        dump_trace(model_without_ddp)
-
-    elif args.mode == "throughput":
-        throughput(data_loader_val, model, logger)
-    elif args.mode == "profile":
-        gpu_data, _batch_size = get_benchmark_data(data_loader_val, logger, 20)
-        profile_v2(model, gpu_data, MOE_LAYER_VENDOR)
-    else:
-        raise ValueError(f"Unknown mode: {args.mode}")
+    elif args.mode == "micro-bench":
+        micro_bench(config, model_without_ddp, 0, 1, checkpoint_file, logger)
 
 
 @torch.no_grad()
 def micro_bench(
     config,
-    model_no_ddp: MicroSwinV2TransformerMoE,
-    gpu_data,
-    logger,
+    model_without_ddp: MicroSwinV2TransformerMoE,
     moe_layer_start,
     moe_layer_end,
+    checkpoint_file,
+    logger,
 ):
     experts_range = {2: 18, 3: 2}
     experts_keys = generate_experts_keys(experts_range)
     start_moe_keys = experts_keys[moe_layer_start]
     end_moe_keys = experts_keys[moe_layer_end]
     assert start_moe_keys[0] == end_moe_keys[0]
-    moe_blocks = model_no_ddp.layers[start_moe_keys[0]].blocks[
+    moe_blocks = model_without_ddp.layers[start_moe_keys[0]].blocks[
         start_moe_keys[1] : end_moe_keys[1]
     ]
 
@@ -254,22 +238,27 @@ def micro_bench(
     )
     in_data = gpu_data[moe_layer_start]
 
-    torch.cuda.synchronize()
-    logger.info("===> Start throughput benchmark")
-    dist.barrier()
-    for _idx in range(20):
-        micro_moe_block_ddp(in_data)
-    torch.cuda.synchronize()
-    dist.barrier()
-    logger.info("Warmup done, start benchmarking")
-    start = time.time()
-    for _idx in range(100):
-        micro_moe_block_ddp(in_data)
-    torch.cuda.synchronize()
-    end = time.time()
-    logger.info(
-        f"Batch size: {config.DATA.BATCH_SIZE}, Throughput: { 100*config.DATA.BATCH_SIZE / (end - start)}"
-    )
+    possible_placement = generate_posible_placement(16, dist.get_world_size())
+    for placement in possible_placement:
+        adaptive_micro_bench_load(
+            model_without_ddp, placement, end_moe_keys, checkpoint_file, 16
+        )
+        torch.cuda.synchronize()
+        logger.info("===> Start throughput benchmark")
+        dist.barrier()
+        for _idx in range(20):
+            micro_moe_block_ddp(in_data)
+        torch.cuda.synchronize()
+        dist.barrier()
+        logger.info("Warmup done, start benchmarking")
+        start = time.time()
+        for _idx in range(100):
+            micro_moe_block_ddp(in_data)
+        torch.cuda.synchronize()
+        end = time.time()
+        logger.info(
+            f"Batch size: {config.DATA.BATCH_SIZE}, Throughput: { 100*config.DATA.BATCH_SIZE / (end - start)}"
+        )
 
 
 def load_micro_bench_data(data_dir: str, bs: int, logger):

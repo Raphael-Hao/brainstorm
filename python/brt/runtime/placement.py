@@ -64,11 +64,12 @@ def sorted_k_even_partitions(seq, k, length):
     result = [sorted(ps, key=lambda p: (len(p), p)) for ps in result]
     # Sort partitions by the length of each part, then lexicographically.
     result = sorted(result, key=lambda ps: (*map(len, ps), ps))
-
     all_ordered_partitions = []
 
     for partition in result:
-        all_ordered_partitions.extend(list(itertools.permutations(partition)))
+        ordered_partitions = list(itertools.permutations(partition))
+        ordered_partitions = [list(p) for p in ordered_partitions]
+        all_ordered_partitions.extend(ordered_partitions)
 
     return all_ordered_partitions
 
@@ -101,19 +102,25 @@ def generate_posible_placement(expert_num: int, world_size: int):
 def adaptive_micro_bench_load(
     model: nn.Module,
     new_placement: List[List[int]],
-    target_expert_key: Tuple[int,int],
+    target_expert_key: Tuple[int, int],
     checkpoint_file: str,
     placement_file: str = None,
     global_expert_num: int = None,
 ):
-    world_rank = dist.get_rank()
-    world_size = dist.get_world_size()
+    # world_rank = dist.get_rank()
+    # world_size = dist.get_world_size()
+    world_rank = 1
+    world_size = 2
     _experts_keys, rank_placement, placement_indices = generate_rank_placement(
         world_rank, world_size, placement_file, global_expert_num
     )
-    rank_placement[target_expert_key] = new_placement[world_rank]
-    placement_indices[target_expert_key] = list(itertools.chain.from_iterable(new_placement))
-    adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
+    rank_placement[target_expert_key] = list(new_placement[world_rank])
+    placement_indices[target_expert_key] = list(
+        itertools.chain.from_iterable(*new_placement)
+    )
+    print(f"placement_indices: {placement_indices}")
+    print(f"rank_placement: {rank_placement}")
+    # adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
 
 
 def generate_rank_placement(
