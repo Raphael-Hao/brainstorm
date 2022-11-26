@@ -272,13 +272,13 @@ def benchmark_serached_placement(
         model_without_ddp, best_searched_placement, checkpoint_file, 16
     )
     best_througput = benchmark_micro_ddp_model(
-        config, micro_moe_block_ddp, in_data, logger
+        config, micro_moe_block_ddp, in_data, "best", logger
     )
     adaptive_micro_bench_load(
         model_without_ddp, worst_searched_placement, checkpoint_file, 16
     )
     worst_througput = benchmark_micro_ddp_model(
-        config, micro_moe_block_ddp, in_data, logger
+        config, micro_moe_block_ddp, in_data, "worst", logger
     )
     logger.info(
         f"moe blocks: {moe_layer_start} - {moe_layer_end}, speedup: {best_througput/worst_througput}"
