@@ -194,7 +194,7 @@ def main(args, config, ds_init):
         dist.barrier()
         gather_micro_bench_data(data_loader_val, model, logger)
     elif args.mode == "micro-bench":
-        micro_bench(config, model_without_ddp, 0, 0, checkpoint_file, logger)
+        micro_bench(config, model_without_ddp, 1, 1, checkpoint_file, logger)
 
 
 @torch.inference_mode()
@@ -257,6 +257,7 @@ def micro_bench(
         dist.barrier()
         # print(micro_moe_block_ddp(in_data).sum())
         for _idx in range(20):
+            # print(in_data.sum())
             micro_moe_block_ddp(in_data)
         torch.cuda.synchronize()
         dist.barrier()
