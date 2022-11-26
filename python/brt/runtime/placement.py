@@ -90,9 +90,28 @@ def generate_experts_keys(experts_range: Dict[int, int]):
     return experts_keys
 
 
-def generate_deterministic_rand_placement(
+def placement_permute_generator(
+    placement: List[List[int]],
+) -> Iterator[List[List[int]]]:
+    np.random.seed(0)
+    used_placement = set()
+    while True:
+        permuted_placement = np.random.permutation(placement)
+        tupled_placement = tuple([tuple(p) for p in permuted_placement])
+        if tupled_placement in used_placement:
+            continue
+        used_placement.add(tupled_placement)
+        yield permuted_placement
+
+
+def permute_placement(placement: List[List[int]], seed=0):
+    np.random.seed(seed)
+    return np.random.permutation(placement)
+
+
+def deterministic_rand_placement_generator(
     expert_num: int, world_size: int
-) -> Iterator[List[np.ndarray]]:
+) -> Iterator[List[List[int]]]:
     assert expert_num % world_size == 0
     np.random.seed(0)
     all_experts = list(range(expert_num))
@@ -100,7 +119,7 @@ def generate_deterministic_rand_placement(
     while True:
         placement_indice = np.random.permutation(all_experts)
         placement = np.split(placement_indice, world_size)
-        placement = [np.sort(p) for p in placement]
+        placement = [list(np.sort(p)) for p in placement]
         tupled_placement = tuple([tuple(p) for p in placement])
         if tupled_placement in used_placement:
             continue
@@ -108,7 +127,7 @@ def generate_deterministic_rand_placement(
         yield placement
 
 
-def generate_posible_placement(expert_num: int, world_size: int):
+def possible_placement_generator(expert_num: int, world_size: int):
     assert expert_num % world_size == 0
     all_experts = list(range(expert_num))
     possible_placement = sorted_k_even_partitions(
@@ -119,8 +138,7 @@ def generate_posible_placement(expert_num: int, world_size: int):
 
 def adaptive_micro_bench_load(
     model: nn.Module,
-    new_placement: List[List[int]],
-    target_expert_key: Tuple[int, int],
+    new_placements: Dict[Tuple[int, int], List[List[int]]],
     checkpoint_file: str,
     global_expert_num: int = None,
 ):
@@ -129,9 +147,10 @@ def adaptive_micro_bench_load(
     _experts_keys, rank_placement, placement_indices = generate_rank_placement(
         world_rank, world_size, None, global_expert_num
     )
-    rank_placement[target_expert_key] = list(new_placement[world_rank])
-    placement_index = np.array(list(itertools.chain.from_iterable(new_placement)))
-    placement_indices[target_expert_key] = torch.from_numpy(placement_index)
+    for expert_key, placement in new_placements.items():
+        rank_placement[expert_key] = list(placement[world_rank])
+        placement_index = np.array(list(itertools.chain.from_iterable(placement)))
+        placement_indices[expert_key] = torch.from_numpy(placement_index)
     adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
 
 
@@ -185,29 +204,12 @@ def adaptive_load(
     )
     adaptive_load_checkpoint(model, checkpoint_file, rank_placement, placement_indices)
     # debug_helper(model, placement_indices)
-    # adaptive_load_placement(model, placement_indices)
     locality_enabled_router = {"scatter": [], "gather": []}
     if enable_locality:
         locality_enabled_router["scatter"].append(experts_keys[0])
         locality_enabled_router["gather"].append(experts_keys[-1])
         print(f"locality_enabled_router: {locality_enabled_router}")
     adaptive_set_locality(model, locality_enabled_router)
-
-
-def adaptive_load_placement(
-    model: nn.Module,
-    placement_indices: "OrderedDict[Tuple[int, int], torch.Tensor]" = None,
-):
-    # layers.{layer_id}.blocks.{block_id}.mlp._moe_layer.scatter
-    if placement_indices is None:
-        return
-    for _m_name, m in model.named_modules():
-        if is_router(m) and "scatter" in m._router_type:
-            expert_key = tuple([int(_m_name.split(".")[i]) for i in [1, 3]])
-            print(
-                f"setting placement for {_m_name} with {placement_indices[expert_key]}"
-            )
-            m.fabric.placement_indices = placement_indices[expert_key]
 
 
 def adaptive_load_checkpoint(

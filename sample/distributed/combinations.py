@@ -2,9 +2,9 @@
 # Licensed under the MIT license.
 
 #%%
-from brt.runtime.placement import adaptive_micro_bench_load, generate_posible_placement
+from brt.runtime.placement import adaptive_micro_bench_load, posible_placement_generator
 
-possible_placement = generate_posible_placement(16, 2)
+possible_placement = posible_placement_generator(16, 2)
 print(possible_placement)
 print(len(possible_placement))
 

@@ -4,6 +4,7 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu
 # --------------------------------------------------------
+from typing import Dict, List, Tuple
 import argparse
 import itertools
 import json
@@ -27,20 +28,28 @@ import torch.distributed as dist
 import torch.nn as nn
 from brt.runtime.benchmark import deterministic_random_generator
 from brt.runtime.pkg_info import BRT_CACHE_PATH
-from brt.runtime.placement import dump_trace  # pylint: disable=unused-import
+
+# pylint: disable=unused-import
 from brt.runtime.placement import (
     adaptive_load,
     adaptive_micro_bench_load,
+    dump_trace,
+    deterministic_rand_placement_generator,
     generate_experts_keys,
-    generate_posible_placement,
-    generate_deterministic_rand_placement,
+    possible_placement_generator,
+    permute_placement,
 )
+
+# pylint: enable=unused-import
+
+
 from config import get_config
 from data import build_loader
 from logger import create_logger
 from models import build_model
 from models.micro_swin_v2_moe import MicroSwinV2TransformerMoE
 from utils import create_ds_config, hook_scale_grad
+
 
 warnings.filterwarnings(
     "ignore",
@@ -118,15 +127,7 @@ def parse_option():
         "--mode",
         type=str,
         default="throughput",
-        choices=[
-            "throughput",
-            "correctness",
-            "trace",
-            "gather-micro",
-            "profile",
-            "valid",
-            "micro-bench",
-        ],
+        choices=["gather-micro", "search-end", "bench-searched"],
     )
     parser.add_argument("--placement", type=str, default=None)
     parser.add_argument("--locality", action="store_true", default=False)
@@ -193,17 +194,23 @@ def main(args, config, ds_init):
         torch.cuda.synchronize()
         dist.barrier()
         gather_micro_bench_data(data_loader_val, model, logger)
-    elif args.mode == "micro-bench":
-        micro_bench(config, model_without_ddp, 1, 1, checkpoint_file, logger)
+    elif args.mode == "search-end":
+        search_end_layer_placement(
+            config, model_without_ddp, 1, 1, checkpoint_file, logger
+        )
+    elif args.mode == "bench-searched":
+        benchmark_permuted_serached_placement(
+            config, model_without_ddp, 0, 1, checkpoint_file, logger
+        )
+    elif args.mode == "search-multiple":
+        pass
 
 
-@torch.inference_mode()
-def micro_bench(
+def make_micro_bench_model(
     config,
     model_without_ddp: MicroSwinV2TransformerMoE,
     moe_layer_start: int,
     moe_layer_end: int,
-    checkpoint_file: str,
     logger,
 ):
     experts_range = {2: 18, 3: 2}
@@ -237,9 +244,147 @@ def micro_bench(
     gpu_data = load_micro_bench_data(
         "swin_moe_micro_bench_data", config.DATA.BATCH_SIZE, logger
     )
+
     in_data = gpu_data[moe_layer_start]
 
-    placement_generator = generate_deterministic_rand_placement(
+    return start_moe_keys, end_moe_keys, micro_moe_block_ddp, in_data
+
+
+@torch.inference_mode()
+def benchmark_serached_placement(
+    config,
+    model_without_ddp: MicroSwinV2TransformerMoE,
+    moe_layer_start: int,
+    moe_layer_end: int,
+    checkpoint_file: str,
+    logger,
+):
+    _, _, micro_moe_block_ddp, in_data = make_micro_bench_model(
+        config, model_without_ddp, moe_layer_start, moe_layer_end, logger
+    )
+    best_searched_placement = load_searched_placement(
+        config, "best", moe_layer_start, moe_layer_end, logger
+    )
+    worst_searched_placement = load_searched_placement(
+        config, "worst", moe_layer_start, moe_layer_end, logger
+    )
+    adaptive_micro_bench_load(
+        model_without_ddp, best_searched_placement, checkpoint_file, 16
+    )
+    best_througput = benchmark_micro_ddp_model(
+        config, micro_moe_block_ddp, in_data, logger
+    )
+    adaptive_micro_bench_load(
+        model_without_ddp, worst_searched_placement, checkpoint_file, 16
+    )
+    worst_througput = benchmark_micro_ddp_model(
+        config, micro_moe_block_ddp, in_data, logger
+    )
+    logger.info(
+        f"moe blocks: {moe_layer_start} - {moe_layer_end}, speedup: {best_througput/worst_througput}"
+    )
+
+
+@torch.inference_mode()
+def benchmark_permuted_serached_placement(
+    config,
+    model_without_ddp: MicroSwinV2TransformerMoE,
+    moe_layer_start: int,
+    moe_layer_end: int,
+    checkpoint_file: str,
+    logger,
+):
+    _, end_moe_key, micro_moe_block_ddp, in_data = make_micro_bench_model(
+        config, model_without_ddp, moe_layer_start, moe_layer_end, logger
+    )
+    best_searched_placement = load_searched_placement(
+        config, "best", moe_layer_start, moe_layer_end, logger
+    )
+    worst_searched_placement = load_searched_placement(
+        config, "worst", moe_layer_start, moe_layer_end, logger
+    )
+    adaptive_micro_bench_load(
+        model_without_ddp, best_searched_placement, checkpoint_file, 16
+    )
+    best_througput = benchmark_micro_ddp_model(
+        config, micro_moe_block_ddp, in_data, "best", logger
+    )
+    adaptive_micro_bench_load(
+        model_without_ddp, worst_searched_placement, checkpoint_file, 16
+    )
+    worst_througput = benchmark_micro_ddp_model(
+        config, micro_moe_block_ddp, in_data, "worst", logger
+    )
+    logger.info(
+        f"Original: moe blocks: {moe_layer_start} - {moe_layer_end}, speedup: {best_througput/worst_througput}"
+    )
+
+    all_best_througput = 0
+    all_worst_througput = 0
+    for i in range(10):
+        placement = best_searched_placement[end_moe_key]
+        best_searched_placement[end_moe_key] = permute_placement(placement, i)
+        # print(f"best placement: {best_searched_placement}")
+        placement = worst_searched_placement[end_moe_key]
+        worst_searched_placement[end_moe_key] = permute_placement(placement, i)
+        # print(f"worst placement: {worst_searched_placement}")
+        adaptive_micro_bench_load(
+            model_without_ddp, best_searched_placement, checkpoint_file, 16
+        )
+        best_througput = benchmark_micro_ddp_model(
+            config, micro_moe_block_ddp, in_data, "best", logger
+        )
+        all_best_througput += best_througput
+        adaptive_micro_bench_load(
+            model_without_ddp, worst_searched_placement, checkpoint_file, 16
+        )
+        worst_througput = benchmark_micro_ddp_model(
+            config, micro_moe_block_ddp, in_data, "worst", logger
+        )
+        all_worst_througput += worst_througput
+        logger.info(
+            f"Permutation iter: {i}, moe blocks: {moe_layer_start} - {moe_layer_end}, speedup: {best_througput/worst_througput}"
+        )
+    logger.info(f"Average permuted speedup: {all_best_througput/all_worst_througput}")
+
+
+@torch.inference_mode()
+def benchmark_micro_ddp_model(config, model, in_data, item, logger):
+    model.eval()
+    torch.cuda.synchronize()
+    logger.info(f"===> Start {item} throughput benchmark")
+    dist.barrier()
+    # print(micro_moe_block_ddp(in_data).sum())
+    for _idx in range(20):
+        # print(in_data.sum())
+        model(in_data)
+    torch.cuda.synchronize()
+    dist.barrier()
+    # logger.info("Warmup done, start benchmarking")
+    start = time.time()
+    for _idx in range(40):
+        model(in_data)
+    torch.cuda.synchronize()
+    dist.barrier()
+    end = time.time()
+    throughput = config.DATA.BATCH_SIZE * 40 / (end - start)
+    return throughput
+
+
+@torch.inference_mode()
+def search_end_layer_placement(
+    config,
+    model_without_ddp: MicroSwinV2TransformerMoE,
+    moe_layer_start: int,
+    moe_layer_end: int,
+    checkpoint_file: str,
+    logger,
+):
+    _, end_moe_keys, micro_moe_block_ddp, in_data = make_micro_bench_model(
+        config, model_without_ddp, moe_layer_start, moe_layer_end, logger
+    )
+
+    placement_generator = deterministic_rand_placement_generator(
         16, dist.get_world_size()
     )
     best_throughput = 0
@@ -249,8 +394,10 @@ def micro_bench(
     idx = 0
     for placement in placement_generator:
         idx += 1
+        modified_placements = {}
+        modified_placements[end_moe_keys] = placement
         adaptive_micro_bench_load(
-            model_without_ddp, placement, end_moe_keys, checkpoint_file, 16
+            model_without_ddp, modified_placements, checkpoint_file, 16
         )
         torch.cuda.synchronize()
         logger.info("===> Start throughput benchmark")
@@ -292,6 +439,28 @@ def micro_bench(
         logger.info(
             f"{idx} ===> Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {best_throughput/worst_throughput:.2f}"
         )
+
+
+def load_searched_placement(
+    config, which_one: str, moe_layer_start: int, moe_layer_end: int, logger
+) -> Dict[Tuple[int, int], List[List[int]]]:
+    world_size = dist.get_world_size()
+    experts_range = {2: 18, 3: 2}
+    experts_keys = generate_experts_keys(experts_range)
+    capacity_factor = config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR
+    assert which_one in ["best", "worst"]
+    searched_placement_file = f"micro_results/{moe_layer_start}_{moe_layer_end}.{capacity_factor}.{which_one}_{world_size}_placement.csv"
+    logger.info(f"Loading searched placement from {searched_placement_file}")
+    searched_placement_list = np.loadtxt(
+        searched_placement_file, dtype=np.int32, delimiter=","
+    )
+    assert len(searched_placement_list) == moe_layer_end - moe_layer_start + 1
+    searched_placement = {}
+    for i in range(moe_layer_start, moe_layer_end + 1):
+        placement = np.split(searched_placement_list[i], world_size)
+        placement = [list(p) for p in placement]
+        searched_placement[experts_keys[i]] = placement
+    return searched_placement
 
 
 def load_micro_bench_data(data_dir: str, bs: int, logger):
