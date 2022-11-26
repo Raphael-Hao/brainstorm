@@ -63,3 +63,5 @@ mkdir -p /root/.vscode-server/data/Machine/
 cp ./vscode/settings_global.json /root/.vscode-server/data/Machine/settings.json
 bash blob/mount.sh
 bash blob/prepare_dataset_ckpt.sh
+cat ./az_funcs >> ~/.bashrc
+cat ./az_funcs >> ~/.zshrc
