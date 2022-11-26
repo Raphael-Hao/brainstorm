@@ -33,6 +33,7 @@ from brt.runtime.placement import (
     adaptive_micro_bench_load,
     generate_experts_keys,
     generate_posible_placement,
+    generate_deterministic_rand_placement,
 )
 from config import get_config
 from data import build_loader
@@ -193,16 +194,16 @@ def main(args, config, ds_init):
         dist.barrier()
         gather_micro_bench_data(data_loader_val, model, logger)
     elif args.mode == "micro-bench":
-        micro_bench(config, model_without_ddp, 0, 1, checkpoint_file, logger)
+        micro_bench(config, model_without_ddp, 0, 0, checkpoint_file, logger)
 
 
 @torch.inference_mode()
 def micro_bench(
     config,
     model_without_ddp: MicroSwinV2TransformerMoE,
-    moe_layer_start,
-    moe_layer_end,
-    checkpoint_file,
+    moe_layer_start: int,
+    moe_layer_end: int,
+    checkpoint_file: str,
     logger,
 ):
     experts_range = {2: 18, 3: 2}
@@ -211,7 +212,7 @@ def micro_bench(
     end_moe_keys = experts_keys[moe_layer_end]
     assert start_moe_keys[0] == end_moe_keys[0]
     moe_blocks = model_without_ddp.layers[start_moe_keys[0]].blocks[
-        start_moe_keys[1] : end_moe_keys[1]
+        start_moe_keys[1] : end_moe_keys[1] + 1
     ]
     logger.info(moe_blocks)
 
@@ -238,47 +239,57 @@ def micro_bench(
     )
     in_data = gpu_data[moe_layer_start]
 
-    possible_placement = generate_posible_placement(16, dist.get_world_size())
+    placement_generator = generate_deterministic_rand_placement(
+        16, dist.get_world_size()
+    )
     best_throughput = 0
     best_placement = None
     worst_throughput = 1e10
     worst_placement = None
-    placement_num = len(possible_placement)
-    for idx, placement in enumerate(possible_placement):
+    idx = 0
+    for placement in placement_generator:
+        idx += 1
         adaptive_micro_bench_load(
             model_without_ddp, placement, end_moe_keys, checkpoint_file, 16
         )
         torch.cuda.synchronize()
         logger.info("===> Start throughput benchmark")
         dist.barrier()
+        # print(micro_moe_block_ddp(in_data).sum())
         for _idx in range(20):
             micro_moe_block_ddp(in_data)
         torch.cuda.synchronize()
         dist.barrier()
         logger.info("Warmup done, start benchmarking")
         start = time.time()
-        for _idx in range(200):
+        for _idx in range(40):
             micro_moe_block_ddp(in_data)
         torch.cuda.synchronize()
         dist.barrier()
         end = time.time()
-        throughput = config.DATA.BATCH_SIZE * 200 / (end - start)
+        throughput = config.DATA.BATCH_SIZE * 40 / (end - start)
         if best_throughput < throughput:
             best_throughput = throughput
             best_placement = np.array(list(itertools.chain.from_iterable(placement)))
             if dist.get_rank() == 0:
                 np.savetxt(
-                    "best_placement.csv", best_placement, fmt="%s", delimiter=","
+                    f"micro_results/{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.best_placement.csv",
+                    best_placement,
+                    fmt="%s",
+                    delimiter=",",
                 )
         if worst_throughput > throughput:
             worst_throughput = throughput
             worst_placement = np.array(list(itertools.chain.from_iterable(placement)))
             if dist.get_rank() == 0:
                 np.savetxt(
-                    "worst_placement.csv", worst_placement, fmt="%s", delimiter=","
+                    f"micro_results/{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.worst_placement.csv",
+                    worst_placement,
+                    fmt="%s",
+                    delimiter=",",
                 )
         logger.info(
-            f"{idx}/{placement_num} ===> Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {best_throughput/worst_throughput:.2f}"
+            f"{idx} ===> Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {best_throughput/worst_throughput:.2f}"
         )
 
 
@@ -447,7 +458,7 @@ if __name__ == "__main__":
 
     os.makedirs(config.OUTPUT, exist_ok=True)
     logger = create_logger(
-        output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name=f"{config.MODEL.NAME}"
+        output_dir=config.OUTPUT, dist_rank=dist.get_rank(), name="micro"
     )
 
     if ds_init is not None:

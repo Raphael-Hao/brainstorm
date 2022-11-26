@@ -1,6 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-
+from typing import Iterator
 import itertools
 import pathlib
 from collections import OrderedDict
@@ -90,6 +90,24 @@ def generate_experts_keys(experts_range: Dict[int, int]):
     return experts_keys
 
 
+def generate_deterministic_rand_placement(
+    expert_num: int, world_size: int
+) -> Iterator[List[np.ndarray]]:
+    assert expert_num % world_size == 0
+    np.random.seed(0)
+    all_experts = list(range(expert_num))
+    used_placement = set()
+    while True:
+        placement_indice = np.random.permutation(all_experts)
+        placement = np.split(placement_indice, world_size)
+        placement = [np.sort(p) for p in placement]
+        tupled_placement = tuple([tuple(p) for p in placement])
+        if tupled_placement in used_placement:
+            continue
+        used_placement.add(tupled_placement)
+        yield placement
+
+
 def generate_posible_placement(expert_num: int, world_size: int):
     assert expert_num % world_size == 0
     all_experts = list(range(expert_num))
@@ -106,10 +124,8 @@ def adaptive_micro_bench_load(
     checkpoint_file: str,
     global_expert_num: int = None,
 ):
-    # world_rank = dist.get_rank()
-    # world_size = dist.get_world_size()
-    world_rank = 1
-    world_size = 2
+    world_rank = dist.get_rank()
+    world_size = dist.get_world_size()
     _experts_keys, rank_placement, placement_indices = generate_rank_placement(
         world_rank, world_size, None, global_expert_num
     )

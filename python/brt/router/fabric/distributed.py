@@ -3,6 +3,7 @@
 from typing import List, Union
 
 import brt.runtime.distributed as brt_dist
+import torch.distributed as dist
 import torch
 
 # pylint: disable=no-name-in-module
@@ -56,6 +57,8 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         #     score = score.index_select(1, self.placement_indices)
         #     # print("score.shape", score.shape)
         capacity = loads.capacity
+        # print(f"rank {dist.get_rank()} loads {loads}")
+
         # print("capacity", capacity)
         if self.route_logics[0] == "1d":
             if self.transforms[0]:
