@@ -196,7 +196,7 @@ def main(args, config, ds_init):
         gather_micro_bench_data(data_loader_val, model, logger)
     elif args.mode == "search-end":
         search_end_layer_placement(
-            config, model_without_ddp, 2, 2, checkpoint_file, logger
+            config, model_without_ddp, 3, 3, checkpoint_file, logger
         )
     elif args.mode == "bench-searched":
         benchmark_permuted_serached_placement(

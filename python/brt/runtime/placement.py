@@ -113,7 +113,7 @@ def deterministic_rand_placement_generator(
     expert_num: int, world_size: int
 ) -> Iterator[List[List[int]]]:
     assert expert_num % world_size == 0
-    np.random.seed(0)
+    np.random.seed(1234135)
     all_experts = list(range(expert_num))
     used_placement = set()
     while True:
