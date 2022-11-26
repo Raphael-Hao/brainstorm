@@ -437,7 +437,7 @@ def search_end_layer_placement(
                     delimiter=",",
                 )
         logger.info(
-            f"{idx} ===> Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {best_throughput/worst_throughput:.2f}"
+            f"{idx} ===>Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {best_throughput/worst_throughput:.2f}"  # pylint: disable=line-too-long
         )
 
 
