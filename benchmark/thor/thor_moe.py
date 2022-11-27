@@ -7,7 +7,6 @@
 
 import torch
 import torch.nn as nn
-from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
 from brt.jit import make_jit_kernel
 from brt.runtime.proto_tensor import collect_proto_attr_stack, init_proto_tensor
 from brt.app.rand import RandScatter

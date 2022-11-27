@@ -59,8 +59,8 @@ $sudo_cmd apt-get update && $sudo_cmd apt-get install -y blobfuse dotnet-sdk-6.0
 mkdir -p ../.vscode
 cp ./vscode/c_cpp_properties.json ../.vscode/c_cpp_properties.json
 cp ./vscode/settings_workspace.json ../.vscode/settings.json
-mkdir -p /root/.vscode-server/data/Machine/
-cp ./vscode/settings_global.json /root/.vscode-server/data/Machine/settings.json
+mkdir -p ~/.vscode-server/data/Machine/
+cp ./vscode/settings_global.json ~/.vscode-server/data/Machine/settings.json
 bash blob/mount.sh
 bash blob/prepare_dataset_ckpt.sh
 cat ./az_funcs >> ~/.bashrc

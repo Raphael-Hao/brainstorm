@@ -96,7 +96,7 @@ def benchmark_eval(args):
     cfg = setup(args)
     model = build_model(cfg)
     model.eval()
-    logger.info("Model:\n{}".format(model))
+    logger.info(f"Model:\n{model}")
     DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
 
     cfg.defrost()
