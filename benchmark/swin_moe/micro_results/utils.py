@@ -18,6 +18,7 @@ def merge_placement(
     np.savetxt(all_placement_file, all_placement, delimiter=",", fmt="%d")
 
 # %%
-merge_placement(0, 1, 4.0, 8, "best")
+merge_placement(0, 8, 4.0, 8, "best")
+merge_placement(0, 8, 4.0, 8, "worst")
 
 # %%

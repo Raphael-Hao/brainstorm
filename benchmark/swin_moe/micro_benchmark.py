@@ -127,7 +127,7 @@ def parse_option():
         "--mode",
         type=str,
         default="throughput",
-        choices=["gather-micro", "search-end", "bench-searched"],
+        choices=["gather-micro", "search-end", "bench-searched", "bench-permuted"],
     )
     parser.add_argument("--placement", type=str, default=None)
     parser.add_argument("--locality", action="store_true", default=False)
@@ -196,14 +196,16 @@ def main(args, config, ds_init):
         gather_micro_bench_data(data_loader_val, model, logger)
     elif args.mode == "search-end":
         search_end_layer_placement(
-            config, model_without_ddp, 3, 3, checkpoint_file, logger
+            config, model_without_ddp, 8, 8, checkpoint_file, logger
         )
     elif args.mode == "bench-searched":
+        benchmark_serached_placement(
+            config, model_without_ddp, 0, 8, checkpoint_file, logger
+        )
+    elif args.mode == "bench-permuted":
         benchmark_permuted_serached_placement(
             config, model_without_ddp, 0, 1, checkpoint_file, logger
         )
-    elif args.mode == "search-multiple":
-        pass
 
 
 def make_micro_bench_model(
@@ -421,7 +423,7 @@ def search_end_layer_placement(
             best_placement = np.array(list(itertools.chain.from_iterable(placement)))
             if dist.get_rank() == 0:
                 np.savetxt(
-                    f"micro_results/{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.best_placement.csv",
+                    f"micro_results/{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.best_{dist.get_world_size()}_placement.csv",
                     best_placement,
                     fmt="%s",
                     delimiter=",",
@@ -431,7 +433,7 @@ def search_end_layer_placement(
             worst_placement = np.array(list(itertools.chain.from_iterable(placement)))
             if dist.get_rank() == 0:
                 np.savetxt(
-                    f"micro_results/{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.worst_placement.csv",
+                    f"micro_results/{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.worst_{dist.get_world_size()}_placement.csv",
                     worst_placement,
                     fmt="%s",
                     delimiter=",",
