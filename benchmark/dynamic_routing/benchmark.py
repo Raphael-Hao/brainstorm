@@ -228,10 +228,10 @@ def main(args):
         # MemoryStats.print_cuda_stats()
 
         backbone = pin_memory(backbone.cpu())
-        # pass_name = "OnDemandMemoryPlanPass"
-        # memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
-        pass_name = "PredictorMemoryPlanPass"
-        memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
+        pass_name = "OnDemandMemoryPlanPass"
+        memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
+        # pass_name = "PredictorMemoryPlanPass"
+        # memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
         memory_plan_pass.run_on_graph()
         initial_loaders, new_backbone = memory_plan_pass.finalize()
         # print(new_backbone.code)

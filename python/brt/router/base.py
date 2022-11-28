@@ -34,7 +34,7 @@ class RouterBase(nn.Module):
             self.capture_mode = capture_mode
             captured_fabric_type = os.environ.get("BRT_CAPTURED_FABRIC_TYPE")
             if captured_fabric_type is not None:
-                self.captured_fabric_type = captured_fabric_type.split(":")
+                self.captured_fabric_type = captured_fabric_type.split(",")
             else:
                 self.captured_fabric_type = ["dispatch"]
         else:
@@ -149,7 +149,6 @@ class RouterBase(nn.Module):
             self.load_history = self.load_history + current_load
 
     def capture_laod_from_protocol(self, loads: torch.Tensor):
-
         loads_np = loads.cpu().numpy()
         if self.history_len == 0:
             self.load_history = np.zeros_like(loads_np, dtype=np.float64)
