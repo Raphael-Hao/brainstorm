@@ -123,9 +123,9 @@ fi
 LAUNCH_ARGS+=(
     --cfg configs/"${EXPERT_NUM}"expert_"${GPU_NUM}"GPU.yaml
     --batch-size "$BS"
-    --data-path "${BRT_CACHE_PATH}"/datasets/imagenet22k
+    --data-path "${BRT_CACHE_PATH}"/dataset/imagenet22k
     --output ./results/MoE/
-    --resume "${BRT_CACHE_PATH}"/ckpt/swin_moe/small_swin_moe_32GPU_16expert/model.pth
+    --resume "${BRT_CACHE_PATH}"/ckpt/swinv2_moe_small/model.pth
 )
 
 echo "Final launch args:" "${LAUNCH_ARGS[@]}"
