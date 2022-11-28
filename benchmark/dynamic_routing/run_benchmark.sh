@@ -5,8 +5,9 @@
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
 ARGUMENT_LIST=(
-    "arch:"      # an option with a required argument
-    "benchmark:" # an option with a required argument
+    "arch:"        # an option with a required argument
+    "benchmark:"   # an option with a required argument
+    "memory-mode:" # an option with a required argument
 )
 
 # read arguments
@@ -30,13 +31,30 @@ while [[ $# -gt 0 ]]; do
         BENCHMARK=$2
         shift 2
         ;;
+    --memory-mode)
+        MEMORY_MODE=$2
+        shift 2
+        ;;
     *)
         break
         ;;
     esac
 done
 
+LAUNCH_ARGS=(
+    --arch "$ARCH"
+    --benchmark "$BENCHMARK"
+)
+
+if [[ "${BENCHMARK}" == "memory_plan" ]]; then
+    if [[ -n "${MEMORY_MODE}" ]]; then
+        LAUNCH_ARGS+=(
+            --memory-mode "$MEMORY_MODE"
+        )
+    fi
+fi
+
 export BRT_CACHE_PATH="$script_dir/../../.cache"
 export BRT_CAPTURE_STATS=True
 export BRT_CAPTURED_FABRIC_TYPE=dispatch,combine
-python benchmark.py --arch "$ARCH" --benchmark "$BENCHMARK"
+python benchmark.py "${LAUNCH_ARGS[@]}"

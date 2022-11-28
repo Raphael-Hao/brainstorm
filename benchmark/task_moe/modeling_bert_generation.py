@@ -283,6 +283,7 @@ class BertGenerationLayer(nn.Module):
         encoder_attention_mask: Optional[torch.FloatTensor] = None,
         past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
+        task_ids: Optional[torch.LongTensor] = None,
     ) -> Tuple[torch.Tensor]:
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
@@ -328,9 +329,8 @@ class BertGenerationLayer(nn.Module):
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
 
-        layer_output = apply_chunking_to_forward(
-            self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, attention_output
-        )
+        layer_output = self.feed_forward_chunk(attention_output)
+
         outputs = (layer_output,) + outputs
 
         # if decoder, return the attn key/values as the last output
