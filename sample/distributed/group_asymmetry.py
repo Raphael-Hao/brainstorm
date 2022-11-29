@@ -1,6 +1,8 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+#%%
+
 import torch
 import torch.distributed as dist
 import brt.runtime.distributed as brt_dist
@@ -16,7 +18,7 @@ brt_dist.is_nccl_activated(group)
 
 grain_size = 4
 capacity = 4
-group_size = 4
+group_size = 2
 
 tensor = torch.arange(
     local_rank * world_size * group_size * capacity * grain_size,
@@ -37,7 +39,7 @@ if local_rank == 0:
     print(f"all_in_loads: \n{all_in_loads}")
     print(f"all_out_loads: \n{all_in_loads.transpose(0, 1)}")
 
-out_data, out_loads, indices = brt_dist.group_asymmetry_a2a(tensor, loads, True)
+out_data, out_loads, indices = brt_dist.group_asymmetry_a2a(tensor, loads, False)
 all_out_loads = None
 if local_rank == 0:
     all_out_loads = [torch.empty_like(out_loads) for _ in range(world_size)]
@@ -83,3 +85,5 @@ if local_rank == 0:
 
 
 # timer.execute(lambda: torch_symmetry_a2a(tensor, loads), "dist.all_to_all_single")
+
+# %%

@@ -26,8 +26,10 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
         locality_aware: bool = False,
+        task_locality_aware: bool = False,
     ):
         self.locality_aware = locality_aware
+        self.task_locality_aware = task_locality_aware
         super().__init__(
             flow_num=flow_num,
             capacity_padding=capacity_padding,
@@ -91,7 +93,20 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
                 [route_indices, loads, score], a2a_resuslts[2]
             )
             brt_dist.set_reorder_indices(a2a_resuslts[2])
-
+        if self.task_locality_aware:
+            out_loads = a2a_resuslts[1]
+            useful_outflow = []
+            start_index = 0
+            for i in range(len(out_loads)):
+                useful_outflow.append(
+                    out_flow[start_index : start_index + out_loads[i].item()]
+                )
+                start_index += capacity
+            out_flow = torch.cat(useful_outflow, dim=0)
+            new_task_ids = torch.empty(
+                out_flow.size(0), dtype=torch.int64, device=out_flow.device
+            ).fill_()
+            return out_flow
 
         out_flow.route_indices = route_indices
         out_flow.in_loads = loads
@@ -143,4 +158,3 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
             out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
 
         return out_flow
-
