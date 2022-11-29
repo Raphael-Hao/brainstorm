@@ -100,11 +100,10 @@ class JitKernelTest(unittest.TestCase):
         cuda_timer.stop(10, "brt_horiz_fusion")
 
         for i in range(4):
-            self.assertTrue(
-
-                torch.allclose(
+            self.assertTrue(torch.allclose(
                     sample_outputs[i], horiz_fused_inputs[2 + i * 4], atol=1e-5
                 )
+            )
 
     def test_hetero_fused_kernel(self):
         cuda_timer = CUDATimer()

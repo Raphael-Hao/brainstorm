@@ -16,7 +16,7 @@ from torch.nn import CrossEntropyLoss
 from transformers.activations import ACT2FN
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions, CausalLMOutputWithCrossAttentions
 from transformers.modeling_utils import PreTrainedModel
-from transformers.pytorch_utils import apply_chunking_to_forward, find_pruneable_heads_and_indices, prune_linear_layer
+from transformers.pytorch_utils import find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.utils import (
     add_code_sample_docstrings,
     add_start_docstrings,
@@ -329,7 +329,7 @@ class BertGenerationLayer(nn.Module):
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
 
-        layer_output = self.feed_forward_chunk(attention_output)
+        layer_output = self.feed_forward_chunk(attention_output, task_ids)
 
         outputs = (layer_output,) + outputs
 
@@ -339,7 +339,7 @@ class BertGenerationLayer(nn.Module):
 
         return outputs
 
-    def feed_forward_chunk(self, attention_output):
+    def feed_forward_chunk(self, attention_output, task_ids=None):
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
         return layer_output
@@ -365,6 +365,7 @@ class BertEncoder(nn.Module):
         output_attentions: Optional[bool] = False,
         output_hidden_states: Optional[bool] = False,
         return_dict: Optional[bool] = True,
+                task_ids: Optional[torch.Tensor] = None,
     ) -> Union[Tuple[torch.Tensor], BaseModelOutputWithPastAndCrossAttentions]:
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -399,6 +400,7 @@ class BertEncoder(nn.Module):
                     layer_head_mask,
                     encoder_hidden_states,
                     encoder_attention_mask,
+                    task_ids,
                 )
             else:
                 layer_outputs = layer_module(
@@ -409,6 +411,7 @@ class BertEncoder(nn.Module):
                     encoder_attention_mask,
                     past_key_value,
                     output_attentions,
+                    task_ids
                 )
 
             hidden_states = layer_outputs[0]
@@ -441,92 +444,6 @@ class BertEncoder(nn.Module):
             attentions=all_self_attentions,
             cross_attentions=all_cross_attentions,
         )
-
-
-def load_tf_weights_in_bert_generation(
-    model, tf_hub_path, model_class, is_encoder_named_decoder=False, is_encoder=False
-):
-    try:
-        import numpy as np
-        import tensorflow.compat.v1 as tf
-
-        import tensorflow_hub as hub
-        import tensorflow_text  # noqa: F401
-
-        tf.disable_eager_execution()
-    except ImportError:
-        logger.error(
-            "Loading a TensorFlow model in PyTorch, requires TensorFlow to be installed. Please see "
-            "https://www.tensorflow.org/install/ for installation instructions."
-        )
-        raise
-    tf_model = hub.Module(tf_hub_path)
-    init = tf.global_variables_initializer()
-    with tf.Session() as sess:
-        init.run()
-        all_variables = tf_model.variable_map
-        keep_track_variables = all_variables.copy()
-        for key in list(all_variables.keys()):
-            if "global" in key:
-                logger.info(f"Skipping {key}...")
-                continue
-            if not is_encoder:
-                model_pointer = getattr(model, model_class)
-            else:
-                model_pointer = model
-            is_embedding = False
-            logger.info(f"Trying to match {key}...")
-            # remove start_string = "module/bert/"
-            sub_layers = key.split("/")[2:]
-            if is_encoder_named_decoder and sub_layers[0] == "encoder":
-                logger.info(f"Skipping encoder layer {key} for decoder")
-                continue
-            if is_encoder and sub_layers[0] == "decoder":
-                logger.info(f"Skipping decoder layer {key} for encoder")
-                continue
-            for i, sub_layer in enumerate(sub_layers):
-                if sub_layer == "embeddings":
-                    is_embedding = True
-                elif sub_layer == "LayerNorm":
-                    is_embedding = False
-                if "layer" in sub_layer:
-                    model_pointer = model_pointer.layer[int(sub_layer.split("_")[-1])]
-                elif sub_layer in ["kernel", "gamma"]:
-                    model_pointer = model_pointer.weight
-                elif sub_layer == "beta":
-                    model_pointer = model_pointer.bias
-                elif sub_layer == "encdec":
-                    model_pointer = model_pointer.crossattention.self
-                elif sub_layer == "encdec_output":
-                    model_pointer = model_pointer.crossattention.output
-                elif is_encoder_named_decoder and sub_layer == "decoder":
-                    model_pointer = model_pointer.encoder
-                else:
-                    if sub_layer == "attention" and "encdec" in sub_layers[i + 1]:
-                        continue
-                    try:
-                        model_pointer = getattr(model_pointer, sub_layer)
-                    except AttributeError:
-                        logger.info(f"Skipping to initialize {key} at {sub_layer}...")
-                        raise AttributeError
-
-            array = np.asarray(sess.run(all_variables[key]))
-            if not is_embedding:
-                logger.info(f"Transposing numpy weight of shape {array.shape} for {key}")
-                array = np.transpose(array)
-            else:
-                model_pointer = model_pointer.weight
-
-            if model_pointer.shape != array.shape:
-                raise ValueError(f"Pointer shape {model_pointer.shape} and array shape {array.shape} mismatched")
-            logger.info(f"Initialize PyTorch weight {key}")
-
-            model_pointer.data = torch.from_numpy(array.astype(np.float32))
-            keep_track_variables.pop(key, None)
-
-        logger.info(f"Weights not copied to PyTorch model: {', '.join(keep_track_variables.keys())}")
-        return model
-
 
 class BertGenerationEmbeddings(nn.Module):
     """Construct the embeddings from word and position embeddings."""
@@ -720,6 +637,7 @@ class BertGenerationEncoder(BertGenerationPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        task_ids: Optional[torch.Tensor] = None,
     ) -> Union[Tuple, BaseModelOutputWithPastAndCrossAttentions]:
         r"""
         encoder_hidden_states  (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
@@ -810,6 +728,7 @@ class BertGenerationEncoder(BertGenerationPreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            task_ids=task_ids,
         )
         sequence_output = encoder_outputs[0]
 
@@ -881,6 +800,7 @@ class BertGenerationDecoder(BertGenerationPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        task_ids: Optional[torch.Tensor] = None,
     ) -> Union[Tuple, CausalLMOutputWithCrossAttentions]:
         r"""
         encoder_hidden_states  (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
