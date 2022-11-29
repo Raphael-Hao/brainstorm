@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 import os
-from typing import Callable, Dict, Type, Any
+from typing import Callable, Dict, Any
 
 import torch
 import torch.nn as nn
@@ -11,7 +11,7 @@ from brt.router.utils import make_kwargs
 
 logger = log.get_logger(__file__)
 
-__all__ = ["ProtocolBase", "ProtocolFactory"]
+__all__ = ["ProtocolBase"]
 
 
 class ProtocolBase(nn.Module):

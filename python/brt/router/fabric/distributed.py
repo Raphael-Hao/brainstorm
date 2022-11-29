@@ -3,7 +3,6 @@
 from typing import List, Union
 
 import brt.runtime.distributed as brt_dist
-import torch.distributed as dist
 import torch
 
 # pylint: disable=no-name-in-module
@@ -44,7 +43,6 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
-
         # if self.placement_indices is not None:  # pylint: disable=E0203
         #     self.placement_indices = self.placement_indices.to(in_flow.device)
         #     # print("path_num", path_num)
@@ -93,6 +91,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
                 [route_indices, loads, score], a2a_resuslts[2]
             )
             brt_dist.set_reorder_indices(a2a_resuslts[2])
+
 
         out_flow.route_indices = route_indices
         out_flow.in_loads = loads
@@ -144,3 +143,4 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
             out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
 
         return out_flow
+

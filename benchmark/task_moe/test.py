@@ -2,8 +2,8 @@
 # Licensed under the MIT license.
 
 #%%
-from transformers import BertGenerationTokenizer, BertGenerationDecoder, BertGenerationConfig
-import torch
+from transformers import BertGenerationTokenizer
+from modeling_bert_generation import BertGenerationDecoder, BertGenerationConfig
 tokenizer = BertGenerationTokenizer.from_pretrained("google/bert_for_seq_generation_L-24_bbc_encoder")
 config = BertGenerationConfig.from_pretrained("google/bert_for_seq_generation_L-24_bbc_encoder")
 config.is_decoder = True
@@ -15,4 +15,6 @@ print(inputs["input_ids"].shape)
 outputs = model(**inputs)
 prediction_logits = outputs.logits
 print(prediction_logits.shape)
+# %%
+print(inputs["input_ids"].dtype)
 # %%

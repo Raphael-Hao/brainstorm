@@ -25,14 +25,13 @@ from transformers.utils import (
     replace_return_docstrings,
 )
 from configuration_bert_generation import BertGenerationConfig
-
+from brt.router import ScatterRouter, GatherRouter
 
 logger = logging.get_logger(__name__)
 
 _CHECKPOINT_FOR_DOC = "google/bert_for_seq_generation_L-24_bbc_encoder"
 _CONFIG_FOR_DOC = "BertGenerationConfig"
 _TOKENIZER_FOR_DOC = "BertGenerationTokenizer"
-
 
 # Copied from transformers.models.bert.modeling_bert.BertSelfOutput with Bert->BertGeneration
 class BertGenerationSelfOutput(nn.Module):
@@ -260,7 +259,7 @@ class BertGenerationOutput(nn.Module):
 
 # Copied from transformers.models.bert.modeling_bert.BertLayer with Bert->BertGeneration
 class BertGenerationLayer(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config:BertGenerationConfig):
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.seq_len_dim = 1
@@ -273,6 +272,9 @@ class BertGenerationLayer(nn.Module):
             self.crossattention = BertGenerationAttention(config, position_embedding_type="absolute")
         self.intermediate = BertGenerationIntermediate(config)
         self.output = BertGenerationOutput(config)
+        self.task_sactter = ScatterRouter(protocol_type="task", protocol_kwargs={"task_num": config.num_tasks, "locality_aware": config.locality_aware})
+        self.hash_scatter = ScatterRouter(protocol_type="hash")
+        self.gather = GatherRouter(config)
 
     def forward(
         self,
@@ -328,6 +330,7 @@ class BertGenerationLayer(nn.Module):
             # add cross-attn cache to positions 3,4 of present_key_value tuple
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
+
 
         layer_output = self.feed_forward_chunk(attention_output, task_ids)
 
@@ -863,6 +866,7 @@ class BertGenerationDecoder(BertGenerationPreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            task_ids=task_ids,
         )
 
         sequence_output = outputs[0]

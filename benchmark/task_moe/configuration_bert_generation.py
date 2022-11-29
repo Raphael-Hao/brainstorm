@@ -89,6 +89,8 @@ class BertGenerationConfig(PretrainedConfig):
         eos_token_id=1,
         position_embedding_type="absolute",
         use_cache=True,
+        locality_aware=False,
+        num_tasks=16,
         **kwargs
     ):
         super().__init__(pad_token_id=pad_token_id, bos_token_id=bos_token_id, eos_token_id=eos_token_id, **kwargs)
@@ -106,3 +108,5 @@ class BertGenerationConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
+        self.locality_aware = locality_aware
+        self.num_tasks = num_tasks
