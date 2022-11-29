@@ -16,7 +16,7 @@ torch.cuda.set_device(device)
 group = dist.group.WORLD
 brt_dist.is_nccl_activated(group)
 
-grain_size = 4
+grain_size = 1
 capacity = 4
 group_size = 2
 
@@ -26,7 +26,7 @@ tensor = torch.arange(
     device=device,
 ).reshape(-1, grain_size)
 loads = torch.randint(
-    1, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
+    capacity, capacity + 1, (world_size * group_size,), dtype=torch.int32, device=device
 ).reshape(-1, group_size)
 # print(tensor)
 all_in_loads = None
@@ -34,19 +34,23 @@ if local_rank == 0:
     all_in_loads = [torch.empty_like(loads) for _ in range(world_size)]
 
 dist.gather(loads, all_in_loads)
-if local_rank == 0:
-    all_in_loads = torch.stack(all_in_loads)
-    print(f"all_in_loads: \n{all_in_loads}")
-    print(f"all_out_loads: \n{all_in_loads.transpose(0, 1)}")
+# if local_rank == 0:
+#     all_in_loads = torch.stack(all_in_loads)
+#     print(f"all_in_loads: \n{all_in_loads}")
+#     print(f"all_out_loads: \n{all_in_loads.transpose(0, 1)}")
 
-out_data, out_loads, indices = brt_dist.group_asymmetry_a2a(tensor, loads, False)
+print(tensor)
+
+out_data, out_loads= brt_dist.group_asymmetry_a2a(tensor, loads, False)
+
+print(out_data)
 all_out_loads = None
 if local_rank == 0:
     all_out_loads = [torch.empty_like(out_loads) for _ in range(world_size)]
 dist.gather(out_loads, all_out_loads)
-if local_rank == 0:
-    all_out_loads = torch.stack(all_out_loads)
-    print(f"all_out_loads: \n{all_out_loads}")
+# if local_rank == 0:
+#     all_out_loads = torch.stack(all_out_loads)
+#     print(f"all_out_loads: \n{all_out_loads}")
 
 # timer = CUDATimer(repeat=2, root=local_rank)
 

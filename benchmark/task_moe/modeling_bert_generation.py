@@ -407,7 +407,7 @@ class BertGenerationLayer(nn.Module):
             # add cross-attn cache to positions 3,4 of present_key_value tuple
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
-
+        print("attention_output", attention_output.shape)
         layer_output = self.feed_forward_chunk(attention_output, task_ids)
 
         outputs = (layer_output,) + outputs

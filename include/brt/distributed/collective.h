@@ -34,6 +34,17 @@ void GroupAsymmetryAllToAll(void* send_buffer, void* recv_buffer,
                             const int& grain_size_in_byte, const int& slice_size_in_byte,
                             const int& group_size, const int& world_size, ncclComm_t comm,
                             cudaStream_t stream);
+void GroupSparseAllToAllForward(void* send_buffer, void* recv_buffer,
+                                const std::vector<int>& send_sizes,
+                                const std::vector<int>& recv_sizes, const int& grain_size_in_byte,
+                                const int& group_size, const int& world_size, ncclComm_t comm,
+                                cudaStream_t stream);
+void GroupSparseAllToAllBackward(void* send_buffer, void* recv_buffer,
+                                 const std::vector<int>& send_sizes,
+                                 const std::vector<int>& recv_sizes, const int& grain_size_in_byte,
+                                 const int& group_size, const int& world_size, ncclComm_t comm,
+                                 cudaStream_t stream);
+
 }  // namespace distributed
 }  // namespace brt
 #endif  // BRT_DISTRIBUTED_COLLECTIVE_H_

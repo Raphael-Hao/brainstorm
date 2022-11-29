@@ -461,7 +461,6 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
   }
 
-  ::torch::cuda::synchronize();
   if (locality_aware) {
     return {out_data, reordered_loads, reorder_indices};
   } else {
@@ -591,6 +590,7 @@ batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
     return {out_datas, recv_sizes, recv_sizes};
   }
 }
+
 static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
                                                              const ::torch::Tensor& send_sizes,
                                                              const ::torch::Tensor& recv_sizes) {
@@ -679,6 +679,122 @@ static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_al
   return out_datas;
 }
 
+static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tensor& in_data,
+                                                            const ::torch::Tensor& send_sizes) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  auto& world_rank = manager.GetWorldRank();
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
+
+  const int total_slice_num = send_sizes.numel();
+  const int group_size = total_slice_num / world_size;
+
+  CHECK_ON_CUDA(in_data);
+  CHECK_ON_CUDA(send_sizes);
+
+  ::torch::Tensor recv_sizes =
+      ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
+
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(send_sizes);
+  manager.RecordStorage(recv_sizes);
+
+  distributed::AllToAll(send_sizes.data_ptr(), recv_sizes.data_ptr(),
+                        send_sizes.nbytes() / world_size, world_size, manager.GetComm(),
+                        manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
+  recv_sizes = recv_sizes.view({world_size, group_size}).permute({1, 0}).contiguous();
+
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+  auto recv_sizes_cpu = recv_sizes.cpu();
+  std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
+                                  recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
+
+  // const int send_num = send_sizes_cpu.count_nonzero().item<int>();
+  // const int recv_num = recv_sizes_cpu.count_nonzero().item<int>();
+
+  // Calculate the total size in byte
+  const int total_size_in_byte = in_data.numel() * in_data.element_size();
+  // Calculate the size of each grainularity in byte
+  const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+
+  const int recv_num = recv_sizes_cpu.sum().item<int>();
+
+  auto out_data_shape = in_data.sizes().vec();
+  out_data_shape[0] = recv_num;
+
+  ::torch::Tensor out_data =
+      ::torch::empty(out_data_shape, in_data.options(), ::torch::MemoryFormat::Contiguous);
+  // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
+  //                                              at::cuda::getCurrentCUDAStream());
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(in_data);
+  manager.RecordStorage(out_data);
+  distributed::GroupSparseAllToAllForward(in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec,
+                                          recv_sizes_vec, grain_size_in_byte, group_size,
+                                          world_size, manager.GetComm(), manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
+  return {out_data, recv_sizes_cpu, send_sizes_cpu};
+}
+
+static ::torch::Tensor size_known_group_sparse_all_to_all(const ::torch::Tensor& in_data,
+                                                          const ::torch::Tensor& send_sizes,
+                                                          const ::torch::Tensor& recv_sizes) {
+  auto& manager = NcclManager::GetManager();
+  auto& world_size = manager.GetWorldSize();
+  const int total_slice_num = send_sizes.numel();
+  const int group_size = total_slice_num / world_size;
+  manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
+
+  CHECK_ON_CUDA(in_data);
+
+  auto send_sizes_cpu = send_sizes.cpu();
+  std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
+                                  send_sizes_cpu.data_ptr<int>() + send_sizes_cpu.numel());
+  auto recv_sizes_cpu = recv_sizes.cpu();
+  std::vector<int> recv_sizes_vec(recv_sizes_cpu.data_ptr<int>(),
+                                  recv_sizes_cpu.data_ptr<int>() + recv_sizes_cpu.numel());
+
+  // Calculate the total size in byte
+  const int total_size_in_byte = in_data.numel() * in_data.element_size();
+  // Calculate the size of each grainularity in byte
+  const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+
+  const int recv_num = recv_sizes_cpu.sum().item<int>();
+
+  auto out_data_shape = in_data.sizes().vec();
+  out_data_shape[0] = recv_num;
+
+  ::torch::Tensor out_data =
+      ::torch::empty(out_data_shape, in_data.options(), ::torch::MemoryFormat::Contiguous);
+
+  // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
+  //                                              at::cuda::getCurrentCUDAStream());
+
+  manager.StartContext();
+  manager.WaitEvent(0);
+  manager.RecordStorage(in_data);
+  manager.RecordStorage(out_data);
+  distributed::GroupSparseAllToAllBackward(in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec,
+                                           recv_sizes_vec, grain_size_in_byte, group_size,
+                                           world_size, manager.GetComm(), manager.GetStream());
+  manager.RecordEvent(0);
+  manager.EndContext();
+  manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
+
+  return out_data;
+}
 }  // namespace torch
 }  // namespace backend
 }  // namespace brt
@@ -722,4 +838,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         &brt::backend::torch::batched_size_known_group_asymmetry_all_to_all,
         "batched asymmetry all to all for send sizes and recv size are already known",
         pybind11::arg("in_datas"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
+  m.def("group_sparse_all_to_all", &brt::backend::torch::group_sparse_all_to_all,
+        "sparse all to all", pybind11::arg("in_data"), pybind11::arg("send_sizes"));
+  m.def("size_known_group_sparse_all_to_all",
+        &brt::backend::torch::size_known_group_sparse_all_to_all, "sparse all to all",
+        pybind11::arg("in_data"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
 }

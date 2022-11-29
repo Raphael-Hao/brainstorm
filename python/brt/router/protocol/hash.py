@@ -87,8 +87,7 @@ class TaskProtocol(ProtocolBase):
         self.supported_capacities = supported_capacities
         self.num_tasks = num_tasks
         task_indices = torch.arange(num_tasks,dtype=torch.int64).view(-1, 1)
-        self.register_buffer("hash_indices",task_indices)
-        self.check_hash_indices()
+        self.register_buffer("task_indices",task_indices)
 
     def make_route_decision(self, task_ids:torch.Tensor):
         task_dest = self.task_indices[task_ids]
@@ -103,9 +102,6 @@ class TaskProtocol(ProtocolBase):
         route_indices.capacity = capacity
         return route_indices, loads, loads
 
-    def check_hash_indices(self):
-        assert self.hash_indices.size(0) == self.num_tasks
-        assert self.hash_indices.size(1) == 2
 
     def update(self, supported_capacities):
         self.supported_capacities = supported_capacities
