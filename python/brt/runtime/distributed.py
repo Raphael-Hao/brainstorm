@@ -178,7 +178,7 @@ def group_sparse_all_to_all(in_data: torch.Tensor, in_loads: torch.Tensor):
     if is_nccl_activated():
         return C_dist.group_sparse_all_to_all(in_data, in_loads)
     else:
-        return in_data
+        return in_data, in_loads, in_loads
 
 
 def size_known_group_sparse_all_to_all(

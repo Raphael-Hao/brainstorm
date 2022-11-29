@@ -683,7 +683,6 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
                                                             const ::torch::Tensor& send_sizes) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
-  auto& world_rank = manager.GetWorldRank();
   manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
 
   const int total_slice_num = send_sizes.numel();
@@ -707,7 +706,7 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
   manager.EndContext();
   manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
 
-  recv_sizes = recv_sizes.view({world_size, group_size}).permute({1, 0}).contiguous();
+  recv_sizes = recv_sizes.view({world_size, group_size}).permute({1, 0}).contiguous().view({-1});
 
   auto send_sizes_cpu = send_sizes.cpu();
   std::vector<int> send_sizes_vec(send_sizes_cpu.data_ptr<int>(),
@@ -721,10 +720,13 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
 
   // Calculate the total size in byte
   const int total_size_in_byte = in_data.numel() * in_data.element_size();
+  printf("total_size_in_byte: %d\n", total_size_in_byte);
   // Calculate the size of each grainularity in byte
   const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
+  printf("grain_size_in_byte: %d\n", grain_size_in_byte);
 
   const int recv_num = recv_sizes_cpu.sum().item<int>();
+  printf("recv_num: %d\n", recv_num);
 
   auto out_data_shape = in_data.sizes().vec();
   out_data_shape[0] = recv_num;
@@ -733,6 +735,7 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
       ::torch::empty(out_data_shape, in_data.options(), ::torch::MemoryFormat::Contiguous);
   // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
   //                                              at::cuda::getCurrentCUDAStream());
+  printf("group size: %d\n", group_size);
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);

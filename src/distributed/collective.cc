@@ -117,14 +117,15 @@ void GroupSparseAllToAllForward(void* send_buffer, void* recv_buffer,
   group_base_idx = 0;
   for (auto j = 0; j < group_size; j++) {
     for (auto i = 0; i < world_size; i++) {
-      NCCL_CHECK(ncclRecv((char*)recv_buffer, recv_sizes[group_base_idx + j] * grain_size_in_byte,
+      NCCL_CHECK(ncclRecv((char*)recv_buffer, recv_sizes[group_base_idx + i] * grain_size_in_byte,
                           ncclChar, i, comm, stream));
-      recv_buffer = (char*)recv_buffer + recv_sizes[group_base_idx + j] * grain_size_in_byte;
+      recv_buffer = (char*)recv_buffer + recv_sizes[group_base_idx + i] * grain_size_in_byte;
     }
     group_base_idx += world_size;
   }
   NCCL_CHECK(ncclGroupEnd());
 }
+
 void GroupSparseAllToAllBackward(void* send_buffer, void* recv_buffer,
                                  const std::vector<int>& send_sizes,
                                  const std::vector<int>& recv_sizes, const int& grain_size_in_byte,
@@ -134,9 +135,9 @@ void GroupSparseAllToAllBackward(void* send_buffer, void* recv_buffer,
   NCCL_CHECK(ncclGroupStart());
   for (auto j = 0; j < group_size; j++) {
     for (auto i = 0; i < world_size; i++) {
-      NCCL_CHECK(ncclSend((char*)send_buffer, send_sizes[group_base_idx + j] * grain_size_in_byte,
+      NCCL_CHECK(ncclSend((char*)send_buffer, send_sizes[group_base_idx + i] * grain_size_in_byte,
                           ncclChar, i, comm, stream));
-      send_buffer = (char*)send_buffer + send_sizes[group_base_idx + j] * grain_size_in_byte;
+      send_buffer = (char*)send_buffer + send_sizes[group_base_idx + i] * grain_size_in_byte;
     }
     group_base_idx += world_size;
   }
