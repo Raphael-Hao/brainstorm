@@ -8,9 +8,10 @@ import torch
 
 # pylint: disable=no-name-in-module
 from brt._C.router import (
-    combine_with_src_indices,  # dispatch_with_dst_indices_1d,
+    combine_with_src_indices,
     padded_dispatch_with_dst_indices_1d,
     dispatch_with_dst_indices_2d,
+    dispatch_with_dst_indices_1d,
 )
 
 # pylint: enable=no-name-in-module
@@ -46,17 +47,6 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
-        # if self.placement_indices is not None:  # pylint: disable=E0203
-        #     self.placement_indices = self.placement_indices.to(in_flow.device)
-        #     # print("path_num", path_num)
-        #     loads = loads.index_select(0, self.placement_indices)
-        #     # print("loads.shape", loads.shape)
-        #     # print("route_indices.shape", route_indices.shape)
-        #     route_indices = route_indices.index_select(1, self.placement_indices)
-        #     # print("route_indices.shape", route_indices.shape)
-        #     # print("score.shape", score.shape)
-        #     score = score.index_select(1, self.placement_indices)
-        #     # print("score.shape", score.shape)
         capacity = loads.capacity
         # print(f"rank {dist.get_rank()} loads {loads}")
 
@@ -162,9 +152,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
         score = in_flow.score
         # print(f"gather in loads: {out_loads}, out loads: {in_loads}")
         # print(f"in flow: {in_flow.sum(1)}")
-        in_flow = brt_dist.size_known_group_asymmetry_all_to_all(
-            in_flow, out_loads, in_loads
-        )
+        in_flow = brt_dist.size_known_group_asymmetry_a2a(in_flow, out_loads, in_loads)
         # print(f"gather out flow: {in_flow.sum(1)}")
         if self.transform:
             out_flow = combine_with_src_indices(
@@ -175,19 +163,18 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
 
         return out_flow
 
-@register_fabric("distributed_neighbour_dispatch")
-class DistributedNeighbourDispatchFabric(FusedDispatchFabric):
+
+@register_fabric("distributed_placement_dispatch")
+class DistributedPlacementDispatchFabric(FusedDispatchFabric):
     def __init__(
         self,
         flow_num: int,
         capacity_padding=False,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
-        locality_aware: bool = False,
-        task_locality_aware: bool = False,
+        task_locality: bool = False,
     ):
-        self.locality_aware = locality_aware
-        self.task_locality_aware = task_locality_aware
+        self.task_locality = task_locality
         super().__init__(
             flow_num=flow_num,
             capacity_padding=capacity_padding,
@@ -202,79 +189,45 @@ class DistributedNeighbourDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
-        capacity = loads.capacity
-        if self.route_logics[0] == "1d":
-            if self.transforms[0]:
-                out_flow = padded_dispatch_with_dst_indices_1d(
-                    in_flow, route_indices, loads, capacity, score
-                )
-            else:
-                out_flow = padded_dispatch_with_dst_indices_1d(
-                    in_flow, route_indices, loads, capacity
-                )
-            # print(out_flow)
-        elif self.route_logics[0] == "2d":
-            in_flow = in_flow.transpose(0, 1).contiguous()
-            out_flow = dispatch_with_dst_indices_2d(
-                in_flow, route_indices, loads, self.capacity_padding
-            )
-        else:
-            raise ValueError("route_logic must be 1d or 2d")
 
-        a2a_resuslts = brt_dist.group_asymmetry_a2a(
-            out_flow, loads, self.locality_aware
-        )
-        out_flow = a2a_resuslts[0]
-
-        if self.task_locality_aware:
-            out_loads = a2a_resuslts[1]
+        out_flow = dispatch_with_dst_indices_1d(in_flow, route_indices, loads)
+        out_flow, out_loads, in_loads = brt_dist.group_sparse_a2a(out_flow, loads)
+        if self.task_locality:
             world_size = dist.get_world_size()
             num_local_tasks = out_loads.size(0) // world_size
-            useful_outflows = [[] for _ in range(num_local_tasks)]
-            start_index = 0
-            for i in range(world_size):
-                for j in range(num_local_tasks):
-                    useful_outflows[j].append(
-                        out_flow[
-                            start_index : start_index
-                            + out_loads[i * num_local_tasks + j]
-                        ]
-                    )
-                start_index += capacity
+            task_ids = torch.empty(
+                out_flow.size(0), dtype=torch.int64, device=out_flow.device
+            )
+            base_idx = 0
+            for i in range(num_local_tasks):
+                task_total_load = (
+                    out_loads[i * world_size : (i + 1) * world_size].sum().item()
+                )
+                task_ids[base_idx : base_idx + task_total_load].fill_(
+                    world_size * num_local_tasks + i
+                )
 
-            out_flows = [
-                torch.cat(useful_outflows[i], dim=0) for i in range(num_local_tasks)
-            ]
-            new_task_ids = [
-                torch.empty(
-                    out_flows[i].size(0), dtype=torch.int64, device=out_flow.device
-                ).fill_(world_size * num_local_tasks + i)
-                for i in range(num_local_tasks)
-            ]
-            out_flow = torch.cat(out_flows, dim=0)
-            out_flow.score = torch.cat(new_task_ids, dim=0)
+            out_flow.score = task_ids
             return out_flow
 
         out_flow.route_indices = route_indices
-        out_flow.in_loads = loads
-        out_flow.out_loads = a2a_resuslts[1]
+        out_flow.in_loads = in_loads
+        out_flow.out_loads = out_loads
         out_flow.score = score
 
         return out_flow
 
 
-@register_fabric("distributed_neighbour_combine")
-class DistributedNeighbourCombineFabric(FusedCombineFabric):
+@register_fabric("distributed_placement_combine")
+class DistributedPlacementCombineFabric(FusedCombineFabric):
     def __init__(
         self,
         flow_num,
         sparse,
         reduction,
         granularity_padding,
-        locality_aware: bool = False,
     ) -> None:
         assert granularity_padding == False
-        self.locality_aware = locality_aware
         super().__init__(
             flow_num=flow_num,
             reduction=reduction,
@@ -293,15 +246,9 @@ class DistributedNeighbourCombineFabric(FusedCombineFabric):
         score = in_flow.score
         # print(f"gather in loads: {out_loads}, out loads: {in_loads}")
         # print(f"in flow: {in_flow.sum(1)}")
-        in_flow = brt_dist.size_known_group_asymmetry_all_to_all(
-            in_flow, out_loads, in_loads
-        )
+        in_flow = brt_dist.size_known_group_sparse_a2a(in_flow, out_loads, in_loads)
         # print(f"gather out flow: {in_flow.sum(1)}")
-        if self.transform:
-            out_flow = combine_with_src_indices(
-                in_flow, route_indices, in_loads, auto_pad=True, gates=score
-            )
-        else:
-            out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
+        out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
+        out_flow.score = score
 
         return out_flow

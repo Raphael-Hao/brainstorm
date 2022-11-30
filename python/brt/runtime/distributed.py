@@ -152,7 +152,7 @@ def batched_group_asymmetry_a2a(
         return in_datas, in_loads
 
 
-def size_known_group_asymmetry_all_to_all(
+def size_known_group_asymmetry_a2a(
     in_data: torch.Tensor, in_loads: torch.Tensor, out_loads: torch.Tensor
 ):
     if is_nccl_activated():
@@ -163,7 +163,7 @@ def size_known_group_asymmetry_all_to_all(
         return in_data
 
 
-def batched_size_known_group_asymmetry_all_to_all(
+def batched_size_known_group_asymmetry_a2a(
     in_datas: List[torch.Tensor], in_loads: torch.Tensor, out_loads: torch.Tensor
 ):
     if is_nccl_activated():
@@ -174,14 +174,14 @@ def batched_size_known_group_asymmetry_all_to_all(
         return in_datas
 
 
-def group_sparse_all_to_all(in_data: torch.Tensor, in_loads: torch.Tensor):
+def group_sparse_a2a(in_data: torch.Tensor, in_loads: torch.Tensor):
     if is_nccl_activated():
         return C_dist.group_sparse_all_to_all(in_data, in_loads)
     else:
         return in_data, in_loads, in_loads
 
 
-def size_known_group_sparse_all_to_all(
+def size_known_group_sparse_a2a(
     in_data: torch.Tensor, in_loads: torch.Tensor, out_loads: torch.Tensor
 ):
     if is_nccl_activated():

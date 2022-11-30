@@ -22,12 +22,12 @@ else:
 tensor = torch.randn(loads.sum().item(), grain_size, device=device)
 print(f"input tensor: {tensor}")
 
-out_data, out_loads, in_loads = brt_dist.group_sparse_all_to_all(tensor, loads)
+out_data, out_loads, in_loads = brt_dist.group_sparse_a2a(tensor, loads)
 
 print(f"output tensor: {out_data}")
 print(f"output loads: {out_loads}")
 print(f"input loads: {in_loads}")
 
-final_data = brt_dist.size_known_group_sparse_all_to_all(out_data, out_loads, in_loads)
+final_data = brt_dist.size_known_group_sparse_a2a(out_data, out_loads, in_loads)
 # print(f"final tensor: {final_data}")
 assert torch.allclose(tensor, final_data)

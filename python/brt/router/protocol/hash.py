@@ -16,9 +16,9 @@ logger = log.get_logger(__file__)
 class HashProtocol(ProtocolBase):
     def __init__(
         self,
-        num_tasks:int,
-        locality_aware:bool=False,
-        seed:int = 0,
+        num_tasks: int,
+        placement_aware: bool = False,
+        seed: int = 0,
         supported_capacities: torch.Tensor = None,
         index_format="dst_index",
         index_gen_opt=True,
@@ -34,22 +34,26 @@ class HashProtocol(ProtocolBase):
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.supported_capacities = supported_capacities
         self.num_tasks = num_tasks
-        self.locality_aware = locality_aware
-        if self.locality_aware:
-            hash_indices_1 = torch.arange(num_tasks,dtype=torch.int64).view(-1, 1)
-            hash_indices_2 = (torch.arange(num_tasks,dtype=torch.int64).view(-1, 1) + 1 ) % num_tasks
+        self.placement_aware = placement_aware
+        if self.placement_aware:
+            hash_indices_1 = torch.arange(num_tasks, dtype=torch.int64).view(-1, 1)
+            hash_indices_2 = (
+                torch.arange(num_tasks, dtype=torch.int64).view(-1, 1) + 1
+            ) % num_tasks
         else:
             torch.random.manual_seed(seed)
-            hash_indices_1 = torch.randperm(num_tasks,dtype=torch.int64).view(-1, 1)
-            hash_indices_2 = torch.randperm(num_tasks,dtype=torch.int64).view(-1, 1)
+            hash_indices_1 = torch.randperm(num_tasks, dtype=torch.int64).view(-1, 1)
+            hash_indices_2 = torch.randperm(num_tasks, dtype=torch.int64).view(-1, 1)
         hash_indices = torch.cat([hash_indices_1, hash_indices_2], dim=1)
-        self.register_buffer("hash_indices",hash_indices)
+        self.register_buffer("hash_indices", hash_indices)
         self.check_hash_indices()
 
-    def make_route_decision(self, task_ids:torch.Tensor):
+    def make_route_decision(self, task_ids: torch.Tensor):
         hash_dest = self.hash_indices[task_ids]
         hot_mask = torch.zeros_like(
-            (task_ids.size(0), self.num_tasks), dtype=torch.int64, device=task_ids.device
+            (task_ids.size(0), self.num_tasks),
+            dtype=torch.int64,
+            device=task_ids.device,
         ).scatter_(1, hash_dest, 1)
         route_indices, loads = generate_dst_indices(
             hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
@@ -63,14 +67,12 @@ class HashProtocol(ProtocolBase):
         assert self.hash_indices.size(0) == self.num_tasks
         assert self.hash_indices.size(1) == 2
 
-    def update(self, supported_capacities):
-        self.supported_capacities = supported_capacities
 
 @register_protocol("task")
 class TaskProtocol(ProtocolBase):
     def __init__(
         self,
-        num_tasks:int,
+        num_tasks: int,
         supported_capacities: torch.Tensor = None,
         index_format="dst_index",
         index_gen_opt=True,
@@ -86,13 +88,15 @@ class TaskProtocol(ProtocolBase):
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
         self.supported_capacities = supported_capacities
         self.num_tasks = num_tasks
-        task_indices = torch.arange(num_tasks,dtype=torch.int64).view(-1, 1)
-        self.register_buffer("task_indices",task_indices)
+        task_indices = torch.arange(num_tasks, dtype=torch.int64).view(-1, 1)
+        self.register_buffer("task_indices", task_indices)
 
-    def make_route_decision(self, task_ids:torch.Tensor):
+    def make_route_decision(self, task_ids: torch.Tensor):
         task_dest = self.task_indices[task_ids]
         hot_mask = torch.zeros_like(
-            (task_ids.size(0), self.num_tasks), dtype=torch.int64, device=task_ids.device
+            (task_ids.size(0), self.num_tasks),
+            dtype=torch.int64,
+            device=task_ids.device,
         ).scatter_(1, task_dest, 1)
         route_indices, loads = generate_dst_indices(
             hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
@@ -101,7 +105,3 @@ class TaskProtocol(ProtocolBase):
         capacity = dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
         route_indices.capacity = capacity
         return route_indices, loads, loads
-
-
-    def update(self, supported_capacities):
-        self.supported_capacities = supported_capacities

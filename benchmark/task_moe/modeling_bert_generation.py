@@ -31,7 +31,7 @@ from transformers.utils import (
     replace_return_docstrings,
 )
 from configuration_bert_generation import BertGenerationConfig
-from brt.router import ScatterRouter, GatherRouter
+from moe_layer import BertGenerationMoE
 
 logger = logging.get_logger(__name__)
 
@@ -311,13 +311,14 @@ class BertGenerationOutput(nn.Module):
 
 # Copied from transformers.models.bert.modeling_bert.BertLayer with Bert->BertGeneration
 class BertGenerationLayer(nn.Module):
-    def __init__(self, config: BertGenerationConfig):
+    def __init__(self, config: BertGenerationConfig, task_locality=False):
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.seq_len_dim = 1
         self.attention = BertGenerationAttention(config)
         self.is_decoder = config.is_decoder
         self.add_cross_attention = config.add_cross_attention
+        self.task_moe = config.task_moe
         if self.add_cross_attention:
             if not self.is_decoder:
                 raise ValueError(
@@ -326,24 +327,11 @@ class BertGenerationLayer(nn.Module):
             self.crossattention = BertGenerationAttention(
                 config, position_embedding_type="absolute"
             )
-        self.intermediate = BertGenerationIntermediate(config)
-        self.output = BertGenerationOutput(config)
-        self.task_sactter = ScatterRouter(
-            protocol_type="task",
-            protocol_kwargs={
-                "num_tasks": config.num_tasks,
-            },
-            fabric_type="distributed_fused_dispatch",
-        )
-        self.hash_scatter = ScatterRouter(
-            protocol_type="hash",
-            protocol_kwargs={
-                "num_tasks": config.num_tasks,
-                "locality_aware": config.locality_aware,
-            },
-            fabric_type="distributed_fused_dispatch",
-        )
-        self.hash_gather = GatherRouter(fabric_type="distributed_fused_combine")
+        if config.task_moe:
+            self.moe = BertGenerationMoE(config, task_locality=task_locality)
+        else:
+            self.intermediate = BertGenerationIntermediate(config)
+            self.output = BertGenerationOutput(config)
 
     def forward(
         self,
@@ -407,8 +395,10 @@ class BertGenerationLayer(nn.Module):
             # add cross-attn cache to positions 3,4 of present_key_value tuple
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
-        print("attention_output", attention_output.shape)
-        layer_output = self.feed_forward_chunk(attention_output, task_ids)
+        if self.task_moe:
+            layer_output = self.moe(attention_output, task_ids)
+        else:
+            layer_output = self.feed_forward_chunk(attention_output)
 
         outputs = (layer_output,) + outputs
 
@@ -418,7 +408,7 @@ class BertGenerationLayer(nn.Module):
 
         return outputs
 
-    def feed_forward_chunk(self, attention_output, task_ids=None):
+    def feed_forward_chunk(self, attention_output):
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
         return layer_output
@@ -430,7 +420,10 @@ class BertEncoder(nn.Module):
         super().__init__()
         self.config = config
         self.layer = nn.ModuleList(
-            [BertGenerationLayer(config) for _ in range(config.num_hidden_layers)]
+            [
+                BertGenerationLayer(config, task_locality=True if i == 0 else False)
+                for i in range(config.num_hidden_layers)
+            ]
         )
         self.gradient_checkpointing = False
 
