@@ -48,6 +48,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
         capacity = loads.capacity
+        print("capacity", capacity)
         # print(f"rank {dist.get_rank()} loads {loads}")
 
         # print("capacity", capacity)
@@ -131,6 +132,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
         reduction,
         granularity_padding,
         locality_aware: bool = False,
+        transform = True,
     ) -> None:
         assert granularity_padding == False
         self.locality_aware = locality_aware
@@ -140,7 +142,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
             sparse=sparse,
             granularity_padding=False,
         )
-        self.transform = True
+        self.transform = transform
 
     def forward(
         self,

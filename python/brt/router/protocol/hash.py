@@ -50,17 +50,23 @@ class HashProtocol(ProtocolBase):
 
     def make_route_decision(self, task_ids: torch.Tensor):
         hash_dest = self.hash_indices[task_ids]
-        hot_mask = torch.zeros_like(
+        hot_mask = torch.zeros(
             (task_ids.size(0), self.num_tasks),
             dtype=torch.int64,
             device=task_ids.device,
         ).scatter_(1, hash_dest, 1)
         route_indices, loads = generate_dst_indices(
-            hot_mask, self.supported_capacities, self.index_format, self.index_gen_opt
+            hot_mask,
+            self.supported_capacities,
+            self.index_gen_opt,
+            load_on_cpu=False,
         )
+        print("route_indices", route_indices)
+        print("loads", loads)
         capacity = loads.max()
-        capacity = dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
-        route_indices.capacity = capacity
+        print(capacity)
+        dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
+        loads.capacity = capacity
         return route_indices, loads, loads
 
     def check_hash_indices(self):

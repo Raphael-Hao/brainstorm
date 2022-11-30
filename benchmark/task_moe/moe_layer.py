@@ -31,7 +31,10 @@ class BertGenerationMoE(nn.Module):
                 },
                 fabric_type="distributed_placement_combine",
             )
-            self.hash_gather = GatherRouter(fabric_type="distributed_fused_combine")
+            self.hash_gather = GatherRouter(
+                fabric_type="distributed_fused_combine",
+                fabric_kwargs={"transform": False},
+            )
         else:
             self.hash_scatter = ScatterRouter(
                 protocol_type="hash",
@@ -40,7 +43,10 @@ class BertGenerationMoE(nn.Module):
                 },
                 fabric_type="distributed_fused_dispatch",
             )
-            self.hash_gather = GatherRouter(fabric_type="distributed_fused_combine")
+            self.hash_gather = GatherRouter(
+                fabric_type="distributed_fused_combine",
+                fabric_kwargs={"transform": False},
+            )
         self.local_experts = config.num_tasks // dist.get_world_size()
         self.intermediate_denses = nn.ModuleList(
             nn.Linear(config.hidden_size, config.intermediate_size)
@@ -49,9 +55,7 @@ class BertGenerationMoE(nn.Module):
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fns = ACT2FN[config.hidden_act]
         else:
-            self.intermediate_act_fns = nn.ModuleList(
-                config.hidden_act for _ in range(self.local_experts)
-            )
+            self.intermediate_act_fns = config.hidden_act
         self.output_denses = nn.ModuleList(
             nn.Linear(config.intermediate_size, config.hidden_size)
             for _ in range(self.local_experts)
@@ -84,7 +88,7 @@ class BertGenerationMoE(nn.Module):
         x.out_loads = out_loads
         x.route_indices = route_indices
         x.score = task_ids
-        x = self.hash_gather(x, task_ids)
+        x = self.hash_gather(x)
         return x
 
     def common_forward(self, x, task_ids):
@@ -95,7 +99,12 @@ class BertGenerationMoE(nn.Module):
         world_size = dist.get_world_size()
         x_origin_shape = x.shape
         x = x.reshape(world_size, self.local_experts, -1, x.shape[-1])
-        xs = x.permute(1, 0, 2, 3).contiguous().view(-1, x.shape[-2], x.shape[-1]).chunk(self.local_experts)
+        xs = (
+            x.permute(1, 0, 2, 3)
+            .contiguous()
+            .view(-1, x.shape[-2], x.shape[-1])
+            .chunk(self.local_experts)
+        )
         outputs = []
         for i in range(self.local_experts):
             outputs.append(self.expert_forward(x[i], i))
@@ -104,12 +113,12 @@ class BertGenerationMoE(nn.Module):
         x.out_loads = out_loads
         x.route_indices = route_indices
         x.score = task_ids
-        x = self.hash_gather(x, task_ids)
+        x = self.hash_gather(x)
         return x
 
     def expert_forward(self, x, expert_idx):
         y = self.intermediate_denses[expert_idx](x)
-        y = self.intermediate_act_fns[expert_idx](y)
+        y = self.intermediate_act_fns(y)
         y = self.output_denses[expert_idx](y)
         y = self.dropouts[expert_idx](y)
         y = self.layer_norms[expert_idx](y + x)
