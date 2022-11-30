@@ -9,6 +9,7 @@ import os
 from typing import List, Union
 
 import brt.runtime.distributed as brt_dist
+import brt.runtime.debug as brt_debug
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -1527,6 +1528,8 @@ class BasicLayer(nn.Module):
         l_aux = 0.0
         ckpt_block = 0
         for idx, blk in enumerate(self.blocks):
+            if blk.is_moe:
+                brt_debug.targeted_profile(x)
             if (
                 self.use_checkpoint
                 and not blk.is_moe
@@ -1684,7 +1687,7 @@ class ResNetDLNPatchEmbed(nn.Module):
         return flops
 
 
-class SwinV2TransformerMoE(nn.Module):
+class MicroSwinV2TransformerMoE(nn.Module):
     r"""Swin Transformer
         A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
           https://arxiv.org/pdf/2103.14030
@@ -2023,6 +2026,7 @@ class SwinV2TransformerMoE(nn.Module):
         }
 
     def forward_features(self, x):
+        brt_debug.start_targeted_profile()
         x = self.patch_embed(x)
         if self.ape:
             x = x + self.absolute_pos_embed
@@ -2036,6 +2040,7 @@ class SwinV2TransformerMoE(nn.Module):
         x = self.norm(x)  # B L C
         x = self.avgpool(x.transpose(1, 2))  # B C 1
         x = torch.flatten(x, 1)
+        brt_debug.end_targeted_profile()
         return x, l_aux
 
     def forward(self, x):

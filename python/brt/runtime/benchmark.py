@@ -1,10 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Iterator
+from typing import Iterator, List
 
 import time
 import argparse
 import torch
+import torch.nn as nn
 import torch.distributed as dist
 import numpy as np
 from brt.runtime import BRT_LOG_PATH
@@ -17,6 +18,26 @@ __all__ = [
     "CUDATimer",
     "CPUTimer",
 ]
+
+
+def profile_v2(model: nn.Module, data_collection: List[torch.Tensor], vendor: str):
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+        profile_memory=True,
+        schedule=torch.profiler.schedule(wait=2, warmup=2, active=5),
+        with_stack=False,
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(f"./results/{vendor}/locality"),
+        record_shapes=True,
+    ) as p:
+        with torch.inference_mode():
+            for step, data in enumerate(data_collection):
+                model(data)
+                p.step()
+                if step + 1 >= 10:
+                    break
 
 
 def profile(func):

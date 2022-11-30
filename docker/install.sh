@@ -20,7 +20,7 @@ wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh 
 cd /root
 git clone git@github.com:Raphael-Hao/dotfile.git
 cd dotfile
-echo -e "USE_BREW=OFF\nUSE_SYS_APPS=ON\nUSE_SHELL=ALL\nUSE_TMUX=ON\nUSE_VIM=OFF\nUSE_PYENV=ON\nUSE_CMAKE=3.23.2\nUSE_LLVM=OFF\nUSE_GTEST=OFF\nUSE_VSCODE=OFF" >dot.conf
+echo -e "USE_BREW=OFF\nUSE_SYS_APPS=ON\nUSE_SHELL=ALL\nUSE_TMUX=ON\nUSE_VIM=OFF\nUSE_PYENV=ON\nUSE_CMAKE=3.23.2\nUSE_LLVM=OFF\nUSE_GTEST=OFF\nUSE_VSCODE=OFF" > dot.conf
 bash bootstrap.sh
 
 echo 'export PATH=/opt/miniconda3/bin:$PATH' >>/etc/profile

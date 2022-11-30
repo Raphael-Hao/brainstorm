@@ -61,7 +61,9 @@ def reverse_exchange(in_data: torch.Tensor, reorder_indices: torch.Tensor):
     return in_data
 
 
-def batched_reverse_exchange(in_datas: List[torch.Tensor], reorder_indices: torch.Tensor):
+def batched_reverse_exchange(
+    in_datas: List[torch.Tensor], reorder_indices: torch.Tensor
+):
     if is_nccl_activated():
         return C_dist.batched_reverse_exchange(in_datas, reorder_indices)
     else:
@@ -134,7 +136,11 @@ def batched_group_asymmetry_a2a(
     in_datas: List[torch.Tensor], in_loads: torch.Tensor, locality_aware: bool = False
 ):
     if is_nccl_activated():
-        out_datas, out_loads, reorder_indices = C_dist.batched_group_asymmetry_all_to_all(
+        (
+            out_datas,
+            out_loads,
+            reorder_indices,
+        ) = C_dist.batched_group_asymmetry_all_to_all(
             in_datas, in_loads, locality_aware
         )
         if locality_aware:
@@ -146,7 +152,7 @@ def batched_group_asymmetry_a2a(
         return in_datas, in_loads
 
 
-def size_known_group_asymmetry_all_to_all(
+def size_known_group_asymmetry_a2a(
     in_data: torch.Tensor, in_loads: torch.Tensor, out_loads: torch.Tensor
 ):
     if is_nccl_activated():
@@ -157,7 +163,7 @@ def size_known_group_asymmetry_all_to_all(
         return in_data
 
 
-def batched_size_known_group_asymmetry_all_to_all(
+def batched_size_known_group_asymmetry_a2a(
     in_datas: List[torch.Tensor], in_loads: torch.Tensor, out_loads: torch.Tensor
 ):
     if is_nccl_activated():
@@ -166,3 +172,19 @@ def batched_size_known_group_asymmetry_all_to_all(
         )
     else:
         return in_datas
+
+
+def group_sparse_a2a(in_data: torch.Tensor, in_loads: torch.Tensor):
+    if is_nccl_activated():
+        return C_dist.group_sparse_all_to_all(in_data, in_loads)
+    else:
+        return in_data, in_loads, in_loads
+
+
+def size_known_group_sparse_a2a(
+    in_data: torch.Tensor, in_loads: torch.Tensor, out_loads: torch.Tensor
+):
+    if is_nccl_activated():
+        return C_dist.size_known_group_sparse_all_to_all(in_data, in_loads, out_loads)
+    else:
+        return in_data

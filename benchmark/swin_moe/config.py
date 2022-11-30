@@ -439,10 +439,6 @@ def update_config(config, args):
         config.OUTPUT = args.output
     if args.tag:
         config.TAG = args.tag
-    if args.eval:
-        config.EVAL_MODE = True
-    if args.throughput:
-        config.THROUGHPUT_MODE = True
 
     # set local rank for distributed training
     config.LOCAL_RANK = args.local_rank

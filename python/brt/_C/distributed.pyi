@@ -56,3 +56,12 @@ def batched_size_known_group_asymmetry_all_to_all(
     send_sizes: torch.Tensor,
     recv_sizes: torch.Tensor,
 ) -> List[torch.Tensor]: ...
+def group_sparse_all_to_all(
+    in_data: torch.Tensor,
+    send_sizes: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
+def size_known_group_sparse_all_to_all(
+    in_data: torch.Tensor,
+    send_sizes: torch.Tensor,
+    recv_sizes: torch.Tensor,
+) -> torch.Tensor: ...

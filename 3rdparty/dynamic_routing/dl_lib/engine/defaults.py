@@ -109,7 +109,7 @@ def default_setup(cfg, args):
 
     logger.info("Rank of current process: {}. World size: {}".format(
         rank, comm.get_world_size()))
-    logger.info("Environment info:\n" + collect_env_info())
+    # logger.info("Environment info:\n" + collect_env_info())
 
     logger.info("Command line arguments: " + str(args))
     if hasattr(args, "config_file") and args.config_file != "":
@@ -117,10 +117,10 @@ def default_setup(cfg, args):
             args.config_file,
             PathManager.open(args.config_file, "r").read()))
 
-    logger.info("Running with full config:\n{}".format(cfg))
+    # logger.info("Running with full config:\n{}".format(cfg))
     base_config = cfg.__class__.__base__()
-    logger.info("different config with base class:\n{}".format(
-        cfg.show_diff(base_config)))
+    # logger.info("different config with base class:\n{}".format(
+    #     cfg.show_diff(base_config)))
     # if comm.is_main_process() and output_dir:
     #     # Note: some of our scripts may expect the existence of
     #     # config.yaml in output directory

@@ -3,11 +3,10 @@
 
 # %%
 import torch
-from brt.runtime.proto_tensor import reset_proto_tensor_cls
 
-from thor_config import ThorConfig
-from thor_model import ThorEncoder
-from thor_moe import ThorMoE
+from .thor_config import ThorConfig
+from .thor_model import ThorEncoder
+from .thor_moe import ThorMoE # pylint: disable=unused-import
 
 config = ThorConfig()
 config.token_num = 64

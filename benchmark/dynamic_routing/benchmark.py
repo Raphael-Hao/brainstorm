@@ -1,68 +1,32 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
-from dynamic_raw_config import config as raw_config
+import logging
+import os
+import sys
+from collections import OrderedDict
+
+from brt.passes import (DeadPathEliminatePass, OnDemandMemoryPlanPass,
+                        PermanentPathFoldPass, PredictMemoryPlanPass)
+from brt.router import switch_router_mode
+from brt.runtime.benchmark import (BenchmarkArgumentManager, Benchmarker,
+                                   CUDATimer, MemoryStats)
+from brt.runtime.memory_planner import pin_memory
 from dynamic_A_config import config as A_config
 from dynamic_B_config import config as B_config
 from dynamic_C_config import config as C_config
-
-from brt.router import switch_router_mode
-from brt.passes import (
-    DeadPathEliminatePass,
-    PermanentPathFoldPass,
-    OnDemandMemoryPlanPass,
-    PredictMemoryPlanPass,
-)
-from brt.runtime.memory_planner import pin_memory
-from brt.runtime.benchmark import (
-    BenchmarkArgumentManager,
-    Benchmarker,
-    CUDATimer,
-    MemoryStats,
-    profile,
-)
-
-"""
-Detection Training Script.
-
-This scripts reads a given config file and runs the training or evaluation.
-It is an entry point that is made to train standard models in dl_lib.
-
-In order to let one script support training of many models,
-this script contains logic that are specific to these built-in models and therefore
-may not be suitable for your own project.
-For example, your research project perhaps only needs a single "evaluator".
-
-Therefore, we recommend you to use dl_lib as an library and take
-this file as an example of how to use the library.
-You may want to write your own script with your datasets and other customizations.
-"""
-import glob
-import logging
-import os
-import re
-import sys
+from dynamic_raw_config import config as raw_config
 
 sys.path.insert(0, ".")  # noqa: E402
 
-from collections import OrderedDict
-import torch
 
 import dl_lib.utils.comm as comm
+import torch
 from dl_lib.checkpoint import DetectionCheckpointer
 from dl_lib.data import MetadataCatalog
-from dl_lib.engine import (
-    CustomizedTrainer,
-    default_argument_parser,
-    default_setup,
-    launch,
-)
-from dl_lib.evaluation import (
-    CityscapesEvaluator,
-    DatasetEvaluators,
-    PascalVOCDetectionEvaluator,
-    SemSegEvaluator,
-    verify_results,
-)
+from dl_lib.engine import (CustomizedTrainer, default_argument_parser,
+                           default_setup)
+from dl_lib.evaluation import (CityscapesEvaluator, DatasetEvaluators,
+                               PascalVOCDetectionEvaluator, SemSegEvaluator)
 from dl_lib.modeling import SemanticSegmentorWithTTA
 from net import build_model
 
@@ -150,6 +114,8 @@ def test_argument_parser():
     bench_arg_manager = BenchmarkArgumentManager(parser)
     bench_arg_manager.add_item("liveness")
     bench_arg_manager.add_item("memory_plan")
+    parser.add_argument("--memory-mode", choices=["predict", "on_demand"], default="on_demand")
+
     return parser
 
 
@@ -166,7 +132,7 @@ def main(args):
         raise ValueError("Invalid arch: {}".format(args.arch))
 
     config.merge_from_list(args.opts)
-    cfg, logger = default_setup(config, args)
+    cfg, _logger = default_setup(config, args)
 
     model = build_model(cfg)
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
@@ -228,10 +194,14 @@ def main(args):
         # MemoryStats.print_cuda_stats()
 
         backbone = pin_memory(backbone.cpu())
-        # pass_name = "OnDemandMemoryPlanPass"
-        # memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
-        pass_name = "PredictorMemoryPlanPass"
-        memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
+        pass_name = None
+        memory_plan_pass = None
+        if args.memory_mode == "predict":
+            pass_name = "PredictorMemoryPlanPass"
+            memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
+        elif args.memory_mode == "on_demand":
+            pass_name = "OnDemandMemoryPlanPass"
+            memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
         memory_plan_pass.run_on_graph()
         initial_loaders, new_backbone = memory_plan_pass.finalize()
         # print(new_backbone.code)

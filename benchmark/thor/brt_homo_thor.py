@@ -4,9 +4,9 @@
 # %%
 import torch
 
-from thor_config import ThorConfig
-from thor_model import ThorEncoder
-from thor_moe import FusedThorMoE
+from .thor_config import ThorConfig
+from .thor_model import ThorEncoder
+from .thor_moe import FusedThorMoE # pylint: disable=unused-import
 
 config = ThorConfig()
 config.token_num = 64

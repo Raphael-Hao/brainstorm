@@ -18,7 +18,7 @@ def build_backbone(cfg, input_shape=None):
             height=cfg.INPUT.FIX_SIZE_FOR_FLOPS[0],
             width=cfg.INPUT.FIX_SIZE_FOR_FLOPS[1],
         )
-        print(input_shape)
+        # print(input_shape)
 
     backbone = build_dynamic_backbone(cfg, input_shape)
     assert isinstance(backbone, Backbone)
