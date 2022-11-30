@@ -29,10 +29,10 @@ class BertGenerationMoE(nn.Module):
                     "num_tasks": config.num_tasks,
                     "placement_aware": config.placement_aware,
                 },
-                fabric_type="distributed_placement_combine",
+                fabric_type="distributed_placement_dispatch",
             )
             self.hash_gather = GatherRouter(
-                fabric_type="distributed_fused_combine",
+                fabric_type="distributed_placement_combine",
                 fabric_kwargs={"transform": False},
             )
         else:
@@ -68,12 +68,11 @@ class BertGenerationMoE(nn.Module):
             nn.Dropout(config.hidden_dropout_prob) for _ in range(self.local_experts)
         )
 
-    def placement_forward(self, x, task_ids):
+    def placement_forward(self, x: torch.Tensor, task_ids: torch.Tensor):
         if self.task_locality:
             x = self.task_sactter(x, task_ids)
             task_ids = x.score
         x = self.hash_scatter(x, task_ids)
-        print(x)
         in_loads = x.in_loads
         out_loads = x.out_loads
         route_indices = x.route_indices
@@ -98,14 +97,9 @@ class BertGenerationMoE(nn.Module):
         out_loads = x.out_loads
         route_indices = x.route_indices
         world_size = dist.get_world_size()
-        x_origin_shape = x.shape
-        x = x.reshape(world_size, self.local_experts, -1, x.shape[-1])
-        xs = (
-            x.permute(1, 0, 2, 3)
-            .contiguous()
-            .view(-1, x.shape[-2], x.shape[-1])
-            .chunk(self.local_experts)
-        )
+        x = x.reshape(world_size, -1, x.shape[-2], x.shape[-1])
+        x = x.permute(1, 0, 2, 3).contiguous().view(-1, x.shape[-2], x.shape[-1])
+        xs = x.chunk(self.local_experts, dim=0)
         outputs = []
         for i in range(self.local_experts):
             outputs.append(self.expert_forward(xs[i], i))
@@ -125,10 +119,11 @@ class BertGenerationMoE(nn.Module):
         y = self.layer_norms[expert_idx](y + x)
         return y
 
-    def forward(self, x, task_ids):
-        print(f"Occupied {torch.cuda.memory_allocated()/1024/1024/1024} GB")
+    def forward(self, x: torch.Tensor, task_ids: torch.Tensor):
+        x = x.contiguous()
         if self.placement_aware:
             x = self.placement_forward(x, task_ids)
+            task_ids = x.score
         else:
             x = self.common_forward(x, task_ids)
-        return x
+        return x, task_ids

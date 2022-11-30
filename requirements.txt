@@ -24,3 +24,4 @@ json_tricks
 graphviz
 ipykernel
 nvitop
+sentencepiece

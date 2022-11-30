@@ -75,7 +75,7 @@ class BertGenerationConfig(PretrainedConfig):
         self,
         vocab_size=50358,
         hidden_size=512,
-        num_hidden_layers=6,
+        num_hidden_layers=2,
         num_attention_heads=8,
         intermediate_size=1024,
         hidden_act="gelu",

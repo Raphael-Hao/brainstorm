@@ -11,6 +11,7 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.utils.checkpoint
 from torch import nn
+import torch.distributed as dist
 from torch.nn import CrossEntropyLoss
 
 from transformers.activations import ACT2FN
@@ -396,15 +397,18 @@ class BertGenerationLayer(nn.Module):
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
         if self.task_moe:
-            layer_output = self.moe(attention_output, task_ids)
+            print(f"rank: {dist.get_rank()} attention_output: {attention_output.sum()}")
+            layer_output, task_ids = self.moe(attention_output, task_ids)
         else:
             layer_output = self.feed_forward_chunk(attention_output)
-
+        print(f"rank: {dist.get_rank()} layer_output: {layer_output.sum()}")
         outputs = (layer_output,) + outputs
 
         # if decoder, return the attn key/values as the last output
         if self.is_decoder:
             outputs = outputs + (present_key_value,)
+
+        outputs = outputs + (task_ids,)
 
         return outputs
 
@@ -414,7 +418,6 @@ class BertGenerationLayer(nn.Module):
         return layer_output
 
 
-# Copied from transformers.models.bert.modeling_bert.BertEncoder with Bert->BertGeneration
 class BertEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -489,10 +492,10 @@ class BertEncoder(nn.Module):
                     output_attentions,
                     task_ids,
                 )
-
+            task_ids = layer_outputs[-1]
             hidden_states = layer_outputs[0]
             if use_cache:
-                next_decoder_cache += (layer_outputs[-1],)
+                next_decoder_cache += (layer_outputs[-2],)
             if output_attentions:
                 all_self_attentions = all_self_attentions + (layer_outputs[1],)
                 if self.config.add_cross_attention:
