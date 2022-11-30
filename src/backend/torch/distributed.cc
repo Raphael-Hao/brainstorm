@@ -402,9 +402,19 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
   const int slice_size_in_byte = total_size_in_byte / total_slice_num;
 
   ::torch::Tensor out_data =
-      ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
+      ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
   // at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
   //                                              at::cuda::getCurrentCUDAStream());
+  if (world_rank == 0) {
+    std::cout << "in total_size_in_byte: " << total_size_in_byte << std::endl;
+    std::cout << "out total_size_in_byte: " << out_data.numel() * out_data.element_size()
+              << std::endl;
+    std::cout << recv_sizes_vec << std::endl;
+    std::cout << send_sizes_vec << std::endl;
+    std::cout << "granularity: " << grain_size_in_byte << std::endl;
+    std::cout << "slice: " << slice_size_in_byte << std::endl;
+  }
+
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);

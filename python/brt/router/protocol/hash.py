@@ -61,12 +61,11 @@ class HashProtocol(ProtocolBase):
             self.index_gen_opt,
             load_on_cpu=False,
         )
-        print("route_indices", route_indices)
-        print("loads", loads)
+        print(f"route_indices:\n{route_indices}", )
+        print(f"loads:\n", loads)
         capacity = loads.max()
-        print(capacity)
         dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
-        loads.capacity = capacity
+        loads.capacity = capacity.sum().item()
         return route_indices, loads, loads
 
     def check_hash_indices(self):

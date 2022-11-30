@@ -28,10 +28,8 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
         locality_aware: bool = False,
-        task_locality_aware: bool = False,
     ):
         self.locality_aware = locality_aware
-        self.task_locality_aware = task_locality_aware
         super().__init__(
             flow_num=flow_num,
             capacity_padding=capacity_padding,
@@ -48,10 +46,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
         capacity = loads.capacity
-        print("capacity", capacity)
-        # print(f"rank {dist.get_rank()} loads {loads}")
-
-        # print("capacity", capacity)
+        print(f"capacity: {capacity}")
         if self.route_logics[0] == "1d":
             if self.transforms[0]:
                 out_flow = padded_dispatch_with_dst_indices_1d(
@@ -61,7 +56,6 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
                 out_flow = padded_dispatch_with_dst_indices_1d(
                     in_flow, route_indices, loads, capacity
                 )
-            # print(out_flow)
         elif self.route_logics[0] == "2d":
             in_flow = in_flow.transpose(0, 1).contiguous()
             out_flow = dispatch_with_dst_indices_2d(
@@ -69,11 +63,15 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
             )
         else:
             raise ValueError("route_logic must be 1d or 2d")
-
+        print(f"loads:\n{loads}")
+        print(f"out_flow size:\n{out_flow.element_size() * out_flow.nelement()}")
+        origin_shape = out_flow.shape
+        out_flow = out_flow.view(origin_shape[0], -1)
         a2a_resuslts = brt_dist.group_asymmetry_a2a(
             out_flow, loads, self.locality_aware
         )
         out_flow = a2a_resuslts[0]
+        out_flow = out_flow.view(-1, *origin_shape[1:])
 
         if self.locality_aware:
             reorder_indices = a2a_resuslts[2]
@@ -85,35 +83,6 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
                 [route_indices, loads, score], a2a_resuslts[2]
             )
             brt_dist.set_reorder_indices(a2a_resuslts[2])
-
-        if self.task_locality_aware:
-            out_loads = a2a_resuslts[1]
-            world_size = dist.get_world_size()
-            num_local_tasks = out_loads.size(0) // world_size
-            useful_outflows = [[] for _ in range(num_local_tasks)]
-            start_index = 0
-            for i in range(world_size):
-                for j in range(num_local_tasks):
-                    useful_outflows[j].append(
-                        out_flow[
-                            start_index : start_index
-                            + out_loads[i * num_local_tasks + j]
-                        ]
-                    )
-                start_index += capacity
-
-            out_flows = [
-                torch.cat(useful_outflows[i], dim=0) for i in range(num_local_tasks)
-            ]
-            new_task_ids = [
-                torch.empty(
-                    out_flows[i].size(0), dtype=torch.int64, device=out_flow.device
-                ).fill_(world_size * num_local_tasks + i)
-                for i in range(num_local_tasks)
-            ]
-            out_flow = torch.cat(out_flows, dim=0)
-            out_flow.score = torch.cat(new_task_ids, dim=0)
-            return out_flow
 
         out_flow.route_indices = route_indices
         out_flow.in_loads = loads

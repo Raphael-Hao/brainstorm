@@ -972,7 +972,6 @@ class BertGenerationDecoder(BertGenerationPreTrainedModel):
         )
         if labels is not None:
             use_cache = False
-
         outputs = self.bert(
             input_ids,
             attention_mask=attention_mask,

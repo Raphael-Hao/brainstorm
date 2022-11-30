@@ -73,6 +73,7 @@ class BertGenerationMoE(nn.Module):
             x = self.task_sactter(x, task_ids)
             task_ids = x.score
         x = self.hash_scatter(x, task_ids)
+        print(x)
         in_loads = x.in_loads
         out_loads = x.out_loads
         route_indices = x.route_indices
@@ -107,7 +108,7 @@ class BertGenerationMoE(nn.Module):
         )
         outputs = []
         for i in range(self.local_experts):
-            outputs.append(self.expert_forward(x[i], i))
+            outputs.append(self.expert_forward(xs[i], i))
         x = torch.cat(outputs, dim=0)
         x.in_loads = in_loads
         x.out_loads = out_loads
@@ -125,6 +126,7 @@ class BertGenerationMoE(nn.Module):
         return y
 
     def forward(self, x, task_ids):
+        print(f"Occupied {torch.cuda.memory_allocated()/1024/1024/1024} GB")
         if self.placement_aware:
             x = self.placement_forward(x, task_ids)
         else:
