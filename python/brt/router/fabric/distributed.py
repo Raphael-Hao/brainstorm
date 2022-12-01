@@ -154,7 +154,6 @@ class DistributedPlacementDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
-
         out_flow = dispatch_with_dst_indices_1d(in_flow, route_indices, loads)
         out_flow, out_loads, in_loads = brt_dist.group_sparse_a2a(out_flow, loads)
         if self.task_locality:
@@ -211,10 +210,7 @@ class DistributedPlacementCombineFabric(FusedCombineFabric):
         in_loads = in_flow.in_loads
         out_loads = in_flow.out_loads
         score = in_flow.score
-        # print(f"gather in loads: {out_loads}, out loads: {in_loads}")
-        # print(f"in flow: {in_flow.sum(1)}")
         in_flow = brt_dist.size_known_group_sparse_a2a(in_flow, out_loads, in_loads)
-        # print(f"gather out flow: {in_flow.sum(1)}")
         out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
         out_flow.score = score
 

@@ -9,7 +9,7 @@ from transformers.activations import ACT2FN
 
 
 class BertGenerationMoE(nn.Module):
-    def __init__(self, config: BertGenerationConfig, task_locality=False):
+    def __init__(self, config: BertGenerationConfig, task_locality=False, seed=0):
         super().__init__()
         self.task_locality = task_locality
         self.placement_aware = config.placement_aware
@@ -19,6 +19,7 @@ class BertGenerationMoE(nn.Module):
                     protocol_type="task",
                     protocol_kwargs={
                         "num_tasks": config.num_tasks,
+                        "index_format": "dst_index",
                     },
                     fabric_type="distributed_placement_dispatch",
                     fabric_kwargs={"task_locality": True},
@@ -28,6 +29,7 @@ class BertGenerationMoE(nn.Module):
                 protocol_kwargs={
                     "num_tasks": config.num_tasks,
                     "placement_aware": config.placement_aware,
+                    "index_format": "dst_index",
                 },
                 fabric_type="distributed_placement_dispatch",
             )
@@ -40,6 +42,8 @@ class BertGenerationMoE(nn.Module):
                 protocol_type="hash",
                 protocol_kwargs={
                     "num_tasks": config.num_tasks,
+                    "index_format": "dst_index",
+                    "seed": seed,
                 },
                 fabric_type="distributed_fused_dispatch",
             )
@@ -80,9 +84,12 @@ class BertGenerationMoE(nn.Module):
         base_load_idx = 0
         base_x_idx = 0
         world_size = dist.get_world_size()
+
         for i in range(self.local_experts):
             load = out_loads[base_load_idx : base_load_idx + world_size].sum().item()
             outputs.append(self.expert_forward(x[base_x_idx : base_x_idx + load], i))
+            base_load_idx += world_size
+            base_x_idx += load
         x = torch.cat(outputs, dim=0)
         x.in_loads = in_loads
         x.out_loads = out_loads

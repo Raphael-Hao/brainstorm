@@ -47,7 +47,6 @@ class HashProtocol(ProtocolBase):
         hash_indices = torch.cat([hash_indices_1, hash_indices_2], dim=1)
         self.register_buffer("hash_indices", hash_indices)
         self.check_hash_indices()
-        print(f"hash_indices:\n{hash_indices}")
 
     def make_route_decision(self, task_ids: torch.Tensor):
         hash_dest = self.hash_indices[task_ids]
@@ -62,10 +61,12 @@ class HashProtocol(ProtocolBase):
             self.index_gen_opt,
             load_on_cpu=False,
         )
-        # print(f"route_indices:\n{route_indices}", )
-        capacity = loads.max()
-        dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
-        loads.capacity = capacity.sum().item()
+        if self.placement_aware:
+            loads.capacity = 0
+        else:
+            capacity = loads.max()
+            dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
+            loads.capacity = capacity.sum().item()
         return route_indices, loads, loads
 
     def check_hash_indices(self):
@@ -106,7 +107,5 @@ class TaskProtocol(ProtocolBase):
         route_indices, loads = generate_dst_indices(
             hot_mask, self.supported_capacities, self.index_gen_opt, load_on_cpu=False
         )
-        capacity = loads.max()
-        capacity = dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
-        route_indices.capacity = capacity
+        route_indices.capacity = 0
         return route_indices, loads, loads

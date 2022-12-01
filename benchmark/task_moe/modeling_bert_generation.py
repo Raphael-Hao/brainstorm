@@ -11,7 +11,6 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.utils.checkpoint
 from torch import nn
-import torch.distributed as dist
 from torch.nn import CrossEntropyLoss
 
 from transformers.activations import ACT2FN
@@ -312,7 +311,7 @@ class BertGenerationOutput(nn.Module):
 
 # Copied from transformers.models.bert.modeling_bert.BertLayer with Bert->BertGeneration
 class BertGenerationLayer(nn.Module):
-    def __init__(self, config: BertGenerationConfig, task_locality=False):
+    def __init__(self, config: BertGenerationConfig, task_locality=False, seed=0):
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.seq_len_dim = 1
@@ -329,7 +328,7 @@ class BertGenerationLayer(nn.Module):
                 config, position_embedding_type="absolute"
             )
         if config.task_moe:
-            self.moe = BertGenerationMoE(config, task_locality=task_locality)
+            self.moe = BertGenerationMoE(config, task_locality=task_locality, seed=seed)
         else:
             self.intermediate = BertGenerationIntermediate(config)
             self.output = BertGenerationOutput(config)
@@ -397,11 +396,9 @@ class BertGenerationLayer(nn.Module):
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
         if self.task_moe:
-            print(f"rank: {dist.get_rank()} attention_output: {attention_output.sum()}")
             layer_output, task_ids = self.moe(attention_output, task_ids)
         else:
             layer_output = self.feed_forward_chunk(attention_output)
-        print(f"rank: {dist.get_rank()} layer_output: {layer_output.sum()}")
         outputs = (layer_output,) + outputs
 
         # if decoder, return the attn key/values as the last output
@@ -424,7 +421,9 @@ class BertEncoder(nn.Module):
         self.config = config
         self.layer = nn.ModuleList(
             [
-                BertGenerationLayer(config, task_locality=True if i == 0 else False)
+                BertGenerationLayer(
+                    config, task_locality=True if i == 0 else False, seed=i
+                )
                 for i in range(config.num_hidden_layers)
             ]
         )
