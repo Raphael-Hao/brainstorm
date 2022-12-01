@@ -1,7 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-import time
 import torch.distributed as dist
 import torch
 import torch.nn as nn
@@ -16,7 +15,7 @@ def main():
     parser.add_argument(
         "--mode", type=str, default="debug", choices=["debug", "throughput"]
     )
-    parser.add_argument("--opt", type=str, default="None", choices=["None", "placement"])
+    parser.add_argument("--opt", type=str, default="None", choices=["None", "placement", "pytorch"])
     args = parser.parse_args()
     dist.init_process_group(backend="nccl")
     local_rank = dist.get_rank()
@@ -32,19 +31,28 @@ def main():
     config.is_decoder = True
     config.task_moe = True
     config.num_tasks = 16
-    if args.opt == "placement":
-        config.placement_aware = True
+    if args.opt == "pytorch":
+        config.pt_native = True
     else:
-        config.placement_aware = False
+        config.pt_native = False
+        if args.opt == "placement":
+            config.placement_aware = True
+        else:
+            config.placement_aware = False
     model = BertGenerationDecoder(config=config).cuda(device)
+    # inputs = tokenizer(
+    #     "To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English",
+    #     return_token_type_ids=False,
+    #     return_tensors="pt",
+    # )
     inputs = tokenizer(
-        "To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English",
+        "To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English",
         return_token_type_ids=False,
         return_tensors="pt",
     )
     #%%
 
-    input_ids = inputs["input_ids"].repeat(256, 1).cuda()
+    input_ids = inputs["input_ids"].repeat(512, 1).cuda()
     print(f"local_rank: {local_rank}, input_ids.shape: {input_ids.shape}")
 
     #%%
@@ -62,11 +70,11 @@ def debug(config: BertGenerationConfig, model_ddp: nn.Module, input_ids: torch.T
     model_ddp.eval()
     with torch.inference_mode():
         all_task_ids = [
-            [1, 0, 0, 2, 1, 1, 1, 0, 0, 2, 1, 1, 3, 0, 3, 2],
-            [0, 1, 2, 3, 2, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1],
+            [1, 0, 3, 2,],
+            [0, 3, 2, 1,],
         ]
         task_ids = torch.tensor(all_task_ids[local_rank], dtype=torch.int64).cuda()
-        while True:
+        for i in range(10):
             # print(f"local_rank: {local_rank}, input_ids.shape: {input_ids.shape}")
             # print(f"local_rank: {local_rank}, task_ids: {task_ids}")
             outputs = model_ddp(input_ids, task_ids=task_ids)

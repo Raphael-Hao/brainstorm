@@ -91,6 +91,7 @@ class BertGenerationConfig(PretrainedConfig):
         use_cache=True,
         task_moe=False,
         num_tasks=16,
+        pt_native = True,
         placement_aware=False,
         **kwargs
     ):
@@ -111,4 +112,5 @@ class BertGenerationConfig(PretrainedConfig):
         self.use_cache = use_cache
         self.task_moe = task_moe
         self.num_tasks = num_tasks
+        self.pt_native = pt_native
         self.placement_aware = placement_aware

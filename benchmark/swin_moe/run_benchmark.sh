@@ -19,6 +19,7 @@ ARGUMENT_LIST=(
     "mode:"
     "blocking"
     "bs:"
+    "capacity:"
 )
 
 # read arguments
@@ -71,6 +72,11 @@ while [[ $# -gt 0 ]]; do
         ;;
     --bs)
         BS=$2
+        shift 2
+        ;;
+    --capacity)
+        CAPACITY=$2
+        LAUNCH_ARGS+=(--capacity "$CAPACITY")
         shift 2
         ;;
     *)

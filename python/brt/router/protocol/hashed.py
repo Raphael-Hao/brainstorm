@@ -43,7 +43,7 @@ class HashProtocol(ProtocolBase):
         else:
             torch.random.manual_seed(seed)
             hash_indices_1 = torch.randperm(num_tasks, dtype=torch.int64).view(-1, 1)
-            hash_indices_2 = torch.randperm(num_tasks, dtype=torch.int64).view(-1, 1)
+            hash_indices_2 = torch.flip(hash_indices_1, dims=[0])
         hash_indices = torch.cat([hash_indices_1, hash_indices_2], dim=1)
         self.register_buffer("hash_indices", hash_indices)
         self.check_hash_indices()
@@ -67,6 +67,7 @@ class HashProtocol(ProtocolBase):
             capacity = loads.max()
             dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
             loads.capacity = capacity.sum().item()
+            loads.dest = hash_dest
         return route_indices, loads, loads
 
     def check_hash_indices(self):

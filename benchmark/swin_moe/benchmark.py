@@ -128,6 +128,7 @@ def parse_option():
     )
     parser.add_argument("--placement", type=str, default=None)
     parser.add_argument("--locality", action="store_true", default=False)
+    parser.add_argument("--capacity", type=float, default=1.25)
     ds_init = None
 
     args, _unparsed = parser.parse_known_args()
@@ -314,27 +315,6 @@ def throughput(data_loader, model, logger):
     logger.info(
         f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
-
-@torch.no_grad()
-def deprecated_throughput(data_loader, model, logger):
-    model.eval()
-    for idx, (images, _) in enumerate(data_loader):
-        images = images.cuda(non_blocking=True)
-        batch_size = images.shape[0]
-        for i in range(50):
-            model(images)
-        torch.cuda.synchronize()
-        logger.info(f"throughput averaged with 30 times")
-        tic1 = time.time()
-        for i in range(30):
-            model(images)
-        torch.cuda.synchronize()
-        tic2 = time.time()
-        logger.info(
-            f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
-        )
-        return
-
 
 @torch.inference_mode()
 def check_correctness(model, bs=1, iteration=10):
