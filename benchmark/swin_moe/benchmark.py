@@ -342,10 +342,10 @@ if __name__ == "__main__":
         master_addr = os.environ["MASTER_ADDR"]
         rank = int(os.environ["RANK"])
         world_size = int(os.environ["WORLD_SIZE"])
-        print(
-            f"RANK and WORLD_SIZE in environ: {rank}/{world_size}, LOCAL_RANK: {config.LOCAL_RANK}, "
-            f"master_node: {master_addr}:{master_port}"
-        )
+        # print(
+        #     f"RANK and WORLD_SIZE in environ: {rank}/{world_size}, LOCAL_RANK: {config.LOCAL_RANK}, "
+        #     f"master_node: {master_addr}:{master_port}"
+        # )
         if "OMPI_COMM_WORLD_RANK" in os.environ:
             del os.environ["OMPI_COMM_WORLD_RANK"]
         if "OMPI_COMM_WORLD_SIZE" in os.environ:
