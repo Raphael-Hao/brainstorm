@@ -4,9 +4,9 @@
 # %%
 import torch
 
-from .thor_config import ThorConfig
-from .thor_model import ThorEncoder
-from .thor_moe import FusedThorMoE # pylint: disable=unused-import
+from thor_config import ThorConfig
+from thor_model import ThorEncoder
+from thor_moe import FusedThorMoE # pylint: disable=unused-import
 
 config = ThorConfig()
 config.token_num = 64
@@ -34,8 +34,9 @@ stream = torch.cuda.default_stream()
 start_event = torch.cuda.Event(enable_timing=True)
 end_event = torch.cuda.Event(enable_timing=True)
 start_event.record(stream)
-for i in range(10):
-    y = fused_thor_moe(x)
+with torch.inference_mode():
+    for i in range(10):
+        y = fused_thor_moe(x)
 end_event.record(stream)
 stream.synchronize()
 print("elapsed time: {:.3f}".format(start_event.elapsed_time(end_event) / 10))

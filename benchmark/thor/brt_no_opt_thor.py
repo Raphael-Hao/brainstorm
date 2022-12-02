@@ -4,16 +4,16 @@
 # %%
 import torch
 
-from .thor_config import ThorConfig
-from .thor_model import ThorEncoder
-from .thor_moe import ThorMoE # pylint: disable=unused-import
+from thor_config import ThorConfig
+from thor_model import ThorEncoder
+from thor_moe import ThorMoE # pylint: disable=unused-import
 
 config = ThorConfig()
 config.token_num = 64
 config.hidden_size = 512
 config.intermediate_size = 1024
 config.num_attention_heads = 8
-config.num_hidden_layers = 1
+config.num_hidden_layers = 12
 config.expert_num = 16
 config.expert_type = "brt_moe"
 

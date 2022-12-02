@@ -166,15 +166,12 @@ class FusedThorMoE(nn.Module):
         self.scatter_router = RandScatter(
             path_num=config.expert_num,
             fabric_type="homo_fused_dispatch",
-            fabric_kwargs={
+            protocol_kwargs={
                 "supported_capacities": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
             },
         )
         self.gather_router = GatherRouter(
             fabric_type="homo_fused_combine",
-            fabric_kwargs={
-                "supported_capacities": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-            },
         )
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
