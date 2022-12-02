@@ -8,6 +8,7 @@ ARGUMENT_LIST=(
     "arch:"        # an option with a required argument
     "benchmark:"   # an option with a required argument
     "memory-mode:" # an option with a required argument
+    "test-origin"
 )
 
 # read arguments
@@ -21,6 +22,8 @@ opts=$(
 
 eval set --"$opts"
 
+LAUNCH_ARGS=()
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
     --arch)
@@ -29,11 +32,16 @@ while [[ $# -gt 0 ]]; do
         ;;
     --benchmark)
         BENCHMARK=$2
+        LAUNCH_ARGS+=(--benchmark "$BENCHMARK")
         shift 2
         ;;
     --memory-mode)
         MEMORY_MODE=$2
         shift 2
+        ;;
+    --test-origin)
+        LAUNCH_ARGS+=(--test-origin)
+        shift 1
         ;;
     *)
         break
@@ -41,9 +49,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-LAUNCH_ARGS=(
+LAUNCH_ARGS+=(
     --arch "$ARCH"
-    --benchmark "$BENCHMARK"
 )
 
 if [[ "${BENCHMARK}" == "memory_plan" ]]; then

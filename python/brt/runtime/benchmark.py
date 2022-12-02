@@ -115,6 +115,21 @@ class Timer:
             self.stop()
             self.print(msg)
 
+    def deprecated_execute(self, func, msg):
+        with torch.no_grad():
+            for _i in range(self.warm_up):
+                func()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            self.start()
+            for _i in range(self.repeat):
+                self.step_start()
+                for _ in range(self.loop):
+                    func()
+                self.step_stop()
+            self.stop()
+            self.print(msg)
+
 
 class CPUTimer(Timer):
     def __init__(
