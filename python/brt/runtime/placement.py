@@ -110,10 +110,10 @@ def permute_placement(placement: List[List[int]], seed=0):
 
 
 def deterministic_rand_placement_generator(
-    expert_num: int, world_size: int
+    expert_num: int, world_size: int, seed=0
 ) -> Iterator[List[List[int]]]:
     assert expert_num % world_size == 0
-    np.random.seed(8496035)
+    np.random.seed(seed)
     all_experts = list(range(expert_num))
     used_placement = set()
     while True:

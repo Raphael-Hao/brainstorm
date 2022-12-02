@@ -13,6 +13,7 @@ import random
 import time
 import warnings
 from functools import partial
+import pathlib
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
 from tutel_ea import system_init
@@ -130,7 +131,17 @@ def parse_option():
         choices=["gather-micro", "search-end", "bench-searched", "bench-permuted"],
     )
     parser.add_argument("--placement", type=str, default=None)
-    parser.add_argument("--locality", action="store_true", default=False)
+    parser.add_argument(
+        "--capacity",
+        type=float,
+        default=1.25,
+        help="capacity",
+        choices=[1.25, 2.0, 3.0, 4.0],
+    )
+    parser.add_argument(
+        "--moe-id", type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    )
+    parser.add_argument("--seed", type=int, default=0)
     ds_init = None
 
     args, _unparsed = parser.parse_known_args()
@@ -188,15 +199,21 @@ def main(args, config, ds_init):
         adaptive_load(
             model_without_ddp,
             checkpoint_file,
-            enable_locality=args.locality,
+            enable_locality=False,
             global_expert_num=16,
         )
         torch.cuda.synchronize()
         dist.barrier()
-        gather_micro_bench_data(data_loader_val, model, logger)
+        gather_micro_bench_data(config, data_loader_val, model, logger)
     elif args.mode == "search-end":
         search_end_layer_placement(
-            config, model_without_ddp, 8, 8, checkpoint_file, logger
+            config,
+            model_without_ddp,
+            args.moe_id,
+            args.moe_id,
+            args.seed,
+            checkpoint_file,
+            logger,
         )
     elif args.mode == "bench-searched":
         benchmark_serached_placement(
@@ -244,7 +261,7 @@ def make_micro_bench_model(
     )
     micro_moe_block_ddp.eval()
     gpu_data = load_micro_bench_data(
-        "swin_moe_micro_bench_data", config.DATA.BATCH_SIZE, logger
+        config, "swin_moe_micro_bench_data", config.DATA.BATCH_SIZE, logger
     )
 
     in_data = gpu_data[moe_layer_start]
@@ -379,22 +396,27 @@ def search_end_layer_placement(
     model_without_ddp: MicroSwinV2TransformerMoE,
     moe_layer_start: int,
     moe_layer_end: int,
+    seed: int,
     checkpoint_file: str,
     logger,
 ):
     _, end_moe_keys, micro_moe_block_ddp, in_data = make_micro_bench_model(
         config, model_without_ddp, moe_layer_start, moe_layer_end, logger
     )
+    micro_moe_block_ddp.eval()
 
     placement_generator = deterministic_rand_placement_generator(
-        16, dist.get_world_size()
+        16, dist.get_world_size(), seed
     )
     best_throughput = 0
     best_placement = None
     worst_throughput = 1e10
     worst_placement = None
     idx = 0
-    for placement in placement_generator:
+    micro_results_path = BRT_CACHE_PATH / "results" / "swin_moe" / "micro_results"
+    micro_results_path.mkdir(parents=True, exist_ok=True)
+    for i in range(1000):
+        placement = next(placement_generator)
         idx += 1
         modified_placements = {}
         modified_placements[end_moe_keys] = placement
@@ -423,7 +445,8 @@ def search_end_layer_placement(
             best_placement = np.array(list(itertools.chain.from_iterable(placement)))
             if dist.get_rank() == 0:
                 np.savetxt(
-                    f"micro_results/{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.best_{dist.get_world_size()}_placement.csv",
+                    micro_results_path
+                    / f"{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.best_{dist.get_world_size()}_placement.csv",
                     best_placement,
                     fmt="%s",
                     delimiter=",",
@@ -433,7 +456,8 @@ def search_end_layer_placement(
             worst_placement = np.array(list(itertools.chain.from_iterable(placement)))
             if dist.get_rank() == 0:
                 np.savetxt(
-                    f"micro_results/{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.worst_{dist.get_world_size()}_placement.csv",
+                    micro_results_path
+                    / f"{moe_layer_start}_{moe_layer_end}.{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.worst_{dist.get_world_size()}_placement.csv",
                     worst_placement,
                     fmt="%s",
                     delimiter=",",
@@ -441,18 +465,30 @@ def search_end_layer_placement(
         logger.info(
             f"{idx} ===>Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {best_throughput/worst_throughput:.2f}"  # pylint: disable=line-too-long
         )
+    if dist.get_rank() == 0:
+        result_path = pathlib.Path(
+            micro_results_path / f"world_size_{dist.get_world_size()}.csv"
+        )
+        result = result_path.open("a")
+        result.write(
+            f"{moe_layer_start}_{moe_layer_end},{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR},{best_throughput:.2f},{worst_throughput:.2f},{best_throughput/worst_throughput:.2f}\n",
+        )
 
 
 def load_searched_placement(
     config, which_one: str, moe_layer_start: int, moe_layer_end: int, logger
 ) -> Dict[Tuple[int, int], List[List[int]]]:
+    result_path = BRT_CACHE_PATH / "results" / "swin_moe"
     world_size = dist.get_world_size()
     experts_range = {2: 18, 3: 2}
     experts_keys = generate_experts_keys(experts_range)
     capacity_factor = config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR
     assert which_one in ["best", "worst"]
-    searched_placement_file = f"micro_results/{moe_layer_start}_{moe_layer_end}.{capacity_factor}.{which_one}_{world_size}_placement.csv"
-    logger.info(f"Loading searched placement from {searched_placement_file}")
+    searched_placement_file = (
+        result_path
+        / f"micro_results/{moe_layer_start}_{moe_layer_end}.{capacity_factor}.{which_one}_{world_size}_placement.csv"
+    )
+    logger.info(f"Loading searched placement from {searched_placement_file.as_posix()}")
     searched_placement_list = np.loadtxt(
         searched_placement_file, dtype=np.int32, delimiter=","
     )
@@ -465,13 +501,13 @@ def load_searched_placement(
     return searched_placement
 
 
-def load_micro_bench_data(data_dir: str, bs: int, logger):
+def load_micro_bench_data(config, data_dir: str, bs: int, logger):
     logger.info(f"Loading micro-bench data from {data_dir}")
-    data_dir_path = BRT_CACHE_PATH / f"datasets/{data_dir}"
+    data_dir_path = BRT_CACHE_PATH / f"dataset/{data_dir}"
     data_file_path = (
         data_dir_path
         / f"world_size_{dist.get_world_size()}"
-        / f"rank{dist.get_rank()}_{bs}.npz"
+        / f"rank{dist.get_rank()}_{bs}_{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}.npz"
     )
     data = np.load(data_file_path, allow_pickle=True)
     numpy_data = list(data.values())
@@ -495,7 +531,7 @@ def get_benchmark_data(data_loader, logger, num_batches=100):
 
 
 @torch.inference_mode()
-def gather_micro_bench_data(data_loader, model, logger):
+def gather_micro_bench_data(config, data_loader, model, logger):
     brt_debug.set_targeted_profile_position(target=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     bench_nums = 1
     data_iter = iter(data_loader)
@@ -507,7 +543,8 @@ def gather_micro_bench_data(data_loader, model, logger):
         images = images.cuda(non_blocking=True)
         model(images)
     brt_debug.save_profile(
-        profile_name=f"{batch_size}", profile_dir="datasets/swin_moe_micro_bench_data"
+        profile_name=f"{batch_size}_{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR}",
+        profile_dir="dataset/swin_moe_micro_bench_data",
     )
     torch.cuda.synchronize()
     dist.barrier()

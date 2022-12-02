@@ -19,6 +19,8 @@ ARGUMENT_LIST=(
     "mode:"
     "blocking"
     "bs:"
+    "capacity:"
+    "moe-id:"
 )
 
 # read arguments
@@ -71,6 +73,16 @@ while [[ $# -gt 0 ]]; do
         ;;
     --bs)
         BS=$2
+        shift 2
+        ;;
+    --capacity)
+        CAPACITY=$2
+        LAUNCH_ARGS+=(--capacity "$CAPACITY")
+        shift 2
+        ;;
+    --moe-id)
+        MOE_ID=$2
+        LAUNCH_ARGS+=(--moe-id "$MOE_ID")
         shift 2
         ;;
     *)
@@ -126,6 +138,7 @@ LAUNCH_ARGS+=(
     --data-path "${BRT_CACHE_PATH}"/dataset/imagenet22k
     --output ./results/MoE/
     --resume "${BRT_CACHE_PATH}"/ckpt/swinv2_moe_small/model.pth
+    --seed "$RANDOM"
 )
 
 echo "Final launch args:" "${LAUNCH_ARGS[@]}"
