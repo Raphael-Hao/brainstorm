@@ -110,8 +110,9 @@ class FusedThorExpert(nn.Module):
         self,
         inter_state: torch.Tensor,
     ) -> torch.Tensor:
-        capacities = inter_state.load.tolist()
-        tag_stack, load_stack, extra_stack = collect_proto_attr_stack(inter_state)
+        capacities = inter_state.loads.tolist()
+        route_indices = inter_state.route_indices
+        score = inter_state.score
         expert1_out = torch.zeros(
             inter_state.shape[0], self.intermediate_size, device=inter_state.device
         )
@@ -129,7 +130,9 @@ class FusedThorExpert(nn.Module):
             standalone_inputs=self.expert2_standalone_inputs,
             capacities=capacities,
         )
-        expert2_out = init_proto_tensor(expert2_out, tag_stack, load_stack, extra_stack)
+        expert2_out.route_indices = route_indices
+        expert2_out.loads = inter_state.loads
+        expert2_out.score = score
         return expert2_out
 
 
@@ -167,7 +170,9 @@ class FusedThorMoE(nn.Module):
             path_num=config.expert_num,
             fabric_type="homo_fused_dispatch",
             protocol_kwargs={
-                "supported_capacities": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+                "supported_capacities": torch.tensor(
+                    [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024], dtype=torch.int32
+                ),
             },
         )
         self.gather_router = GatherRouter(
