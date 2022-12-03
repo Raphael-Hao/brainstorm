@@ -22,7 +22,7 @@ def main():
     config.num_attention_heads = 8
     config.num_hidden_layers = 12
     config.expert_num = args.expert
-    config.expert_type = "brt_homo_moe"
+    config.expert_type = "brt_homo"
 
     # fused_thor_moe = FusedThorMoE(config).eval()
     fused_thor_moe = ThorEncoder(config).eval()

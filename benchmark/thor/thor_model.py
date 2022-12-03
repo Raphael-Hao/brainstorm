@@ -220,6 +220,7 @@ class ThorSelfAttention(nn.Module):
         past_key_value=None,
         output_attentions=False,
     ):
+        # print("hidden_states", hidden_states.shape)
         mixed_query_layer = self.query(hidden_states)
 
         # If this is instantiated as a cross-attention module, the keys
@@ -461,10 +462,10 @@ class BertLayer(nn.Module):
             elif config.expert_type == "sparse_fusion":
                 print("using sparse fusion inter output for moe")
                 self.inter_output = SparseFusionThorMoE(config)
-            elif config.expert_type == "brt_moe":
+            elif config.expert_type == "brt":
                 print("using brt moe inter output")
                 self.inter_output = ThorMoE(config)
-            elif config.expert_type == "brt_homo_moe":
+            elif config.expert_type == "brt_homo":
                 print("using brt homo fused inter output")
                 self.inter_output = FusedThorMoE(config)
             else:
