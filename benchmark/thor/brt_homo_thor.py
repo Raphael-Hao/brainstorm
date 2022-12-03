@@ -13,14 +13,14 @@ def main():
     bench_arg_manager = BenchmarkArgumentManager()
     parser = bench_arg_manager.get_parser()
     parser.add_argument("--expert", type=int, default=2, choices=[2, 4, 8, 16])
-    parser.add_argument("--token", type=int, default=32, choices=[32, 64, 128, 256])
+    parser.add_argument("--token", type=int, default=32, choices=[32, 64, 96, 128, 160, 192, 224, 256])
     args = bench_arg_manager.get_args()
     config = ThorConfig()
     config.token_num = args.token
     config.hidden_size = 512
     config.intermediate_size = 1024
     config.num_attention_heads = 8
-    config.num_hidden_layers = 1#2
+    config.num_hidden_layers = 12
     config.expert_num = args.expert
     config.expert_type = "brt_homo_moe"
 
