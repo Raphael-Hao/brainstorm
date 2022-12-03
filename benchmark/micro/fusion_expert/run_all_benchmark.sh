@@ -7,19 +7,23 @@ export BRT_CACHE_PATH=$SCRIPT_DIR/../../../.cache
 
 EXPERTS=(
     2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    10
+)
+TOKENS=(
+    1
+    2
     4
     8
     16
-)
-TOKENS=(
     32
     64
-    96
-    128
-    160
-    192
-    224
-    256
 )
 BENCH_ITEMS=(
     brt
@@ -29,7 +33,8 @@ for bench in "${BENCH_ITEMS[@]}"; do
     for expert in "${EXPERTS[@]}"; do
         for token in "${TOKENS[@]}"; do
             echo "Running benchmark for $bench with $expert experts and $token tokens"
-            python micro_thor.py --bench "$bench" --expert "$expert" --token "$token"
+            total_tokens=$((expert * token))
+            python micro_thor.py --bench "$bench" --expert "$expert" --token "$total_tokens"
         done
     done
 done
