@@ -415,6 +415,7 @@ def search_end_layer_placement(
     idx = 0
     micro_results_path = BRT_CACHE_PATH / "results" / "swin_moe" / "micro_results"
     micro_results_path.mkdir(parents=True, exist_ok=True)
+    no_update_iter_nums = 0
     for i in range(1000):
         placement = next(placement_generator)
         idx += 1
@@ -451,6 +452,7 @@ def search_end_layer_placement(
                     fmt="%s",
                     delimiter=",",
                 )
+            no_update_iter_nums = 0
         if worst_throughput > throughput:
             worst_throughput = throughput
             worst_placement = np.array(list(itertools.chain.from_iterable(placement)))
@@ -462,9 +464,14 @@ def search_end_layer_placement(
                     fmt="%s",
                     delimiter=",",
                 )
+            no_update_iter_nums = 0
+        no_update_iter_nums += 1
+        gap = best_throughput/worst_throughput
         logger.info(
-            f"{idx} ===>Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {best_throughput/worst_throughput:.2f}"  # pylint: disable=line-too-long
+            f"{idx} ===>Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {gap:.2f}"  # pylint: disable=line-too-long
         )
+        if no_update_iter_nums > 200 and gap > 1.05:
+            break
     if dist.get_rank() == 0:
         result_path = pathlib.Path(
             micro_results_path / f"world_size_{dist.get_world_size()}.csv"
