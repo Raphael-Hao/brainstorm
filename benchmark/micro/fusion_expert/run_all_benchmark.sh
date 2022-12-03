@@ -3,7 +3,7 @@
 # Licensed under the MIT license.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-export BRT_CACHE_PATH=$SCRIPT_DIR/../../.cache
+export BRT_CACHE_PATH=$SCRIPT_DIR/../../../.cache
 
 EXPERTS=(
     2
