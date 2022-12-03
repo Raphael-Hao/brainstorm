@@ -4,11 +4,10 @@
 # \file: /thor_moe.py
 # \brief:
 # Author: raphael hao
-
+import math
 import torch
 import torch.nn as nn
 from brt.jit import make_jit_kernel
-from brt.runtime.proto_tensor import collect_proto_attr_stack, init_proto_tensor
 from brt.app.rand import RandScatter
 from brt.router import GatherRouter
 
@@ -62,6 +61,9 @@ class ThorExpert(nn.Module):
 class FusedThorExpert(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
+        self.token_num = config.token_num
+        max_exp = math.ceil(math.log2(self.token_num))
+        capacities = [2 ** i for i in range(max_exp)]
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
         dense1s = nn.ModuleList(
@@ -80,7 +82,6 @@ class FusedThorExpert(nn.Module):
                 for _ in range(config.expert_num)
             ]
         )
-        capacities = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
         sample_inputs = [torch.ones(i, config.hidden_size) for i in capacities]
 
         self.expert1_kernel = make_jit_kernel(
@@ -166,12 +167,15 @@ class ThorMoE(nn.Module):
 class FusedThorMoE(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
+        self.token_num = config.token_num
+        max_exp = math.ceil(math.log2(self.token_num))
+        capacities = [2 ** i for i in range(max_exp)]
         self.scatter_router = RandScatter(
             path_num=config.expert_num,
             fabric_type="homo_fused_dispatch",
             protocol_kwargs={
                 "supported_capacities": torch.tensor(
-                    [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024], dtype=torch.int32
+                    capacities, dtype=torch.int32
                 ),
             },
         )

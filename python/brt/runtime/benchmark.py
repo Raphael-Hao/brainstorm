@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import numpy as np
-from brt.runtime import BRT_LOG_PATH
+from brt.runtime import BRT_LOG_PATH, BRT_CACHE_PATH
 
 __all__ = [
     "profile",
@@ -29,7 +29,9 @@ def profile_v2(model: nn.Module, data_collection: List[torch.Tensor], vendor: st
         profile_memory=True,
         schedule=torch.profiler.schedule(wait=2, warmup=2, active=5),
         with_stack=False,
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(f"./results/{vendor}/locality"),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(
+            f"./results/{vendor}/locality"
+        ),
         record_shapes=True,
     ) as p:
         with torch.inference_mode():
@@ -100,7 +102,15 @@ class Timer:
                 f"Configuration: warm_up: {self.warm_up} loop: {self.loop} repeat: {self.repeat}",
             )
 
-    def execute(self, func, msg):
+    def export(self, msg, export_path: str):
+        if self.root != 0:
+            return
+        result_path = BRT_CACHE_PATH / "results" / export_path
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result = result_path.open("a")
+        result.write(f"{msg},{self.avg:.3f},{self.max:.3f},{self.min:.3f}\n")
+
+    def execute(self, func, msg, export=False, export_path=None):
         with torch.inference_mode():
             for _i in range(self.warm_up):
                 func()
@@ -113,7 +123,10 @@ class Timer:
                     func()
                 self.step_stop()
             self.stop()
-            self.print(msg)
+            if export:
+                self.export(msg, export_path)
+            else:
+                self.print(msg)
 
     def deprecated_execute(self, func, msg):
         with torch.no_grad():
