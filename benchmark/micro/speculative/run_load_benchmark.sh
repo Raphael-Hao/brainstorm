@@ -5,24 +5,25 @@
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 export BRT_CACHE_PATH=$SCRIPT_DIR/../../../.cache
 BRANCHES=(
-    2
-    3
-    4
-    5
-    6
-    7
+    # 2
+    # 3
+    # 4
+    # 5
+    # 6
+    # 7
     8
-    9
-    10
-    11
-    12
-    13
-    14
-    15
-    16
+    # 9
+    # 10
+    # 11
+    # 12
+    # 13
+    # 14
+    # 15
+    # 16
 )
 
 CELL_SIZES=(
+    64
     128
     256
     384
