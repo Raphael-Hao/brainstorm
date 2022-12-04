@@ -7,15 +7,18 @@ import torch.nn as nn
 from transformers import BertGenerationTokenizer
 from modeling_bert_generation import BertGenerationDecoder, BertGenerationConfig
 from brt.runtime.benchmark import BenchmarkArgumentManager
+from brt.runtime.placement import dump_decision
 
 
 def main():
     arg_manager = BenchmarkArgumentManager()
     parser = arg_manager.get_parser()
     parser.add_argument(
-        "--mode", type=str, default="debug", choices=["debug", "throughput"]
+        "--mode", type=str, default="debug", choices=["debug", "throughput", "trace"]
     )
-    parser.add_argument("--opt", type=str, default="None", choices=["None", "placement", "pytorch"])
+    parser.add_argument(
+        "--opt", type=str, default="None", choices=["None", "placement", "pytorch"]
+    )
     args = parser.parse_args()
     dist.init_process_group(backend="nccl")
     local_rank = dist.get_rank()
@@ -63,6 +66,8 @@ def main():
         debug(config, model_ddp, input_ids)
     elif args.mode == "throughput":
         throughput(config, model_ddp, input_ids)
+    elif args.mode == "trace":
+        trace(config, model_ddp, model, input_ids)
 
 
 def debug(config: BertGenerationConfig, model_ddp: nn.Module, input_ids: torch.Tensor):
@@ -70,8 +75,18 @@ def debug(config: BertGenerationConfig, model_ddp: nn.Module, input_ids: torch.T
     model_ddp.eval()
     with torch.inference_mode():
         all_task_ids = [
-            [1, 0, 3, 2,],
-            [0, 3, 2, 1,],
+            [
+                1,
+                0,
+                3,
+                2,
+            ],
+            [
+                0,
+                3,
+                2,
+                1,
+            ],
         ]
         task_ids = torch.tensor(all_task_ids[local_rank], dtype=torch.int64).cuda()
         for i in range(10):
@@ -114,6 +129,24 @@ def throughput(
         print(
             f"local_rank: {dist.get_rank()}, throughput: {bench_iteration * input_ids.size(0) / start_event.elapsed_time(end_event) * 1000} samples/s"
         )
+
+
+def trace(
+    config: BertGenerationConfig,
+    model_ddp: nn.Module,
+    model: nn.Module,
+    input_ids: torch.Tensor,
+):
+    bench_iteration = 100
+    model_ddp.eval()
+    all_task_ids = []
+    torch.random.manual_seed(dist.get_rank())
+    for _ in range(bench_iteration):
+        all_task_ids.append(torch.randint(0, config.num_tasks, (input_ids.size(0),)))
+    with torch.inference_mode():
+        for i in range(bench_iteration):
+            outputs = model_ddp(input_ids, task_ids=all_task_ids[i])
+    dump_decision(model)
 
 
 if __name__ == "__main__":
