@@ -78,7 +78,7 @@ def dump_trace(mod: nn.Module):
     scatter_results = []
     for _m_name, m in mod.named_modules():
         if is_router(m) and "scatter" in m._router_type:
-            scatter_results.append(np.array(m.ptu_decision_history, dtype=object))
+            scatter_results.append(np.array(m.load_history, dtype=object))
     np.save("scatter_results.npy", scatter_results, allow_pickle=True)
 
 

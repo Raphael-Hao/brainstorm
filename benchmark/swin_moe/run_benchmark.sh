@@ -56,7 +56,6 @@ while [[ $# -gt 0 ]]; do
         LAUNCH_ARGS+=(--placement "$PLACEMENT")
         shift 2
         ;;
-
     --port)
         PORT=$2
         shift 2

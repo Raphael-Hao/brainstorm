@@ -49,7 +49,9 @@ def main():
 
     cuda_timer = CUDATimer(repeat=10, loop=100, root=local_rank)
 
-    result_path = BRT_CACHE_PATH / "results" / "micro_benchmark" / "sparse_a2a.csv"
+    result_path = (
+        BRT_CACHE_PATH / "results" / "micro" / "distributed" / "sparse_a2a.csv"
+    )
     result_path.parent.mkdir(parents=True, exist_ok=True)
 
     if args.benchmark == "brt":
@@ -82,10 +84,11 @@ def main():
         )
         torch.cuda.synchronize()
         dist.barrier()
-        def torch_a2a(tensor, loads):
-            out_data = torch.zeors_like(tensor)
-            dist.all_to_all_single(out_data, loads)
-            out_data = out_data.view(args.world_size, -1, cell_size)
+
+        def torch_a2a(tensor):
+            out_data = torch.zeros_like(tensor)
+            dist.all_to_all_single(out_data, tensor)
+            out_data = out_data.view(world_size, -1, cell_size)
             out_data = out_data.permute(1, 0, 2).contiguous()
             out_data = out_data.permute(0, 2, 1).contiguous()
             out_data = out_data.view(-1, cell_size)
@@ -94,8 +97,11 @@ def main():
             return final_data
 
         cuda_timer.execute(
-            lambda: torch_a2a(tensor, loads),
+            lambda: torch_a2a(tensor),
             msg=f"torch_a2a,{world_size},{local_expert},{cell_size},{args.load}",
             export=True,
             export_path=result_path,
         )
+
+if __name__ == "__main__":
+    main()
