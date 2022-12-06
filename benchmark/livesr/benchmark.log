@@ -134,3 +134,112 @@
 2022-11-23 14:47:05,461 [INFO] benchmark: LiveSR:                2854828.7181998603 us/run
 2022-11-23 14:47:10,328 [INFO] benchmark: vFusedLiveSR:          476188.47369449213 us/run
 2022-11-23 14:47:12,498 [INFO] benchmark: hFusedLiveSR:          211142.73819839582 us/run
+
+
+2022-12-03 11:22:54,258 [INFO] benchmark: SUBNET_NUM_BLOCK = 80
+2022-12-03 11:22:54,258 [INFO] benchmark: ALL_SUBNET_BS = [[6, 7, 12, 27, 8, 8, 8, 12, 12, 4], [21, 8, 16, 11, 20, 8, 7, 15], [9, 32, 18, 16, 18, 7], [19, 25, 18, 36]]
+2022-12-03 11:22:54,258 [INFO] benchmark: ALL_NUM_CHANNELS = [8, 12, 16, 20]
+2022-12-03 11:22:54,258 [INFO] benchmark: Start
+2022-12-03 11:22:55,785 [INFO] benchmark: LiveSR 8 10 builded
+2022-12-03 11:30:43,176 [INFO] benchmark: vFusedLiveSR 8 10 builded
+2022-12-03 11:31:24,318 [INFO] benchmark: hFusedLiveSR 8 10 builded
+2022-12-03 11:31:24,800 [INFO] benchmark: LiveSR 8 8 builded
+2022-12-03 11:37:53,533 [INFO] benchmark: vFusedLiveSR 8 8 builded
+2022-12-03 11:38:31,863 [INFO] benchmark: hFusedLiveSR 8 8 builded
+2022-12-03 11:38:32,356 [INFO] benchmark: LiveSR 8 6 builded
+2022-12-03 11:44:07,821 [INFO] benchmark: vFusedLiveSR 8 6 builded
+2022-12-03 11:44:46,440 [INFO] benchmark: hFusedLiveSR 8 6 builded
+2022-12-03 11:44:46,677 [INFO] benchmark: LiveSR 8 4 builded
+2022-12-03 11:48:19,227 [INFO] benchmark: vFusedLiveSR 8 4 builded
+2022-12-03 11:48:53,616 [INFO] benchmark: hFusedLiveSR 8 4 builded
+dict_keys([('LiveSR', 8, 10), ('vFusedLiveSR', 8, 10), ('hFusedLiveSR', 8, 10), ('LiveSR', 8, 8), ('vFusedLiveSR', 8, 8), ('hFusedLiveSR', 8, 8), ('LiveSR', 8, 6), ('vFusedLiveSR', 8, 6), ('hFusedLiveSR', 8, 6), ('LiveSR', 8, 4), ('vFusedLiveSR', 8, 4), ('hFusedLiveSR', 8, 4)])
+2022-12-03 11:48:53,630 [INFO] benchmark: * Start timeit: Run 10 times
+2022-12-03 11:48:55,460 [INFO] benchmark: LiveSR, 8, 10:		 1388029.4859409332 us/run
+2022-12-03 11:48:56,000 [INFO] benchmark: vFusedLiveSR, 8, 10:		 388380.1188785583 us/run
+2022-12-03 11:54:21,312 [INFO] benchmark: hFusedLiveSR, 8, 10:		 177546.54912278056 us/run
+2022-12-03 11:54:22,792 [INFO] benchmark: LiveSR, 8, 8:		 1174896.6111335903 us/run
+2022-12-03 11:54:23,252 [INFO] benchmark: vFusedLiveSR, 8, 8:		 335916.1838889122 us/run
+2022-12-03 11:58:34,546 [INFO] benchmark: hFusedLiveSR, 8, 8:		 140558.07003751397 us/run
+2022-12-03 11:58:35,816 [INFO] benchmark: LiveSR, 8, 6:		 997616.9920992106 us/run
+2022-12-03 11:58:36,192 [INFO] benchmark: vFusedLiveSR, 8, 6:		 271490.9170754254 us/run
+2022-12-03 12:02:57,272 [INFO] benchmark: hFusedLiveSR, 8, 6:		 120364.6610956639 us/run
+2022-12-03 12:02:58,348 [INFO] benchmark: LiveSR, 8, 4:		 853602.6650108397 us/run
+2022-12-03 12:02:58,604 [INFO] benchmark: vFusedLiveSR, 8, 4:		 169358.6311303079 us/run
+2022-12-03 12:05:44,292 [INFO] benchmark: hFusedLiveSR, 8, 4:		 92365.43206498027 us/run
+2022-12-03 12:05:44,292 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-03 12:05:58,036 [INFO] benchmark: LiveSR, 8, 10:		 1342899.808101356 us/run
+2022-12-03 12:06:02,268 [INFO] benchmark: vFusedLiveSR, 8, 10:		 409263.1428968161 us/run
+2022-12-03 12:06:03,988 [INFO] benchmark: hFusedLiveSR, 8, 10:		 164919.9139792472 us/run
+2022-12-03 12:06:15,936 [INFO] benchmark: LiveSR, 8, 8:		 1164602.497802116 us/run
+2022-12-03 12:06:19,244 [INFO] benchmark: vFusedLiveSR, 8, 8:		 319064.6588103846 us/run
+2022-12-03 12:06:20,728 [INFO] benchmark: hFusedLiveSR, 8, 8:		 139890.7626979053 us/run
+2022-12-03 12:06:30,852 [INFO] benchmark: LiveSR, 8, 6:		 987542.1360135078 us/run
+2022-12-03 12:06:33,324 [INFO] benchmark: vFusedLiveSR, 8, 6:		 237294.5407172665 us/run
+2022-12-03 12:06:34,564 [INFO] benchmark: hFusedLiveSR, 8, 6:		 114558.61339345574 us/run
+2022-12-03 12:06:42,532 [INFO] benchmark: LiveSR, 8, 4:		 776936.9176123292 us/run
+2022-12-03 12:06:44,252 [INFO] benchmark: vFusedLiveSR, 8, 4:		 161758.55970941484 us/run
+2022-12-03 12:06:45,204 [INFO] benchmark: hFusedLiveSR, 8, 4:		 90170.435491018 us/run
+
+Tuned Classifier
+2022-12-03 13:34:20,632 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-03 13:34:20,776 [INFO] benchmark: classifier of LiveSR, 8, 10:           10990.253882482648 us/run
+2022-12-03 13:34:20,920 [INFO] benchmark: classifier of LiveSR, 8, 8:            10986.440815031528 us/run
+2022-12-03 13:34:21,076 [INFO] benchmark: classifier of LiveSR, 8, 6:            10949.696996249259 us/run
+2022-12-03 13:34:21,227 [INFO] benchmark: classifier of LiveSR, 8, 4:            10970.91471310705 us/run
+Untuned Classifier
+2022-12-03 13:36:37,744 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-03 13:48:41,692 [INFO] benchmark: classifier of LiveSR, 8, 10:           40801.039012148976 us/run
+2022-12-03 13:48:42,146 [INFO] benchmark: classifier of LiveSR, 8, 8:            43602.04671975225 us/run
+2022-12-03 13:48:42,567 [INFO] benchmark: classifier of LiveSR, 8, 6:            40351.545391604304 us/run
+2022-12-03 13:48:43,036 [INFO] benchmark: classifier of LiveSR, 8, 4:            44247.739715501666 us/run
+
+2022-12-05 06:32:05,387 [INFO] benchmark: SUBNET_NUM_BLOCK = 80
+2022-12-05 06:32:05,387 [INFO] benchmark: ALL_SUBNET_BS = [[6, 7, 12, 27, 8, 8, 8, 12, 12, 4], [21, 8, 16, 11, 20, 8, 7, 15], [9, 32, 18, 16, 18, 7], [19, 25, 18, 36]]
+2022-12-05 06:32:05,387 [INFO] benchmark: ALL_NUM_CHANNELS = [8, 12, 16, 20]
+2022-12-05 06:32:05,387 [INFO] benchmark: Start
+2022-12-05 06:32:39,082 [INFO] benchmark: LiveSR 12 10 builded
+2022-12-05 06:44:18,079 [INFO] benchmark: vFusedLiveSR 12 10 builded
+2022-12-05 06:44:36,588 [INFO] benchmark: hFusedLiveSR 12 10 builded
+2022-12-05 06:45:07,381 [INFO] benchmark: LiveSR 16 10 builded
+2022-12-05 07:02:15,660 [INFO] benchmark: vFusedLiveSR 16 10 builded
+2022-12-05 07:02:41,453 [INFO] benchmark: hFusedLiveSR 16 10 builded
+2022-12-05 07:03:11,867 [INFO] benchmark: LiveSR 20 10 builded
+2022-12-05 07:20:45,739 [INFO] benchmark: vFusedLiveSR 20 10 builded
+2022-12-05 07:21:11,051 [INFO] benchmark: hFusedLiveSR 20 10 builded
+dict_keys([('LiveSR', 12, 10), ('vFusedLiveSR', 12, 10), ('hFusedLiveSR', 12, 10), ('LiveSR', 16, 10), ('vFusedLiveSR', 16, 10), ('hFusedLiveSR', 16, 10), ('LiveSR', 20, 10), ('vFusedLiveSR', 20, 10), ('hFusedLiveSR', 20, 10)])
+torch.Size([88, 3, 32, 32]) cuda:0 torch.float32
+2022-12-05 07:21:11,055 [INFO] benchmark: * Start timeit: Run 10 times
+2022-12-05 07:21:12,741 [INFO] benchmark: LiveSR, 12, 10:		 1332824.826007709 us/run
+2022-12-05 07:21:13,228 [INFO] benchmark: vFusedLiveSR, 12, 10:		 360506.22700713575 us/run
+2022-12-05 07:30:35,944 [INFO] benchmark: hFusedLiveSR, 12, 10:		 156399.46307055652 us/run
+2022-12-05 07:30:37,590 [INFO] benchmark: LiveSR, 16, 10:		 1334412.190131843 us/run
+2022-12-05 07:30:38,104 [INFO] benchmark: vFusedLiveSR, 16, 10:		 362528.91505137086 us/run
+2022-12-05 07:46:40,228 [INFO] benchmark: hFusedLiveSR, 16, 10:		 159966.6979163885 us/run
+2022-12-05 07:46:41,832 [INFO] benchmark: LiveSR, 20, 10:		 1284248.722018674 us/run
+2022-12-05 07:46:42,320 [INFO] benchmark: vFusedLiveSR, 20, 10:		 363063.6299494654 us/run
+2022-12-05 08:02:05,787 [INFO] benchmark: hFusedLiveSR, 20, 10:		 377124.1041831672 us/run
+2022-12-05 08:02:05,787 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-05 08:02:20,106 [INFO] benchmark: LiveSR, 12, 10:		 1399470.8442827687 us/run
+2022-12-05 08:02:23,940 [INFO] benchmark: vFusedLiveSR, 12, 10:		 370563.45120072365 us/run
+2022-12-05 08:02:25,589 [INFO] benchmark: hFusedLiveSR, 12, 10:		 157471.74869757143 us/run
+2022-12-05 08:02:39,832 [INFO] benchmark: LiveSR, 16, 10:		 1391799.6808886528 us/run
+2022-12-05 08:02:43,692 [INFO] benchmark: vFusedLiveSR, 16, 10:		 373873.1113029644 us/run
+2022-12-05 08:02:45,358 [INFO] benchmark: hFusedLiveSR, 16, 10:		 160014.15927894413 us/run
+2022-12-05 08:02:59,660 [INFO] benchmark: LiveSR, 20, 10:		 1397066.8526133522 us/run
+2022-12-05 08:03:03,428 [INFO] benchmark: vFusedLiveSR, 20, 10:		 363576.74391474575 us/run
+2022-12-05 08:03:07,304 [INFO] benchmark: hFusedLiveSR, 20, 10:		 375953.5509161651 us/run
+Press any key to start profiling
+
+2022-12-06 04:20:29,600 [INFO] benchmark: LiveSR 20 10 builded
+2022-12-06 04:38:07,544 [INFO] benchmark: vFusedLiveSR 20 10 builded
+2022-12-06 04:38:32,798 [INFO] benchmark: hFusedLiveSR 20 10 builded
+dict_keys([('LiveSR', 20, 10), ('vFusedLiveSR', 20, 10), ('hFusedLiveSR', 20, 10)])
+torch.Size([88, 3, 32, 32]) cuda:0 torch.float32
+2022-12-06 04:38:32,854 [INFO] benchmark: * Start timeit: Run 10 times
+2022-12-06 04:38:34,598 [INFO] benchmark: LiveSR, 20, 10:                1357469.7880540043 us/run
+2022-12-06 04:38:35,156 [INFO] benchmark: vFusedLiveSR, 20, 10:          416292.94701851904 us/run
+2022-12-06 04:55:27,956 [INFO] benchmark: hFusedLiveSR, 20, 10:          377800.882095471 us/run
+2022-12-06 04:55:27,956 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-06 04:55:42,604 [INFO] benchmark: LiveSR, 20, 10:                1430567.5068870184 us/run
+2022-12-06 04:55:46,800 [INFO] benchmark: vFusedLiveSR, 20, 10:          406239.8715876043 us/run
+2022-12-06 04:55:50,692 [INFO] benchmark: hFusedLiveSR, 20, 10:          377500.46241562814 us/run
