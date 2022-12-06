@@ -1,7 +1,9 @@
 from typing import List
 
+
 import torch
-from torch import nn
+from torch import nn, fx
+from torch.utils import dlpack
 
 from brt.router import ScatterRouter, GatherRouter
 from brt.runtime.proto_tensor import (
@@ -11,7 +13,7 @@ from brt.runtime.proto_tensor import (
     init_proto_tensor,
 )
 
-from archs.livesr import LiveSR, Classifier
+from archs.livesr import LiveSR, TunedClassifier
 from archs.vfused_nas_mdsr import vFusedNAS
 from archs.nas_mdsr import SingleNetwork as NAS, ResBlock, Upsampler
 from archs.fuse import TunedKernel
@@ -25,9 +27,7 @@ class vFusedLiveSR(nn.Module):
         self.subnet_num_block = raw.subnet_num_block
         self.num_feature = raw.num_feature
         self.classifier = raw.classifier
-        self.scatter = ScatterRouter(
-            protocol_type="label", protocol_kwargs={"flow_num": 10}
-        )
+        self.scatter = ScatterRouter()
         self.subnets = nn.ModuleList(
             vFusedNAS(net, bs) for net, bs in zip(raw.subnets, subnet_bs)
         )
@@ -53,3 +53,4 @@ class vFusedLiveSR(nn.Module):
             )
         gathered = self.gather(subnet_outputs)
         return gathered
+

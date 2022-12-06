@@ -19,10 +19,10 @@ logger = log.get_logger()
 logger.setLevel("INFO")
 
 all_subnet_bs = [
-    [19, 25, 18, 36],
-    [9, 32, 18, 16, 18, 7],
-    [21, 8, 16, 11, 20, 8, 7, 15],
     [6, 7, 12, 27, 8, 8, 8, 12, 12, 4],
+    [21, 8, 16, 11, 20, 8, 7, 15],
+    [9, 32, 18, 16, 18, 7],
+    [19, 25, 18, 36],
 ]
 all_num_channels = [
     8, 12, 16, 20
@@ -139,8 +139,8 @@ def tune(subnet_bs, num_channels):
                 f"####### find tuned {module_name =} with: {parameters =}, {input_infos =}, continue"
             )
             logger.info("##########################################################")
-            tvm_tuner.insert_top_n_netlet_to_storage("fastest", 5)
-            tvm_tuner.insert_top_n_netlet_to_storage("most_efficient", 5)
+            # tvm_tuner.insert_top_n_netlet_to_storage("fastest")
+            # tvm_tuner.insert_top_n_netlet_to_storage("most_efficient", 5)
         else:
             logger.info("##########################################################")
             logger.info(
@@ -149,13 +149,67 @@ def tune(subnet_bs, num_channels):
             logger.info("##########################################################")
             tvm_tuner.tune_netlet()
             tvm_tuner.export_netlet_template("fastest")
-            tvm_tuner.insert_top_n_netlet_to_storage("fastest", 1)
+            tvm_tuner.insert_top_n_netlet_to_storage("fastest")
             # tvm_tuner.insert_top_n_netlet_to_storage("most_efficient", 5)
 
     print("Done!")
 
 
+def update_db(subnet_bs, num_channels):
+    tvm_tuner = TVMTuner()
+    for line in conv_params(subnet_bs, num_channels):
+        conv_param = json.loads(line)
+        (
+            module_name,
+            input_infos,
+            output_infos,
+            parameters,
+            operator,
+        ) = parse_params(conv_param)
+
+        if module_name == "Conv2dBiasMulAdd":
+            operator = Conv2dMulAdd(
+                operator,
+                scale=1,
+            )
+            input_infos["input_1"] = input_infos["input_0"]
+
+        logger.info(parameters)
+        tvm_tuner.import_pt_netlet(
+            module_name,
+            "forward",
+            operator,
+            input_infos,
+            output_infos,
+            parameters,
+        )
+        print(f"#### {module_name =} with: {parameters =}, {input_infos =}")
+        module_function = ModuleKernel(
+            module_name,
+            "forward",
+            None,
+            "CUDA_GPU",
+            input_infos,
+            output_infos,
+            parameters,
+        )
+        try:
+            # module_function.load_from_db("most_efficient")
+            module_function.load_from_db("fastest")
+            print("     find kernel in db")
+        except ValueError:
+            module_function = None
+        if module_function is None:
+            try:
+                tvm_tuner.insert_top_n_netlet_to_storage("fastest")
+                print("     insert kernel into db")
+            except:
+                print(f"     can't find kernel")
+
 if __name__ == "__main__":
     for subnet_bs in all_subnet_bs:
-        for num_channels in all_num_channels:
-            tune(subnet_bs, num_channels)
+        # update_db(subnet_bs, all_num_channels[0])
+        tune(subnet_bs, all_num_channels[0])
+    for num_channels in all_num_channels:
+        # update_db(all_subnet_bs[0], num_channels)
+        tune(all_subnet_bs[0], num_channels)
