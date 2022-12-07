@@ -15,19 +15,25 @@ EXPERTS=(
     8
     9
     10
+    11
+    12
+    14
+    15
+    16
 )
 TOKENS=(
-    1
-    2
+    # 1
+    # 2
     4
-    8
-    16
-    32
-    64
+    # 8
+    # 16
+    # 32
+    # 64
 )
 BENCH_ITEMS=(
     brt
     brt_homo
+    matmul
 )
 for bench in "${BENCH_ITEMS[@]}"; do
     for expert in "${EXPERTS[@]}"; do
