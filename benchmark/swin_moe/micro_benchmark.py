@@ -470,7 +470,7 @@ def search_end_layer_placement(
         logger.info(
             f"{idx} ===>Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {gap:.2f}"  # pylint: disable=line-too-long
         )
-        if no_update_iter_nums > 200 and gap > 1.05:
+        if no_update_iter_nums > 500 and gap <= 1.05:
             break
     if dist.get_rank() == 0:
         result_path = pathlib.Path(
