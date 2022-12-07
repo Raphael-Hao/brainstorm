@@ -24,7 +24,12 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import deterministic_random_generator, profile_v2
-from brt.runtime.placement import dump_trace, adaptive_load
+from brt.runtime.placement import (
+    dump_trace,
+    adaptive_load,
+    adaptive_micro_bench_load,
+    load_searched_placement,
+)
 from brt.runtime import BRT_CACHE_PATH
 from config import get_config
 from data import build_loader
@@ -129,7 +134,6 @@ def parse_option():
         ],
     )
     parser.add_argument("--placement", type=str, default=None)
-    parser.add_argument("--locality", action="store_true", default=False)
     parser.add_argument("--capacity", type=float, default=1.25)
     ds_init = None
 
@@ -166,7 +170,7 @@ def main(args, config, ds_init):
     # flops = 0
     # # if hasattr(model, "flops"):
     #     flops = model.flops()
-        # logger.info(f"number of GFLOPs: {flops / 1e9}")
+    # logger.info(f"number of GFLOPs: {flops / 1e9}")
     model.cuda(config.LOCAL_RANK)
     model_without_ddp = model
 
@@ -183,12 +187,9 @@ def main(args, config, ds_init):
         checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
         MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
         if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
-            placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-            adaptive_load(
-                model_without_ddp,
-                checkpoint_file,
-                enable_locality=args.locality,
-                placement_file=placement_file,
+            searched_placedment = load_searched_placement(config, "best", 0, 10, logger)
+            adaptive_micro_bench_load(
+                model_without_ddp, searched_placedment, checkpoint_file, 16
             )
         else:
             adaptive_load(
@@ -315,13 +316,14 @@ def throughput(data_loader, model, logger):
     torch.cuda.synchronize()
     end = time.time()
     if dist.get_rank() == 0:
-        result_path = BRT_CACHE_PATH / "results" / "swin_moe" /"e2e.csv"
+        result_path = BRT_CACHE_PATH / "results" / "swin_moe" / "e2e.csv"
         result_path.parent.mkdir(parents=True, exist_ok=True)
         result_f = result_path.open("a")
         # result_f.write()
     logger.info(
         f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
+
 
 @torch.inference_mode()
 def check_correctness(model, bs=1, iteration=10):

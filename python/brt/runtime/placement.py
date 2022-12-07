@@ -11,7 +11,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from brt.router import is_router
-from brt.runtime import log
+from brt.runtime import log, BRT_CACHE_PATH
 
 logger = log.get_logger(__file__)
 
@@ -140,6 +140,31 @@ def possible_placement_generator(expert_num: int, world_size: int):
         all_experts, world_size, expert_num // world_size
     )
     return possible_placement
+
+def load_searched_placement(
+    config, which_one: str, moe_layer_start: int, moe_layer_end: int
+) -> Dict[Tuple[int, int], List[List[int]]]:
+    result_path = BRT_CACHE_PATH / "results" / "swin_moe"
+    world_size = dist.get_world_size()
+    experts_range = {2: 18, 3: 2}
+    experts_keys = generate_experts_keys(experts_range)
+    capacity_factor = config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR
+    assert which_one in ["best", "worst"]
+    searched_placement_file = (
+        result_path
+        / f"micro_results/{moe_layer_start}_{moe_layer_end}.{capacity_factor}.{which_one}_{world_size}_placement.csv"
+    )
+    logger.info(f"Loading searched placement from {searched_placement_file.as_posix()}")
+    searched_placement_list = np.loadtxt(
+        searched_placement_file, dtype=np.int32, delimiter=","
+    )
+    assert len(searched_placement_list) == moe_layer_end - moe_layer_start + 1
+    searched_placement = {}
+    for i in range(moe_layer_start, moe_layer_end + 1):
+        placement = np.split(searched_placement_list[i], world_size)
+        placement = [list(p) for p in placement]
+        searched_placement[experts_keys[i]] = placement
+    return searched_placement
 
 
 def adaptive_micro_bench_load(

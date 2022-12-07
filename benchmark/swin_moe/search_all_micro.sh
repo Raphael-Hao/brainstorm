@@ -3,14 +3,14 @@
 # Licensed under the MIT license.
 
 gpus_settings=(
-    # "0,1"
-    # "0,1,2,3"
+    "0,1"
+    "0,1,2,3"
     "0,1,2,3,4,5,6,7"
 )
 capacity_factors=(
-    1.25
-    2.0
-    3.0
+    # 1.25
+    # 2.0
+    # 3.0
     4.0
 )
 moe_layers=(
