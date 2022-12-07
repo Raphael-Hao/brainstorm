@@ -22,28 +22,20 @@ def main():
     config.num_attention_heads = 8
     config.num_hidden_layers = 12
     config.expert_num = args.expert
-    config.expert_type = "brt_homo"
+    config.expert_type = "brt_bmm"
 
-    # fused_thor_moe = FusedThorMoE(config).eval()
-    fused_thor_moe = ThorEncoder(config).eval()
+    # thor_moe = ThorMoE(config).eval()
+    thor_moe = ThorEncoder(config).eval()
 
-    fused_thor_moe.cuda()
-
-    # x = torch.randn(1, 4, config.hidden_size).cuda()
-    # x = fused_thor_moe(x)
-    # print(x[0].shape)
-    x = torch.randn(1, args.token, config.hidden_size).cuda()
-    x = fused_thor_moe(x)
-    print(x[0].shape)
+    thor_moe.cuda()
 
     cuda_timer = CUDATimer(loop=100, repeat=10)
 
     # %%
-
     x = torch.zeros(1, args.token, 512).cuda()
     cuda_timer.execute(
-        lambda: fused_thor_moe(x),
-        msg=f"brt_fuse,{args.expert},{args.token}",
+        lambda: thor_moe(x),
+        msg=f"brt_bmm,{args.expert},{args.token}",
         export=True,
         export_path=f"thor/all_results.csv",
     )

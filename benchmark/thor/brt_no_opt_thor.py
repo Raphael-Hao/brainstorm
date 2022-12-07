@@ -13,7 +13,7 @@ def main():
     bench_arg_manager = BenchmarkArgumentManager()
     parser = bench_arg_manager.get_parser()
     parser.add_argument("--expert", type=int, default=2, choices=[2, 4, 8, 16])
-    parser.add_argument("--token", type=int, default=32, choices=[32, 64, 96, 128, 160, 192, 224, 256])
+    parser.add_argument("--token", type=int, default=32,)
     args = bench_arg_manager.get_args()
     config = ThorConfig()
     config.token_num = args.token

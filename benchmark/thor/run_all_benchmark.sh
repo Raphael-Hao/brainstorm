@@ -9,18 +9,20 @@ EXPERTS=(
     16
 )
 TOKENS=(
-    32
-    64
-    96
-    128
-    160
-    192
-    224
-    256
+    # 32
+    # 64
+    # 96
+    # 128
+    # 160
+    # 192
+    # 224
+    # 256
+    512
 )
 BENCH_ITEMS=(
-    brt
+    # brt
     brt_homo
+    brt_bmm
 )
 for bench in "${BENCH_ITEMS[@]}"; do
     for expert in "${EXPERTS[@]}"; do

@@ -51,4 +51,6 @@ if [[ "${BENCH}" == "brt" ]]; then
     python brt_no_opt_thor.py "${LAUNCH_ARGS[@]}"
 elif [[ "${BENCH}" == "brt_homo" ]]; then
     python brt_homo_thor.py "${LAUNCH_ARGS[@]}"
+elif [[ "${BENCH}" == "brt_bmm" ]]; then
+    python brt_bmm_thor.py "${LAUNCH_ARGS[@]}"
 fi

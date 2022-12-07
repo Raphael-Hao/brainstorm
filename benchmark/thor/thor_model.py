@@ -6,7 +6,6 @@
 # Author: raphael hao
 
 import math
-import os
 import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -46,6 +45,7 @@ from transformers.utils import logging
 from thor_config import ThorConfig
 from thor_moe import (
     FusedThorMoE,
+    FusedThorMoEBmm,
     MaskFusionThorMoE,
     MaskSerialThorMoE,
     SparseFusionThorMoE,
@@ -468,6 +468,9 @@ class BertLayer(nn.Module):
             elif config.expert_type == "brt_homo":
                 print("using brt homo fused inter output")
                 self.inter_output = FusedThorMoE(config)
+            elif config.expert_type == "brt_bmm":
+                print("using brt bmm inter output")
+                self.inter_output = FusedThorMoEBmm(config)
             else:
                 raise ValueError(f"{config.expert_type} is not supported")
 
