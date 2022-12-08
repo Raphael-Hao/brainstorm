@@ -10,11 +10,13 @@ from brt.jit import make_jit_kernel
 from brt.runtime.benchmark import BenchmarkArgumentManager, CUDATimer
 from thor_config import ThorConfig
 
-
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = False
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
 class FusedThorExpert(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
-        capacities = [4, 256]
+        capacities = [config.token_num]
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
         dense1s = nn.ModuleList(
@@ -25,21 +27,21 @@ class FusedThorExpert(nn.Module):
         )
         dense2s = nn.ModuleList(
             [
-                nn.Linear(config.intermediate_size, config.hidden_size)
+                nn.Linear(config.intermediate_size, config.hidden_size, bias=False)
                 for _ in range(config.expert_num)
             ]
         )
         sample_inputs = [torch.ones(i, config.hidden_size) for i in capacities]
 
         self.expert1_kernel = make_jit_kernel(
-            dense1s, sample_inputs, opt_level="homo_fuse"
+            dense1s, sample_inputs, opt_level="homo_fuse", rank=10
         )
 
         sample_inputs = [torch.ones(i, config.intermediate_size) for i in capacities]
 
-        self.expert2_kernel = make_jit_kernel(
-            dense2s, sample_inputs, opt_level="homo_fuse"
-        )
+        # self.expert2_kernel = make_jit_kernel(
+        #     dense2s, sample_inputs, opt_level="homo_fuse"
+        # )
 
         self.expert1_standalone_inputs = []
         for linear in dense1s:
@@ -49,7 +51,7 @@ class FusedThorExpert(nn.Module):
         )
         self.expert2_standalone_inputs = []
         for linear in dense2s:
-            self.expert2_standalone_inputs.extend([linear.weight, linear.bias])
+            self.expert2_standalone_inputs.extend([linear.weight])
         self.expert2_standalone_inputs = nn.ParameterList(
             self.expert2_standalone_inputs
         )
@@ -67,27 +69,27 @@ class FusedThorExpert(nn.Module):
             standalone_inputs=self.expert1_standalone_inputs,
             capacities=capacities,
         )
-        # x = expert1_out
-        expert2_out = torch.empty(
-            inter_state.shape[0], self.hidden_size, device=inter_state.device
-        )
-        self.expert2_kernel(
-            shared_inputs=[expert1_out, expert2_out],
-            standalone_inputs=self.expert2_standalone_inputs,
-            capacities=capacities,
-        )
-        return expert2_out
+        # # x = expert1_out
+        # expert2_out = torch.empty(
+        #     inter_state.shape[0], self.hidden_size, device=inter_state.device
+        # )
+        # self.expert2_kernel(
+        #     shared_inputs=[expert1_out, expert2_out],
+        #     standalone_inputs=self.expert2_standalone_inputs,
+        #     capacities=capacities,
+        # )
+        return expert1_out
 
 
 class ThorExpert(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.dense1 = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.dense2 = nn.Linear(config.intermediate_size, config.hidden_size)
+        # self.dense2 = nn.Linear(config.intermediate_size, config.hidden_size)
 
     def forward(self, inter_state):
         x = self.dense1(inter_state)
-        x = self.dense2(x)
+        # x = self.dense2(x)
         return x
 
 
@@ -106,6 +108,7 @@ class ThorMoE(nn.Module):
             expert_results.append(expert(route_results[i]))
 
         expert_results = torch.cat(expert_results, dim=0).contiguous()
+        # print(expert_results.shape)
         return expert_results
 
 
@@ -150,11 +153,9 @@ class BatchedMatmul(nn.Module):
         self.register_parameter("linear2_bias", nn.Parameter(linear2_bias))
 
     def forward(self, inter_state):
-        hidden_state = (
-            torch.matmul(inter_state, self.linear1_weight) + self.linear1_bias
-        )
-        x = torch.matmul(hidden_state, self.linear2_weight) + self.linear2_bias
-        return x
+        hidden_state = torch.bmm(inter_state, self.linear1_weight) + self.linear1_bias
+        # x = torch.bmm(hidden_state, self.linear2_weight)  # + self.linear2_bias
+        return hidden_state
 
 
 def main():
@@ -171,37 +172,42 @@ def main():
     config.hidden_size = 512
     config.intermediate_size = 1024
     config.num_attention_heads = 8
-    config.num_hidden_layers = 12
+    config.num_hidden_layers = 1
     config.expert_num = args.expert
     config.expert_type = args.bench
     cuda_timer = CUDATimer(loop=100, repeat=10)
     if args.bench == "brt":
         thor_moe = ThorMoE(config).eval().cuda()
-        x = [torch.randn(4, 512).cuda() for _ in range(config.expert_num)]
-        x[-1] = torch.randn(512, 512).cuda()
+        x = [
+            torch.randn(config.token_num, config.hidden_size).cuda() for _ in range(config.expert_num)
+        ]
+        x[-1] = torch.randn(config.token_num, config.hidden_size).cuda()
         cuda_timer.execute(
             lambda: thor_moe(x),
-            msg=f"brt,{config.expert_num}",
+            msg=f"brt,{config.expert_num},{config.token_num}",
             export=True,
             export_path=f"thor/micro_results.csv",
         )
     elif args.bench == "brt_homo":
         thor_moe = FusedThorExpert(config).eval().cuda()
-        x = torch.randn(4 * config.expert_num + 508, 512).cuda()
+        x = torch.randn(
+            config.token_num * config.expert_num + config.token_num - config.token_num, config.hidden_size
+        ).cuda()
         # x = torch.randn(256 * config.expert_num, 512).cuda()
-        capacities = [4] * (config.expert_num - 1) + [512]
+        capacities = [config.token_num] * (config.expert_num - 1) + [config.token_num]
         cuda_timer.execute(
             lambda: thor_moe(x, capacities),
-            msg=f"brt_homo,{config.expert_num}",
+            msg=f"brt_homo,{config.expert_num},{config.token_num}",
             export=True,
             export_path=f"thor/micro_results.csv",
         )
     elif args.bench == "matmul":
         thor_moe = BatchedMatmul(config).cuda().eval()
-        x = torch.randn(config.expert_num, 512, config.hidden_size).cuda()
+        x = torch.randn(config.expert_num, config.token_num, config.hidden_size).cuda()
+        thor_moe(x)
         cuda_timer.execute(
             lambda: thor_moe(x),
-            msg=f"batched_matmul,{config.expert_num}",
+            msg=f"batched_matmul,{config.expert_num},{config.token_num}",
             export=True,
             export_path=f"thor/micro_results.csv",
         )

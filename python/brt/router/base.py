@@ -112,7 +112,7 @@ class RouterBase(nn.Module):
         if len(in_flows) == 0 and isinstance(in_flows, List):
             return
 
-        self.capture_ptu_grains_and_options(in_flows, is_dispatch=False)
+        # self.capture_ptu_grains_and_options(in_flows, is_dispatch=False)
 
         if all(isinstance(flow, List) for flow in in_flows):
             if all(len(flow) > 0 for flow in in_flows):
@@ -126,8 +126,8 @@ class RouterBase(nn.Module):
         self.capture_load_from_flows(in_flows)
 
     def capture_dispatch_flows(self, in_flows, route_indices, loads):
-        self.capture_correlations(route_indices, loads)
-        self.capture_ptu_grains_and_options(in_flows, is_dispatch=True)
+        # self.capture_correlations(route_indices, loads)
+        # self.capture_ptu_grains_and_options(in_flows, is_dispatch=True)
         self.capture_laod_from_protocol(loads)
 
     def capture_load_from_flows(self, in_flows: List[torch.Tensor]) -> None:
@@ -149,9 +149,9 @@ class RouterBase(nn.Module):
             self.load_history = self.load_history + current_load
 
     def capture_laod_from_protocol(self, loads: torch.Tensor):
-        loads_np = loads.cpu().numpy()
+        loads_np = loads
         if self.history_len == 0:
-            self.load_history = np.zeros_like(loads_np, dtype=np.float64)
+            self.load_history = torch.zeros_like(loads_np)
 
         if self.capture_mode == "avg":
             self.load_history = (self.load_history * self.history_len + loads_np) / (
@@ -184,27 +184,28 @@ class RouterBase(nn.Module):
             self.ptu_grain_history = None
 
     def capture_correlations(self, indices: torch.Tensor, loads: torch.Tensor):
-        assert hasattr(
-            self, "protocol"
-        ), "Correlation capturing is only supported for Router with protocol!"
-        path_num = len(loads)
-        src_indices = convert_index_format(
-            indices, loads, self.protocol.index_format, "src_index"
-        )
-        current_ptu_path = [
-            src_indices[: loads[i], i].cpu().numpy() + self.ptu_tag_base
-            for i in range(path_num)
-        ]
-        if self.history_len == 0:
-            self.ptu_decision_history = current_ptu_path
-        else:
-            self.ptu_decision_history = [
-                np.concatenate(
-                    (self.ptu_decision_history[i], current_ptu_path[i]), axis=None
-                )
+        with torch.no_grad():
+            assert hasattr(
+                self, "protocol"
+            ), "Correlation capturing is only supported for Router with protocol!"
+            path_num = len(loads)
+            src_indices = convert_index_format(
+                indices, loads, self.protocol.index_format, "src_index"
+            )
+            current_ptu_path = [
+                src_indices[: loads[i], i] + self.ptu_tag_base
                 for i in range(path_num)
             ]
-        self.ptu_tag_base += loads.sum().item()
+            if self.history_len == 0:
+                self.ptu_decision_history = current_ptu_path
+            else:
+                self.ptu_decision_history = [
+                    torch.concat(
+                        (self.ptu_decision_history[i], current_ptu_path[i])
+                    )
+                    for i in range(path_num)
+                ]
+            self.ptu_tag_base += loads.sum()
 
     def listing_flows(self, flows, is_dispatch=True):
         if is_dispatch:

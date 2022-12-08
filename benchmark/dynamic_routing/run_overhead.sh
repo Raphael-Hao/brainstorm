@@ -40,4 +40,6 @@ LAUNCH_ARGS+=(
 export BRT_CACHE_PATH="$script_dir/../../.cache"
 export BRT_CAPTURE_STATS=True
 export BRT_CAPTURED_FABRIC_TYPE=dispatch,combine
+# export BRT_CAPTURED_FABRIC_TYPE=combine
+# export BRT_CAPTURED_FABRIC_TYPE=dispatch
 python overhead.py "${LAUNCH_ARGS[@]}"

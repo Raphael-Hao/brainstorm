@@ -139,7 +139,7 @@ def main(args):
     _res = Trainer.test(cfg, model)
     torch.cuda.empty_cache()
 
-    timer = CUDATimer(repeat=5, loop=100)
+    timer = CUDATimer(repeat=5, loop=40)
 
     backbone_input = model.backbone_input
 
