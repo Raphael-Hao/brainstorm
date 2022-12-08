@@ -81,12 +81,14 @@ def dump_trace(mod: nn.Module):
             scatter_results.append(np.array(m.load_history, dtype=object))
     np.save("scatter_results.npy", scatter_results, allow_pickle=True)
 
+
 def dump_decision(mod: nn.Module):
     scatter_results = []
     for _m_name, m in mod.named_modules():
         if is_router(m) and "scatter" in m._router_type:
             scatter_results.append(np.array(m.ptu_decision_history, dtype=object))
     np.save("scatter_results.npy", scatter_results, allow_pickle=True)
+
 
 def generate_experts_keys(experts_range: Dict[int, int]):
     experts_keys: List[Tuple[int, int]] = []
@@ -141,8 +143,9 @@ def possible_placement_generator(expert_num: int, world_size: int):
     )
     return possible_placement
 
+
 def load_searched_placement(
-    config, which_one: str, moe_layer_start: int, moe_layer_end: int
+    config, which_one: str, moe_layer_start: int = None, moe_layer_end: int = None
 ) -> Dict[Tuple[int, int], List[List[int]]]:
     result_path = BRT_CACHE_PATH / "results" / "swin_moe"
     world_size = dist.get_world_size()
@@ -150,10 +153,18 @@ def load_searched_placement(
     experts_keys = generate_experts_keys(experts_range)
     capacity_factor = config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR
     assert which_one in ["best", "worst"]
-    searched_placement_file = (
-        result_path
-        / f"micro_results/{moe_layer_start}_{moe_layer_end}.{capacity_factor}.{which_one}_{world_size}_placement.csv"
-    )
+    if moe_layer_start is None and moe_layer_end is None:
+        searched_placement_file = (
+            result_path
+            / f"placement/{which_one}_{world_size}_placement.csv"
+        )
+        moe_layer_start = 0
+        moe_layer_end = len(experts_keys) - 1
+    else:
+        searched_placement_file = (
+            result_path
+            / f"placement/{moe_layer_start}_{moe_layer_end}.{capacity_factor}.{which_one}_{world_size}_placement.csv"
+        )
     logger.info(f"Loading searched placement from {searched_placement_file.as_posix()}")
     searched_placement_list = np.loadtxt(
         searched_placement_file, dtype=np.int32, delimiter=","

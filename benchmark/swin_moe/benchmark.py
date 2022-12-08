@@ -133,7 +133,7 @@ def parse_option():
             "valid",
         ],
     )
-    parser.add_argument("--placement", type=str, default=None)
+    parser.add_argument("--placement", action="store_true", default=False)
     parser.add_argument("--capacity", type=float, default=1.25)
     ds_init = None
 
@@ -186,8 +186,9 @@ def main(args, config, ds_init):
     else:
         checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
         MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
-        if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
-            searched_placedment = load_searched_placement(config, "best", 0, 10, logger)
+        if MOE_LAYER_VENDOR == "brt_dist" and args.placement:
+            logger.info("===> Loading searched placement")
+            searched_placedment = load_searched_placement(config, "best")
             adaptive_micro_bench_load(
                 model_without_ddp, searched_placedment, checkpoint_file, 16
             )

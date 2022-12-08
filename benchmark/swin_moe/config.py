@@ -429,8 +429,6 @@ def update_config(config, args):
         config.MODEL.PRETRAINED = args.pretrained
     if args.resume:
         config.MODEL.RESUME = args.resume
-    if args.placement:
-        config.MODEL.PLACEMENT = args.placement
     if args.accumulation_steps:
         config.TRAIN.ACCUMULATION_STEPS = args.accumulation_steps
     if args.use_checkpoint:

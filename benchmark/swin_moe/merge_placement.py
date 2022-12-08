@@ -2,7 +2,11 @@
 # Licensed under the MIT license.
 
 #%%
+import os
 import numpy as np
+os.environ["BRT_CACHE_PATH"] = "/brainstorm_project/brainstorm/.cache"
+from brt.runtime import BRT_CACHE_PATH
+
 
 def merge_placement(
     moe_layer_start, moe_layer_end, capacity_factor, world_size, which_one
@@ -18,4 +22,12 @@ def merge_placement(
     np.savetxt(all_placement_file, all_placement, delimiter=",", fmt="%d")
 
 # %%
-merge_placement(0, 1, 4.0, 8, "best")
+merge_placement(0, 9, 1.25, 8, "best")
+merge_placement(0, 9, 2.0, 8, "best")
+merge_placement(0, 9, 3.0, 8, "best")
+merge_placement(0, 9, 4.0, 8, "best")
+# %%
+
+merge_placement(0, 9, 4.0, 2, "best")
+merge_placement(0, 9, 4.0, 4, "best")
+# %%

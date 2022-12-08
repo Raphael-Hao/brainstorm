@@ -13,8 +13,7 @@ LAUNCH_ARGS=()
 ARGUMENT_LIST=(
     "vendor:"
     "gpus:"
-    "locality"
-    "placement:"
+    "placement"
     "port:"
     "mode:"
     "blocking"
@@ -45,16 +44,9 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
 
-    --locality)
-        LOCALITY=1
-        LAUNCH_ARGS+=(--locality)
-        shift 1
-        ;;
-
     --placement)
-        PLACEMENT=$2
-        LAUNCH_ARGS+=(--placement "$PLACEMENT")
-        shift 2
+        LAUNCH_ARGS+=(--placement)
+        shift 1
         ;;
     --port)
         PORT=$2
@@ -108,7 +100,7 @@ if [[ "${VENDOR}" == "brt" ]]; then
         export MOE_LAYER_VENDOR=brt_dist
     fi
 else
-    if [ -n "$LOCALITY" ] || [ -n "$PLACEMENT" ]; then
+    if [ -n "$PLACEMENT" ]; then
         echo "locality should not be specified for non-brt vendor"
         exit 1
     fi
