@@ -1,4 +1,5 @@
 import numpy as np
+import pathlib
 
 import tvm
 from tvm import relay, auto_scheduler
@@ -41,22 +42,29 @@ def tune_bmm(B, M, N, P):
         )
         print(task.compute_dag)
 
+    searched = 0
+    if pathlib.Path(log_file).exists():
+        with open(log_file) as f:
+            lines = f.readlines()
+        searched = len(lines)
+
     def run_tuning():
         print("Begin tuning...")
         measure_ctx = auto_scheduler.LocalRPCMeasureContext(
             repeat=1, min_repeat_ms=300, timeout=10
         )
 
-        tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
+        tuner = auto_scheduler.TaskScheduler(tasks, task_weights, load_log_file=log_file if pathlib.Path(log_file).exists() else None)
         tune_option = auto_scheduler.TuningOptions(
-            num_measure_trials=2000,  # change this to 20000 to achieve the best performance
+            num_measure_trials=2000 - searched,  # change this to 20000 to achieve the best performance
             runner=measure_ctx.runner,
             measure_callbacks=[auto_scheduler.RecordToFile(log_file)],
         )
 
         tuner.tune(tune_option)
 
-    run_tuning()
+    if searched < 2000:
+        run_tuning()
 
     # # Compile with the history best
     # print("Compile...")
