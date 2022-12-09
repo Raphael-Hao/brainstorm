@@ -1,12 +1,14 @@
 from typing import List, Tuple, Union
 
 import torch
+
 # pylint: disable=no-name-in-module
 from brt._C.router import (
     dispatch_with_dst_indices_1d,
     dispatch_with_dst_indices_2d,
     combine_with_src_indices,
 )
+
 # pylint: enable=no-name-in-module
 from brt.runtime import log
 from brt.router.fabric.base import register_fabric
@@ -252,9 +254,48 @@ class HomoFusedCombineFabric(CombineFabric):
                     in_flow, local_indices, loads, auto_pad=True, gates=score
                 )
             else:
+                out_flow = combine_with_src_indices(in_flow, local_indices, loads, None)
+
+            out_flows.append(out_flow)
+
+        return out_flows
+
+    def pack_invalid_flow(self, in_flow):
+        return in_flow
+
+    def remove_needless_pack(self, out_flow):
+        return out_flow
+
+
+@register_fabric("Residual_homo_fused_combine")
+class ResidualHomoFusedCombineFabric(CombineFabric):
+    def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
+        assert granularity_padding == False
+        super().__init__(
+            flow_num=flow_num,
+            reduction=reduction,
+            sparse=sparse,
+            granularity_padding=False,
+        )
+        self.transform = True
+
+    def combine(
+        self, residual_flows: List[torch.Tensor], in_flows: List[torch.Tensor]
+    ) -> List[torch.Tensor]:
+        out_flows = []
+        for flow_idx, in_flow in enumerate(in_flows):
+
+            local_indices = in_flow.route_indices
+            loads = in_flow.loads
+            score = in_flow.score
+
+            # self.start_timer()
+            if self.transform:
                 out_flow = combine_with_src_indices(
-                    in_flow, local_indices, loads, None
+                    in_flow, local_indices, loads, auto_pad=True, gates=score, residual=residual_flows[flow_idx]
                 )
+            else:
+                out_flow = combine_with_src_indices(in_flow, local_indices, loads, None, residual=residual_flows[flow_idx])
 
             out_flows.append(out_flow)
 

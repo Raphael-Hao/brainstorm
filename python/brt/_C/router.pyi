@@ -50,4 +50,5 @@ def combine_with_src_indices(
     loads: torch.Tensor,
     auto_pad: bool = False,
     gates: torch.Tensor = None,
+    output: torch.Tensor = None,
 ) -> torch.Tensor: ...

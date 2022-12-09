@@ -240,9 +240,7 @@ class SwitchTransformersTop1Router(nn.Module):
         router_probs, router_logits = self._compute_router_probabilities(hidden_states)
 
         expert_index = torch.argmax(router_probs, dim=-1)
-        expert_index = torch.nn.functional.one_hot(
-            expert_index, num_classes=self.num_experts
-        )
+        expert_index = torch.nn.functional.one_hot(expert_index, num_classes=self.num_experts)
 
         # Mask tokens outside expert capacity. Sum over each sequence
         token_priority = torch.cumsum(expert_index, dim=-2)

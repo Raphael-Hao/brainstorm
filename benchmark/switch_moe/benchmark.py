@@ -36,7 +36,7 @@ test_time = 100
 seed = 171
 max_seq_length = 128
 bsz = 8
-model_name = "google/switch-base-8"
+model_name = "google/switch-base-256"
 device = torch.device("cuda:0")
 config = AutoConfig.from_pretrained(model_name, max_position_embeddings=max_seq_length)
 model = SwitchTransformersModel.from_pretrained(model_name, config=config).cuda()

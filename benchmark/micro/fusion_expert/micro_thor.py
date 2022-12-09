@@ -13,6 +13,7 @@ from thor_config import ThorConfig
 torch.backends.cuda.matmul.allow_tf32 = False
 torch.backends.cudnn.allow_tf32 = False
 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+
 class FusedThorExpert(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()

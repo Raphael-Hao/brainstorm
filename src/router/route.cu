@@ -252,6 +252,102 @@ __global__ void __launch_bounds__(1024) padded_weighted_combine_with_src_indices
   }
 }
 
+__global__ void __launch_bounds__(1024)
+    residual_combine_with_src_indices(float* __restrict__ in_data /*[?load*path_num x sample_size]*/,
+                             float* __restrict__ out_data /*[sample_num x sample_size]*/,
+                             int* __restrict__ route_indices /*[sample_num x path_num]*/,
+                             int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_size,
+                             int path_num) {
+  for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
+    for (int j = 0; j < path_num; j++) {
+      int route_index = i * path_num + j;
+      int local_dst = route_indices[route_index];
+
+      if (local_dst == 0 || local_dst > loads[j]) {
+        continue;
+      }
+
+      int global_dst = local_dst - 1;
+      for (int k = 0; k < j; k++) {
+        global_dst += loads[k];
+      }
+      for (int k = threadIdx.x; k < sample_size; k += 1024) {
+        out_data[i * sample_size + k] = in_data[global_dst * sample_size + k];
+      }
+    }
+  }
+}
+
+__global__ void __launch_bounds__(1024)
+    residual_padded_combine_with_src_indices(float* __restrict__ in_data /*[?load*path_num x sample_size]*/,
+                                    float* __restrict__ out_data /*[sample_num x sample_size]*/,
+                                    int* __restrict__ route_indices /*[sample_num x path_num]*/,
+                                    int* __restrict__ loads /*[path_num]*/, int capacity,
+                                    int sample_num, int sample_size, int path_num) {
+  for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
+    for (int j = 0; j < path_num; j++) {
+      int route_index = i * path_num + j;
+      int local_dst = route_indices[route_index];
+
+      if (local_dst == 0 || local_dst > loads[j]) {
+        continue;
+      }
+
+      int global_dst = local_dst - 1 + j * capacity;
+      for (int k = threadIdx.x; k < sample_size; k += 1024) {
+        out_data[i * sample_size + k] = in_data[global_dst * sample_size + k];
+      }
+    }
+  }
+}
+
+__global__ void __launch_bounds__(1024)
+    residual_weighted_combine_with_src_indices(float* __restrict__ in_data /*[?load*path_num x sample_size]*/,
+                                      float* __restrict__ out_data /*[sample_num x sample_size]*/,
+                                      float* __restrict__ gates /*[sample_num x path_num]*/,
+                                      int* __restrict__ route_indices /*[sample_num x path_num]*/,
+                                      int* __restrict__ loads /*[path_num]*/, int sample_num,
+                                      int sample_size, int path_num) {
+  for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
+    for (int j = 0; j < path_num; j++) {
+      int route_index = i * path_num + j;
+      int local_dst = route_indices[route_index];
+      if (local_dst == 0) {
+        continue;
+      }
+      int global_dst = local_dst - 1;
+      for (int k = 0; k < j; k++) {
+        global_dst += loads[k];
+      }
+      for (int k = threadIdx.x; k < sample_size; k += 1024) {
+        out_data[i * sample_size + k] = in_data[global_dst * sample_size + k] * gates[route_index];
+      }
+    }
+  }
+}
+
+__global__ void __launch_bounds__(1024) residual_padded_weighted_combine_with_src_indices(
+    float* __restrict__ in_data /*[?load*path_num x sample_size]*/,
+    float* __restrict__ out_data /*[sample_num x sample_size]*/,
+    float* __restrict__ gates /*[sample_num x path_num]*/,
+    int* __restrict__ route_indices /*[sample_num x path_num]*/,
+    int* __restrict__ loads /*[path_num]*/, int capacity, int sample_num, int sample_size,
+    int path_num) {
+  for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
+    for (int j = 0; j < path_num; j++) {
+      int route_index = i * path_num + j;
+      int local_dst = route_indices[route_index];
+      if (local_dst == 0 || local_dst > loads[j]) {
+        continue;
+      }
+      int global_dst = local_dst - 1 + j * capacity;
+      for (int k = threadIdx.x; k < sample_size; k += 1024) {
+        out_data[i * sample_size + k] = in_data[global_dst * sample_size + k] * gates[route_index];
+      }
+    }
+  }
+}
+
 __global__ void __launch_bounds__(1024) no_transform_route_with_in_indices(
     float* __restrict__ in_data /*[sample_num x sample_size]*/,
     float* __restrict__ out_data /*[?load*path_num x sample_size]*/,
@@ -528,6 +624,34 @@ void CombineWithSrcIndices(float* src_data /*[?load*path_num x sample_size]*/,
           src_data, dst_data, route_indices, loads, capacity, sample_num, sample_size, path_num);
     } else {
       padded_weighted_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
+          src_data, dst_data, gates, route_indices, loads, capacity, sample_num, sample_size,
+          path_num);
+    }
+  }
+}
+
+void ResidualCombineWithSrcIndices(float* src_data /*[?load*path_num x sample_size]*/,
+                           float* dst_data /*[sample_num x sample_size]*/,
+                           float* gates /*[sample_num x path_num]*/,
+                           int* route_indices /*[sample_num x path_num]*/,
+                           int* loads /*[path_num]*/, const int& capacity, const int& sample_num,
+                           const int& sample_size, const int& path_num, cudaStream_t stream) {
+  constexpr dim3 block_size(1024);
+  dim3 grid_size(512);
+  if (capacity == 0) {
+    if (gates == nullptr) {
+      residual_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
+          src_data, dst_data, route_indices, loads, sample_num, sample_size, path_num);
+    } else {
+     residual_weighted_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
+          src_data, dst_data, gates, route_indices, loads, sample_num, sample_size, path_num);
+    }
+  } else {
+    if (gates == nullptr) {
+      residual_padded_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
+          src_data, dst_data, route_indices, loads, capacity, sample_num, sample_size, path_num);
+    } else {
+      residual_padded_weighted_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
           src_data, dst_data, gates, route_indices, loads, capacity, sample_num, sample_size,
           path_num);
     }
