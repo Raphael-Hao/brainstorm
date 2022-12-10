@@ -155,7 +155,7 @@ def inference_on_dataset(model, data_loader, evaluator):
             # if idx > 20:
             #     profiler.stop()
             #     break
-            # break
+            break
 
     # Measure the time only for this worker (before the synchronization barrier)
     total_time = int(time.time() - start_time)
