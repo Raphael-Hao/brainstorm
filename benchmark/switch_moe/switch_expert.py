@@ -63,9 +63,10 @@ class FusedSwitchExpert(nn.Module):
         print(capacities)
         route_indices = dispatched_states.route_indices
         score = dispatched_states.score
-        wi_out = torch.empty(
+        wi_out = torch.zeros(
             (dispatched_states.shape[0], self.d_ff), device=dispatched_states.device
         )
+        import pdb; pdb.set_trace()
         self.fused_wi(
             shared_inputs=[dispatched_states, wi_out],
             standalone_inputs=self.fused_wi_standalone_inputs,
@@ -73,7 +74,7 @@ class FusedSwitchExpert(nn.Module):
         )
         act_out = self.act(wi_out)
         dropout_out = self.dropout(act_out)
-        wo_out = torch.empty(
+        wo_out = torch.zeros(
             (dispatched_states.shape[0], self.d_model), device=dispatched_states.device
         )
         self.fused_wo(

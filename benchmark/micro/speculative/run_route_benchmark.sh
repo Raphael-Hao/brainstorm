@@ -11,11 +11,11 @@ BRANCHES=(
     # 5
     # 6
     # 7
-    # 8
+    8
     # 9
     # 10
     # 11
-    12
+    # 12
     # 13
     # 14
     # 15
@@ -31,26 +31,22 @@ CELL_SIZES=(
     # 768
     # 896
     1024
+    # 2048
 )
 
 UNROLL_INDICES=(
-    # 2
-    4
-    # 6
-    # 8
-    # 10
-    # 12
-    # 14
-    # 16
-    # 18
-    # 20
+    0.000087 #4
+    0.000174 #8
+    0.000261 #12
+    0.000348 #16
+    0.000435 #20
 )
 
 for cell_size in "${CELL_SIZES[@]}"; do
     for branch in "${BRANCHES[@]}"; do
         for unroll_index in "${UNROLL_INDICES[@]}"; do
             echo "Running branch $branch, cell_size $cell_size, unroll_index $unroll_index"
-            python route.py --path-num "$branch" --cell-size "$cell_size" --unroll-index "$unroll_index"
+            python route.py --path-num "$branch" --cell-size "$cell_size" --time "$unroll_index"
         done
     done
 done

@@ -25,13 +25,14 @@ BRANCHES=(
 CELL_SIZES=(
     64
     128
+    192
     256
+    320
     384
+    448
     512
+    576
     640
-    768
-    896
-    1024
 )
 
 for branch in "${BRANCHES[@]}"; do

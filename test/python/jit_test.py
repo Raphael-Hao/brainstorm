@@ -100,7 +100,8 @@ class JitKernelTest(unittest.TestCase):
         cuda_timer.stop(10, "brt_horiz_fusion")
 
         for i in range(4):
-            self.assertTrue(torch.allclose(
+            self.assertTrue(
+                torch.allclose(
                     sample_outputs[i], horiz_fused_inputs[2 + i * 4], atol=1e-5
                 )
             )
@@ -154,25 +155,28 @@ class JitKernelTest(unittest.TestCase):
 
     def test_homo_fused_kernel(self):
         cuda_timer = CUDATimer()
-        linears = nn.ModuleList(nn.Linear(512, 1024) for _ in range(4)).cuda()
-        sample_inputs = [torch.randn((2**i, 512)).cuda() for i in range(5)]
+        linears = nn.ModuleList(
+            nn.Linear(768, 3072, bias=False) for _ in range(4)
+        ).cuda()
+        sample_inputs = [torch.randn((2**i, 768)).cuda() for i in range(1, 5)]
+        sample_inputs += [torch.randn((512, 768)).cuda()]
         homo_fused_kernel = make_jit_kernel(
             linears, sample_inputs=sample_inputs, opt_level="homo_fuse"
         )
 
         shared_inputs = [
-            torch.randn((16, 512), device="cuda"),
-            torch.randn((16, 1024), device="cuda"),
+            torch.randn((524, 768), device="cuda"),
+            torch.randn((524, 3072), device="cuda"),
         ]
         standalone_inputs = []
         for linear in linears:
             standalone_inputs.append(linear.weight)
-            standalone_inputs.append(linear.bias)
-        capacities = [2, 8, 4, 2]
+            # standalone_inputs.append(linear.bias)
+        capacities = torch.tensor([2, 8, 512, 2], dtype=torch.int32, device="cuda")
         homo_fused_kernel(shared_inputs, standalone_inputs, capacities)
         cuda_timer.start()
         for i in range(100):
-            shared_inputs[1] = torch.empty((16, 1024), device="cuda")
+            shared_inputs[1] = torch.empty((524, 3072), device="cuda")
             homo_fused_kernel(shared_inputs, standalone_inputs, capacities)
         cuda_timer.stop(100, "brt_homo_fusion")
 
@@ -194,6 +198,8 @@ class JitKernelTest(unittest.TestCase):
                 start_idx += cap
             outputs = torch.cat(outputs)
         cuda_timer.stop(100, "brt_serial_fusion")
+        print(outputs.sum())
+        print(shared_inputs[1].sum())
         self.assertTrue(torch.allclose(outputs, shared_inputs[1], atol=1e-5))
 
 
@@ -284,19 +290,21 @@ class JitFunctionTest(unittest.TestCase):
                 hetero_fused_inputs.append(sample_inputs[i])
                 hetero_fused_inputs.append(linears[i].weight)
                 hetero_fused_inputs.append(linears[i].bias)
-        brt_outs = hetero_fused_function.forward(*hetero_fused_inputs, active_blocks=active_blocks)
+        brt_outs = hetero_fused_function.forward(
+            *hetero_fused_inputs, active_blocks=active_blocks
+        )
 
         cuda_timer.start()
         for i in range(100):
-            brt_outs = hetero_fused_function.forward(*hetero_fused_inputs, active_blocks=active_blocks)
+            brt_outs = hetero_fused_function.forward(
+                *hetero_fused_inputs, active_blocks=active_blocks
+            )
         cuda_timer.stop(100, "brt_hetero_fusion")
 
         for i, active in enumerate(active_blocks):
             if active != 0:
                 sample_out = linears[i](hetero_fused_inputs[i * 3])
-                self.assertTrue(
-                    torch.allclose(sample_out, brt_outs[i], atol=1e-6)
-                )
+                self.assertTrue(torch.allclose(sample_out, brt_outs[i], atol=1e-6))
 
     def test_homo_fused_function(self):
         cuda_timer = CUDATimer()
@@ -314,10 +322,14 @@ class JitFunctionTest(unittest.TestCase):
             standalone_inputs.append(linear.weight)
             standalone_inputs.append(linear.bias)
         capacities = [2, 8, 4, 2]
-        brt_outputs = homo_fused_funciton.forward(*shared_inputs, *standalone_inputs, capacities=capacities)
+        brt_outputs = homo_fused_funciton.forward(
+            *shared_inputs, *standalone_inputs, capacities=capacities
+        )
         cuda_timer.start()
         for i in range(100):
-            brt_outputs = homo_fused_funciton.forward(*shared_inputs, *standalone_inputs, capacities=capacities)
+            brt_outputs = homo_fused_funciton.forward(
+                *shared_inputs, *standalone_inputs, capacities=capacities
+            )
         cuda_timer.stop(100, "brt_homo_fusion")
 
         start_idx = 0
@@ -339,7 +351,6 @@ class JitFunctionTest(unittest.TestCase):
 
         for i in range(len(capacities)):
             self.assertTrue(torch.allclose(outputs[i], brt_outputs[1], atol=1e-6))
-
 
 
 if __name__ == "__main__":

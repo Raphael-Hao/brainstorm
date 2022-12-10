@@ -20,10 +20,9 @@ class DefaultModel(nn.Module):
             [
                 nn.Sequential(
                     *[
-                        nn.Conv2d(
-                            in_channels=self.in_features,
-                            out_channels=self.in_features,
-                            kernel_size=1,
+                        nn.Linear(
+                            in_features=self.in_features,
+                            out_features=self.in_features,
                         )
                         for _ in range(20)
                     ]
@@ -39,7 +38,7 @@ class DefaultModel(nn.Module):
         for i, branch in enumerate(self.branches):
             if routed_x[i].numel() > 0:
                 branch.to(x.device)
-            branch_results.append(branch(routed_x[i]))
+                branch_results.append(branch(routed_x[i]))
         x = self.gather(branch_results)
         return x
 
@@ -54,10 +53,9 @@ class HitModel(nn.Module):
             [
                 nn.Sequential(
                     *[
-                        nn.Conv2d(
-                            in_channels=self.in_features,
-                            out_channels=self.in_features,
-                            kernel_size=1,
+                        nn.Linear(
+                            in_features=self.in_features,
+                            out_features=self.in_features,
                         )
                         for _ in range(20)
                     ]
@@ -82,10 +80,9 @@ class MissModel(nn.Module):
             [
                 nn.Sequential(
                     *[
-                        nn.Conv2d(
-                            in_channels=self.in_features,
-                            out_channels=self.in_features,
-                            kernel_size=1,
+                        nn.Linear(
+                            in_features=self.in_features,
+                            out_features=self.in_features,
                         )
                         for _ in range(20)
                     ]
@@ -97,12 +94,12 @@ class MissModel(nn.Module):
 
     def forward(self, x):
         routed_x = self.scatter(x)
+        branch_results = []
         if routed_x[0].size(0) == 0:
-            branch_results = []
-            for i, branch in enumerate(self.branches[1:]):
-                if routed_x[i + 1].numel() > 0:
-                    branch.to(x.device)
-                branch_results.append(branch(routed_x[i + 1]))
+            for i in range(1, len(self.branches)):
+                if routed_x[i].numel() > 0:
+                    self.branches[i].to(x.device)
+                    branch_results.append(self.branches[i](routed_x[i]))
             x = self.gather(branch_results)
         else:
             x = self.branches[0](routed_x[0])
@@ -119,24 +116,22 @@ def main():
     hit_model = MissModel(args.path_num, args.cell_size, is_hit=True).eval().cpu()
     miss_model = MissModel(args.path_num, args.cell_size, is_hit=False).eval().cpu()
 
-    x = torch.randn(1, args.cell_size, 1, 1).cuda()
-    timer = CUDATimer(repeat=10, loop=100)
+    x = torch.randn(1, args.cell_size).cuda()
+    timer = CUDATimer(warm_up=10, repeat=10, loop=1)
 
-    def default_forward():
-        default_model(x)
-
-    def hit_forward():
-        hit_model(x)
-
-    def miss_forward():
-        miss_model(x)
+    pytorch_total_params = sum(
+        p.numel() for p in default_model.branches[0].parameters()
+    )
+    pytorch_total_params_in_MB = pytorch_total_params * 4 / 1024 / 1024
+    print(f"Total params: {pytorch_total_params_in_MB} MB")
 
     result_path = (
         BRT_CACHE_PATH / "results" / "micro" / "speculative" / "load" / f"default.csv"
     )
     result_path.parent.mkdir(parents=True, exist_ok=True)
-    timer.execute(
-        default_forward,
+    timer.memory_execute(
+        default_model,
+        x,
         f"{args.path_num},{args.cell_size}",
         export=True,
         export_path=result_path,
@@ -147,7 +142,7 @@ def main():
     result_path.parent.mkdir(parents=True, exist_ok=True)
     hit_model.branches[0].cuda()
     timer.execute(
-        hit_forward,
+        lambda: hit_model(x),
         f"{args.path_num},{args.cell_size}",
         export=True,
         export_path=result_path,
@@ -157,8 +152,9 @@ def main():
     )
     result_path.parent.mkdir(parents=True, exist_ok=True)
     # miss_model.branches[0].cuda()
-    timer.execute(
-        miss_forward,
+    timer.memory_execute(
+        miss_model,
+        x,
         f"{args.path_num},{args.cell_size}",
         export=True,
         export_path=result_path,

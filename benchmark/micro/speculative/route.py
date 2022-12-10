@@ -2,20 +2,24 @@
 # Licensed under the MIT license.
 
 import argparse
-from brt.app.rand import MissHitScatter
-from brt.router import GatherRouter
+import time
+
 import torch
 import torch.nn as nn
-from brt.runtime.benchmark import CUDATimer
+from brt.app.rand import MissHitScatter
+from brt.router import GatherRouter
 from brt.runtime import BRT_CACHE_PATH
+from brt.runtime.benchmark import CUDATimer
 
 
 class DefaultModel(nn.Module):
-    def __init__(self, path_num=2, in_features=1):
+    def __init__(self, path_num=2, in_features=1, router_time=0.1):
         super().__init__()
         self.in_features = in_features
         self.path_num = path_num
-        self.scatter = MissHitScatter(path_num=self.path_num, is_hit=True)
+        self.router_time = router_time
+        self.selected_path = path_num - 1
+        self.router_time
         self.branches = nn.ModuleList(
             [
                 nn.Sequential(
@@ -27,11 +31,10 @@ class DefaultModel(nn.Module):
         self.gather = GatherRouter()
 
     def forward(self, x):
-        routed_x = self.scatter(x)
-        branch_results = []
+        time.sleep(self.router_time)
         for i, branch in enumerate(self.branches):
-            branch_results.append(branch(routed_x[i]))
-        x = self.gather(branch_results)
+            if i == self.selected_path:
+                x = branch(x)
         return x
 
 
@@ -57,12 +60,19 @@ class HitModel(nn.Module):
 
 
 class MissModel(nn.Module):
-    def __init__(self, path_num=2, in_features=1, unroll_indx=4, is_hit=False):
+    def __init__(self, path_num=2, in_features=1, is_hit=False, router_time=0.1):
         super().__init__()
+        self.unroll_index = int(router_time // 0.00087) * 4
+        # self.unroll_index = 4
+        print(self.unroll_index)
         self.in_features = in_features
         self.path_num = path_num
-        self.unroll_indx = unroll_indx
-        self.scatter = MissHitScatter(path_num=self.path_num, is_hit=is_hit)
+        self.router_time = router_time
+        if is_hit:
+            self.selected_path = 0
+        else:
+            self.selected_path = path_num - 1
+        # self.scatter = MissHitScatter(path_num=self.path_num, is_hit=is_hit)
         self.branches = nn.ModuleList(
             [
                 nn.Sequential(
@@ -71,40 +81,42 @@ class MissModel(nn.Module):
                 for _path_id in range(self.path_num)
             ]
         )
-        self.gather = GatherRouter()
+        self.former_half_branches = self.branches[0][0 : self.unroll_index]
+        self.latter_half_branches = self.branches[0][self.unroll_index :]
+        self.half_index = 4 + self.unroll_index
 
     def forward(self, x):
-        self.branches[0][: self.unroll_indx](x)
-        routed_x = self.scatter(x)
-        if routed_x[0].size(0) == 0:
-            branch_results = []
-            for i, branch in enumerate(self.branches[1:]):
-                branch_results.append(branch(routed_x[i + 1]))
-            x = self.gather(branch_results)
+        half_x = self.former_half_branches(x)
+        # time.sleep(self.router_time)
+        if self.selected_path != 0:
+            time.sleep(self.router_time)
+            for i in range(1, self.path_num):
+                if i == self.selected_path:
+                    x = self.branches[i](x)
+                    break
         else:
-            x = self.branches[0][self.unroll_indx :](routed_x[0])
-        return x
+            x = self.latter_half_branches(half_x)
+        # x =self.former_half_branches(x)
+        return half_x
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cell-size", type=int, default=100)
     parser.add_argument("--path-num", type=int, default=2)
-    parser.add_argument("--unroll-index", type=int, default=4)
+    parser.add_argument("--time", type=float, default=0.1)
     args = parser.parse_args()
-    default_model = DefaultModel(args.path_num, args.cell_size).eval().cuda()
+    default_model = (
+        DefaultModel(args.path_num, args.cell_size, router_time=args.time).eval().cuda()
+    )
     # hit_model = HitModel(args.path_num, args.cell_size).eval().cuda()
     hit_model = (
-        MissModel(
-            args.path_num, args.cell_size, unroll_indx=args.unroll_index, is_hit=True
-        )
+        MissModel(args.path_num, args.cell_size, is_hit=True, router_time=args.time)
         .eval()
         .cuda()
     )
     miss_model = (
-        MissModel(
-            args.path_num, args.cell_size, unroll_indx=args.unroll_index, is_hit=False
-        )
+        MissModel(args.path_num, args.cell_size, is_hit=False, router_time=args.time)
         .eval()
         .cuda()
     )
@@ -127,7 +139,7 @@ def main():
     result_path.parent.mkdir(parents=True, exist_ok=True)
     timer.execute(
         default_forward,
-        f"{args.path_num},{args.unroll_index},{args.cell_size}",
+        f"{args.path_num},{args.time*1e3},{args.cell_size}",
         export=True,
         export_path=result_path,
     )
@@ -137,7 +149,7 @@ def main():
     result_path.parent.mkdir(parents=True, exist_ok=True)
     timer.execute(
         hit_forward,
-        f"{args.path_num},{args.unroll_index},{args.cell_size}",
+        f"{args.path_num},{args.time*1e3},{args.cell_size}",
         export=True,
         export_path=result_path,
     )
@@ -147,7 +159,7 @@ def main():
     result_path.parent.mkdir(parents=True, exist_ok=True)
     timer.execute(
         miss_forward,
-        f"{args.path_num},{args.unroll_index},{args.cell_size}",
+        f"{args.path_num},{args.time*1e3},{args.cell_size}",
         export=True,
         export_path=result_path,
     )

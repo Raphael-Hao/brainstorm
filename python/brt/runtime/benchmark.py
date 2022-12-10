@@ -20,7 +20,7 @@ __all__ = [
 ]
 
 
-def profile_v2(model: nn.Module, data_collection: List[torch.Tensor], vendor: str):
+def profile_v2(model: nn.Module, data_collection, vendor: str):
     with torch.profiler.profile(
         activities=[
             torch.profiler.ProfilerActivity.CPU,
@@ -30,16 +30,16 @@ def profile_v2(model: nn.Module, data_collection: List[torch.Tensor], vendor: st
         schedule=torch.profiler.schedule(wait=2, warmup=2, active=5),
         with_stack=False,
         on_trace_ready=torch.profiler.tensorboard_trace_handler(
-            f"./results/{vendor}/locality"
+            (BRT_LOG_PATH / f"./profile_results/{vendor}").as_posix()
         ),
         record_shapes=True,
     ) as p:
+        np.random.seed(0)
+        data_indices = np.random.randint(0, len(data_collection), 10)
         with torch.inference_mode():
-            for step, data in enumerate(data_collection):
-                model(data)
+            for step in range(10):
+                model(**data_collection[data_indices[step]])
                 p.step()
-                if step + 1 >= 10:
-                    break
 
 
 def profile(func):
@@ -122,6 +122,27 @@ class Timer:
                 for _ in range(self.loop):
                     func()
                 self.step_stop()
+            self.stop()
+            if export:
+                self.export(msg, export_path)
+            else:
+                self.print(msg)
+
+    def memory_execute(self, model, x, msg, export=False, export_path=None):
+        assert self.loop == 1
+        with torch.inference_mode():
+            for _i in range(self.warm_up):
+                model(x)
+            model.cpu()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            self.start()
+            for _i in range(self.repeat):
+                self.step_start()
+                for _ in range(self.loop):
+                    model(x)
+                self.step_stop()
+                model.cpu()
             self.stop()
             if export:
                 self.export(msg, export_path)

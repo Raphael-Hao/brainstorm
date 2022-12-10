@@ -295,6 +295,7 @@ class SwitchTransformersDenseActDense(nn.Module):
         self.act = ACT2FN[config.dense_act_fn]
 
     def forward(self, hidden_states):
+        import pdb; pdb.set_trace()
         hidden_states = self.wi(hidden_states)
         hidden_states = self.act(hidden_states)
         hidden_states = self.dropout(hidden_states)
@@ -337,6 +338,7 @@ class FusedSwitchTransformersSparseMLP(nn.Module):
         self.scatter = ScatterRouter(
             protocol_type="switch_top1",
             protocol_kwargs={
+                "index_format": "dst_index",
                 "expert_capacity": config.expert_capacity,
                 "supported_capacities": torch.tensor(
                     [0] + config.capacities, dtype=torch.int32
@@ -372,6 +374,7 @@ class FusedSwitchTransformersSparseMLP(nn.Module):
         # The routers introduced might not always map all the tokens, to a router, which means that some hidden states
         # can be unchanged from one layer to another. That is why the hidden states are cloned before updating only the seleced ones.
         # next_states = hidden_states.clone()
+        import pdb; pdb.set_trace()
         origin_shape = hidden_states.shape
         hidden_states_to_be_routed = hidden_states.view(-1, hidden_states.size(-1))
         routed_hidden_states = self.scatter(
@@ -405,6 +408,7 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
         self.scatter = ScatterRouter(
             protocol_type="switch_top1",
             protocol_kwargs={
+                "index_format": "dst_index",
                 "expert_capacity": config.expert_capacity,
             },
             fabric_type="homo_fused_dispatch",
@@ -493,7 +497,8 @@ class SwitchTransformersSparseMLP(nn.Module):
 
         # The routers introduced might not always map all the tokens, to a router, which means that some hidden states
         # can be unchanged from one layer to another. That is why the hidden states are cloned before updating only the seleced ones.
-        # current_history = np.zeros((len(self.experts), 1), dtype=np.int32)
+        import pdb; pdb.set_trace()
+        # current_history = np.zeros((len(self.experts,1)), dtype=np.int32)
         next_states = hidden_states.clone()
         for idx, expert in enumerate(self.experts.values()):
 
@@ -501,6 +506,7 @@ class SwitchTransformersSparseMLP(nn.Module):
             # current_history[idx] = hidden_states[token_indices].shape[0]
             # print(f"expert {idx} shape: {self.shape_history[idx]}")
             next_states[token_indices] = expert(hidden_states[token_indices])
+        # print(current_history)
         # if self.shape_history is None:
         #     self.shape_history = current_history
         # else:

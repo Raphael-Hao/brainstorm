@@ -104,10 +104,15 @@ def miss_hit_gate(x: torch.Tensor, path_num: int, is_hit: bool):
     if is_hit:
         mask_indice = torch.zeros((x.size(0), 1), device=x.device, dtype=torch.int64)
     else:
-        mask_indice = torch.randint(
-            1, path_num, (x.size(0), 1), device=x.device, dtype=torch.int64
-        )
-    mask = torch.zeros((x.size(0), path_num), device=x.device).scatter_(1, mask_indice, 1)
+        # mask_indice = torch.randint(
+        #     1, path_num, (x.size(0), 1), device=x.device, dtype=torch.int64
+        # )
+        mask_indice = torch.zeros(
+            (x.size(0), 1), device=x.device, dtype=torch.int64
+        ).fill_(path_num - 1)
+    mask = torch.zeros((x.size(0), path_num), device=x.device).scatter_(
+        1, mask_indice, 1
+    )
     return mask
 
 

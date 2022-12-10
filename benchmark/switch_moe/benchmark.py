@@ -14,14 +14,14 @@ from switch_transformer import (
     BatchmatmulSwitchTransformersSparseMLP,
 )  # v4.25.1
 from transformers import AutoConfig, AutoTokenizer
-from brt.runtime import BRT_CACHE_PATH
 from config import SwitchTransformersConfig
+from brt.runtime.benchmark import profile_v2
 
 
 def get_gpu_info():
     devices = Device.all()  # or `Device.cuda.all()` to use CUDA ordinal instead
     for device in devices[:1]:
-        processes = device.processes()  # type: Dict[int, GpuProcess]
+        processes = device.processes()
         sorted_pids = sorted(processes.keys())
         print(device)
         print(f"  - Fan speed:       {device.fan_speed()}%")
@@ -44,7 +44,7 @@ def main():
     parser.add_argument("--bsz", type=int, default=8)
     parser.add_argument("--max-seq-length", type=int, default=128)
     parser.add_argument(
-        "--mode", type=str, default="throughput", choices=["throughput", "debug"]
+        "--mode", type=str, default="throughput", choices=["throughput", "debug", "profile"]
     )
     parser.add_argument(
         "--vendor", type=str, default="torch", choices=["torch", "brt", "batchmatmul"]
@@ -100,8 +100,8 @@ def main():
 
     model = SwitchTransformersModel.from_pretrained(model_name, config=config).cuda()
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-
     model.eval()
+
     for _name, m in model.named_modules():
         if isinstance(m, FusedSwitchTransformersSparseMLP) or isinstance(
             m, BatchmatmulSwitchTransformersSparseMLP
@@ -112,6 +112,8 @@ def main():
         debug(args, model, tokenizer)
     elif args.mode == "throughput":
         throughput(args, model, tokenizer, 100)
+    elif args.mode == "profile":
+        profile(args, model, tokenizer, args.vendor)
 
     # Load to different GPU
     # model.encoder.embed_tokens.to("cuda:0")
@@ -126,6 +128,7 @@ def main():
     # for ii in range(6, 12):
     #     model.decoder.block[ii].to("cuda:3")
     # model.decoder.final_layer_norm.to("cuda:3")
+
 
 def load_data(args, tokenizer, data_num=100):
     dataset = datasets.load_dataset("glue", "mnli")
@@ -178,6 +181,13 @@ def debug(args, model, tokenizer):
         print(out[0])
         print(out[0].sum())
     torch.cuda.synchronize()
+
+
+def profile(args, model, tokenizer, vendor):
+    loaded_data = load_data(args, tokenizer, 10)
+    model(**loaded_data[0])
+    torch.cuda.synchronize()
+    profile_v2(model, loaded_data, vendor)
 
 
 if __name__ == "__main__":

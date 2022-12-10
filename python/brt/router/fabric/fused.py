@@ -289,8 +289,8 @@ class ResidualHomoFusedCombineFabric(CombineFabric):
                 in_flow,
                 local_indices,
                 loads,
-                None,
-                residual_flow,
+                auto_pad=False,
+                out_data=residual_flow,
             )
 
         return out_flow
