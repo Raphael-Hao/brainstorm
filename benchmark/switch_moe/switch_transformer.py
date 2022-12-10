@@ -20,7 +20,7 @@ import math
 import warnings
 from typing import Optional, Tuple, Union
 
-import numpy as np
+import numpy as np  # pylint: disable=unused-import
 
 import torch
 import torch.nn as nn
@@ -49,7 +49,8 @@ from transformers.utils import (
     logging,
     replace_return_docstrings,
 )
-from brt.router import ScatterRouter, GatherRouter
+from brt.router import ScatterRouter, SwitchGatherRouter
+from switch_expert import FusedSwitchExpert, BatchmamutlSwitchExpert
 from config import SwitchTransformersConfig
 
 
@@ -240,7 +241,9 @@ class SwitchTransformersTop1Router(nn.Module):
         router_probs, router_logits = self._compute_router_probabilities(hidden_states)
 
         expert_index = torch.argmax(router_probs, dim=-1)
-        expert_index = torch.nn.functional.one_hot(expert_index, num_classes=self.num_experts)
+        expert_index = torch.nn.functional.one_hot(
+            expert_index, num_classes=self.num_experts
+        )
 
         # Mask tokens outside expert capacity. Sum over each sequence
         token_priority = torch.cumsum(expert_index, dim=-2)
@@ -286,8 +289,6 @@ ALL_LAYERNORM_LAYERS.append(SwitchTransformersLayerNorm)
 class SwitchTransformersDenseActDense(nn.Module):
     def __init__(self, config: SwitchTransformersConfig):
         super().__init__()
-        print(f"config.d_model: {config.d_model}")
-        print(f"config.d_ff: {config.d_ff}")
         self.wi = nn.Linear(config.d_model, config.d_ff, bias=False)
         self.wo = nn.Linear(config.d_ff, config.d_model, bias=False)
         self.dropout = nn.Dropout(config.dropout_rate)
@@ -318,6 +319,139 @@ class SwitchTransformersDenseGatedActDense(nn.Module):
         hidden_states = self.dropout(hidden_states)
         hidden_states = self.wo(hidden_states)
         return hidden_states
+
+
+class FusedSwitchTransformersSparseMLP(nn.Module):
+    r"""
+    Implementation of the Switch Transformers Sparse MLP module.
+    """
+
+    def __init__(
+        self,
+        config: SwitchTransformersConfig,
+        expert_class: nn.Module = SwitchTransformersDenseActDense,
+    ):
+        super().__init__()
+        # Step 1: Get the correct router according to its class
+        self.router = SwitchTransformersTop1Router(config)
+        self.scatter = ScatterRouter(
+            protocol_type="switch_top1",
+            protocol_kwargs={
+                "expert_capacity": config.expert_capacity,
+                "supported_capacities": torch.tensor(
+                    [0] + config.capacities, dtype=torch.int32
+                ),
+            },
+            fabric_type="homo_fused_dispatch",
+        )
+        self.gather = SwitchGatherRouter(fabric_type="residual_homo_fused_combine")
+        self.fused_expert = FusedSwitchExpert(config)
+
+        # Step 2: Get the experts
+        self.experts = nn.ModuleDict()
+        for idx in range(config.num_experts):
+            self.experts[f"expert_{idx}"] = expert_class(config)
+
+    def forward(self, hidden_states):
+        r"""
+        Hold on, this will be slightly tricky to understand In the correct order, a MoE layer does the following:
+
+        1- Gets the `router_mask` from the router. The shape of the mask is `(batch_size, sequence_length, num_expert)`
+        and corresponds to the argmax of the `router_probs`. The probabilities are needed in the computation of the
+        hidden states : they are broadcasted to the hidden states values (can be interpreted as a scaling factor).
+
+        2- Dispatch the tokens to its associated experts. We do a classic for loop over the experts and assign for each
+        expert the corresponding hidden states.
+
+        """
+        # Step 1: Get the router_mask from the router as wel as the probabilities
+        router_mask, router_probs, router_logits = self.router(hidden_states)
+
+        expert_index = torch.argmax(router_mask, dim=-1)
+
+        # The routers introduced might not always map all the tokens, to a router, which means that some hidden states
+        # can be unchanged from one layer to another. That is why the hidden states are cloned before updating only the seleced ones.
+        # next_states = hidden_states.clone()
+        origin_shape = hidden_states.shape
+        hidden_states_to_be_routed = hidden_states.view(-1, hidden_states.size(-1))
+        routed_hidden_states = self.scatter(
+            hidden_states_to_be_routed, router_mask.view(-1, router_mask.size(-1))
+        )
+        # print(routed_hidden_states.shape)
+        expert_out = self.fused_expert(routed_hidden_states)
+        next_states = self.gather(hidden_states, expert_out)
+        next_states = next_states.view(origin_shape)
+
+        hidden_states = router_probs * next_states
+        return hidden_states, (router_logits, expert_index)
+
+    def initialize_fused_expert(self):
+        self.fused_expert.initialize_weights_from_experts(self.experts)
+
+
+class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
+    r"""
+    Implementation of the Switch Transformers Sparse MLP module.
+    """
+
+    def __init__(
+        self,
+        config: SwitchTransformersConfig,
+        expert_class: nn.Module = SwitchTransformersDenseActDense,
+    ):
+        super().__init__()
+        # Step 1: Get the correct router according to its class
+        self.router = SwitchTransformersTop1Router(config)
+        self.scatter = ScatterRouter(
+            protocol_type="switch_top1",
+            protocol_kwargs={
+                "expert_capacity": config.expert_capacity,
+            },
+            fabric_type="homo_fused_dispatch",
+            fabric_kwargs={"capacity_padding": True},
+        )
+        self.gather = SwitchGatherRouter(fabric_type="residual_homo_fused_combine")
+        self.fused_expert = BatchmamutlSwitchExpert(config)
+
+        # Step 2: Get the experts
+        self.experts = nn.ModuleDict()
+        for idx in range(config.num_experts):
+            self.experts[f"expert_{idx}"] = expert_class(config)
+
+    def forward(self, hidden_states):
+        r"""
+        Hold on, this will be slightly tricky to understand In the correct order, a MoE layer does the following:
+
+        1- Gets the `router_mask` from the router. The shape of the mask is `(batch_size, sequence_length, num_expert)`
+        and corresponds to the argmax of the `router_probs`. The probabilities are needed in the computation of the
+        hidden states : they are broadcasted to the hidden states values (can be interpreted as a scaling factor).
+
+        2- Dispatch the tokens to its associated experts. We do a classic for loop over the experts and assign for each
+        expert the corresponding hidden states.
+
+        """
+        # Step 1: Get the router_mask from the router as wel as the probabilities
+        router_mask, router_probs, router_logits = self.router(hidden_states)
+
+        expert_index = torch.argmax(router_mask, dim=-1)
+
+        # The routers introduced might not always map all the tokens, to a router, which means that some hidden states
+        # can be unchanged from one layer to another. That is why the hidden states are cloned before updating only the seleced ones.
+        # next_states = hidden_states.clone()
+        origin_shape = hidden_states.shape
+        hidden_states_to_be_routed = hidden_states.view(-1, hidden_states.size(-1))
+        routed_hidden_states = self.scatter(
+            hidden_states_to_be_routed, router_mask.view(-1, router_mask.size(-1))
+        )
+        expert_out = self.fused_expert(routed_hidden_states)
+        # print(expert_out.shape)
+        next_states = self.gather(hidden_states, expert_out)
+        next_states = next_states.view(origin_shape)
+        hidden_states = router_probs * next_states
+        return hidden_states, (router_logits, expert_index)
+
+    def initialize_fused_expert(self):
+        self.fused_expert.initialize_weights_from_experts(self.experts)
 
 
 class SwitchTransformersSparseMLP(nn.Module):
@@ -359,20 +493,20 @@ class SwitchTransformersSparseMLP(nn.Module):
 
         # The routers introduced might not always map all the tokens, to a router, which means that some hidden states
         # can be unchanged from one layer to another. That is why the hidden states are cloned before updating only the seleced ones.
-        current_history = np.zeros((len(self.experts), 1), dtype=np.int32)
+        # current_history = np.zeros((len(self.experts), 1), dtype=np.int32)
         next_states = hidden_states.clone()
         for idx, expert in enumerate(self.experts.values()):
 
             token_indices = router_mask[:, :, idx].bool()
-            current_history[idx] = hidden_states[token_indices].shape[0]
+            # current_history[idx] = hidden_states[token_indices].shape[0]
             # print(f"expert {idx} shape: {self.shape_history[idx]}")
             next_states[token_indices] = expert(hidden_states[token_indices])
-        if self.shape_history is None:
-            self.shape_history = current_history
-        else:
-            self.shape_history = np.concatenate(
-                (self.shape_history, current_history), axis=1
-            )
+        # if self.shape_history is None:
+        #     self.shape_history = current_history
+        # else:
+        #     self.shape_history = np.concatenate(
+        #         (self.shape_history, current_history), axis=1
+        #     )
         hidden_states = router_probs * next_states
         return hidden_states, (router_logits, expert_index)
 
@@ -397,8 +531,12 @@ class SwitchTransformersLayerFF(nn.Module):
         if not self.is_sparse:
             self.mlp = SwitchTransformersDenseActDense(config)
         else:
-            self.mlp = SwitchTransformersSparseMLP(config)
-
+            if config.vendor == "torch":
+                self.mlp = SwitchTransformersSparseMLP(config)
+            elif config.vendor == "brt":
+                self.mlp = FusedSwitchTransformersSparseMLP(config)
+            elif config.vendor == "batchmatmul":
+                self.mlp = BatchmatmulSwitchTransformersSparseMLP(config)
         self.layer_norm = SwitchTransformersLayerNorm(
             config.d_model, eps=config.layer_norm_epsilon
         )

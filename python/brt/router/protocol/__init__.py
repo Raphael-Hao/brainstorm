@@ -9,6 +9,7 @@ from brt.router.protocol import (
     swin_moe,
     threshold,
     topk,
+    switch,
 )
 from brt.router.protocol.base import ProtocolBase, make_protocol, register_protocol
 

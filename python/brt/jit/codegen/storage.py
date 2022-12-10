@@ -15,7 +15,7 @@ FROM KernelCache
 WHERE (Identifier = ?) AND (DeviceType = ?) AND (ObjectiveFunc = ?) AND (Rank = ?);"""
     ADD_KERNEL_CMD = r"""
 INSERT INTO KernelCache
-    (Key, Identifier, OpType, Attributes, Source, DeviceType, Function, Tags, Miscs, ObjectiveFunc, Rank) 
+    (Key, Identifier, OpType, Attributes, Source, DeviceType, Function, Tags, Miscs, ObjectiveFunc, Rank)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
     DEL_KERNEL_CMD = r"""
 DELETE FROM KernelCache

@@ -96,7 +96,11 @@ class SwitchTransformersConfig(PretrainedConfig):
     """
     model_type = "switch_transformers"
     keys_to_ignore_at_inference = ["past_key_values"]
-    attribute_map = {"hidden_size": "d_model", "num_attention_heads": "num_heads", "num_hidden_layers": "num_layers"}
+    attribute_map = {
+        "hidden_size": "d_model",
+        "num_attention_heads": "num_heads",
+        "num_hidden_layers": "num_layers",
+    }
 
     def __init__(
         self,
@@ -129,7 +133,7 @@ class SwitchTransformersConfig(PretrainedConfig):
         use_cache=True,
         pad_token_id=0,
         eos_token_id=1,
-        **kwargs
+        **kwargs,
     ):
         self.vocab_size = vocab_size
         self.d_model = d_model
@@ -148,13 +152,19 @@ class SwitchTransformersConfig(PretrainedConfig):
         if self.num_sparse_encoder_layers > 0:
             self.encoder_sparse_step = self.num_layers // self.num_sparse_encoder_layers
         else:
-            self.encoder_sparse_step = self.num_layers  # HACK: this will create 0 sparse layers
+            self.encoder_sparse_step = (
+                self.num_layers
+            )  # HACK: this will create 0 sparse layers
 
         # This tells us, each how many encoder layer we'll have to set a sparse layer.
         if self.num_sparse_decoder_layers > 0:
-            self.decoder_sparse_step = self.num_decoder_layers // self.num_sparse_decoder_layers
+            self.decoder_sparse_step = (
+                self.num_decoder_layers // self.num_sparse_decoder_layers
+            )
         else:
-            self.decoder_sparse_step = self.num_decoder_layers  # HACK: this will create 0 sparse layers
+            self.decoder_sparse_step = (
+                self.num_decoder_layers
+            )  # HACK: this will create 0 sparse layers
 
         self.num_heads = num_heads
         self.router_type = router_type
@@ -163,7 +173,9 @@ class SwitchTransformersConfig(PretrainedConfig):
         self.router_bias = router_bias
         self.router_jitter_noise = router_jitter_noise
         if router_dtype not in ["float32", "float16", "bfloat16"]:
-            raise ValueError(f"`router_dtype` must be one of 'float32', 'float16' or 'bfloat16', got {router_dtype}")
+            raise ValueError(
+                f"`router_dtype` must be one of 'float32', 'float16' or 'bfloat16', got {router_dtype}"
+            )
         self.router_dtype = router_dtype
 
         self.router_ignore_padding_tokens = router_ignore_padding_tokens
@@ -194,6 +206,10 @@ class SwitchTransformersConfig(PretrainedConfig):
         # for backwards compatibility
         if feed_forward_proj == "gated-gelu":
             self.dense_act_fn = "gelu_new"
+
+        self.capacities = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+        self.ranks = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        self.vendor = "torch" # "brt"
 
         super().__init__(
             pad_token_id=pad_token_id,

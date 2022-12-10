@@ -8,9 +8,14 @@ import datasets
 import numpy as np
 import torch
 from nvitop import Device
-from switch_transformer import SwitchTransformersModel, SwitchTransformersSparseMLP  # v4.25.1
+from switch_transformer import (
+    SwitchTransformersModel,
+    FusedSwitchTransformersSparseMLP,
+    BatchmatmulSwitchTransformersSparseMLP,
+)  # v4.25.1
 from transformers import AutoConfig, AutoTokenizer
 from brt.runtime import BRT_CACHE_PATH
+from config import SwitchTransformersConfig
 
 
 def get_gpu_info():
@@ -31,67 +36,149 @@ def get_gpu_info():
         print("-" * 120)
 
 
-data_dir = BRT_CACHE_PATH / "dataset/glue/"
-test_time = 100
-seed = 171
-max_seq_length = 128
-bsz = 8
-model_name = "google/switch-base-256"
-device = torch.device("cuda:0")
-config = AutoConfig.from_pretrained(model_name, max_position_embeddings=max_seq_length)
-model = SwitchTransformersModel.from_pretrained(model_name, config=config).cuda()
-model.eval()
-# Load to different GPU
-# model.encoder.embed_tokens.to("cuda:0")
-# for ii in range(6):
-#     model.encoder.block[ii].to("cuda:0")
-# for ii in range(6, 12):
-#     model.encoder.block[ii].to("cuda:1")
-# model.encoder.final_layer_norm.to("cuda:1")
-# # model.decoder.embed_tokens.to("cuda:2")
-# for ii in range(6):
-#     model.decoder.block[ii].to("cuda:2")
-# for ii in range(6, 12):
-#     model.decoder.block[ii].to("cuda:3")
-# model.decoder.final_layer_norm.to("cuda:3")
-parser = argparse.ArgumentParser(description="Basic")
-parser.add_argument("--dataset_name", type=str, default="")
-args = parser.parse_args()
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-d = datasets.load_dataset("glue", "mnli")
-N = len(d["train"])
-np.random.seed(seed)
-datas = []
-for ii in range(100):
-    idx = np.random.randint(0, N)
-    inputs = [
-        d["train"][ii + idx]["premise"] + "</s>" + d["train"][ii + idx]["hypothesis"]
-        for ii in range(bsz)
-    ]
-    inputs = tokenizer(
-        inputs, padding="max_length", max_length=max_seq_length, truncation=True
+def main():
+    parser = argparse.ArgumentParser(description="Basic")
+    parser.add_argument(
+        "--expert", type=int, default=8, choices=[8, 16, 32, 64, 128, 256]
     )
-    inputs = {ii: torch.tensor(jj).to(device) for ii, jj in inputs.items()}
-    inputs["decoder_input_ids"] = inputs["input_ids"]
-    datas.append(inputs)
-N = len(datas)
-random_idx = np.random.choice(range(N), 1000)
-torch.cuda.synchronize()
-st = time.time()
-for ii, idx in enumerate(random_idx):
-    model(**datas[idx])
-    if ii == 1000 // 2:
-        get_gpu_info()
-np.set_printoptions(linewidth=1000)
-for name, mod in model.named_modules():
-    if isinstance(mod, SwitchTransformersSparseMLP):
-        print(f"=================={name}==================")
-        print(f"Max Tokens: {mod.shape_history.max(axis=1)}")
-        print(f"P90 Tokens: {np.percentile(mod.shape_history, 90, axis=1).astype(int)}")
-        print(f"P50 Tokens: {np.percentile(mod.shape_history, 50, axis=1).astype(int)}")
-        print(f"P30 Tokens: {np.percentile(mod.shape_history, 10, axis=1).astype(int)}")
-        print(f"P10 Tokens: {np.percentile(mod.shape_history, 10, axis=1).astype(int)}")
-        print(f"Min Tokens: {mod.shape_history.min(axis=1)}")
-torch.cuda.synchronize()
-end = time.time()
-print("Forward Implementation", end - st)
+    parser.add_argument("--bsz", type=int, default=8)
+    parser.add_argument("--max-seq-length", type=int, default=128)
+    parser.add_argument(
+        "--mode", type=str, default="throughput", choices=["throughput", "debug"]
+    )
+    parser.add_argument(
+        "--vendor", type=str, default="torch", choices=["torch", "brt", "batchmatmul"]
+    )
+    args = parser.parse_args()
+
+    model_name = f"google/switch-base-{args.expert}"
+    config: SwitchTransformersConfig = AutoConfig.from_pretrained(
+        model_name, max_position_embeddings=args.max_seq_length
+    )
+    config.capacities = [
+        # 2,  # 1,
+        # 4,  # 1,
+        # 8,  # 1,
+        16,  # 1,
+        32,  # 1,
+        64,  # 1,
+        128,  # 1,
+        224,  # 1,
+        320,  # 1, no need may
+        416,  # 1,
+        512,
+    ]
+    config.ranks = [
+        [
+            # 1,  # 2
+            # 2,  # 4
+            # 1,  # 8
+            1,  # 16
+            1,  # 32
+            2,  # 64
+            9,  # 128
+            2,  # 224
+            1,  # 320
+            2,  # 416
+            1,  # 512
+        ],
+        [
+            # 1,  # 2
+            # 1,  # 4
+            # 1,  # 8
+            1,  # 16
+            1,  # 32
+            1,  # 64
+            1,  # 128
+            1,  # 224
+            5,  # 320
+            1,  # 416
+            3,  # 512
+        ],
+    ]
+    config.vendor = args.vendor
+
+    model = SwitchTransformersModel.from_pretrained(model_name, config=config).cuda()
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    model.eval()
+    for _name, m in model.named_modules():
+        if isinstance(m, FusedSwitchTransformersSparseMLP) or isinstance(
+            m, BatchmatmulSwitchTransformersSparseMLP
+        ):
+            m.initialize_fused_expert()
+
+    if args.mode == "debug":
+        debug(args, model, tokenizer)
+    elif args.mode == "throughput":
+        throughput(args, model, tokenizer, 100)
+
+    # Load to different GPU
+    # model.encoder.embed_tokens.to("cuda:0")
+    # for ii in range(6):
+    #     model.encoder.block[ii].to("cuda:0")
+    # for ii in range(6, 12):
+    #     model.encoder.block[ii].to("cuda:1")
+    # model.encoder.final_layer_norm.to("cuda:1")
+    # # model.decoder.embed_tokens.to("cuda:2")
+    # for ii in range(6):
+    #     model.decoder.block[ii].to("cuda:2")
+    # for ii in range(6, 12):
+    #     model.decoder.block[ii].to("cuda:3")
+    # model.decoder.final_layer_norm.to("cuda:3")
+
+def load_data(args, tokenizer, data_num=100):
+    dataset = datasets.load_dataset("glue", "mnli")
+    all_data_num = len(dataset["train"])
+    seed = 171
+    np.random.seed(seed)
+    datas = []
+    for _idx in range(data_num):
+        idx = np.random.randint(0, all_data_num)
+        inputs = [
+            dataset["train"][ii + idx]["premise"]
+            + "</s>"
+            + dataset["train"][ii + idx]["hypothesis"]
+            for ii in range(args.bsz)
+        ]
+        inputs = tokenizer(
+            inputs,
+            padding="max_length",
+            max_length=args.max_seq_length,
+            truncation=True,
+        )
+        inputs = {ii: torch.tensor(jj).cuda() for ii, jj in inputs.items()}
+        inputs["decoder_input_ids"] = inputs["input_ids"]
+        datas.append(inputs)
+    return datas
+
+
+def throughput(args, model, tokenizer, test_data_num):
+    loaded_data = load_data(args, tokenizer)
+    data_num = len(loaded_data)
+    random_idx = np.random.choice(range(data_num), test_data_num)
+    model(**loaded_data[0])
+    with torch.inference_mode():
+        torch.cuda.synchronize()
+        st = time.time()
+        for ii, idx in enumerate(random_idx):
+            model(**loaded_data[idx])
+            # if ii == 1000 // 2:
+            #     get_gpu_info()
+        torch.cuda.synchronize()
+        end = time.time()
+        print("Forward Implementation", end - st)
+
+
+def debug(args, model, tokenizer):
+    loaded_data = load_data(args, tokenizer, 1)
+    torch.cuda.synchronize()
+    for in_data in loaded_data:
+        out = model(**in_data)
+        print(out[0])
+        print(out[0].sum())
+    torch.cuda.synchronize()
+
+
+if __name__ == "__main__":
+    main()

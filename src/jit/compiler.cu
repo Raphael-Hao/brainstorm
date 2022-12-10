@@ -148,7 +148,7 @@ void CUDACompiler::HeteroExecute(const std::vector<const void*>& ppargs,
 
 void CUDACompiler::HomoExecute(const std::vector<const void*>& shared_inputs_ptr,
                                 const std::vector<const void*>& standalone_inputs_ptr,
-                                const std::vector<long>& branch_capacities, int fd, int dev,
+                                const std::vector<int>& branch_capacities, int fd, int dev,
                                 cudaStream_t stream) {
   auto& kernel = kernels_[fd];
 

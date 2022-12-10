@@ -14,6 +14,7 @@ torch.backends.cuda.matmul.allow_tf32 = False
 torch.backends.cudnn.allow_tf32 = False
 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
 
+
 class FusedThorExpert(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
@@ -155,8 +156,8 @@ class BatchedMatmul(nn.Module):
 
     def forward(self, inter_state):
         hidden_state = torch.bmm(inter_state, self.linear1_weight) + self.linear1_bias
-        # x = torch.bmm(hidden_state, self.linear2_weight)  # + self.linear2_bias
-        return hidden_state
+        x = torch.bmm(hidden_state, self.linear2_weight) + self.linear2_bias
+        return x
 
 
 def main():
@@ -180,7 +181,8 @@ def main():
     if args.bench == "brt":
         thor_moe = ThorMoE(config).eval().cuda()
         x = [
-            torch.randn(config.token_num, config.hidden_size).cuda() for _ in range(config.expert_num)
+            torch.randn(config.token_num, config.hidden_size).cuda()
+            for _ in range(config.expert_num)
         ]
         x[-1] = torch.randn(config.token_num, config.hidden_size).cuda()
         cuda_timer.execute(
@@ -192,7 +194,8 @@ def main():
     elif args.bench == "brt_homo":
         thor_moe = FusedThorExpert(config).eval().cuda()
         x = torch.randn(
-            config.token_num * config.expert_num + config.token_num - config.token_num, config.hidden_size
+            config.token_num * config.expert_num + config.token_num - config.token_num,
+            config.hidden_size,
         ).cuda()
         # x = torch.randn(256 * config.expert_num, 512).cuda()
         capacities = [config.token_num] * (config.expert_num - 1) + [config.token_num]

@@ -34,17 +34,10 @@ class SwitchTop1Protocol(ProtocolBase):
         self.register_buffer("supported_capacities", supported_capacities)
 
     def make_route_decision(self, score):
-
-        expert_indices = torch.argmax(score, dim=-1)
-        expert_indices = torch.nn.functional.one_hot(expert_indices, score.shape[-1])
-        token_priority = torch.cumsum(expert_indices, dim=-2)
-        expert_capacity_mask = token_priority <= self.expert_capacity
-        expert_indices = expert_indices * expert_capacity_mask
-        expert_indices = expert_indices.reshape(-1, score.shape[-1])
+        score = score.reshape(-1, score.shape[-1])
         route_indices, loads = generate_indices(
-            expert_indices, self.supported_capacities, self.index_format, self.index_gen_opt
+            score, self.supported_capacities, self.index_format, self.index_gen_opt
         )
-
         return route_indices, loads, loads
 
     def update(self, supported_capacities):

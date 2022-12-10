@@ -35,9 +35,13 @@ class HomoFusedModule(FusedModule):
         assert shared_arg_grans is not None, "shared_arg_grans is None"
 
         candidates = []
-        for inp in sample_inputs:
+        if isinstance(rank, int):
+            rank = [rank] * len(sample_inputs)
+        else:
+            assert len(rank) == len(sample_inputs)
+        for idx, inp in enumerate(sample_inputs):
             module_kernel = self.jit_submodules[0]._make_global_kernel(
-                inp, method, objective_func, rank
+                inp, method, objective_func, rank[idx]
             )
             candidates.append(module_kernel)
         fused_kernel = HomoFusedKernel(

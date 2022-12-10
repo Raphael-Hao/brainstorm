@@ -267,7 +267,7 @@ class HomoFusedCombineFabric(CombineFabric):
         return out_flow
 
 
-@register_fabric("Residual_homo_fused_combine")
+@register_fabric("residual_homo_fused_combine")
 class ResidualHomoFusedCombineFabric(CombineFabric):
     def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
         assert granularity_padding == False
@@ -277,32 +277,20 @@ class ResidualHomoFusedCombineFabric(CombineFabric):
             sparse=sparse,
             granularity_padding=False,
         )
-        self.transform = True
 
-    def combine(
-        self, residual_flows: List[torch.Tensor], in_flows: List[torch.Tensor]
-    ) -> List[torch.Tensor]:
-        out_flows = []
-        for flow_idx, in_flow in enumerate(in_flows):
+    def forward(
+        self, residual_flow: torch.Tensor, in_flow: torch.Tensor
+    ) -> torch.Tensor:
 
-            local_indices = in_flow.route_indices
-            loads = in_flow.loads
-            score = in_flow.score
+        local_indices = in_flow.route_indices
+        loads = in_flow.loads
 
-            # self.start_timer()
-            if self.transform:
-                out_flow = combine_with_src_indices(
-                    in_flow, local_indices, loads, auto_pad=True, gates=score, residual=residual_flows[flow_idx]
-                )
-            else:
-                out_flow = combine_with_src_indices(in_flow, local_indices, loads, None, residual=residual_flows[flow_idx])
+        out_flow = combine_with_src_indices(
+                in_flow,
+                local_indices,
+                loads,
+                None,
+                residual_flow,
+            )
 
-            out_flows.append(out_flow)
-
-        return out_flows
-
-    def pack_invalid_flow(self, in_flow):
-        return in_flow
-
-    def remove_needless_pack(self, out_flow):
         return out_flow

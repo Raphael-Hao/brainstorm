@@ -19,22 +19,23 @@ torch.backends.cudnn.allow_tf32 = False
 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
 
 all_bsz = [
-    1, # 1,
-    2, # 1,
-    4, # 1,
-    8, # 1,
-    16, # 1,
-    32, # 1,
-    64, # 1,
-    128, # 1,
-    224, # 1,
-    320, # 1, 不用
-    416, # 1,
-    512, # 3,
+    # 1, # 1,
+    2,  # 1,
+    4,  # 1,
+    8,  # 1,
+    16,  # 1,
+    32,  # 1,
+    64,  # 1,
+    128,  # 1,
+    224,  # 1,
+    320,  # 1, no need may
+    416,  # 1,
+    512,  # 3,
 ]
 
+# in_features = 768
+# out_features = 3072
 in_features = 3072
-
 out_features = 768
 
 for bs in all_bsz:
