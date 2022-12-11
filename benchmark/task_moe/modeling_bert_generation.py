@@ -311,7 +311,7 @@ class BertGenerationOutput(nn.Module):
 
 # Copied from transformers.models.bert.modeling_bert.BertLayer with Bert->BertGeneration
 class BertGenerationLayer(nn.Module):
-    def __init__(self, config: BertGenerationConfig, task_locality=False):
+    def __init__(self, config: BertGenerationConfig, task_locality=False, seed=0):
         super().__init__()
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.seq_len_dim = 1
@@ -328,7 +328,7 @@ class BertGenerationLayer(nn.Module):
                 config, position_embedding_type="absolute"
             )
         if config.task_moe:
-            self.moe = BertGenerationMoE(config, task_locality=task_locality)
+            self.moe = BertGenerationMoE(config, task_locality=task_locality, seed=seed)
         else:
             self.intermediate = BertGenerationIntermediate(config)
             self.output = BertGenerationOutput(config)
@@ -396,16 +396,17 @@ class BertGenerationLayer(nn.Module):
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
         if self.task_moe:
-            layer_output = self.moe(attention_output, task_ids)
+            layer_output, task_ids = self.moe(attention_output, task_ids)
         else:
             layer_output = self.feed_forward_chunk(attention_output)
-
         outputs = (layer_output,) + outputs
 
         # if decoder, return the attn key/values as the last output
         if self.is_decoder:
             outputs = outputs + (present_key_value,)
 
+
+        outputs = outputs + (task_ids,)
         return outputs
 
     def feed_forward_chunk(self, attention_output):
@@ -414,14 +415,15 @@ class BertGenerationLayer(nn.Module):
         return layer_output
 
 
-# Copied from transformers.models.bert.modeling_bert.BertEncoder with Bert->BertGeneration
 class BertEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
         self.layer = nn.ModuleList(
             [
-                BertGenerationLayer(config, task_locality=True if i == 0 else False)
+                BertGenerationLayer(
+                    config, task_locality=True if i == 0 else False, seed=i
+                )
                 for i in range(config.num_hidden_layers)
             ]
         )
@@ -489,10 +491,10 @@ class BertEncoder(nn.Module):
                     output_attentions,
                     task_ids,
                 )
-
+            task_ids = layer_outputs[-1]
             hidden_states = layer_outputs[0]
             if use_cache:
-                next_decoder_cache += (layer_outputs[-1],)
+                next_decoder_cache += (layer_outputs[-2],)
             if output_attentions:
                 all_self_attentions = all_self_attentions + (layer_outputs[1],)
                 if self.config.add_cross_attention:

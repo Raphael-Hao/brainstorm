@@ -1,12 +1,14 @@
 from typing import List, Tuple, Union
 
 import torch
+
 # pylint: disable=no-name-in-module
 from brt._C.router import (
     dispatch_with_dst_indices_1d,
     dispatch_with_dst_indices_2d,
     combine_with_src_indices,
 )
+
 # pylint: enable=no-name-in-module
 from brt.runtime import log
 from brt.router.fabric.base import register_fabric
@@ -252,9 +254,8 @@ class HomoFusedCombineFabric(CombineFabric):
                     in_flow, local_indices, loads, auto_pad=True, gates=score
                 )
             else:
-                out_flow = combine_with_src_indices(
-                    in_flow, local_indices, loads, None
-                )
+                out_flow = combine_with_src_indices(in_flow, local_indices, loads, None)
+
 
             out_flows.append(out_flow)
 
@@ -265,3 +266,36 @@ class HomoFusedCombineFabric(CombineFabric):
 
     def remove_needless_pack(self, out_flow):
         return out_flow
+
+
+@register_fabric("residual_homo_fused_combine")
+class ResidualHomoFusedCombineFabric(CombineFabric):
+    def __init__(
+        self, auto_pad, flow_num, sparse, reduction, granularity_padding
+    ) -> None:
+        assert granularity_padding == False
+        super().__init__(
+            flow_num=flow_num,
+            reduction=reduction,
+            sparse=sparse,
+            granularity_padding=False,
+        )
+        self.auto_pad = auto_pad
+
+    def forward(
+        self, residual_flow: torch.Tensor, in_flow: torch.Tensor
+    ) -> torch.Tensor:
+
+        local_indices = in_flow.route_indices
+        loads = in_flow.loads
+
+        out_flow = combine_with_src_indices(
+            in_flow,
+            local_indices,
+            loads,
+            auto_pad=self.auto_pad,
+            out_data=residual_flow,
+        )
+
+        return out_flow
+

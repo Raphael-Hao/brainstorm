@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 # Motto: Were It to Benefit My Country, I Would Lay Down My Life!
 # \file: /thor_generate.py
-# \brief: 
+# \brief:
 # Author: raphael hao
 
 import torch
@@ -19,8 +19,8 @@ from transformers.file_utils import (
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions, CausalLMOutputWithCrossAttentions
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
-from .thor_model import BertEncoder
-from .thor_config import BertGenerationConfig
+from thor_model import BertEncoder
+from thor_config import BertGenerationConfig
 
 
 logger = logging.get_logger(__name__)

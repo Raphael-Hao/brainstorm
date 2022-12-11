@@ -232,10 +232,11 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
 }
 
 ::torch::Tensor combine_with_src_indices(
-    const ::torch::Tensor& in_data /*[?load*path_num x sample_size]*/,
+    const ::torch::Tensor& in_data /*[load*path_num x sample_size]*/,
     const ::torch::Tensor& route_indices /*[sample_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/, const bool& auto_pad = false,
-    const ::c10::optional<::torch::Tensor>& gates = {} /*[sample_num x path_num]*/) {
+    const ::c10::optional<::torch::Tensor>& gates = {} /*[sample_num x path_num]*/,
+    const ::c10::optional<::torch::Tensor>& out_data = {} /*[sample_num x sample_size]*/) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
   ::torch::Tensor cuda_loads;
@@ -262,15 +263,24 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_dst_indices(
     capacity = out_shape[0] / path_num;
   }
 
-  out_shape[0] = sample_num;
-  ::torch::Tensor out_data = ::torch::zeros(out_shape, in_data.options());
-  CHECK_ON_CUDA(out_data);
-
-  router::CombineWithSrcIndices(in_data.data_ptr<float>(), out_data.data_ptr<float>(),
-                                gates_data_ptr, route_indices.data_ptr<int>(),
-                                cuda_loads.data_ptr<int>(), capacity, sample_num, sample_size,
-                                path_num, at::cuda::getDefaultCUDAStream().stream());
-  return out_data;
+  ::torch::Tensor out_data_t;
+  if (out_data.has_value()) {
+    CHECK_ON_CUDA(out_data.value());
+    out_data_t = out_data.value();
+    router::ResidualCombineWithSrcIndices(
+        in_data.data_ptr<float>(), out_data_t.data_ptr<float>(), gates_data_ptr,
+        route_indices.data_ptr<int>(), cuda_loads.data_ptr<int>(), capacity, sample_num,
+        sample_size, path_num, at::cuda::getDefaultCUDAStream().stream());
+  } else {
+    out_shape[0] = sample_num;
+    out_data_t = ::torch::zeros(out_shape, in_data.options());
+    CHECK_ON_CUDA(out_data_t);
+    router::CombineWithSrcIndices(in_data.data_ptr<float>(), out_data_t.data_ptr<float>(),
+                                  gates_data_ptr, route_indices.data_ptr<int>(),
+                                  cuda_loads.data_ptr<int>(), capacity, sample_num, sample_size,
+                                  path_num, at::cuda::getDefaultCUDAStream().stream());
+  }
+  return out_data_t;
 }
 
 }  // namespace torch
@@ -304,5 +314,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("combine_with_src_indices", &brt::backend::torch::combine_with_src_indices,
         "Route data back with dst indices", pybind11::arg("in_data"),
         pybind11::arg("route_indices"), pybind11::arg("loads"), pybind11::arg("auto_pad") = false,
-        pybind11::arg("gates") = pybind11::none());
+        pybind11::arg("gates") = pybind11::none(), pybind11::arg("out_data") = pybind11::none());
 }

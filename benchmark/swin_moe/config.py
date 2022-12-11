@@ -404,7 +404,7 @@ def _update_config_from_file(config, cfg_file):
             _update_config_from_file(
                 config, os.path.join(os.path.dirname(cfg_file), cfg)
             )
-    print('=> merge config from {}'.format(cfg_file))
+    # print('=> merge config from {}'.format(cfg_file))
     config.merge_from_file(cfg_file)
     config.freeze()
 
@@ -429,8 +429,6 @@ def update_config(config, args):
         config.MODEL.PRETRAINED = args.pretrained
     if args.resume:
         config.MODEL.RESUME = args.resume
-    if args.placement:
-        config.MODEL.PLACEMENT = args.placement
     if args.accumulation_steps:
         config.TRAIN.ACCUMULATION_STEPS = args.accumulation_steps
     if args.use_checkpoint:
@@ -439,6 +437,9 @@ def update_config(config, args):
         config.OUTPUT = args.output
     if args.tag:
         config.TAG = args.tag
+    if args.capacity:
+        config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR = args.capacity
+
 
     # set local rank for distributed training
     config.LOCAL_RANK = args.local_rank

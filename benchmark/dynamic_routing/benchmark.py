@@ -5,11 +5,21 @@ import os
 import sys
 from collections import OrderedDict
 
-from brt.passes import (DeadPathEliminatePass, OnDemandMemoryPlanPass,
-                        PermanentPathFoldPass, PredictMemoryPlanPass)
+
+from brt.passes import (
+    DeadPathEliminatePass,
+    OnDemandMemoryPlanPass,
+    PermanentPathFoldPass,
+    PredictMemoryPlanPass,
+)
 from brt.router import switch_router_mode
-from brt.runtime.benchmark import (BenchmarkArgumentManager, Benchmarker,
-                                   CUDATimer, MemoryStats)
+from brt.runtime.benchmark import (
+    BenchmarkArgumentManager,
+    Benchmarker,
+    CUDATimer,
+    MemoryStats,
+)
+
 from brt.runtime.memory_planner import pin_memory
 from dynamic_A_config import config as A_config
 from dynamic_B_config import config as B_config
@@ -23,12 +33,19 @@ import dl_lib.utils.comm as comm
 import torch
 from dl_lib.checkpoint import DetectionCheckpointer
 from dl_lib.data import MetadataCatalog
-from dl_lib.engine import (CustomizedTrainer, default_argument_parser,
-                           default_setup)
-from dl_lib.evaluation import (CityscapesEvaluator, DatasetEvaluators,
-                               PascalVOCDetectionEvaluator, SemSegEvaluator)
+
+from dl_lib.engine import CustomizedTrainer, default_argument_parser, default_setup
+from dl_lib.evaluation import (
+    CityscapesEvaluator,
+    DatasetEvaluators,
+    PascalVOCDetectionEvaluator,
+    SemSegEvaluator,
+)
+
 from dl_lib.modeling import SemanticSegmentorWithTTA
+
 from net import build_model
+from origin_net import build_model as origin_build_model
 
 
 class Trainer(CustomizedTrainer):
@@ -114,7 +131,12 @@ def test_argument_parser():
     bench_arg_manager = BenchmarkArgumentManager(parser)
     bench_arg_manager.add_item("liveness")
     bench_arg_manager.add_item("memory_plan")
-    parser.add_argument("--memory-mode", choices=["predict", "on_demand"], default="on_demand")
+
+    parser.add_argument(
+        "--memory-mode", choices=["predict", "on_demand"], default="on_demand"
+    )
+    parser.add_argument("--test-origin", action="store_true", help="test origin model")
+
 
     return parser
 
@@ -138,11 +160,24 @@ def main(args):
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
         cfg.MODEL.WEIGHTS, resume=args.resume
     )
+
     model.cuda()
     torch.cuda.synchronize()
 
-    res = Trainer.test(cfg, model)
+    _res = Trainer.test(cfg, model)
     torch.cuda.empty_cache()
+
+    if args.test_origin:
+        timer = CUDATimer(repeat=5)
+        origin_model = origin_build_model(cfg)
+        DetectionCheckpointer(origin_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+            cfg.MODEL.WEIGHTS, resume=args.resume
+        )
+        origin_model.eval()
+        origin_model.cuda()
+        origin_backbone = origin_model.backbone
+        backbone_input = model.backbone_input
+        timer.deprecated_execute(lambda: origin_backbone(backbone_input), "torch")
 
     benchmarker = Benchmarker()
 
@@ -157,7 +192,9 @@ def main(args):
 
         timer.execute(lambda: naive_backbone(backbone_input), "naive")
 
-        eliminate_pass = DeadPathEliminatePass(naive_backbone, runtime_load=1)
+        eliminate_pass = DeadPathEliminatePass(
+            naive_backbone, dead_load=0.0, runtime_load=1
+        )
         eliminate_pass.run_on_graph()
         new_backbone = eliminate_pass.finalize()
 

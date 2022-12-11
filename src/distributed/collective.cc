@@ -82,9 +82,13 @@ void GroupAsymmetryAllToAll(void* send_buffer, void* recv_buffer,
                             cudaStream_t stream) {
   const int group_size_in_byte = group_size * slice_size_in_byte;
   int group_base_idx = 0;
+  // printf("start send buffer: %p, recv buffer: %p, group size: %d, world size: %d");
   NCCL_CHECK(ncclGroupStart());
   for (auto i = 0; i < world_size; i++) {
     for (auto j = 0; j < group_size; j++) {
+      // printf(
+      //     "send_buffer: %p, recv_buffer: %p, send_size: %d, recv_size: %d, group_base_idx: %d, i: "
+      //     "%d, j: %d");
       NCCL_CHECK(ncclSend((char*)send_buffer + j * slice_size_in_byte,
                           send_sizes[group_base_idx + j] * grain_size_in_byte, ncclChar, i, comm,
                           stream));
