@@ -54,19 +54,17 @@ class FusedSwitchExpert(nn.Module):
         self.fused_wi_standalone_inputs = nn.ParameterList(
             self.fused_wi_standalone_inputs
         )
-        self.fused_wi_standalone_inputs = nn.ParameterList(
+        self.fused_wo_standalone_inputs = nn.ParameterList(
             self.fused_wo_standalone_inputs
         )
 
     def forward(self, dispatched_states):
         capacities = dispatched_states.loads
-        print(capacities)
         route_indices = dispatched_states.route_indices
         score = dispatched_states.score
         wi_out = torch.zeros(
             (dispatched_states.shape[0], self.d_ff), device=dispatched_states.device
         )
-        import pdb; pdb.set_trace()
         self.fused_wi(
             shared_inputs=[dispatched_states, wi_out],
             standalone_inputs=self.fused_wi_standalone_inputs,
@@ -119,11 +117,10 @@ class BatchmamutlSwitchExpert(nn.Module):
     def forward(self, dispatched_states):
 
         loads = dispatched_states.loads
-        print(loads)
+        # print(loads)
         route_indices = dispatched_states.route_indices
         score = dispatched_states.score
         dispatched_states = dispatched_states.view(self.num_experts, -1, self.d_model)
-
         wi_out = torch.bmm(dispatched_states, self.fused_wi_weight)
         act_out = self.act(wi_out)
         dropout_out = self.dropout(act_out)

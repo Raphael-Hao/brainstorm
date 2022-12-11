@@ -269,7 +269,9 @@ class HomoFusedCombineFabric(CombineFabric):
 
 @register_fabric("residual_homo_fused_combine")
 class ResidualHomoFusedCombineFabric(CombineFabric):
-    def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
+    def __init__(
+        self, auto_pad, flow_num, sparse, reduction, granularity_padding
+    ) -> None:
         assert granularity_padding == False
         super().__init__(
             flow_num=flow_num,
@@ -277,6 +279,7 @@ class ResidualHomoFusedCombineFabric(CombineFabric):
             sparse=sparse,
             granularity_padding=False,
         )
+        self.auto_pad = auto_pad
 
     def forward(
         self, residual_flow: torch.Tensor, in_flow: torch.Tensor
@@ -286,11 +289,11 @@ class ResidualHomoFusedCombineFabric(CombineFabric):
         loads = in_flow.loads
 
         out_flow = combine_with_src_indices(
-                in_flow,
-                local_indices,
-                loads,
-                auto_pad=False,
-                out_data=residual_flow,
-            )
+            in_flow,
+            local_indices,
+            loads,
+            auto_pad=self.auto_pad,
+            out_data=residual_flow,
+        )
 
         return out_flow

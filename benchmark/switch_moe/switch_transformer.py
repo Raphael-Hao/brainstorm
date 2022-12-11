@@ -295,7 +295,6 @@ class SwitchTransformersDenseActDense(nn.Module):
         self.act = ACT2FN[config.dense_act_fn]
 
     def forward(self, hidden_states):
-        import pdb; pdb.set_trace()
         hidden_states = self.wi(hidden_states)
         hidden_states = self.act(hidden_states)
         hidden_states = self.dropout(hidden_states)
@@ -374,7 +373,6 @@ class FusedSwitchTransformersSparseMLP(nn.Module):
         # The routers introduced might not always map all the tokens, to a router, which means that some hidden states
         # can be unchanged from one layer to another. That is why the hidden states are cloned before updating only the seleced ones.
         # next_states = hidden_states.clone()
-        import pdb; pdb.set_trace()
         origin_shape = hidden_states.shape
         hidden_states_to_be_routed = hidden_states.view(-1, hidden_states.size(-1))
         routed_hidden_states = self.scatter(
@@ -414,7 +412,9 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
             fabric_type="homo_fused_dispatch",
             fabric_kwargs={"capacity_padding": True},
         )
-        self.gather = SwitchGatherRouter(fabric_type="residual_homo_fused_combine")
+        self.gather = SwitchGatherRouter(
+            fabric_type="residual_homo_fused_combine", fabric_kwargs={"auto_pad": True}
+        )
         self.fused_expert = BatchmamutlSwitchExpert(config)
 
         # Step 2: Get the experts
@@ -497,9 +497,9 @@ class SwitchTransformersSparseMLP(nn.Module):
 
         # The routers introduced might not always map all the tokens, to a router, which means that some hidden states
         # can be unchanged from one layer to another. That is why the hidden states are cloned before updating only the seleced ones.
-        import pdb; pdb.set_trace()
-        # current_history = np.zeros((len(self.experts,1)), dtype=np.int32)
+        # current_history = np.zeros((len(self.experts)), dtype=np.int32)
         next_states = hidden_states.clone()
+
         for idx, expert in enumerate(self.experts.values()):
 
             token_indices = router_mask[:, :, idx].bool()

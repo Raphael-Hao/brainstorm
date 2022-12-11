@@ -58,13 +58,13 @@ def main():
     config.capacities = [
         # 2,  # 1,
         # 4,  # 1,
-        # 8,  # 1,
+        8,  # 1,
         16,  # 1,
         32,  # 1,
         64,  # 1,
         128,  # 1,
         224,  # 1,
-        320,  # 1, no need may
+        # 320,  # 1, no need may
         416,  # 1,
         512,
     ]
@@ -72,26 +72,26 @@ def main():
         [
             # 1,  # 2
             # 2,  # 4
-            # 1,  # 8
+            1,  # 8
             1,  # 16
             1,  # 32
             2,  # 64
             9,  # 128
             2,  # 224
-            1,  # 320
+            # 1,  # 320
             2,  # 416
             1,  # 512
         ],
         [
             # 1,  # 2
             # 1,  # 4
-            # 1,  # 8
+            1,  # 8
             1,  # 16
             1,  # 32
             1,  # 64
             1,  # 128
             1,  # 224
-            5,  # 320
+            # 5,  # 320
             1,  # 416
             3,  # 512
         ],
@@ -111,7 +111,7 @@ def main():
     if args.mode == "debug":
         debug(args, model, tokenizer)
     elif args.mode == "throughput":
-        throughput(args, model, tokenizer, 100)
+        throughput(args, model, tokenizer, 1000)
     elif args.mode == "profile":
         profile(args, model, tokenizer, args.vendor)
 
@@ -166,8 +166,8 @@ def throughput(args, model, tokenizer, test_data_num):
         st = time.time()
         for ii, idx in enumerate(random_idx):
             model(**loaded_data[idx])
-            # if ii == 1000 // 2:
-            #     get_gpu_info()
+            if ii == 1000 // 2:
+                get_gpu_info()
         torch.cuda.synchronize()
         end = time.time()
         print("Forward Implementation", end - st)

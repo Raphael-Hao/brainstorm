@@ -83,6 +83,7 @@ class SwitchGatherRouter(RouterBase):
 
         if "combine" in self.fabric_type:
             bult_in_fabric_kwargs = {
+                "auto_pad": False,
                 "flow_num": 1,
                 "reduction": "add",
                 "sparse": False,
