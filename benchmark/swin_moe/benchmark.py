@@ -24,6 +24,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import deterministic_random_generator, profile_v2
+
 from brt.runtime.placement import (
     dump_trace,
     adaptive_load,
@@ -31,6 +32,7 @@ from brt.runtime.placement import (
     load_searched_placement,
 )
 from brt.runtime import BRT_CACHE_PATH
+
 from config import get_config
 from data import build_loader
 from logger import create_logger
@@ -288,6 +290,7 @@ def get_benchmark_data(data_loader, logger, num_batches=100):
     # logger.info(
     #     f"===> Preparing benchmark data, get first {max_batches} batches from data loader of length {len(data_loader)}"
     # )
+
     gpu_data = []
     for idx, (images, _target) in enumerate(data_loader):
         if idx == max_batches:
@@ -316,6 +319,7 @@ def throughput(data_loader, model, logger):
         model(data)
     torch.cuda.synchronize()
     end = time.time()
+
     if dist.get_rank() == 0:
         result_path = BRT_CACHE_PATH / "results" / "swin_moe" / "e2e.csv"
         result_path.parent.mkdir(parents=True, exist_ok=True)
@@ -324,6 +328,7 @@ def throughput(data_loader, model, logger):
     logger.info(
         f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
+
 
 
 @torch.inference_mode()

@@ -5,6 +5,7 @@ import os
 import sys
 from collections import OrderedDict
 
+
 from brt.passes import (
     DeadPathEliminatePass,
     OnDemandMemoryPlanPass,
@@ -18,6 +19,7 @@ from brt.runtime.benchmark import (
     CUDATimer,
     MemoryStats,
 )
+
 from brt.runtime.memory_planner import pin_memory
 from dynamic_A_config import config as A_config
 from dynamic_B_config import config as B_config
@@ -31,6 +33,7 @@ import dl_lib.utils.comm as comm
 import torch
 from dl_lib.checkpoint import DetectionCheckpointer
 from dl_lib.data import MetadataCatalog
+
 from dl_lib.engine import CustomizedTrainer, default_argument_parser, default_setup
 from dl_lib.evaluation import (
     CityscapesEvaluator,
@@ -38,6 +41,7 @@ from dl_lib.evaluation import (
     PascalVOCDetectionEvaluator,
     SemSegEvaluator,
 )
+
 from dl_lib.modeling import SemanticSegmentorWithTTA
 
 from net import build_model
@@ -127,10 +131,12 @@ def test_argument_parser():
     bench_arg_manager = BenchmarkArgumentManager(parser)
     bench_arg_manager.add_item("liveness")
     bench_arg_manager.add_item("memory_plan")
+
     parser.add_argument(
         "--memory-mode", choices=["predict", "on_demand"], default="on_demand"
     )
     parser.add_argument("--test-origin", action="store_true", help="test origin model")
+
 
     return parser
 

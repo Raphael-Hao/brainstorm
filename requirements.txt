@@ -18,7 +18,7 @@ Pillow
 scikit-learn
 scipy
 xgboost
-tornado==6.1
+tornado==6.2
 tqdm
 json_tricks
 graphviz

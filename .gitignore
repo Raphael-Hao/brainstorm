@@ -11,7 +11,7 @@ benchmark/swin_moe/results
 docker/id_*
 
 .cache/*
-!.cache/kernel_db.sqlite
+.cache/kernel_db.sqlite
 !.cache/log/
 .cache/log/*
 !.cache/log/kernel_tune/

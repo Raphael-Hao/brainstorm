@@ -13,7 +13,7 @@ from dataset import get_dataloader
 
 
 DEFAULT_MODEL_TYPE = "LiveSR"
-DEFAULT_DATASET = "./dataset/cam1/LQ/"
+DEFAULT_DATASET = Path(__file__).parent / "dataset/cam1/LQ"
 
 SUBNET_BATCH_SIZE = [6, 7, 12, 27, 8, 8, 8, 12, 12, 4]
 
@@ -22,6 +22,7 @@ def generate_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--model", default=DEFAULT_MODEL_TYPE)
     parser.add_argument("-n", "--subnet-num-block", type=int, default=8)
+    parser.add_argument("-f", "--subnet-num-feature", type=int, default=8)
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
     parser.add_argument(
         "--objective-func", choices=["fastest", "most-efficient"], default="fastest"
@@ -32,13 +33,14 @@ def generate_args():
     return args
 
 
-def build_model(model_type: str, subnet_num_block: int):
+def build_model(model_type: str, subnet_num_block: int, subnet_num_feature):
+    livesr = LiveSR(10, subnet_num_block, subnet_num_feature).cuda()
     if model_type == "LiveSR":
-        model = LiveSR(10, subnet_num_block).cuda()
+        model = livesr
     elif model_type == "vFused":
-        model = vFusedLiveSR(LiveSR(10, subnet_num_block).cuda(), SUBNET_BATCH_SIZE)
+        model = vFusedLiveSR(livesr, SUBNET_BATCH_SIZE)
     elif model_type == "hFused":
-        model = hFusedLiveSR(LiveSR(10, subnet_num_block).cuda(), SUBNET_BATCH_SIZE)
+        model = hFusedLiveSR(livesr, SUBNET_BATCH_SIZE)
     else:
         raise ValueError
     return model
@@ -46,7 +48,7 @@ def build_model(model_type: str, subnet_num_block: int):
 
 def main():
     args = generate_args()
-    model = build_model(args.model, args.subnet_num_block)
+    model = build_model(args.model, args.subnet_num_block, args.subnet_num_feature)
     print(model)
     dataloader = get_dataloader(args.dataset, device="cuda")
     for data in dataloader:

@@ -1,0 +1,245 @@
+2022-10-27 11:49:06,140 [INFO] benchmark: Start
+2022-10-27 11:49:07,685 [INFO] benchmark: LiveSR builded
+2022-10-27 11:52:03,717 [INFO] benchmark: vFusedLiveSR builded
+2022-10-27 11:55:01,851 [INFO] benchmark: hFusedLiveSR builded
+2022-10-27 11:55:01,917 [INFO] benchmark: * Start timeit: Run 1 times
+2022-10-27 11:55:02,172 [INFO] benchmark: LiveSR:		 0.25317811104469s in 1 runs (0.25317811104469s/run)
+2022-10-27 11:55:02,233 [INFO] benchmark: vFusedLiveSR:		 0.05997019389178604s in 1 runs (0.05997019389178604s/run)
+2022-10-27 11:55:02,280 [INFO] benchmark: hFusedLiveSR:		 0.04681831004563719s in 1 runs (0.04681831004563719s/run)
+2022-10-27 11:55:02,280 [INFO] benchmark: * Start timeit: Run 100 times
+2022-10-27 11:55:09,810 [INFO] benchmark: LiveSR:		 7.5233028520597145s in 100 runs (0.07523302852059714s/run)
+2022-10-27 11:55:14,684 [INFO] benchmark: vFusedLiveSR:		 4.873407892067917s in 100 runs (0.048734078920679165s/run)
+2022-10-27 11:55:19,781 [INFO] benchmark: hFusedLiveSR:		 5.097095290897414s in 100 runs (0.05097095290897414s/run)
+2022-10-27 11:55:19,782 [INFO] benchmark: Profiling LiveSR
+[W kineto_shim.cpp:337] Profiler is not initialized: skipping step() invocation
+2022-10-27 11:55:22,346 [INFO] benchmark: Profiling vFusedLiveSR
+2022-10-27 11:55:23,480 [INFO] benchmark: Profiling hFusedLiveSR
+2022-10-27 12:20:45,367 [INFO] benchmark: Start
+2022-10-27 12:20:46,845 [INFO] benchmark: LiveSR builded
+2022-10-27 12:21:17,400 [INFO] benchmark: vFusedLiveSR builded
+2022-10-27 12:21:47,150 [INFO] benchmark: hFusedLiveSR builded
+2022-10-27 12:21:47,222 [INFO] benchmark: * Start timeit: Run 1 times
+2022-10-27 12:21:47,440 [INFO] benchmark: LiveSR:		 0.2113653210690245s in 1 runs (0.2113653210690245s/run)
+2022-10-27 12:21:47,494 [INFO] benchmark: vFusedLiveSR:		 0.0526655480498448s in 1 runs (0.0526655480498448s/run)
+2022-10-27 12:21:47,538 [INFO] benchmark: hFusedLiveSR:		 0.04347209702245891s in 1 runs (0.04347209702245891s/run)
+2022-10-27 12:21:47,538 [INFO] benchmark: * Start timeit: Run 100 times
+2022-10-27 12:21:52,071 [INFO] benchmark: LiveSR:		 4.531811095890589s in 100 runs (0.045318110958905894s/run)
+2022-10-27 12:21:56,361 [INFO] benchmark: vFusedLiveSR:		 4.289446277893148s in 100 runs (0.04289446277893148s/run)
+2022-10-27 12:22:00,657 [INFO] benchmark: hFusedLiveSR:		 4.295628517051227s in 100 runs (0.042956285170512275s/run)
+2022-10-27 12:22:00,657 [INFO] benchmark: Profiling LiveSR
+[W kineto_shim.cpp:337] Profiler is not initialized: skipping step() invocation
+2022-10-27 12:22:02,275 [INFO] benchmark: Profiling vFusedLiveSR
+2022-10-27 12:22:03,210 [INFO] benchmark: Profiling hFusedLiveSR
+
+(base) FAREAST.v-louyang@GCRAZGDL1202:~/brainstorm_project/brainstorm/benchmark/livesr$ python benchmark.py 
+2022-11-07 03:30:49,780 [INFO] benchmark: Start
+2022-11-07 03:30:51,192 [INFO] benchmark: LiveSR builded
+2022-11-07 03:32:24,777 [INFO] benchmark: vFusedLiveSR builded
+2022-11-07 03:33:53,337 [INFO] benchmark: hFusedLiveSR builded
+2022-11-07 03:33:53,402 [INFO] benchmark: * Start timeit: Run 1 times
+2022-11-07 03:33:53,631 [INFO] benchmark: LiveSR:                0.22866466990672052s in 1 runs (0.22866466990672052s/run) (timeit tf32)
+2022-11-07 03:33:53,708 [INFO] benchmark: LiveSR:                0.07574740308336914s in 1 runs (0.07574740308336914s/run) (timeit)
+2022-11-07 03:33:53,956 [INFO] benchmark: LiveSR:                539916.2485264242s in 1 runs (539916.2485264242s/run) (torch tf32)
+2022-11-07 03:33:54,186 [INFO] benchmark: LiveSR:                677629.6603493392s in 1 runs (677629.6603493392s/run) (torch)
+2022-11-07 03:33:54,247 [INFO] benchmark: vFusedLiveSR:          0.059830397833138704s in 1 runs (0.059830397833138704s/run) (timeit tf32)
+2022-11-07 03:33:54,296 [INFO] benchmark: vFusedLiveSR:          0.04916576505638659s in 1 runs (0.04916576505638659s/run) (timeit)
+2022-11-07 03:33:54,466 [INFO] benchmark: vFusedLiveSR:          510010.9986960888s in 1 runs (510010.9986960888s/run) (torch tf32)
+2022-11-07 03:33:54,635 [INFO] benchmark: vFusedLiveSR:          509723.2200205326s in 1 runs (509723.2200205326s/run) (torch)
+2022-11-07 03:33:54,684 [INFO] benchmark: hFusedLiveSR:          0.049158631823956966s in 1 runs (0.049158631823956966s/run) (timeit tf32)
+2022-11-07 03:33:54,731 [INFO] benchmark: hFusedLiveSR:          0.04628312401473522s in 1 runs (0.04628312401473522s/run) (timeit)
+2022-11-07 03:33:54,882 [INFO] benchmark: hFusedLiveSR:          539868.3389648795s in 1 runs (539868.3389648795s/run) (torch tf32)
+2022-11-07 03:33:55,034 [INFO] benchmark: hFusedLiveSR:          453371.0004761815s in 1 runs (453371.0004761815s/run) (torch)
+2022-11-07 03:33:55,034 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-07 03:34:02,097 [INFO] benchmark: LiveSR:                7.0622474539559335s in 100 runs (0.07062247453955933s/run) (timeit tf32)
+2022-11-07 03:34:09,129 [INFO] benchmark: LiveSR:                7.031457557110116s in 100 runs (0.07031457557110116s/run) (timeit)
+2022-11-07 03:34:16,338 [INFO] benchmark: LiveSR:                705208.3640825003s in 100 runs (7052.083640825003s/run) (torch tf32)
+2022-11-07 03:34:23,538 [INFO] benchmark: LiveSR:                702975.044795312s in 100 runs (7029.75044795312s/run) (torch)
+2022-11-07 03:34:28,404 [INFO] benchmark: vFusedLiveSR:          4.865474916994572s in 100 runs (0.048654749169945714s/run) (timeit tf32)
+2022-11-07 03:34:33,249 [INFO] benchmark: vFusedLiveSR:          4.843757515074685s in 100 runs (0.04843757515074685s/run) (timeit)
+2022-11-07 03:34:37,962 [INFO] benchmark: vFusedLiveSR:          459714.61408771574s in 100 runs (4597.146140877157s/run) (torch tf32)
+2022-11-07 03:34:42,854 [INFO] benchmark: vFusedLiveSR:          478376.4970023185s in 100 runs (4783.764970023185s/run) (torch)
+2022-11-07 03:34:47,258 [INFO] benchmark: hFusedLiveSR:          4.403119210153818s in 100 runs (0.044031192101538184s/run) (timeit tf32)
+2022-11-07 03:34:51,772 [INFO] benchmark: hFusedLiveSR:          4.512937861029059s in 100 runs (0.04512937861029059s/run) (timeit)
+2022-11-07 03:34:56,258 [INFO] benchmark: hFusedLiveSR:          436384.9679008126s in 100 runs (4363.849679008126s/run) (torch tf32)
+2022-11-07 03:35:00,790 [INFO] benchmark: hFusedLiveSR:          442591.20209608227s in 100 runs (4425.912020960823s/run) (torch)
+2022-11-07 03:35:00,791 [INFO] benchmark: Profiling LiveSR
+[W kineto_shim.cpp:337] Profiler is not initialized: skipping step() invocation
+2022-11-07 03:35:03,181 [INFO] benchmark: Profiling vFusedLiveSR
+2022-11-07 03:35:04,317 [INFO] benchmark: Profiling hFusedLiveSR
+
+
+8, 8
+2022-11-18 06:57:20,141 [INFO] benchmark: Start
+2022-11-18 06:57:21,170 [INFO] benchmark: LiveSR builded
+2022-11-18 06:58:12,890 [INFO] benchmark: vFusedLiveSR builded
+2022-11-18 06:58:50,085 [INFO] benchmark: hFusedLiveSR builded
+2022-11-18 06:58:50,090 [INFO] benchmark: * Start timeit: Run 1 times
+2022-11-18 06:58:50,412 [INFO] benchmark: LiveSR:		 414076.76006201655s in 1 runs (414076.76006201655s/run) (torch)
+2022-11-18 06:58:50,481 [INFO] benchmark: vFusedLiveSR:		 207015.78992884606s in 1 runs (207015.78992884606s/run) (torch)
+2022-11-18 06:58:50,538 [INFO] benchmark: hFusedLiveSR:		 160452.99998950213s in 1 runs (160452.99998950213s/run) (torch)
+2022-11-18 06:58:50,538 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-18 06:58:55,010 [INFO] benchmark: LiveSR:		 438246.5956005035s in 100 runs (4382.465956005035s/run) (torch)
+2022-11-18 06:58:57,570 [INFO] benchmark: vFusedLiveSR:		 251629.26890188828s in 100 runs (2516.292689018883s/run) (torch)
+2022-11-18 06:58:59,884 [INFO] benchmark: hFusedLiveSR:		 225895.569002023s in 100 runs (2258.95569002023s/run) (torch)
+2022-11-18 06:58:59,884 [INFO] benchmark: Profiling LiveSR
+2022-11-18 06:59:01,949 [INFO] benchmark: Profiling vFusedLiveSR
+2022-11-18 06:59:02,771 [INFO] benchmark: Profiling hFusedLiveSR
+
+8, 80
+2022-11-18 08:03:04,231 [INFO] benchmark: Start
+2022-11-18 08:03:05,511 [INFO] benchmark: LiveSR builded
+2022-11-18 08:11:01,579 [INFO] benchmark: vFusedLiveSR builded
+2022-11-18 08:16:55,612 [INFO] benchmark: hFusedLiveSR builded
+2022-11-18 08:16:55,621 [INFO] benchmark: * Start timeit: Run 1 times
+2022-11-18 08:16:56,800 [INFO] benchmark: LiveSR:		 2877706.7802730016s in 1 runs (2877706.7802730016s/run) (torch)
+2022-11-18 08:16:57,100 [INFO] benchmark: vFusedLiveSR:		 932644.4400358014s in 1 runs (932644.4400358014s/run) (torch)
+2022-11-18 08:16:57,268 [INFO] benchmark: hFusedLiveSR:		 502603.3500325866s in 1 runs (502603.3500325866s/run) (torch)
+2022-11-18 08:16:57,268 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-18 08:17:27,725 [INFO] benchmark: LiveSR:		 2986203.0301010236s in 100 runs (29862.030301010236s/run) (torch)
+2022-11-18 08:17:35,700 [INFO] benchmark: vFusedLiveSR:		 781175.0635999487s in 100 runs (7811.750635999487s/run) (torch)
+2022-11-18 08:17:40,813 [INFO] benchmark: hFusedLiveSR:		 499480.02060118597s in 100 runs (4994.80020601186s/run) (torch)
+2022-11-18 08:17:40,813 [INFO] benchmark: Profiling LiveSR
+2022-11-18 08:17:51,903 [INFO] benchmark: Profiling vFusedLiveSR
+2022-11-18 08:17:55,398 [INFO] benchmark: Profiling hFusedLiveSR
+
+8, 200
+2022-11-18 08:32:00,390 [INFO] benchmark: Start
+2022-11-18 08:32:02,207 [INFO] benchmark: LiveSR builded
+2022-11-18 08:51:33,726 [INFO] benchmark: vFusedLiveSR builded
+2022-11-18 09:06:43,792 [INFO] benchmark: hFusedLiveSR builded
+2022-11-18 09:06:43,858 [INFO] benchmark: * Start timeit: Run 1 times
+2022-11-18 09:06:46,292 [INFO] benchmark: LiveSR:		 7221432.999940589s in 1 runs (7221432.999940589s/run) (torch)
+2022-11-18 09:06:46,860 [INFO] benchmark: vFusedLiveSR:		 1790010.4098953307s in 1 runs (1790010.4098953307s/run) (torch)
+2022-11-18 09:06:47,228 [INFO] benchmark: hFusedLiveSR:		 1070290.3801575303s in 1 runs (1070290.3801575303s/run) (torch)
+2022-11-18 09:06:47,229 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-18 09:07:59,708 [INFO] benchmark: LiveSR:		 7102177.517602104s in 100 runs (71021.77517602104s/run) (torch)
+2022-11-18 09:08:17,572 [INFO] benchmark: vFusedLiveSR:		 1751645.9088015833s in 100 runs (17516.459088015832s/run) (torch)
+2022-11-18 09:08:29,372 [INFO] benchmark: hFusedLiveSR:		 1155920.6667996477s in 100 runs (11559.206667996477s/run) (torch)
+2022-11-18 09:08:29,372 [INFO] benchmark: Profiling LiveSR
+[W kineto_shim.cpp:337] Profiler is not initialized: skipping step() invocation
+2022-11-18 09:08:56,923 [INFO] benchmark: Profiling vFusedLiveSR
+2022-11-18 09:09:04,823 [INFO] benchmark: Profiling hFusedLiveSR
+
+8, 80
+(base) FAREAST.v-louyang@GCRAZGDL1202:~/brainstorm_project/brainstorm/benchmark/livesr$ python benchmark.py 
+2022-11-23 14:33:11,179 [INFO] benchmark: Start
+2022-11-23 14:33:12,455 [INFO] benchmark: LiveSR builded
+2022-11-23 14:40:40,771 [INFO] benchmark: vFusedLiveSR builded
+2022-11-23 14:40:52,673 [INFO] benchmark: hFusedLiveSR builded
+2022-11-23 14:40:52,678 [INFO] benchmark: * Start timeit: Run 10 times
+2022-11-23 14:40:56,481 [INFO] benchmark: LiveSR:                2904373.4109727666 us/run
+2022-11-23 14:40:57,228 [INFO] benchmark: vFusedLiveSR:          522518.5810122639 us/run
+2022-11-23 14:46:36,313 [INFO] benchmark: hFusedLiveSR:          208324.79500677437 us/run
+2022-11-23 14:46:36,313 [INFO] benchmark: * Start timeit: Run 100 times
+2022-11-23 14:47:05,461 [INFO] benchmark: LiveSR:                2854828.7181998603 us/run
+2022-11-23 14:47:10,328 [INFO] benchmark: vFusedLiveSR:          476188.47369449213 us/run
+2022-11-23 14:47:12,498 [INFO] benchmark: hFusedLiveSR:          211142.73819839582 us/run
+
+
+2022-12-03 11:22:54,258 [INFO] benchmark: SUBNET_NUM_BLOCK = 80
+2022-12-03 11:22:54,258 [INFO] benchmark: ALL_SUBNET_BS = [[6, 7, 12, 27, 8, 8, 8, 12, 12, 4], [21, 8, 16, 11, 20, 8, 7, 15], [9, 32, 18, 16, 18, 7], [19, 25, 18, 36]]
+2022-12-03 11:22:54,258 [INFO] benchmark: ALL_NUM_CHANNELS = [8, 12, 16, 20]
+2022-12-03 11:22:54,258 [INFO] benchmark: Start
+2022-12-03 11:22:55,785 [INFO] benchmark: LiveSR 8 10 builded
+2022-12-03 11:30:43,176 [INFO] benchmark: vFusedLiveSR 8 10 builded
+2022-12-03 11:31:24,318 [INFO] benchmark: hFusedLiveSR 8 10 builded
+2022-12-03 11:31:24,800 [INFO] benchmark: LiveSR 8 8 builded
+2022-12-03 11:37:53,533 [INFO] benchmark: vFusedLiveSR 8 8 builded
+2022-12-03 11:38:31,863 [INFO] benchmark: hFusedLiveSR 8 8 builded
+2022-12-03 11:38:32,356 [INFO] benchmark: LiveSR 8 6 builded
+2022-12-03 11:44:07,821 [INFO] benchmark: vFusedLiveSR 8 6 builded
+2022-12-03 11:44:46,440 [INFO] benchmark: hFusedLiveSR 8 6 builded
+2022-12-03 11:44:46,677 [INFO] benchmark: LiveSR 8 4 builded
+2022-12-03 11:48:19,227 [INFO] benchmark: vFusedLiveSR 8 4 builded
+2022-12-03 11:48:53,616 [INFO] benchmark: hFusedLiveSR 8 4 builded
+dict_keys([('LiveSR', 8, 10), ('vFusedLiveSR', 8, 10), ('hFusedLiveSR', 8, 10), ('LiveSR', 8, 8), ('vFusedLiveSR', 8, 8), ('hFusedLiveSR', 8, 8), ('LiveSR', 8, 6), ('vFusedLiveSR', 8, 6), ('hFusedLiveSR', 8, 6), ('LiveSR', 8, 4), ('vFusedLiveSR', 8, 4), ('hFusedLiveSR', 8, 4)])
+2022-12-03 11:48:53,630 [INFO] benchmark: * Start timeit: Run 10 times
+2022-12-03 11:48:55,460 [INFO] benchmark: LiveSR, 8, 10:		 1388029.4859409332 us/run
+2022-12-03 11:48:56,000 [INFO] benchmark: vFusedLiveSR, 8, 10:		 388380.1188785583 us/run
+2022-12-03 11:54:21,312 [INFO] benchmark: hFusedLiveSR, 8, 10:		 177546.54912278056 us/run
+2022-12-03 11:54:22,792 [INFO] benchmark: LiveSR, 8, 8:		 1174896.6111335903 us/run
+2022-12-03 11:54:23,252 [INFO] benchmark: vFusedLiveSR, 8, 8:		 335916.1838889122 us/run
+2022-12-03 11:58:34,546 [INFO] benchmark: hFusedLiveSR, 8, 8:		 140558.07003751397 us/run
+2022-12-03 11:58:35,816 [INFO] benchmark: LiveSR, 8, 6:		 997616.9920992106 us/run
+2022-12-03 11:58:36,192 [INFO] benchmark: vFusedLiveSR, 8, 6:		 271490.9170754254 us/run
+2022-12-03 12:02:57,272 [INFO] benchmark: hFusedLiveSR, 8, 6:		 120364.6610956639 us/run
+2022-12-03 12:02:58,348 [INFO] benchmark: LiveSR, 8, 4:		 853602.6650108397 us/run
+2022-12-03 12:02:58,604 [INFO] benchmark: vFusedLiveSR, 8, 4:		 169358.6311303079 us/run
+2022-12-03 12:05:44,292 [INFO] benchmark: hFusedLiveSR, 8, 4:		 92365.43206498027 us/run
+2022-12-03 12:05:44,292 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-03 12:05:58,036 [INFO] benchmark: LiveSR, 8, 10:		 1342899.808101356 us/run
+2022-12-03 12:06:02,268 [INFO] benchmark: vFusedLiveSR, 8, 10:		 409263.1428968161 us/run
+2022-12-03 12:06:03,988 [INFO] benchmark: hFusedLiveSR, 8, 10:		 164919.9139792472 us/run
+2022-12-03 12:06:15,936 [INFO] benchmark: LiveSR, 8, 8:		 1164602.497802116 us/run
+2022-12-03 12:06:19,244 [INFO] benchmark: vFusedLiveSR, 8, 8:		 319064.6588103846 us/run
+2022-12-03 12:06:20,728 [INFO] benchmark: hFusedLiveSR, 8, 8:		 139890.7626979053 us/run
+2022-12-03 12:06:30,852 [INFO] benchmark: LiveSR, 8, 6:		 987542.1360135078 us/run
+2022-12-03 12:06:33,324 [INFO] benchmark: vFusedLiveSR, 8, 6:		 237294.5407172665 us/run
+2022-12-03 12:06:34,564 [INFO] benchmark: hFusedLiveSR, 8, 6:		 114558.61339345574 us/run
+2022-12-03 12:06:42,532 [INFO] benchmark: LiveSR, 8, 4:		 776936.9176123292 us/run
+2022-12-03 12:06:44,252 [INFO] benchmark: vFusedLiveSR, 8, 4:		 161758.55970941484 us/run
+2022-12-03 12:06:45,204 [INFO] benchmark: hFusedLiveSR, 8, 4:		 90170.435491018 us/run
+
+Tuned Classifier
+2022-12-03 13:34:20,632 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-03 13:34:20,776 [INFO] benchmark: classifier of LiveSR, 8, 10:           10990.253882482648 us/run
+2022-12-03 13:34:20,920 [INFO] benchmark: classifier of LiveSR, 8, 8:            10986.440815031528 us/run
+2022-12-03 13:34:21,076 [INFO] benchmark: classifier of LiveSR, 8, 6:            10949.696996249259 us/run
+2022-12-03 13:34:21,227 [INFO] benchmark: classifier of LiveSR, 8, 4:            10970.91471310705 us/run
+Untuned Classifier
+2022-12-03 13:36:37,744 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-03 13:48:41,692 [INFO] benchmark: classifier of LiveSR, 8, 10:           40801.039012148976 us/run
+2022-12-03 13:48:42,146 [INFO] benchmark: classifier of LiveSR, 8, 8:            43602.04671975225 us/run
+2022-12-03 13:48:42,567 [INFO] benchmark: classifier of LiveSR, 8, 6:            40351.545391604304 us/run
+2022-12-03 13:48:43,036 [INFO] benchmark: classifier of LiveSR, 8, 4:            44247.739715501666 us/run
+
+2022-12-05 06:32:05,387 [INFO] benchmark: SUBNET_NUM_BLOCK = 80
+2022-12-05 06:32:05,387 [INFO] benchmark: ALL_SUBNET_BS = [[6, 7, 12, 27, 8, 8, 8, 12, 12, 4], [21, 8, 16, 11, 20, 8, 7, 15], [9, 32, 18, 16, 18, 7], [19, 25, 18, 36]]
+2022-12-05 06:32:05,387 [INFO] benchmark: ALL_NUM_CHANNELS = [8, 12, 16, 20]
+2022-12-05 06:32:05,387 [INFO] benchmark: Start
+2022-12-05 06:32:39,082 [INFO] benchmark: LiveSR 12 10 builded
+2022-12-05 06:44:18,079 [INFO] benchmark: vFusedLiveSR 12 10 builded
+2022-12-05 06:44:36,588 [INFO] benchmark: hFusedLiveSR 12 10 builded
+2022-12-05 06:45:07,381 [INFO] benchmark: LiveSR 16 10 builded
+2022-12-05 07:02:15,660 [INFO] benchmark: vFusedLiveSR 16 10 builded
+2022-12-05 07:02:41,453 [INFO] benchmark: hFusedLiveSR 16 10 builded
+2022-12-05 07:03:11,867 [INFO] benchmark: LiveSR 20 10 builded
+2022-12-05 07:20:45,739 [INFO] benchmark: vFusedLiveSR 20 10 builded
+2022-12-05 07:21:11,051 [INFO] benchmark: hFusedLiveSR 20 10 builded
+dict_keys([('LiveSR', 12, 10), ('vFusedLiveSR', 12, 10), ('hFusedLiveSR', 12, 10), ('LiveSR', 16, 10), ('vFusedLiveSR', 16, 10), ('hFusedLiveSR', 16, 10), ('LiveSR', 20, 10), ('vFusedLiveSR', 20, 10), ('hFusedLiveSR', 20, 10)])
+torch.Size([88, 3, 32, 32]) cuda:0 torch.float32
+2022-12-05 07:21:11,055 [INFO] benchmark: * Start timeit: Run 10 times
+2022-12-05 07:21:12,741 [INFO] benchmark: LiveSR, 12, 10:		 1332824.826007709 us/run
+2022-12-05 07:21:13,228 [INFO] benchmark: vFusedLiveSR, 12, 10:		 360506.22700713575 us/run
+2022-12-05 07:30:35,944 [INFO] benchmark: hFusedLiveSR, 12, 10:		 156399.46307055652 us/run
+2022-12-05 07:30:37,590 [INFO] benchmark: LiveSR, 16, 10:		 1334412.190131843 us/run
+2022-12-05 07:30:38,104 [INFO] benchmark: vFusedLiveSR, 16, 10:		 362528.91505137086 us/run
+2022-12-05 07:46:40,228 [INFO] benchmark: hFusedLiveSR, 16, 10:		 159966.6979163885 us/run
+2022-12-05 07:46:41,832 [INFO] benchmark: LiveSR, 20, 10:		 1284248.722018674 us/run
+2022-12-05 07:46:42,320 [INFO] benchmark: vFusedLiveSR, 20, 10:		 363063.6299494654 us/run
+2022-12-05 08:02:05,787 [INFO] benchmark: hFusedLiveSR, 20, 10:		 377124.1041831672 us/run
+2022-12-05 08:02:05,787 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-05 08:02:20,106 [INFO] benchmark: LiveSR, 12, 10:		 1399470.8442827687 us/run
+2022-12-05 08:02:23,940 [INFO] benchmark: vFusedLiveSR, 12, 10:		 370563.45120072365 us/run
+2022-12-05 08:02:25,589 [INFO] benchmark: hFusedLiveSR, 12, 10:		 157471.74869757143 us/run
+2022-12-05 08:02:39,832 [INFO] benchmark: LiveSR, 16, 10:		 1391799.6808886528 us/run
+2022-12-05 08:02:43,692 [INFO] benchmark: vFusedLiveSR, 16, 10:		 373873.1113029644 us/run
+2022-12-05 08:02:45,358 [INFO] benchmark: hFusedLiveSR, 16, 10:		 160014.15927894413 us/run
+2022-12-05 08:02:59,660 [INFO] benchmark: LiveSR, 20, 10:		 1397066.8526133522 us/run
+2022-12-05 08:03:03,428 [INFO] benchmark: vFusedLiveSR, 20, 10:		 363576.74391474575 us/run
+2022-12-05 08:03:07,304 [INFO] benchmark: hFusedLiveSR, 20, 10:		 375953.5509161651 us/run
+Press any key to start profiling
+
+2022-12-06 04:20:29,600 [INFO] benchmark: LiveSR 20 10 builded
+2022-12-06 04:38:07,544 [INFO] benchmark: vFusedLiveSR 20 10 builded
+2022-12-06 04:38:32,798 [INFO] benchmark: hFusedLiveSR 20 10 builded
+dict_keys([('LiveSR', 20, 10), ('vFusedLiveSR', 20, 10), ('hFusedLiveSR', 20, 10)])
+torch.Size([88, 3, 32, 32]) cuda:0 torch.float32
+2022-12-06 04:38:32,854 [INFO] benchmark: * Start timeit: Run 10 times
+2022-12-06 04:38:34,598 [INFO] benchmark: LiveSR, 20, 10:                1357469.7880540043 us/run
+2022-12-06 04:38:35,156 [INFO] benchmark: vFusedLiveSR, 20, 10:          416292.94701851904 us/run
+2022-12-06 04:55:27,956 [INFO] benchmark: hFusedLiveSR, 20, 10:          377800.882095471 us/run
+2022-12-06 04:55:27,956 [INFO] benchmark: * Start timeit: Run 100 times
+2022-12-06 04:55:42,604 [INFO] benchmark: LiveSR, 20, 10:                1430567.5068870184 us/run
+2022-12-06 04:55:46,800 [INFO] benchmark: vFusedLiveSR, 20, 10:          406239.8715876043 us/run
+2022-12-06 04:55:50,692 [INFO] benchmark: hFusedLiveSR, 20, 10:          377500.46241562814 us/run

@@ -256,6 +256,7 @@ class HomoFusedCombineFabric(CombineFabric):
             else:
                 out_flow = combine_with_src_indices(in_flow, local_indices, loads, None)
 
+
             out_flows.append(out_flow)
 
         return out_flows
@@ -297,3 +298,4 @@ class ResidualHomoFusedCombineFabric(CombineFabric):
         )
 
         return out_flow
+

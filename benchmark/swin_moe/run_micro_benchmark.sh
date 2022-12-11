@@ -85,6 +85,7 @@ while [[ $# -gt 0 ]]; do
         LAUNCH_ARGS+=(--moe-id "$MOE_ID")
         shift 2
         ;;
+
     *)
         break
         ;;
@@ -139,6 +140,7 @@ LAUNCH_ARGS+=(
     --output ./results/MoE/
     --resume "${BRT_CACHE_PATH}"/ckpt/swinv2_moe_small/model.pth
     --seed "$RANDOM"
+
 )
 
 echo "Final launch args:" "${LAUNCH_ARGS[@]}"

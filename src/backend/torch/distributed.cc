@@ -349,8 +349,10 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
 
   ::torch::Tensor recv_sizes =
       ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
+
   at::cuda::CUDACachingAllocator::recordStream(recv_sizes.storage().data_ptr(),
                                                at::cuda::getCurrentCUDAStream());
+
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -371,6 +373,7 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
                                       send_sizes.options(), ::torch::MemoryFormat::Contiguous);
       at::cuda::CUDACachingAllocator::recordStream(all_recv_sizes.storage().data_ptr(),
                                                    at::cuda::getCurrentCUDAStream());
+
     }
     manager.StartContext();
     manager.WaitEvent(1);
@@ -415,6 +418,7 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
   //   std::cout << "slice: " << slice_size_in_byte << std::endl;
   // }
 
+
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -433,6 +437,7 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
       ::torch::empty_like(send_sizes, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
   at::cuda::CUDACachingAllocator::recordStream(reordered_loads.storage().data_ptr(),
                                                at::cuda::getCurrentCUDAStream());
+
   if (locality_aware) {
     manager.ExternalWaitEvent(1, at::cuda::getCurrentCUDAStream());
     if (world_rank == 0) {
@@ -448,6 +453,7 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
           ::torch::empty(world_size, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
       at::cuda::CUDACachingAllocator::recordStream(reorder_indices.storage().data_ptr(),
                                                    at::cuda::getCurrentCUDAStream());
+
     }
     manager.ExternalRecordEvent(1, at::cuda::getCurrentCUDAStream());
     manager.StartContext();
@@ -703,6 +709,7 @@ static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tens
   at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
                                                at::cuda::getCurrentCUDAStream());
 
+
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -746,6 +753,7 @@ static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_al
         ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
     at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
                                                  at::cuda::getCurrentCUDAStream());
+
     manager.StartContext();
     manager.WaitEvent(0);
     manager.RecordStorage(in_data);
@@ -802,6 +810,7 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
 
   // Calculate the total size in byte
   const int total_size_in_byte = in_data.numel() * in_data.element_size();
+
   // printf("total_size_in_byte: %d\n", total_size_in_byte);
   // Calculate the size of each grainularity in byte
   const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
@@ -818,6 +827,7 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
   at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
                                                at::cuda::getCurrentCUDAStream());
   // printf("group size: %d\n", group_size);
+
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);

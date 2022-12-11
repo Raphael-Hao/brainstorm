@@ -8,7 +8,7 @@ def parse_params(params: Dict[str, Any]):
     module_name = params.pop("module_name")
     if module_name is None:
         module_name = "Conv2d"
-    if module_name in ["Conv2d", "ConvTranspose2d"]:
+    if module_name in ["Conv2d", "ConvTranspose2d", "Conv2dMulAdd"]:
         # default value
         params["kernel_size"] = _pair(params["kernel_size"])
         if params["stride"] == None:
@@ -33,7 +33,7 @@ def parse_params(params: Dict[str, Any]):
             params["output_padding"] = 0
         # generate module_name & operator
         modules = []
-        if module_name == "Conv2d":
+        if module_name in ["Conv2d", "Conv2dMulAdd"]:
             modules.append(
                 nn.Conv2d(
                     in_channels=params["in_channels"],
@@ -48,7 +48,7 @@ def parse_params(params: Dict[str, Any]):
                 )
             )
             params.pop("padding_mode")
-        else:
+        elif module_name == "ConvTranspose2d":
             modules.append(
                 nn.ConvTranspose2d(
                     in_channels=params["in_channels"],
@@ -66,10 +66,12 @@ def parse_params(params: Dict[str, Any]):
         bias = params.pop("bias")
         if bias is True:
             module_name += "Bias"
+            if module_name == "Conv2dMulAddBias":
+                module_name = "Conv2dBiasMulAdd"
         norm = params.pop("norm")
         if norm == "SyncBatchNorm":
             modules.append(nn.BatchNorm2d(params["out_channels"]))
-            module_name += "BatchNorm"
+            module_name += "BatchNorm2d"
         elif norm is not None:
             assert False, f"Unsupported norm type {norm}"
         activation = params.pop("activation")
@@ -92,7 +94,12 @@ def parse_params(params: Dict[str, Any]):
         operator = nn.Sequential(*modules)
     elif module_name == "AdaptiveAvgPool2d":
         operator = nn.AdaptiveAvgPool2d(params["output_size"])
+    elif module_name == "MaxPool2d":
+        operator = nn.MaxPool2d(params["kernel_size"],params["stride"],params["padding"])
+    elif module_name == "AvgPool2d":
+        operator = nn.AvgPool2d(params["kernel_size"])
     else:
+        import pdb; pdb.set_trace()
         raise ValueError(f"Unsupported module type: {module_name}")
     input_infos = {"input_0": params.pop("input_shape")}
     output_infos = {"output_0": params.pop("output_shape")}
@@ -103,6 +110,8 @@ def parse_params(params: Dict[str, Any]):
         params,
         operator,
     )
+
+
 
 
 def make_log_fname(

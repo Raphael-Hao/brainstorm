@@ -20,6 +20,7 @@ __all__ = [
 ]
 
 
+
 def profile_v2(model: nn.Module, data_collection, vendor: str):
     with torch.profiler.profile(
         activities=[
@@ -29,6 +30,7 @@ def profile_v2(model: nn.Module, data_collection, vendor: str):
         profile_memory=True,
         schedule=torch.profiler.schedule(wait=2, warmup=2, active=5),
         with_stack=False,
+
         on_trace_ready=torch.profiler.tensorboard_trace_handler(
             (BRT_LOG_PATH / f"./profile_results/{vendor}").as_posix()
         ),

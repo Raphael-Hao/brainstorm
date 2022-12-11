@@ -440,6 +440,7 @@ def update_config(config, args):
     if args.capacity:
         config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR = args.capacity
 
+
     # set local rank for distributed training
     config.LOCAL_RANK = args.local_rank
 

@@ -405,8 +405,8 @@ class BertGenerationLayer(nn.Module):
         if self.is_decoder:
             outputs = outputs + (present_key_value,)
 
-        outputs = outputs + (task_ids,)
 
+        outputs = outputs + (task_ids,)
         return outputs
 
     def feed_forward_chunk(self, attention_output):
@@ -974,6 +974,7 @@ class BertGenerationDecoder(BertGenerationPreTrainedModel):
         )
         if labels is not None:
             use_cache = False
+
         outputs = self.bert(
             input_ids,
             attention_mask=attention_mask,

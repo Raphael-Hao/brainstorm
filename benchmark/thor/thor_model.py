@@ -42,8 +42,8 @@ from transformers.modeling_utils import (
 )
 from transformers.utils import logging
 
-from thor_config import ThorConfig
-from thor_moe import (
+from .thor_config import ThorConfig
+from .thor_moe import (
     FusedThorMoE,
     FusedThorMoEBmm,
     MaskFusionThorMoE,

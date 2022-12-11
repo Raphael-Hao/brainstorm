@@ -177,7 +177,6 @@ def load_searched_placement(
         searched_placement[experts_keys[i]] = placement
     return searched_placement
 
-
 def adaptive_micro_bench_load(
     model: nn.Module,
     new_placements: Dict[Tuple[int, int], List[List[int]]],

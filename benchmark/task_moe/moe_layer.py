@@ -95,6 +95,7 @@ class BertGenerationMoE(nn.Module):
                     fabric_type="distributed_fused_combine",
                     fabric_kwargs={"transform": False},
                 )
+
         self.local_experts = config.num_tasks // dist.get_world_size()
         self.intermediate_denses = nn.ModuleList(
             nn.Linear(config.hidden_size, config.intermediate_size)
@@ -117,6 +118,7 @@ class BertGenerationMoE(nn.Module):
         )
 
     def placement_forward(self, x: torch.Tensor, task_ids: torch.Tensor):
+
         if self.task_locality:
             x = self.task_sactter(x, task_ids)
             task_ids = x.score
@@ -134,6 +136,7 @@ class BertGenerationMoE(nn.Module):
             outputs.append(self.expert_forward(x[base_x_idx : base_x_idx + load], i))
             base_load_idx += world_size
             base_x_idx += load
+
         x = torch.cat(outputs, dim=0)
         x.in_loads = in_loads
         x.out_loads = out_loads
@@ -154,6 +157,7 @@ class BertGenerationMoE(nn.Module):
         outputs = []
         for i in range(self.local_experts):
             outputs.append(self.expert_forward(xs[i], i))
+
         x = torch.cat(outputs, dim=0)
         x.in_loads = in_loads
         x.out_loads = out_loads
@@ -238,3 +242,4 @@ class BertGenerationMoE(nn.Module):
             else:
                 x = self.common_forward(x, task_ids)
         return x, task_ids
+

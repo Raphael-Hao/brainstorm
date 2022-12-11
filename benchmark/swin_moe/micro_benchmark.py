@@ -15,6 +15,7 @@ import warnings
 from functools import partial
 import pathlib
 
+
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
 from tutel_ea import system_init
 
@@ -142,6 +143,7 @@ def parse_option():
         "--moe-id", type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     )
     parser.add_argument("--seed", type=int, default=0)
+
     ds_init = None
 
     args, _unparsed = parser.parse_known_args()
@@ -453,6 +455,7 @@ def search_end_layer_placement(
                     delimiter=",",
                 )
             no_update_iter_nums = 0
+
         if worst_throughput > throughput:
             worst_throughput = throughput
             worst_placement = np.array(list(itertools.chain.from_iterable(placement)))
@@ -496,6 +499,7 @@ def load_searched_placement(
         / f"micro_results/{moe_layer_start}_{moe_layer_end}.{capacity_factor}.{which_one}_{world_size}_placement.csv"
     )
     logger.info(f"Loading searched placement from {searched_placement_file.as_posix()}")
+
     searched_placement_list = np.loadtxt(
         searched_placement_file, dtype=np.int32, delimiter=","
     )
@@ -506,7 +510,6 @@ def load_searched_placement(
         placement = [list(p) for p in placement]
         searched_placement[experts_keys[i]] = placement
     return searched_placement
-
 
 def load_micro_bench_data(config, data_dir: str, bs: int, logger):
     logger.info(f"Loading micro-bench data from {data_dir}")

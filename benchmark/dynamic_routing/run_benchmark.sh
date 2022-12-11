@@ -22,6 +22,7 @@ opts=$(
 
 eval set --"$opts"
 
+
 LAUNCH_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -33,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --benchmark)
         BENCHMARK=$2
         LAUNCH_ARGS+=(--benchmark "$BENCHMARK")
+
         shift 2
         ;;
     --memory-mode)
@@ -43,6 +45,7 @@ while [[ $# -gt 0 ]]; do
         LAUNCH_ARGS+=(--test-origin)
         shift 1
         ;;
+
     *)
         break
         ;;
@@ -51,6 +54,7 @@ done
 
 LAUNCH_ARGS+=(
     --arch "$ARCH"
+
 )
 
 if [[ "${BENCHMARK}" == "memory_plan" ]]; then

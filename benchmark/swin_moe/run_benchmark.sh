@@ -70,6 +70,7 @@ while [[ $# -gt 0 ]]; do
         LAUNCH_ARGS+=(--capacity "$CAPACITY")
         shift 2
         ;;
+
     *)
         break
         ;;

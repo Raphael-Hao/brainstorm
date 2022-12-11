@@ -1,16 +1,18 @@
-from typing import List, Tuple, Union, Literal, Callable
+import itertools
+from typing import List, Tuple, Union, Literal, Callable, Any
 
 import torch
 from torch import autograd
 
 from brt.jit.codegen.hetero_fused import HeteroFusedKernel
+from brt.jit.modules.base import FuseModuleInputType
 from brt.jit.modules.fused import FusedModule
 
 
 class HeteroFusedModule(FusedModule):
     def _make_global_kernel(
         self,
-        sample_inputs: List[torch.Tensor],
+        sample_inputs: FuseModuleInputType,
         method: str = "forward",
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
@@ -29,7 +31,7 @@ class HeteroFusedModule(FusedModule):
 
     def make_function(
         self,
-        sample_inputs: List[torch.Tensor],
+        sample_inputs: FuseModuleInputType,
         mode: Literal["eval", "train"] = "eval",
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
@@ -51,9 +53,9 @@ class HeteroFusedModule(FusedModule):
             for shp in self._get_output_shape("forward", sample_inputs)
         ]
 
-        class JitFunction:
+        class JitFunction(autograd.Function):
             @staticmethod
-            def forward(*inputs, active_blocks):
+            def forward(ctx: Any, *inputs, active_blocks):
                 inputs = list(inputs)
                 for i, out_index in enumerate(output_arg_indices):
                     inputs.insert(out_index, out_data[i])
@@ -61,12 +63,16 @@ class HeteroFusedModule(FusedModule):
                 outputs = [inputs[i] for i in output_arg_indices]
                 return tuple(outputs)
 
+            @staticmethod
+            def backward(ctx: Any, *grad_outputs: Any) -> Any:
+                raise NotImplementedError
+                
         return JitFunction
 
     def _extract_shared_arg_infos(
         self,
         method: str,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: FuseModuleInputType,
     ) -> Tuple[List, List]:
         raise NotImplementedError()
 
@@ -99,14 +105,13 @@ class HeteroFusedModule(FusedModule):
         )
 
     def _get_output_shape(
-        self, method: str, sample_inputs: List[torch.Tensor]
+        self, method: str, sample_inputs: FuseModuleInputType
     ) -> List[torch.Size]:
-        return sum(
-            [
+        return list(
+            itertools.chain.from_iterable(
                 jsm._get_output_shape(method, sample_input)
                 for jsm, sample_input in zip(self.jit_submodules, sample_inputs)
-            ],
-            start=[],
+            )
         )
 
     @property

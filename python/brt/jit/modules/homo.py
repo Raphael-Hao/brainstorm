@@ -1,3 +1,4 @@
+import itertools
 from typing import List, Tuple, Union, Literal, Callable
 
 import torch
@@ -5,6 +6,7 @@ from torch import autograd
 from torch import nn
 
 from brt.jit.codegen.homo_fused import HomoFusedKernel
+from brt.jit.modules.base import FuseModuleInputType
 from brt.jit.modules.fused import FusedModule
 
 
@@ -15,7 +17,7 @@ class HomoFusedModule(FusedModule):
 
     def _make_global_kernel(
         self,
-        sample_inputs: List[torch.Tensor],
+        sample_inputs: FuseModuleInputType,
         method: str = "forward",
         objective_func: str = "fastest",
         rank: int = 1,
@@ -55,7 +57,7 @@ class HomoFusedModule(FusedModule):
 
     def make_function(
         self,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: FuseModuleInputType,
         mode: Literal["eval", "train"] = "eval",
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
@@ -127,7 +129,7 @@ class HomoFusedModule(FusedModule):
     def _extract_shared_arg_infos(
         self,
         method: str,
-        sample_inputs: Union[torch.Tensor, List[torch.Tensor]],
+        sample_inputs: FuseModuleInputType,
     ) -> Tuple[List, List]:
         raise NotImplementedError()
 
@@ -138,12 +140,13 @@ class HomoFusedModule(FusedModule):
         raise NotImplementedError()
 
     def _get_output_shape(
-        self, method: str, sample_inputs: List[torch.Tensor]
+        self, method: str, sample_inputs: FuseModuleInputType
     ) -> List[torch.Size]:
         candidate = self.jit_submodules[0]
-        return sum(
-            [candidate._get_output_shape(method, inp) for inp in sample_inputs],
-            start=[],
+        return list(
+            itertools.chain.from_iterable(
+                candidate._get_output_shape(method, inp) for inp in sample_inputs
+            )
         )
 
     @property

@@ -62,6 +62,7 @@ def build_loader(config):
         is_train=True, config=config
     )
     config.freeze()
+
     # print(
     #     f"local rank {config.LOCAL_RANK} / global rank {dist.get_rank()} successfully build train dataset"
     # )
