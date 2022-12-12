@@ -324,12 +324,12 @@ class JitFunctionTest(unittest.TestCase):
             standalone_inputs.append(linear.weight)
             standalone_inputs.append(linear.bias)
         capacities = [2, 8, 4, 2]
-        brt_outputs = homo_fused_funciton.forward(
+        brt_outputs = homo_fused_function.forward(
             *shared_inputs, *standalone_inputs, capacities=capacities
         )
         cuda_timer.start()
         for i in range(100):
-            brt_outputs = homo_fused_funciton.forward(
+            brt_outputs = homo_fused_function.forward(
                 *shared_inputs, *standalone_inputs, capacities=capacities
             )
 

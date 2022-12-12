@@ -62,7 +62,8 @@ class FusedSwitchExpert(nn.Module):
         capacities = dispatched_states.loads
         route_indices = dispatched_states.route_indices
         score = dispatched_states.score
-        wi_out = torch.zeros(
+        # print(f"capacities: {capacities}")
+        wi_out = torch.empty(
             (dispatched_states.shape[0], self.d_ff), device=dispatched_states.device
         )
         self.fused_wi(
@@ -72,7 +73,7 @@ class FusedSwitchExpert(nn.Module):
         )
         act_out = self.act(wi_out)
         dropout_out = self.dropout(act_out)
-        wo_out = torch.zeros(
+        wo_out = torch.empty(
             (dispatched_states.shape[0], self.d_model), device=dispatched_states.device
         )
         self.fused_wo(
