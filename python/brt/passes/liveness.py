@@ -27,26 +27,12 @@ class DeadPathEliminatePass(PassBase):
         # eliminate dead path
         node_id = 0
         for node in self.graph_mod.graph.nodes:
-            # if self.is_scatter_node(node):
-            #     node_id += 1
-            #     node_m = self.sub_modules[node.target]
-            #     dead_paths = []
-            #     load_histroy = node_m.load_history
-            #     print('scatter node id', node_id)
-            #     for path_id, path_load in enumerate(load_histroy):
-            #         if path_load < 500  and path_load > 0:
-            #             print( path_load)
-
             if self.is_gather_node(node):
                 node_id += 1
                 node_m = self.sub_modules[node.target]
                 dead_paths = []
                 load_histroy = node_m.load_history
-                # print(' gather node id', node_id)
                 for path_id, path_load in enumerate(load_histroy):
-                    # if path_load < 500  and path_load > 0:
-                    #     print( path_load)
-
                     if path_load <= self.dead_load:
                         dead_paths.append(path_id)
                 live_paths = [
@@ -54,10 +40,6 @@ class DeadPathEliminatePass(PassBase):
                     for path_id in range(len(load_histroy))
                     if path_id not in dead_paths
                 ]
-                # if len(dead_paths)!=0:
-                #     print(f"Eliminate dead path {dead_paths} in {node}")
-                #     print(f"Live path {live_paths} in {node}")
-                #     print("len live", len(live_paths))
                 new_args = ([node.args[0][path_id] for path_id in live_paths],)
                 new_load_history = np.array(
                     [load_histroy[path_id] for path_id in live_paths],
@@ -141,8 +123,6 @@ class PermanentPathFoldPass(PassBase):
                         len(permanent_paths) == len(load_histroy)
                         and len(permanent_paths) > 0
                     ):
-                        # print('node target', node.target)
-                        # print('load history', load_histroy)
                         node_m.fabric = make_fabric(
                             "identity_combine", node_m.fabric_kwargs
                         )
