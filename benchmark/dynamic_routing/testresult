@@ -1,0 +1,150 @@
+['.', '/home/v-weihaocui/brainstorm_project/brainstorm/benchmark/dynamic_routing', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python38.zip', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/lib-dynload', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages', '/home/v-weihaocui/brainstorm_project/brainstorm/python', '/home/v-weihaocui/brainstorm_project/brainstorm/3rdparty/dynamic_routing', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/pycocotools-2.0.6-py3.8-linux-x86_64.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/portalocker-2.6.0-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/tensorboard-2.11.0-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/shapely-2.0rc1-py3.8-linux-x86_64.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/matplotlib-3.6.2-py3.8-linux-x86_64.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/tabulate-0.9.0-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/termcolor-2.1.1-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/wheel-0.38.4-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/Werkzeug-2.2.2-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/tensorboard_plugin_wit-1.8.1-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/tensorboard_data_server-0.6.1-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/Markdown-3.4.1-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/grpcio-1.51.1-py3.8-linux-x86_64.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/google_auth-2.14.1-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/google_auth_oauthlib-0.4.6-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/absl_py-1.3.0-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/kiwisolver-1.4.4-py3.8-linux-x86_64.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/fonttools-4.38.0-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/cycler-0.11.0-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/contourpy-1.0.6-py3.8-linux-x86_64.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/rsa-4.9-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/pyasn1_modules-0.3.0rc1-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/cachetools-5.2.0-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/requests_oauthlib-1.3.1-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/pyasn1-0.5.0rc2-py3.8.egg', '/home/v-weihaocui/.pyenv/versions/miniconda3-3.8-4.10.3/lib/python3.8/site-packages/oauthlib-3.2.2-py3.8.egg']
+Command Line Args: Namespace(arch='A', benchmark=['memory_plan'], debug=False, dist_url='tcp://127.0.0.1:62896', eval_only=False, machine_rank=0, memory_mode='predict', num_gpus=1, num_machines=1, opts=[], resume=False)
+[12/07 09:34:26 dl_lib]: Rank of current process: 0. World size: 1
+[12/07 09:34:26 dl_lib]: Command line arguments: Namespace(arch='A', benchmark=['memory_plan'], debug=False, dist_url='tcp://127.0.0.1:62896', eval_only=False, machine_rank=0, memory_mode='predict', num_gpus=1, num_machines=1, opts=[], resume=False)
+[12/07 09:34:28 c2.utils.checkpoint]: Loading checkpoint from /home/v-weihaocui/brainstorm_project/brainstorm/benchmark/dynamic_routing/../../.cache/ckpt/dynamic_routing/dynamic_A_miou73_9.pth
+[12/07 09:34:30 c2.data.detection_utils]: TransformGens used: [ResizeShortestEdge(short_edge_length=(1024, 1024), max_size=2048, sample_style='choice')]
+[12/07 09:34:30 c2.evaluation.evaluator]: Start inference on 500 images
+[12/07 09:34:35 c2.evaluation.evaluator]: Total inference time: 0:00:02 (0.004040 s / img per device, on 1 devices)
+[12/07 09:34:35 c2.evaluation.evaluator]: Total inference pure compute time: 0:00:00 (0.001511 s / img per device, on 1 devices)
+[12/07 09:34:35 c2.evaluation.sem_seg_evaluation]: OrderedDict([('sem_seg', {'mIoU': 67.04451849496685, 'fwIoU': 91.59501108474498, 'mACC': 77.37655559368238, 'pACC': 95.43627925849809})])
+[12/07 09:34:35 c2.engine.custom]: Evaluation results for cityscapes_fine_sem_seg_val in csv format:
+[12/07 09:34:35 c2.evaluation.testing]: copypaste: Task: sem_seg
+[12/07 09:34:35 c2.evaluation.testing]: copypaste: mIoU,fwIoU,mACC,pACC
+[12/07 09:34:35 c2.evaluation.testing]: copypaste: 67.0445,91.5950,77.3766,95.4363
+naive test results in ms: avg: 74.994 max: 75.737 min: 74.563
+|===========================================================================|
+|                  PyTorch CUDA memory summary, device ID 0                 |
+|---------------------------------------------------------------------------|
+|            CUDA OOMs: 0            |        cudaMalloc retries: 0         |
+|===========================================================================|
+|        Metric         | Cur Usage  | Peak Usage | Tot Alloc  | Tot Freed  |
+|---------------------------------------------------------------------------|
+| Allocated memory      |   94765 KB |  619053 KB |  729178 MB |  729178 MB |
+|       from large pool |   24576 KB |  548864 KB |  722421 MB |  722421 MB |
+|       from small pool |   70189 KB |   72237 KB |    6756 MB |    6756 MB |
+|---------------------------------------------------------------------------|
+| Active memory         |   94765 KB |  619053 KB |  729178 MB |  729178 MB |
+|       from large pool |   24576 KB |  548864 KB |  722421 MB |  722421 MB |
+|       from small pool |   70189 KB |   72237 KB |    6756 MB |    6756 MB |
+|---------------------------------------------------------------------------|
+| GPU reserved memory   |  643072 KB |  643072 KB |  546816 KB |       0 B  |
+|       from large pool |  569344 KB |  569344 KB |  544768 KB |       0 B  |
+|       from small pool |   73728 KB |   73728 KB |    2048 KB |       0 B  |
+|---------------------------------------------------------------------------|
+| Non-releasable memory |    1491 KB |  271827 KB |  719318 MB |  719318 MB |
+|       from large pool |       0 KB |  270336 KB |  711021 MB |  711021 MB |
+|       from small pool |    1491 KB |    3538 KB |    8296 MB |    8296 MB |
+|---------------------------------------------------------------------------|
+| Allocations           |    1935    |    1957    |   81840    |   81840    |
+|       from large pool |       1    |      19    |   35200    |   35200    |
+|       from small pool |    1934    |    1939    |   46640    |   46640    |
+|---------------------------------------------------------------------------|
+| Active allocs         |    1935    |    1957    |   81840    |   81840    |
+|       from large pool |       1    |      19    |   35200    |   35200    |
+|       from small pool |    1934    |    1939    |   46640    |   46640    |
+|---------------------------------------------------------------------------|
+| GPU reserved segments |      42    |      42    |       6    |       0    |
+|       from large pool |       6    |       6    |       5    |       0    |
+|       from small pool |      36    |      36    |       1    |       0    |
+|---------------------------------------------------------------------------|
+| Non-releasable allocs |       1    |      10    |   42680    |   42680    |
+|       from large pool |       0    |       8    |   21120    |   21120    |
+|       from small pool |       1    |       3    |   21560    |   21560    |
+|---------------------------------------------------------------------------|
+| Oversize allocations  |       0    |       0    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Oversize GPU segments |       0    |       0    |       0    |       0    |
+|===========================================================================|
+
+before profile
+|===========================================================================|
+|                  PyTorch CUDA memory summary, device ID 0                 |
+|---------------------------------------------------------------------------|
+|            CUDA OOMs: 0            |        cudaMalloc retries: 0         |
+|===========================================================================|
+|        Metric         | Cur Usage  | Peak Usage | Tot Alloc  | Tot Freed  |
+|---------------------------------------------------------------------------|
+| Allocated memory      |   25383 KB |   25383 KB |       0 B  |       0 B  |
+|       from large pool |   24576 KB |   24576 KB |       0 B  |       0 B  |
+|       from small pool |     807 KB |     807 KB |       0 B  |       0 B  |
+|---------------------------------------------------------------------------|
+| Active memory         |   25383 KB |   25383 KB |       0 B  |       0 B  |
+|       from large pool |   24576 KB |   24576 KB |       0 B  |       0 B  |
+|       from small pool |     807 KB |     807 KB |       0 B  |       0 B  |
+|---------------------------------------------------------------------------|
+| GPU reserved memory   |  645120 KB |  645120 KB |       0 B  |       0 B  |
+|       from large pool |  569344 KB |  569344 KB |       0 B  |       0 B  |
+|       from small pool |   75776 KB |   75776 KB |       0 B  |       0 B  |
+|---------------------------------------------------------------------------|
+| Non-releasable memory |    7384 KB |    7384 KB |       0 B  |       0 B  |
+|       from large pool |       0 KB |       0 KB |       0 B  |       0 B  |
+|       from small pool |    7384 KB |    7384 KB |       0 B  |       0 B  |
+|---------------------------------------------------------------------------|
+| Allocations           |      57    |      57    |       0    |       0    |
+|       from large pool |       1    |       1    |       0    |       0    |
+|       from small pool |      56    |      56    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Active allocs         |      57    |      57    |       0    |       0    |
+|       from large pool |       1    |       1    |       0    |       0    |
+|       from small pool |      56    |      56    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| GPU reserved segments |      43    |      43    |       0    |       0    |
+|       from large pool |       6    |       6    |       0    |       0    |
+|       from small pool |      37    |      37    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Non-releasable allocs |       4    |       4    |       0    |       0    |
+|       from large pool |       0    |       0    |       0    |       0    |
+|       from small pool |       4    |       4    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Oversize allocations  |       0    |       0    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Oversize GPU segments |       0    |       0    |       0    |       0    |
+|===========================================================================|
+
+PredictorMemoryPlanPass test results in ms: avg: 115.536 max: 116.414 min: 114.633
+|===========================================================================|
+|                  PyTorch CUDA memory summary, device ID 0                 |
+|---------------------------------------------------------------------------|
+|            CUDA OOMs: 0            |        cudaMalloc retries: 0         |
+|===========================================================================|
+|        Metric         | Cur Usage  | Peak Usage | Tot Alloc  | Tot Freed  |
+|---------------------------------------------------------------------------|
+| Allocated memory      |   25383 KB |  290608 KB |  729729 MB |  729729 MB |
+|       from large pool |   24576 KB |  289800 KB |  722421 MB |  722421 MB |
+|       from small pool |     807 KB |    2867 KB |    7307 MB |    7307 MB |
+|---------------------------------------------------------------------------|
+| Active memory         |   25383 KB |  290608 KB |  729729 MB |  729729 MB |
+|       from large pool |   24576 KB |  289800 KB |  722421 MB |  722421 MB |
+|       from small pool |     807 KB |    2867 KB |    7307 MB |    7307 MB |
+|---------------------------------------------------------------------------|
+| GPU reserved memory   |  645120 KB |  645120 KB |       0 B  |       0 B  |
+|       from large pool |  569344 KB |  569344 KB |       0 B  |       0 B  |
+|       from small pool |   75776 KB |   75776 KB |       0 B  |       0 B  |
+|---------------------------------------------------------------------------|
+| Non-releasable memory |    7384 KB |  240856 KB |  722962 MB |  722962 MB |
+|       from large pool |       0 KB |  233472 KB |  715655 MB |  715655 MB |
+|       from small pool |    7384 KB |    7384 KB |    7307 MB |    7307 MB |
+|---------------------------------------------------------------------------|
+| Allocations           |      57    |      80    |  131010    |  131010    |
+|       from large pool |       1    |      11    |   35200    |   35200    |
+|       from small pool |      56    |      72    |   95810    |   95810    |
+|---------------------------------------------------------------------------|
+| Active allocs         |      57    |      80    |  131010    |  131010    |
+|       from large pool |       1    |      11    |   35200    |   35200    |
+|       from small pool |      56    |      72    |   95810    |   95810    |
+|---------------------------------------------------------------------------|
+| GPU reserved segments |      43    |      43    |       0    |       0    |
+|       from large pool |       6    |       6    |       0    |       0    |
+|       from small pool |      37    |      37    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Non-releasable allocs |       4    |      12    |   44605    |   44605    |
+|       from large pool |       0    |       6    |   20680    |   20680    |
+|       from small pool |       4    |       6    |   23925    |   23925    |
+|---------------------------------------------------------------------------|
+| Oversize allocations  |       0    |       0    |       0    |       0    |
+|---------------------------------------------------------------------------|
+| Oversize GPU segments |       0    |       0    |       0    |       0    |
+|===========================================================================|
+
+bash run_benchmark.sh --arch A  --benchmark memory_plan --memory-mode predict

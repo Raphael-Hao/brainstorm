@@ -54,7 +54,16 @@ if [[ "${BENCHMARK}" == "memory_plan" ]]; then
     fi
 fi
 
+if [[ "${BENCHMARK}" == "dce_memory_plan" ]]; then
+    if [[ -n "${MEMORY_MODE}" ]]; then
+        LAUNCH_ARGS+=(
+            --memory-mode "$MEMORY_MODE"
+        )
+    fi
+fi
+
 export BRT_CACHE_PATH="$script_dir/../../.cache"
 export BRT_CAPTURE_STATS=True
 export BRT_CAPTURED_FABRIC_TYPE=dispatch,combine
+# echo "${LAUNCH_ARGS[@]}"
 python benchmark.py "${LAUNCH_ARGS[@]}"

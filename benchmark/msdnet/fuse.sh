@@ -1,5 +1,6 @@
 export BRT_CACHE_PATH=$HOME/brainstorm_project/brainstorm/.cache
-export BRT_CAPTURED_FABRIC_TYPE=dispatch:combine
+export BRT_CAPTURE_STATS=True
+export BRT_CAPTURED_FABRIC_TYPE=dispatch,combine
 rm -r saveresult/
 rm msdnet.json
     ##0.5 0.5 0 0 0

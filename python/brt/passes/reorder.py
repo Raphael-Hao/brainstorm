@@ -173,8 +173,6 @@ class OperatorReorderPass(PassBase):
                     in_degrees[v] += 1
             Q = [u for u in in_degrees if in_degrees[u] == 0]
             Seq = []
-            import torch.fx as fx
-
             while Q:
                 u = Q.pop(0)
                 Seq.append(u)

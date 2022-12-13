@@ -152,8 +152,7 @@ def inference_on_dataset(model, data_loader, evaluator):
                         idx + 1, total, seconds_per_img, str(eta)
                     )
                 )
-            # if idx > 20:
-            #     profiler.stop()
+            # if idx > 10:
             #     break
             # break
 

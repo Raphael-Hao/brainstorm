@@ -34,6 +34,8 @@ class PassBase:
         )
 
     def finalize(self) -> GraphModule:
+        self.graph_mod.graph.lint()
+        
         self.graph_mod.graph.eliminate_dead_code()
         self.graph_mod.recompile()
         return self.graph_mod

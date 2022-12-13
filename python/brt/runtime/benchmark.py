@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.distributed as dist
 import numpy as np
 from brt.runtime import BRT_LOG_PATH
-
+import os
 __all__ = [
     "profile",
     "BenchmarkArgumentManager",
@@ -32,6 +32,7 @@ def profile_v2(model: nn.Module, data_collection: List[torch.Tensor], vendor: st
         on_trace_ready=torch.profiler.tensorboard_trace_handler(f"./results/{vendor}/locality"),
         record_shapes=True,
     ) as p:
+
         with torch.inference_mode():
             for step, data in enumerate(data_collection):
                 model(data)
