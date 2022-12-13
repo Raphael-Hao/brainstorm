@@ -116,12 +116,18 @@ class HorizFusedKernel(GlobalKernel):
         self.threadidx_y = 1
         self.threadidx_z = 1
 
-    def generate_dependency(self, sync_method="asm"):
+    def generate_dependency(self):
         dependencies = []
         dependencies.append(self.add_codeblock(GlobalKernel.asm_block_sync))
         dependencies.append(self.add_codeblock(GlobalKernel.asm_warp_sync))
         self.new_line()
+        dep_memo = set()
         for _, func in enumerate(self.candidates):
+            if func.func_deps is not None:
+                for dep in func.func_deps:
+                    if dep not in dep_memo:
+                        dep_memo.add(dep)
+                        dependencies.append(self.add_codeblock(dep))
             device_code = func.convert_to_device()
             dependencies.append(self.add_codeblock(device_code))
         return dependencies
@@ -177,6 +183,7 @@ class HorizFusedKernel(GlobalKernel):
         return formated_code
 
     def make_identifier(self):
+        # pylint: disable=no-value-for-parameter
         identifiers = [
             make_identifier(
                 module.module_name,
@@ -186,4 +193,5 @@ class HorizFusedKernel(GlobalKernel):
             )
             for module in self.candidates
         ]
+        # pylint: enable=no-value-for-parameter
         return make_fused_identifier(identifiers=identifiers)

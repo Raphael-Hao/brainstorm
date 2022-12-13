@@ -38,10 +38,10 @@ all_bsz = [
     512,  # 3,
 ]
 
-# in_features = 768
-# out_features = 3072
-in_features = 3072
-out_features = 768
+in_features = 768
+out_features = 3072
+# in_features = 3072
+# out_features = 768
 
 for bs in all_bsz:
     input_infos = {"input_0": (bs, in_features)}
@@ -99,6 +99,9 @@ for bs in all_bsz:
             sample_inputs=x,
             rank=rank,
         )
+
+
+        y = torch.empty(bs, out_features).cuda(); linear_kernel(x, linear.weight, y)
 
         time = (
             Timer(

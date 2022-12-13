@@ -193,7 +193,7 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
             )
         elif self.blockidx_z == 1:
             formated_code += self.add_line_with_indent(
-                "const dim3 blockIdx(block_idx % {self.blockidx_x}, block_idx % {self.blockidx_x});",
+                f"const dim3 blockIdx(block_idx % {self.blockidx_x}, block_idx / {self.blockidx_x});",
                 end=True,
             )
         else:
@@ -223,9 +223,13 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
         self.clean_code = ""
         self.indent = 0
 
-    def generate_dependency(self, sync_method="asm"):
-        deps = []
-        return deps
+    def generate_dependency(self):
+        dependencies = []
+        if hasattr(self, "func_deps") and self.func_deps is not None:
+            for dep in self.func_deps:
+                dependencies.append(dep)
+                self.add_codeblock(dep)
+        return dependencies
 
     def generate_signature(self):
         formated_code = self.add_line_with_indent(GlobalKernel.global_decorator)
@@ -259,7 +263,9 @@ extern "C" __device__ __forceinline__ void CppCgBlockSync(int block_size) {
             self.add_single_c_api()
             self.append_code(func_sig)
             self.append_code(func_body)
-            return self.clean_code, self.func_deps, self.func_sig, self.func_body
+            # pylint: disable=access-member-before-definition
+            return (self.clean_code, self.func_deps, self.func_sig, self.func_body)
+            # pylint: enable=access-member-before-definition
         self.func_deps = self.generate_dependency()
         self.add_single_c_api()
         self.func_sig = self.generate_signature()

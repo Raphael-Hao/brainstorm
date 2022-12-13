@@ -152,9 +152,9 @@ class TVMTuner:
         )
         template_file_generated = self.get_template_file_generated(objective_func, rank)
         if self.template_file_origin.exists():
-            logger.warn(f"{self.template_file_origin} already exists.")
+            logger.warning(f"{self.template_file_origin} already exists.")
         if template_file_generated.exists():
-            logger.warn(f"{template_file_generated} already exists.")
+            logger.warning(f"{template_file_generated} already exists.")
         self.template_file_origin.parent.mkdir(parents=True, exist_ok=True)
         self.template_file_origin.write_text(kernel_source)
         template_file_generated.parent.mkdir(parents=True, exist_ok=True)
@@ -180,6 +180,18 @@ class TVMTuner:
             parameters=self.parameters,
         )
         module_function.dump_to_db(objective_func, rank)
+
+    def insert_from_source_to_storage(self, kernel_source: str, objective_func: str):
+        module_function = ModuleKernel(
+            self.module_name,
+            method=self.method,
+            kernel_source=kernel_source,
+            platform=self.platform,
+            input_infos=self.input_infos,
+            output_infos=self.output_infos,
+            parameters=self.parameters,
+        )
+        module_function.dump_to_db(objective_func)
 
     def insert_top_n_netlet_to_storage(
         self, objective_func: str = "fastest", top: int = 5
