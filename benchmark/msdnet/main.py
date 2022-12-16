@@ -68,7 +68,7 @@ def main():
     torch.save(n_flops, os.path.join(args.save, "flops.pth"))
     del model
     model = MSDNet(args, False)
-    file = "recordingtest3.txt"
+    file = "recordingtest9.txt"
     with open(file, "a") as f:
         f.write(str(args.thresholds) + "\n")
     if args.arch.startswith("alexnet") or args.arch.startswith("vgg"):

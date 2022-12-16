@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
-from brt.passes.utils import debug_node # pylint: disable=unused-import
+from brt.passes.utils import debug_node  # pylint: disable=unused-import
 from brt.runtime import log
 from brt.runtime.tensor_group import TensorGroupManager, TensorGroup
 from brt.runtime.memory_planner import (
@@ -414,6 +414,9 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                 if self.is_scatter_node(node):
                     path_nodes = self.cluster_path_start_nodes(node)
                     for per_path_nodes in path_nodes:
+                        if len(per_path_nodes) == 0:
+                            self.plan_groups.setdefault(node, []).append(({}, {}, {}))
+                            continue
                         (
                             goal_nodes,
                             traveled_nodes,
@@ -421,6 +424,7 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                             buffers_dict,
                         ) = self.travel_to_goal(start_nodes=per_path_nodes, memo=memo)
                         new_goal_nodes.update(goal_nodes)
+                        assert len(traveled_nodes) > 0
                         self.add_new_plan_group(
                             traveled_nodes, parameters_dict, buffers_dict, node
                         )
@@ -437,14 +441,33 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                     )
             start_nodes = self.remove_output(new_goal_nodes)
 
-        assert self.is_params_and_buffer_all_collected()
+        # assert self.is_params_and_buffer_all_collected()
+
+    def topological(self):
+        in_degrees = dict((u, 0) for u in self.graph_mod.graph.nodes)
+        num = len(in_degrees)
+        for u in self.graph_mod.graph.nodes:
+            for v in u.users.copy().keys():
+                in_degrees[v] += 1
+        Q = [u for u in in_degrees if in_degrees[u] == 0]
+        Seq = []
+        while Q:
+            u = Q.pop(0)
+            Seq.append(u)
+            for v in u.users.copy().keys():
+                in_degrees[v] -= 1
+                if in_degrees[v] == 0:
+                    Q.append(v)
+        if not len(Seq) == num:
+            raise Exception("failed to finish topological search")
+        return Seq
 
     def process_plan(self):
         orderred_plan_groups = self.sort_plan_groups_in_tuple()
         event_num = 0
         for _, plan_groups in orderred_plan_groups:
             event_num += len(plan_groups)
-
+        topo_order = self.topological()
         MemoryPlanContext.init(event_num)
         event_id = 0
         initial_loader_injected = False
@@ -471,6 +494,8 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                 if planner_mode == "initial":
                     continue
                 traveled_nodes = plan_groups[-path_id - 1][0]
+                if len(traveled_nodes) == 0:
+                    continue
                 tail_node = traveled_nodes[-1]
                 with self.graph_mod.graph.inserting_after(tail_node):
                     unloader_node = self.graph_mod.graph.call_module(
@@ -482,7 +507,10 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                     )
 
             for path_id in range(len(plan_groups)):
+                if len(plan_groups[-path_id - 1][0]) == 0:
+                    continue
                 planner_mode = self.inspect_planner_mode(event_id - path_id)
+
                 if planner_mode == "initial":
                     continue
                 with self.graph_mod.graph.inserting_after(head_node):
@@ -495,6 +523,8 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
                     )
 
             for path_id in range(len(plan_groups)):
+                if len(plan_groups[-path_id - 1][0]) == 0:
+                    continue
                 planner_mode = self.inspect_planner_mode(event_id - path_id)
                 if planner_mode == "initial":
                     continue
@@ -508,6 +538,11 @@ class OnDemandMemoryPlanPass(MemoryPlanPass):
             event_id -= len(plan_groups)
 
     def finalize(self) -> Tuple[List[nn.Module], GraphModule]:
+        # from torch.fx.passes.graph_drawer import FxGraphDrawer
+
+        # graph_drawer = FxGraphDrawer(self.graph_mod, "new_backbone")
+        # with open("mem.svg", "wb") as f:
+        #     f.write(graph_drawer.get_dot_graph().create_svg())
         return self.initial_loaders, super().finalize()
 
 
@@ -590,7 +625,6 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
 
         orderred_plan_groups.reverse()
         event_id -= 1
-        self.initial_loaders: List[nn.Module] = []
 
         for g_id, (head_node, plan_groups) in enumerate(orderred_plan_groups):
             for path_id in range(len(plan_groups)):
@@ -598,6 +632,8 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                 if planner_mode == "initial":
                     continue
                 traveled_nodes = plan_groups[-path_id - 1][0]
+                if len(traveled_nodes) == 0:
+                    continue
                 tail_node = traveled_nodes[-1]
                 with self.graph_mod.graph.inserting_after(tail_node):
                     unloader_node = self.graph_mod.graph.call_module(
@@ -608,6 +644,8 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                     )
 
             for path_id in range(len(plan_groups)):
+                if len(plan_groups[-path_id - 1][0]) == 0:
+                    continue
                 planner_mode = self.inspect_planner_mode(event_id - path_id)
                 if planner_mode == "initial":
                     continue
@@ -620,6 +658,8 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                     )
 
             for path_id in range(len(plan_groups)):
+                if len(plan_groups[-path_id - 1][0]) == 0:
+                    continue
                 planner_mode = self.inspect_planner_mode(event_id - path_id)
                 if planner_mode == "initial":
                     continue

@@ -1,5 +1,6 @@
 rm -r saveresult/
-export BRT_CAPTURED_FABRIC_TYPE=dispatch:combine
+export BRT_CAPTURE_STATS=True
+export BRT_CAPTURED_FABRIC_TYPE=dispatch,combine
 export BRT_CACHE_PATH=$HOME/brainstorm_project/brainstorm/.cache
 rm msdnet.json
 ##0.5 0.5 0 0 0
@@ -20,7 +21,8 @@ python3 main.py --data-root  ~/imagenet/all --thresholds     0.44246864 0.398819
 python3 main.py --data-root ~/imagenet/all --thresholds 0.44246849  0.26682281 -1 -1  --data ImageNet --save /home/v-weihaocui/brainstorm_project/brainstorm/benchmark/msdnet/saveresult                 --arch msdnet --batch-size 256 --epochs 90 --nBlocks 5                 --stepmode even --step 4 --base 4 --nChannels 32 --growthRate 16                 --grFactor 1-2-4-4 --bnFactor 1-2-4-4                 --evalmode threshold  --evaluate-from /home/v-weihaocui/pth/msdnet-step=4-block=5.pth.tar  --benchmark hfuse             --use-valid --gpu 0,1,2,3 -j 16 --init_routers --parallel
 python3 main.py --data-root ~/imagenet/all --thresholds -1 -1 -1 -1  --data ImageNet --save /home/v-weihaocui/brainstorm_project/brainstorm/benchmark/msdnet/saveresult                 --arch msdnet --batch-size 256 --epochs 90 --nBlocks 5                 --stepmode even --step 4 --base 4 --nChannels 32 --growthRate 16                 --grFactor 1-2-4-4 --bnFactor 1-2-4-4                 --evalmode threshold  --evaluate-from /home/v-weihaocui/pth/msdnet-step=4-block=5.pth.tar  --benchmark hfuse             --use-valid --gpu 0,1,2,3 -j 16 --init_routers --parallel
 export BRT_CACHE_PATH=$HOME/brainstorm_project/brainstorm/.cache
-export BRT_CAPTURED_FABRIC_TYPE=dispatch:combine
+export BRT_CAPTURE_STATS=True
+export BRT_CAPTURED_FABRIC_TYPE=dispatch,combine
 rm -r saveresult/
 rm msdnet.json
 ##0.5 0.5 0 0 0
@@ -40,3 +42,6 @@ python3 main.py --data-root  ~/imagenet/all --thresholds     0.44246864 0.398819
 ## 0.5 0.3 0.2 0 0
 python3 main.py --data-root ~/imagenet/all --thresholds 0.44246849  0.26682281 -1 -1  --data ImageNet --save /home/v-weihaocui/brainstorm_project/brainstorm/benchmark/msdnet/saveresult                 --arch msdnet --batch-size 256 --epochs 90 --nBlocks 5                 --stepmode even --step 4 --base 4 --nChannels 32 --growthRate 16                 --grFactor 1-2-4-4 --bnFactor 1-2-4-4                 --evalmode threshold  --evaluate-from /home/v-weihaocui/pth/msdnet-step=4-block=5.pth.tar  --benchmark vfuse             --use-valid --gpu 0,1,2,3 -j 16 --init_routers --parallel
 python3 main.py --data-root ~/imagenet/all --thresholds -1 -1 -1 -1  --data ImageNet --save /home/v-weihaocui/brainstorm_project/brainstorm/benchmark/msdnet/saveresult                 --arch msdnet --batch-size 256 --epochs 90 --nBlocks 5                 --stepmode even --step 4 --base 4 --nChannels 32 --growthRate 16                 --grFactor 1-2-4-4 --bnFactor 1-2-4-4                 --evalmode threshold  --evaluate-from /home/v-weihaocui/pth/msdnet-step=4-block=5.pth.tar  --benchmark vfuse             --use-valid --gpu 0,1,2,3 -j 16 --init_routers --parallel
+
+
+# CUDA_LAUNCH_BLOCKING=1 python3 main.py --thresholds 0.44246858 -1 -1 -1 --data-root  ~/imagenet/all --data ImageNet --save /home/v-weihaocui/brainstorm_project/brainstorm/benchmark/msdnet/saveresult                 --arch msdnet --batch-size 256 --epochs 90 --nBlocks 5                 --stepmode even --step 4 --base 4 --nChannels 32 --growthRate 16                 --grFactor 1-2-4-4 --bnFactor 1-2-4-4                 --evalmode threshold  --evaluate-from /home/v-weihaocui/pth/msdnet-step=4-block=5.pth.tar  --benchmark vfuse_trans             --use-valid --gpu 0,1,2,3 -j 16 --init_routers --parallel

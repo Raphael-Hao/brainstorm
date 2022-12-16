@@ -38,6 +38,7 @@ def profile_v2(model: nn.Module, data_collection, vendor: str):
     ) as p:
         np.random.seed(0)
         data_indices = np.random.randint(0, len(data_collection), 10)
+
         with torch.inference_mode():
             for step in range(10):
                 model(**data_collection[data_indices[step]])

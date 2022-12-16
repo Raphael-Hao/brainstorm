@@ -264,6 +264,10 @@ bench_arg_manager.add_item("reorder_operator")
 bench_arg_manager.add_item("constant_propagation")
 bench_arg_manager.add_item("all_opt")
 bench_arg_manager.add_item("vfuse")
+bench_arg_manager.add_item("only_vfuse")
+bench_arg_manager.add_item("vfuse_trans")
 bench_arg_manager.add_item("hfuse")
+bench_arg_manager.add_item("capture")
+
 
 
