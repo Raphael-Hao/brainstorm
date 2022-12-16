@@ -39,6 +39,7 @@ class ModuleKernel(GlobalKernel):
         input_infos: Dict[str, List[int]] = None,
         output_infos: Dict[str, List[int]] = None,
         parameters: Dict[str, List[Union[int, float]]] = None,
+        dependencies: List[str] = None,
     ):
         if not hasattr(self, "kernel_type"):
             setattr(self, "kernel_type", "global")
@@ -50,6 +51,7 @@ class ModuleKernel(GlobalKernel):
         self.input_infos = input_infos
         self.output_infos = output_infos
         self.parameters = parameters
+        self.func_deps = dependencies
         if self.kernel_source is not None:
             self.initialize()
 
@@ -75,6 +77,7 @@ class ModuleKernel(GlobalKernel):
         self.min_blocks_per_sm = 1
         if len(launch_bounds) == 0:
             self.max_threads_per_block = 0
+            source_without_launch_bound = self.kernel_source
         else:
             launch_bound_params = launch_bounds[0].split(",")
             self.max_threads_per_block = int(launch_bound_params[0])
@@ -249,6 +252,7 @@ class ModuleKernel(GlobalKernel):
         assert self.kernel_type == tag_dict["kernel_type"]
         if self.kernel_type == "global":
             self.kernel_source = fetched_kernel[0]
+            self.func_deps = function_dict["function_deps"]
             self.initialize()
         else:
             self.func_deps = function_dict["function_deps"]

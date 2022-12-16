@@ -4,7 +4,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Dict, List, Union
+from typing import List
 
 from brt.runtime import log
 

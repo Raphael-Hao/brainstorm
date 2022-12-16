@@ -12,10 +12,12 @@ from switch_transformer import (
     SwitchTransformersModel,
     FusedSwitchTransformersSparseMLP,
     BatchmatmulSwitchTransformersSparseMLP,
+    SwitchTransformersSparseMLP,
 )  # v4.25.1
 from transformers import AutoConfig, AutoTokenizer
 from config import SwitchTransformersConfig
 from brt.runtime.benchmark import profile_v2
+from brt.runtime import BRT_CACHE_PATH
 
 
 def get_gpu_info():
@@ -44,7 +46,10 @@ def main():
     parser.add_argument("--bsz", type=int, default=8)
     parser.add_argument("--max-seq-length", type=int, default=128)
     parser.add_argument(
-        "--mode", type=str, default="throughput", choices=["throughput", "debug", "profile"]
+        "--mode",
+        type=str,
+        default="throughput",
+        choices=["throughput", "debug", "profile", "trace"],
     )
     parser.add_argument(
         "--vendor", type=str, default="torch", choices=["torch", "brt", "batchmatmul"]
@@ -58,45 +63,61 @@ def main():
     config.capacities = [
         # 2,  # 1,
         # 4,  # 1,
-        8,  # 1,
+        # 8,  # 1,
         16,  # 1,
         32,  # 1,
         64,  # 1,
+        96,  # 1,
         128,  # 1,
-        224,  # 1,
+        160,  # 1,
+        192,  # 1,
+        # 224,  # 1,
+        # 272,  # 1,
         # 320,  # 1, no need may
-        416,  # 1,
+        # 368,  # 1,
+        # 416,  # 1,
         512,
     ]
     config.ranks = [
         [
             # 1,  # 2
             # 2,  # 4
-            1,  # 8
+            # 1,  # 8
             1,  # 16
             1,  # 32
             2,  # 64
-            9,  # 128
-            2,  # 224
+            1,  # 96
+            1,  # 128
+            3,  # 160
+            1,  # 192
+            # 2,  # 224
+            # 1,  # 272
             # 1,  # 320
-            2,  # 416
+            # 1,  # 368
+            # 2,  # 416
             1,  # 512
         ],
         [
             # 1,  # 2
             # 1,  # 4
-            1,  # 8
+            # 1,  # 8
             1,  # 16
             1,  # 32
             1,  # 64
+            1,  # 96
             1,  # 128
-            1,  # 224
+            1,  # 160
+            1,  # 192
+            # 1,  # 224
+            # 1,  # 272
             # 5,  # 320
-            1,  # 416
+            # 1,  # 368
+            # 1,  # 416
             3,  # 512
         ],
     ]
     config.vendor = args.vendor
+    config.trace = args.mode == "trace"
 
     model = SwitchTransformersModel.from_pretrained(model_name, config=config).cuda()
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -114,7 +135,8 @@ def main():
         throughput(args, model, tokenizer, 1000)
     elif args.mode == "profile":
         profile(args, model, tokenizer, args.vendor)
-
+    elif args.mode == "trace":
+        trace(args, model, tokenizer)
     # Load to different GPU
     # model.encoder.embed_tokens.to("cuda:0")
     # for ii in range(6):
@@ -156,21 +178,31 @@ def load_data(args, tokenizer, data_num=100):
     return datas
 
 
-def throughput(args, model, tokenizer, test_data_num):
+def throughput(args, model, tokenizer, test_data_num, warmup=10):
     loaded_data = load_data(args, tokenizer)
     data_num = len(loaded_data)
+    result_path = BRT_CACHE_PATH / "results" / "switch_transformer"
+    result_path.mkdir(parents=True, exist_ok=True)
+    result_file = result_path / "e2e.csv"
+    result = result_file.open("a")
     random_idx = np.random.choice(range(data_num), test_data_num)
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
     model(**loaded_data[0])
+    torch.cuda.synchronize()
     with torch.inference_mode():
+        for i in range(warmup):
+            model(**loaded_data[i])
+        print("warmup done, start benchmarking")
         torch.cuda.synchronize()
-        st = time.time()
+        start_event.record()
         for ii, idx in enumerate(random_idx):
             model(**loaded_data[idx])
-            if ii == 1000 // 2:
-                get_gpu_info()
-        torch.cuda.synchronize()
-        end = time.time()
-        print("Forward Implementation", end - st)
+        end_event.record()
+        end_event.synchronize()
+    result.write(
+        f"{args.vendor},{args.bsz},{args.max_seq_length},{args.expert},{(start_event.elapsed_time(end_event) / test_data_num):.2f}\n"
+    )
 
 
 def debug(args, model, tokenizer):
@@ -182,6 +214,26 @@ def debug(args, model, tokenizer):
         print(out[0].sum())
     torch.cuda.synchronize()
 
+
+def trace(args, model, tokenizer):
+    loaded_data = load_data(args, tokenizer)
+    data_num = len(loaded_data)
+    result_path = BRT_CACHE_PATH / "results" / "switch_transformer"
+    result_path.mkdir(parents=True, exist_ok=True)
+    result_file = result_path / f"track_{args.expert}.csv"
+    with torch.inference_mode():
+        for idx in range(data_num):
+            model(**loaded_data[idx])
+
+    all_history = []
+    for _name, m in model.named_modules():
+        if isinstance(m, SwitchTransformersSparseMLP):
+            np.set_printoptions(linewidth=300)
+            average_load = np.min(m.shape_history, axis=1).astype(int)
+            # average_load = np.average(m.shape_history, axis=1).astype(int)
+            # average_load = np.max(m.shape_history, axis=1).astype(int)
+            all_history.append(average_load)
+    np.savetxt(result_file, np.array(all_history), delimiter=",", fmt="%d")
 
 def profile(args, model, tokenizer, vendor):
     loaded_data = load_data(args, tokenizer, 10)

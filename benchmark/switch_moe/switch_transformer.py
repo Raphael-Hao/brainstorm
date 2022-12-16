@@ -478,6 +478,7 @@ class SwitchTransformersSparseMLP(nn.Module):
             self.experts[f"expert_{idx}"] = expert_class(config)
         self.shape_history = None
         self.history = 0
+        self.trace = config.trace
 
     def forward(self, hidden_states):
         r"""
@@ -497,22 +498,25 @@ class SwitchTransformersSparseMLP(nn.Module):
 
         # The routers introduced might not always map all the tokens, to a router, which means that some hidden states
         # can be unchanged from one layer to another. That is why the hidden states are cloned before updating only the seleced ones.
-        # current_history = np.zeros((len(self.experts)), dtype=np.int32)
+        if self.trace:
+            current_history = np.zeros((len(self.experts), 1), dtype=np.int32)
         next_states = hidden_states.clone()
 
         for idx, expert in enumerate(self.experts.values()):
 
             token_indices = router_mask[:, :, idx].bool()
-            # current_history[idx] = hidden_states[token_indices].shape[0]
+            if self.trace:
+                current_history[idx] = hidden_states[token_indices].shape[0]
             # print(f"expert {idx} shape: {self.shape_history[idx]}")
             next_states[token_indices] = expert(hidden_states[token_indices])
         # print(current_history)
-        # if self.shape_history is None:
-        #     self.shape_history = current_history
-        # else:
-        #     self.shape_history = np.concatenate(
-        #         (self.shape_history, current_history), axis=1
-        #     )
+        if self.trace:
+            if self.shape_history is None:
+                self.shape_history = current_history
+            else:
+                self.shape_history = np.concatenate(
+                    (self.shape_history, current_history), axis=1
+                )
         hidden_states = router_probs * next_states
         return hidden_states, (router_logits, expert_index)
 

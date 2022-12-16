@@ -159,25 +159,25 @@ class JitKernelTest(unittest.TestCase):
         linears = nn.ModuleList(
             nn.Linear(768, 3072, bias=False) for _ in range(4)
         ).cuda()
-        sample_inputs = [torch.randn((2**i, 768)).cuda() for i in range(1, 5)]
+        sample_inputs = [torch.randn((2, 768)).cuda()]# for i in range(1, 5)]
         sample_inputs += [torch.randn((512, 768)).cuda()]
         homo_fused_kernel = make_jit_kernel(
-            linears, sample_inputs=sample_inputs, opt_level="homo_fuse"
+            linears, sample_inputs=sample_inputs, opt_level="homo_fuse",rank=[1,11]
         )
 
         shared_inputs = [
-            torch.randn((524, 768), device="cuda"),
-            torch.randn((524, 3072), device="cuda"),
+            torch.randn((514, 768), device="cuda"),
+            torch.randn((514, 3072), device="cuda"),
         ]
         standalone_inputs = []
         for linear in linears:
             standalone_inputs.append(linear.weight)
             # standalone_inputs.append(linear.bias)
-        capacities = torch.tensor([2, 8, 512, 2], dtype=torch.int32, device="cuda")
+        capacities = torch.tensor([512, 2], dtype=torch.int32, device="cuda")
         homo_fused_kernel(shared_inputs, standalone_inputs, capacities)
         cuda_timer.start()
         for i in range(100):
-            shared_inputs[1] = torch.empty((524, 3072), device="cuda")
+            shared_inputs[1] = torch.empty((514, 3072), device="cuda")
             homo_fused_kernel(shared_inputs, standalone_inputs, capacities)
         cuda_timer.stop(100, "brt_homo_fusion")
 
@@ -324,12 +324,12 @@ class JitFunctionTest(unittest.TestCase):
             standalone_inputs.append(linear.weight)
             standalone_inputs.append(linear.bias)
         capacities = [2, 8, 4, 2]
-        brt_outputs = homo_fused_funciton.forward(
+        brt_outputs = homo_fused_function.forward(
             *shared_inputs, *standalone_inputs, capacities=capacities
         )
         cuda_timer.start()
         for i in range(100):
-            brt_outputs = homo_fused_funciton.forward(
+            brt_outputs = homo_fused_function.forward(
                 *shared_inputs, *standalone_inputs, capacities=capacities
             )
 
