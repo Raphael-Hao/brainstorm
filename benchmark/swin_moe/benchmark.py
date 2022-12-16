@@ -11,6 +11,7 @@ import random
 import time
 import warnings
 from functools import partial
+import pathlib
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
 from tutel_ea import system_init
@@ -23,7 +24,15 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 from brt.runtime.benchmark import deterministic_random_generator, profile_v2
-from brt.runtime.placement import dump_trace, adaptive_load
+
+from brt.runtime.placement import (
+    dump_trace,
+    adaptive_load,
+    adaptive_micro_bench_load,
+    load_searched_placement,
+)
+from brt.runtime import BRT_CACHE_PATH
+
 from config import get_config
 from data import build_loader
 from logger import create_logger
@@ -126,8 +135,8 @@ def parse_option():
             "valid",
         ],
     )
-    parser.add_argument("--placement", type=str, default=None)
-    parser.add_argument("--locality", action="store_true", default=False)
+    parser.add_argument("--placement", action="store_true", default=False)
+    parser.add_argument("--capacity", type=float, default=1.25)
     ds_init = None
 
     args, _unparsed = parser.parse_known_args()
@@ -148,7 +157,7 @@ def main(args, config, ds_init):
         _mixup_fn,
     ) = build_loader(config)
 
-    logger.info(f"Creating model:{config.MODEL.TYPE}/{config.MODEL.NAME}")
+    # logger.info(f"Creating model:{config.MODEL.TYPE}/{config.MODEL.NAME}")
     model = build_model(config)
     # logger.info(str(model))
 
@@ -158,12 +167,12 @@ def main(args, config, ds_init):
             model.add_param_to_skip_allreduce(name)
             param.register_hook(partial(hook_scale_grad, config.TRAIN.MOE_GRAD_SCALE))
 
-    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    logger.info(f"number of params: {n_parameters}")
-    flops = 0
-    if hasattr(model, "flops"):
-        flops = model.flops()
-        logger.info(f"number of GFLOPs: {flops / 1e9}")
+    # n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # logger.info(f"number of params: {n_parameters}")
+    # flops = 0
+    # # if hasattr(model, "flops"):
+    #     flops = model.flops()
+    # logger.info(f"number of GFLOPs: {flops / 1e9}")
     model.cuda(config.LOCAL_RANK)
     model_without_ddp = model
 
@@ -179,13 +188,11 @@ def main(args, config, ds_init):
     else:
         checkpoint_file = f"{config.MODEL.RESUME}.all_in_one"
         MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
-        if MOE_LAYER_VENDOR == "brt_dist" and config.MODEL.PLACEMENT:
-            placement_file = f"{config.MODEL.PLACEMENT}.{dist.get_world_size()}.best"
-            adaptive_load(
-                model_without_ddp,
-                checkpoint_file,
-                enable_locality=args.locality,
-                placement_file=placement_file,
+        if MOE_LAYER_VENDOR == "brt_dist" and args.placement:
+            logger.info("===> Loading searched placement")
+            searched_placedment = load_searched_placement(config, "best")
+            adaptive_micro_bench_load(
+                model_without_ddp, searched_placedment, checkpoint_file, 16
             )
         else:
             adaptive_load(
@@ -280,16 +287,17 @@ def validate(config, data_loader, model):
 
 def get_benchmark_data(data_loader, logger, num_batches=100):
     max_batches = num_batches if len(data_loader) > num_batches else len(data_loader)
-    logger.info(
-        f"===> Preparing benchmark data, get first {max_batches} batches from data loader of length {len(data_loader)}"
-    )
+    # logger.info(
+    #     f"===> Preparing benchmark data, get first {max_batches} batches from data loader of length {len(data_loader)}"
+    # )
+
     gpu_data = []
     for idx, (images, _target) in enumerate(data_loader):
         if idx == max_batches:
             break
         gpu_data.append(images.cuda())
     batch_size = gpu_data[0].size(0)
-    logger.info(f"===> Benchmark data prepared, batch size {batch_size}")
+    # logger.info(f"===> Benchmark data prepared, batch size {batch_size}")
     return gpu_data, batch_size
 
 
@@ -311,29 +319,16 @@ def throughput(data_loader, model, logger):
         model(data)
     torch.cuda.synchronize()
     end = time.time()
+
+    if dist.get_rank() == 0:
+        result_path = BRT_CACHE_PATH / "results" / "swin_moe" / "e2e.csv"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result_f = result_path.open("a")
+        # result_f.write()
     logger.info(
         f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
 
-@torch.no_grad()
-def deprecated_throughput(data_loader, model, logger):
-    model.eval()
-    for idx, (images, _) in enumerate(data_loader):
-        images = images.cuda(non_blocking=True)
-        batch_size = images.shape[0]
-        for i in range(50):
-            model(images)
-        torch.cuda.synchronize()
-        logger.info(f"throughput averaged with 30 times")
-        tic1 = time.time()
-        for i in range(30):
-            model(images)
-        torch.cuda.synchronize()
-        tic2 = time.time()
-        logger.info(
-            f"batch_size {batch_size} throughput {30 * batch_size / (tic2 - tic1)}"
-        )
-        return
 
 
 @torch.inference_mode()
@@ -362,10 +357,10 @@ if __name__ == "__main__":
         master_addr = os.environ["MASTER_ADDR"]
         rank = int(os.environ["RANK"])
         world_size = int(os.environ["WORLD_SIZE"])
-        print(
-            f"RANK and WORLD_SIZE in environ: {rank}/{world_size}, LOCAL_RANK: {config.LOCAL_RANK}, "
-            f"master_node: {master_addr}:{master_port}"
-        )
+        # print(
+        #     f"RANK and WORLD_SIZE in environ: {rank}/{world_size}, LOCAL_RANK: {config.LOCAL_RANK}, "
+        #     f"master_node: {master_addr}:{master_port}"
+        # )
         if "OMPI_COMM_WORLD_RANK" in os.environ:
             del os.environ["OMPI_COMM_WORLD_RANK"]
         if "OMPI_COMM_WORLD_SIZE" in os.environ:
@@ -437,12 +432,12 @@ if __name__ == "__main__":
         path = os.path.join(config.OUTPUT, "config.json")
         with open(path, "w") as f:
             f.write(config.dump())
-        logger.info(f"Full config saved to {path}")
+        # logger.info(f"Full config saved to {path}")
 
         path = os.path.join(config.OUTPUT, "args.json")
         with open(path, "w") as f:
             f.write(json.dumps(vars(args)))
-        logger.info(f"Full config saved to {path}")
+        # logger.info(f"Full config saved to {path}")
 
     # print config
     # logger.info(config.dump())

@@ -48,10 +48,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
         capacity = loads.capacity
-        print("capacity", capacity)
-        # print(f"rank {dist.get_rank()} loads {loads}")
 
-        # print("capacity", capacity)
         if self.route_logics[0] == "1d":
             if self.transforms[0]:
                 out_flow = padded_dispatch_with_dst_indices_1d(
@@ -162,9 +159,8 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
             )
         else:
             out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
-
+        out_flow.score = score
         return out_flow
-
 
 @register_fabric("distributed_placement_dispatch")
 class DistributedPlacementDispatchFabric(FusedDispatchFabric):
@@ -191,11 +187,11 @@ class DistributedPlacementDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
-
         out_flow = dispatch_with_dst_indices_1d(in_flow, route_indices, loads)
         out_flow, out_loads, in_loads = brt_dist.group_sparse_a2a(out_flow, loads)
         if self.task_locality:
             world_size = dist.get_world_size()
+            world_rank = dist.get_rank()
             num_local_tasks = out_loads.size(0) // world_size
             task_ids = torch.empty(
                 out_flow.size(0), dtype=torch.int64, device=out_flow.device
@@ -206,9 +202,9 @@ class DistributedPlacementDispatchFabric(FusedDispatchFabric):
                     out_loads[i * world_size : (i + 1) * world_size].sum().item()
                 )
                 task_ids[base_idx : base_idx + task_total_load].fill_(
-                    world_size * num_local_tasks + i
+                    world_rank * num_local_tasks + i
                 )
-
+                base_idx += task_total_load
             out_flow.score = task_ids
             return out_flow
 
@@ -228,6 +224,7 @@ class DistributedPlacementCombineFabric(FusedCombineFabric):
         sparse,
         reduction,
         granularity_padding,
+        transform = True,
     ) -> None:
         assert granularity_padding == False
         super().__init__(
@@ -236,7 +233,7 @@ class DistributedPlacementCombineFabric(FusedCombineFabric):
             sparse=sparse,
             granularity_padding=False,
         )
-        self.transform = True
+        self.transform = transform
 
     def forward(
         self,
@@ -246,11 +243,7 @@ class DistributedPlacementCombineFabric(FusedCombineFabric):
         in_loads = in_flow.in_loads
         out_loads = in_flow.out_loads
         score = in_flow.score
-        # print(f"gather in loads: {out_loads}, out loads: {in_loads}")
-        # print(f"in flow: {in_flow.sum(1)}")
         in_flow = brt_dist.size_known_group_sparse_a2a(in_flow, out_loads, in_loads)
-        # print(f"gather out flow: {in_flow.sum(1)}")
         out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
         out_flow.score = score
-
         return out_flow

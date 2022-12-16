@@ -11,7 +11,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from brt.router import is_router
-from brt.runtime import log
+from brt.runtime import log, BRT_CACHE_PATH
 
 logger = log.get_logger(__file__)
 
@@ -78,6 +78,14 @@ def dump_trace(mod: nn.Module):
     scatter_results = []
     for _m_name, m in mod.named_modules():
         if is_router(m) and "scatter" in m._router_type:
+            scatter_results.append(np.array(m.load_history, dtype=object))
+    np.save("scatter_results.npy", scatter_results, allow_pickle=True)
+
+
+def dump_decision(mod: nn.Module):
+    scatter_results = []
+    for _m_name, m in mod.named_modules():
+        if is_router(m) and "scatter" in m._router_type:
             scatter_results.append(np.array(m.ptu_decision_history, dtype=object))
     np.save("scatter_results.npy", scatter_results, allow_pickle=True)
 
@@ -110,10 +118,10 @@ def permute_placement(placement: List[List[int]], seed=0):
 
 
 def deterministic_rand_placement_generator(
-    expert_num: int, world_size: int
+    expert_num: int, world_size: int, seed=0
 ) -> Iterator[List[List[int]]]:
     assert expert_num % world_size == 0
-    np.random.seed(8496035)
+    np.random.seed(seed)
     all_experts = list(range(expert_num))
     used_placement = set()
     while True:
@@ -135,6 +143,39 @@ def possible_placement_generator(expert_num: int, world_size: int):
     )
     return possible_placement
 
+
+def load_searched_placement(
+    config, which_one: str, moe_layer_start: int = None, moe_layer_end: int = None
+) -> Dict[Tuple[int, int], List[List[int]]]:
+    result_path = BRT_CACHE_PATH / "results" / "swin_moe"
+    world_size = dist.get_world_size()
+    experts_range = {2: 18, 3: 2}
+    experts_keys = generate_experts_keys(experts_range)
+    capacity_factor = config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR
+    assert which_one in ["best", "worst"]
+    if moe_layer_start is None and moe_layer_end is None:
+        searched_placement_file = (
+            result_path
+            / f"placement/{which_one}_{world_size}_placement.csv"
+        )
+        moe_layer_start = 0
+        moe_layer_end = len(experts_keys) - 1
+    else:
+        searched_placement_file = (
+            result_path
+            / f"placement/{moe_layer_start}_{moe_layer_end}.{capacity_factor}.{which_one}_{world_size}_placement.csv"
+        )
+    logger.info(f"Loading searched placement from {searched_placement_file.as_posix()}")
+    searched_placement_list = np.loadtxt(
+        searched_placement_file, dtype=np.int32, delimiter=","
+    )
+    assert len(searched_placement_list) == moe_layer_end - moe_layer_start + 1
+    searched_placement = {}
+    for i in range(moe_layer_start, moe_layer_end + 1):
+        placement = np.split(searched_placement_list[i], world_size)
+        placement = [list(p) for p in placement]
+        searched_placement[experts_keys[i]] = placement
+    return searched_placement
 
 def adaptive_micro_bench_load(
     model: nn.Module,

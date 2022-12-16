@@ -22,7 +22,7 @@ def generate_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--model", default=DEFAULT_MODEL_TYPE)
     parser.add_argument("-n", "--subnet-num-block", type=int, default=8)
-    parser.add_argument("-f", "--subnet-num-feature", type=int, default=36)
+    parser.add_argument("-f", "--subnet-num-feature", type=int, default=8)
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
     parser.add_argument(
         "--objective-func", choices=["fastest", "most-efficient"], default="fastest"

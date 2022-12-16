@@ -74,10 +74,10 @@ class BertGenerationConfig(PretrainedConfig):
     def __init__(
         self,
         vocab_size=50358,
-        hidden_size=1024,
-        num_hidden_layers=24,
-        num_attention_heads=16,
-        intermediate_size=4096,
+        hidden_size=512,
+        num_hidden_layers=6,
+        num_attention_heads=8,
+        intermediate_size=2048,
         hidden_act="gelu",
         hidden_dropout_prob=0.1,
         attention_probs_dropout_prob=0.1,
@@ -91,6 +91,7 @@ class BertGenerationConfig(PretrainedConfig):
         use_cache=True,
         task_moe=False,
         num_tasks=16,
+        pt_native = True,
         placement_aware=False,
         **kwargs
     ):
@@ -111,4 +112,5 @@ class BertGenerationConfig(PretrainedConfig):
         self.use_cache = use_cache
         self.task_moe = task_moe
         self.num_tasks = num_tasks
+        self.pt_native = pt_native
         self.placement_aware = placement_aware
