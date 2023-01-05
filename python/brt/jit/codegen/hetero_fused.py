@@ -209,7 +209,7 @@ class DynamicHeteroFusedKernel(HorizFusedKernel):
         self.declare_return_with_launch_bounds()
         self.declare_name_args()
         self.new_codeblock()
-        self.set_kernel_type("homo_fuse_v1")
+        self.set_kernel_type()
         self.set_culaunch_dims()
         self.alloc_array_for_capacity_dims()
         self.alloc_shared_memory()

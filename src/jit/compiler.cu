@@ -89,8 +89,9 @@ CUfunction CUDACompiler::Activate(int fd, int dev) {
     long launch_bound =
         CaptureWithDefault(kernel.code, std::regex(R"(\s+__launch_bounds__\((\d+)\)\s+)"), 0);
 
-    static CUjit_option options[] = {CU_JIT_OPTIMIZATION_LEVEL, CU_JIT_THREADS_PER_BLOCK};
-    static void* values[] = {(void*)4L, (void*)launch_bound};
+    long max_registers = 65536 / launch_bound / 2;
+    static CUjit_option options[] = {CU_JIT_OPTIMIZATION_LEVEL, CU_JIT_THREADS_PER_BLOCK, CU_JIT_MAX_REGISTERS};
+    static void* values[] = {(void*)4L, (void*)launch_bound, (void*)max_registers};
 
     CUmodule hMod = nullptr;
     CU_CHECK(cuModuleLoadDataEx(&hMod, image.c_str(), sizeof(options) / sizeof(*options), options,
@@ -148,7 +149,7 @@ void CUDACompiler::HeteroExecute(const std::vector<const void*>& ppargs,
 
 void CUDACompiler::HomoExecute(const std::vector<const void*>& shared_inputs_ptr,
                                 const std::vector<const void*>& standalone_inputs_ptr,
-                                const std::vector<long>& branch_capacities, int fd, int dev,
+                                const std::vector<int>& branch_capacities, int fd, int dev,
                                 cudaStream_t stream) {
   auto& kernel = kernels_[fd];
 

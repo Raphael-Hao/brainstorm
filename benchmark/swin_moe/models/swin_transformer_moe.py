@@ -4,7 +4,6 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu
 # --------------------------------------------------------
-import os
 
 import torch
 import torch.nn as nn
@@ -13,13 +12,6 @@ import torch.distributed as dist
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from tutel_ea import moe as tutel_moe
-
-
-def print_rank(str):
-    # g_rank = dist.get_rank()
-    # if g_rank == 0:
-    #     print(f"[{g_rank}]===>" + str)
-    pass
 
 
 class Mlp(nn.Module):
@@ -34,15 +26,12 @@ class Mlp(nn.Module):
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
-        print_rank(f"[MLP-In]: {x.dtype} {x.max()} {x.min()} {x.std()}")
         x = self.fc1(x)
-        print_rank(f"[MLP-Mid]: {x.dtype} {x.max()} {x.min()} {x.std()}")
         x = self.act(x)
         x = self.drop(x)
         with torch.cuda.amp.autocast(enabled=False):
             x = self.fc2.float()(x.float())
         x = self.drop(x)
-        print_rank(f"[MLP-Out]: {x.dtype} {x.max()} {x.min()} {x.std()}")
         return x
 
 
@@ -90,9 +79,7 @@ class MoEMlp(nn.Module):
             [torch.numel(param) for name, param in self._moe_layer.get_parameter_iterator(param_type='gate')])
 
     def forward(self, x):
-        print_rank(f"[MOE-In]: {x.dtype} {x.max()} {x.min()} {x.std()}")
         x = self._moe_layer(x)
-        print_rank(f"[MOE-Out]: {x.dtype} {x.max()} {x.min()} {x.std()}")
         return x, x.l_aux
 
     def extra_repr(self) -> str:

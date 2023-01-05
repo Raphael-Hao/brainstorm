@@ -1,70 +1,87 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
-from dynamic_raw_config import config as raw_config
-from dynamic_A_config import config as A_config
-from dynamic_B_config import config as B_config
-from dynamic_C_config import config as C_config
+import logging
+import os
+import sys
+from typing import Iterator, List
 
-from brt.router import switch_router_mode
+import time
+import argparse
+import torch
+import torch.nn as nn
+import torch.distributed as dist
+import numpy as np
+from brt.runtime import BRT_LOG_PATH
+from collections import OrderedDict
+
 from brt.passes import (
     DeadPathEliminatePass,
-    PermanentPathFoldPass,
     OnDemandMemoryPlanPass,
+    PermanentPathFoldPass,
     PredictMemoryPlanPass,
+    TracePass,
 )
-from brt.runtime.memory_planner import pin_memory
+from brt.router import switch_router_mode
 from brt.runtime.benchmark import (
     BenchmarkArgumentManager,
     Benchmarker,
     CUDATimer,
     MemoryStats,
-    profile,
 )
 
-"""
-Detection Training Script.
-
-This scripts reads a given config file and runs the training or evaluation.
-It is an entry point that is made to train standard models in dl_lib.
-
-In order to let one script support training of many models,
-this script contains logic that are specific to these built-in models and therefore
-may not be suitable for your own project.
-For example, your research project perhaps only needs a single "evaluator".
-
-Therefore, we recommend you to use dl_lib as an library and take
-this file as an example of how to use the library.
-You may want to write your own script with your datasets and other customizations.
-"""
-import glob
-import logging
-import os
-import re
-import sys
+from brt.runtime.memory_planner import pin_memory
+from dynamic_A_config import config as A_config
+from dynamic_B_config import config as B_config
+from dynamic_C_config import config as C_config
+from dynamic_raw_config import config as raw_config
 
 sys.path.insert(0, ".")  # noqa: E402
 
-from collections import OrderedDict
-import torch
 
 import dl_lib.utils.comm as comm
+import torch
 from dl_lib.checkpoint import DetectionCheckpointer
 from dl_lib.data import MetadataCatalog
-from dl_lib.engine import (
-    CustomizedTrainer,
-    default_argument_parser,
-    default_setup,
-    launch,
-)
+
+from dl_lib.engine import CustomizedTrainer, default_argument_parser, default_setup
 from dl_lib.evaluation import (
     CityscapesEvaluator,
     DatasetEvaluators,
     PascalVOCDetectionEvaluator,
     SemSegEvaluator,
-    verify_results,
 )
+
 from dl_lib.modeling import SemanticSegmentorWithTTA
+
 from net import build_model
+from origin_net import build_model as origin_build_model
+
+
+def profile_v2(model: nn.Module, data_collection: List[torch.Tensor], vendor: str):
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+        profile_memory=True,
+        schedule=torch.profiler.schedule(wait=0, warmup=0, active=1),
+        # schedule=torch.profiler.schedule(wait=2, warmup=2, active=5),
+        with_stack=False,
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(
+            f"./results/{vendor}/locality"
+        ),
+        record_shapes=True,
+    ) as p:
+        print("os is: ", os.getcwd())
+        print("start profiling")
+        print("path is: ", f"./results/{vendor}/locality")
+        with torch.inference_mode():
+            for step, data in enumerate(data_collection):
+                torch.cuda.empty_cache()
+                model(data)
+                p.step()
+                if step + 1 >= 10:
+                    break
 
 
 class Trainer(CustomizedTrainer):
@@ -150,6 +167,13 @@ def test_argument_parser():
     bench_arg_manager = BenchmarkArgumentManager(parser)
     bench_arg_manager.add_item("liveness")
     bench_arg_manager.add_item("memory_plan")
+    bench_arg_manager.add_item("dce_memory_plan")
+    parser.add_argument(
+        "--memory-mode", choices=["predict", "on_demand"], default="on_demand"
+    )
+    parser.add_argument("--test-origin", action="store_true", help="test origin model")
+
+
     return parser
 
 
@@ -166,17 +190,30 @@ def main(args):
         raise ValueError("Invalid arch: {}".format(args.arch))
 
     config.merge_from_list(args.opts)
-    cfg, logger = default_setup(config, args)
+    cfg, _logger = default_setup(config, args)
 
     model = build_model(cfg)
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
         cfg.MODEL.WEIGHTS, resume=args.resume
     )
+
     model.cuda()
     torch.cuda.synchronize()
 
-    res = Trainer.test(cfg, model)
+    _res = Trainer.test(cfg, model)
     torch.cuda.empty_cache()
+
+    if args.test_origin:
+        timer = CUDATimer(repeat=5)
+        origin_model = origin_build_model(cfg)
+        DetectionCheckpointer(origin_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+            cfg.MODEL.WEIGHTS, resume=args.resume
+        )
+        origin_model.eval()
+        origin_model.cuda()
+        origin_backbone = origin_model.backbone
+        backbone_input = model.backbone_input
+        timer.deprecated_execute(lambda: origin_backbone(backbone_input), "torch")
 
     benchmarker = Benchmarker()
 
@@ -189,19 +226,29 @@ def main(args):
 
         naive_backbone = switch_router_mode(naive_backbone, False).eval()
 
+        trace_pass = TracePass(naive_backbone)
+        trace_pass.run_on_graph()
+        naive_backbone = trace_pass.finalize()
+        # MemoryStats.reset_cuda_stats()
         timer.execute(lambda: naive_backbone(backbone_input), "naive")
+        # MemoryStats.print_cuda_stats()
+        # naive_out= naive_backbone(backbone_input)
 
-        eliminate_pass = DeadPathEliminatePass(naive_backbone, runtime_load=1)
+        eliminate_pass = DeadPathEliminatePass(
+            naive_backbone, dead_load=0.0, runtime_load=1
+        )
         eliminate_pass.run_on_graph()
         new_backbone = eliminate_pass.finalize()
 
         timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
+        # eliminate_pass_output=new_backbone(backbone_input)
 
         permanent_pass = PermanentPathFoldPass(new_backbone, upper_perm_load=500)
         permanent_pass.run_on_graph()
         new_backbone = permanent_pass.finalize()
 
         timer.execute(lambda: new_backbone(backbone_input), "all_liveness_pass")
+        # all_liveness_output=new_backbone(backbone_input)
 
         if args.debug:
             from torch.fx.passes.graph_drawer import FxGraphDrawer
@@ -214,6 +261,59 @@ def main(args):
             new_res = Trainer.test(cfg, model)
 
     benchmarker.add_benchmark("liveness", liveness_benchmark)
+
+    def dce_memroy_plan_benchmark():
+        # input_list=[]
+        timer = CUDATimer(repeat=5)
+        backbone_input = model.backbone_input.detach().cuda()
+        # for i in range(12):
+        #     input_list.append(backbone_input)
+        backbone = switch_router_mode(model.backbone, False).eval()
+        MemoryStats.reset_cuda_stats()
+        timer.execute(lambda: backbone(backbone_input), "naive0")
+        MemoryStats.print_cuda_stats()
+
+        trace_pass = TracePass(backbone)
+        trace_pass.run_on_graph()
+        backbone = trace_pass.finalize()
+        MemoryStats.reset_cuda_stats()
+        timer.execute(lambda: backbone(backbone_input), "naive")
+        MemoryStats.print_cuda_stats()
+        # naive_output= backbone(backbone_input)
+        eliminate_pass = DeadPathEliminatePass(backbone, runtime_load=1)
+        eliminate_pass.run_on_graph()
+        new_backbone = eliminate_pass.finalize()
+        timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
+        permanent_pass = PermanentPathFoldPass(new_backbone, upper_perm_load=12)
+        permanent_pass.run_on_graph()
+        backbone = permanent_pass.finalize()
+        timer.execute(lambda: backbone(backbone_input), "all_liveness_pass")
+        backbone = pin_memory(backbone.cpu())
+        pass_name = None
+        memory_plan_pass = None
+        if args.memory_mode == "predict":
+            pass_name = "PredictorMemoryPlanPass"
+            memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
+        elif args.memory_mode == "on_demand":
+            pass_name = "OnDemandMemoryPlanPass"
+            memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
+        memory_plan_pass.run_on_graph()
+        initial_loaders, new_backbone = memory_plan_pass.finalize()
+        # print(new_backbone.code)
+        torch.cuda.empty_cache()
+        torch.cuda.reset_accumulated_memory_stats()
+        torch.cuda.reset_peak_memory_stats()
+        for loader in initial_loaders:
+            loader()
+        torch.cuda.synchronize()
+        MemoryStats.reset_cuda_stats()
+        # profile(lambda: new_backbone(backbone_input))
+        # mem_output1 = new_backbone(backbone_input)
+        MemoryStats.reset_cuda_stats()
+        timer.execute(lambda: new_backbone(backbone_input), pass_name)
+        MemoryStats.print_cuda_stats()
+        # profile_v2(new_backbone,[backbone_input], "new_dcr_mem_backbone")
+        mem_output = new_backbone(backbone_input)
 
     def memroy_plan_benchmark():
         timer = CUDATimer(repeat=5)
@@ -228,24 +328,28 @@ def main(args):
         # MemoryStats.print_cuda_stats()
 
         backbone = pin_memory(backbone.cpu())
-        # pass_name = "OnDemandMemoryPlanPass"
-        # memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
-        pass_name = "PredictorMemoryPlanPass"
-        memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
+        pass_name = None
+        memory_plan_pass = None
+        if args.memory_mode == "predict":
+            pass_name = "PredictorMemoryPlanPass"
+            memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
+        elif args.memory_mode == "on_demand":
+            pass_name = "OnDemandMemoryPlanPass"
+            memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
         memory_plan_pass.run_on_graph()
         initial_loaders, new_backbone = memory_plan_pass.finalize()
-        # print(new_backbone.code)
         torch.cuda.reset_accumulated_memory_stats()
         torch.cuda.reset_peak_memory_stats()
-
         for loader in initial_loaders:
             loader()
         torch.cuda.synchronize()
         MemoryStats.reset_cuda_stats()
+        # profile_v2(new_backbone,input_list, "only_mem_backbone")
         # profile(lambda: new_backbone(backbone_input))
         timer.execute(lambda: new_backbone(backbone_input), pass_name)
         # MemoryStats.print_cuda_stats()
 
+    benchmarker.add_benchmark("dce_memory_plan", dce_memroy_plan_benchmark)
     benchmarker.add_benchmark("memory_plan", memroy_plan_benchmark)
 
     benchmarker.benchmarking(args.benchmark)

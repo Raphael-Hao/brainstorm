@@ -12,6 +12,10 @@ docker/id_*
 
 .cache/*
 .cache/kernel_db.sqlite
+.cache/kernel_db1.sqlite
+.cache/kernel_db2.sqlite
+
+
 !.cache/log/
 .cache/log/*
 !.cache/log/kernel_tune/
@@ -80,6 +84,7 @@ benchmark/dynamic_routing/log.txt
 3rdparty/dynamic_routing/datasets/*
 !3rdparty/dynamic_routing/datasets/README.md
 benchmark/msdnet/*.pth
+benchmark/msdnet/*.txt
 benchmark/msdnet/saveresult
 *.nsys-rep
 

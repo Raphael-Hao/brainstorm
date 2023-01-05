@@ -116,7 +116,8 @@ class IdentityCombineFabric(CombineFabric):
         out_flows = []
 
         for flow_idx in range(self.flow_num):
-            out_flow = torch.stack(in_flows[flow_idx], dim=0).sum(dim=0)
+            original_shape = in_flows[flow_idx][0].shape
+            out_flow = torch.cat(in_flows[flow_idx], dim=0).reshape(-1,1,*original_shape[1:]).sum(dim=0)
             out_flows.append(out_flow)
 
         return out_flows

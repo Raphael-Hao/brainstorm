@@ -4,12 +4,10 @@
 # \file: /thor_moe.py
 # \brief:
 # Author: raphael hao
-
+import math
 import torch
 import torch.nn as nn
-from brt.runtime import BRT_KERNEL_TEMPLATE_PATH
 from brt.jit import make_jit_kernel
-from brt.runtime.proto_tensor import collect_proto_attr_stack, init_proto_tensor
 from brt.app.rand import RandScatter
 from brt.router import GatherRouter
 
@@ -63,6 +61,10 @@ class ThorExpert(nn.Module):
 class FusedThorExpert(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
+        self.token_num = config.token_num
+        max_exp = math.ceil(math.log2(self.token_num))
+        # capacities = [2**i for i in range(max_exp + 1)]
+        capacities = [2 ** (max_exp - 1)]
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
         dense1s = nn.ModuleList(
@@ -81,7 +83,6 @@ class FusedThorExpert(nn.Module):
                 for _ in range(config.expert_num)
             ]
         )
-        capacities = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
         sample_inputs = [torch.ones(i, config.hidden_size) for i in capacities]
 
         self.expert1_kernel = make_jit_kernel(
@@ -111,8 +112,9 @@ class FusedThorExpert(nn.Module):
         self,
         inter_state: torch.Tensor,
     ) -> torch.Tensor:
-        capacities = inter_state.load.tolist()
-        tag_stack, load_stack, extra_stack = collect_proto_attr_stack(inter_state)
+        capacities = inter_state.loads.tolist()
+        route_indices = inter_state.route_indices
+        score = inter_state.score
         expert1_out = torch.zeros(
             inter_state.shape[0], self.intermediate_size, device=inter_state.device
         )
@@ -130,7 +132,73 @@ class FusedThorExpert(nn.Module):
             standalone_inputs=self.expert2_standalone_inputs,
             capacities=capacities,
         )
-        expert2_out = init_proto_tensor(expert2_out, tag_stack, load_stack, extra_stack)
+        expert2_out.route_indices = route_indices
+        expert2_out.loads = inter_state.loads
+        expert2_out.score = score
+        return expert2_out
+
+
+class FusedThorExpertBmm(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.hidden_size = config.hidden_size
+        self.intermediate_size = config.intermediate_size
+        self.expert_num = config.expert_num
+        if isinstance(config.hidden_act, str):
+            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+        else:
+            self.intermediate_act_fn = config.hidden_act
+        dense1s = nn.ModuleList(
+            [
+                nn.Linear(config.hidden_size, config.intermediate_size)
+                for _ in range(config.expert_num)
+            ]
+        )
+        dense2s = nn.ModuleList(
+            [
+                nn.Linear(config.intermediate_size, config.hidden_size)
+                for _ in range(config.expert_num)
+            ]
+        )
+        linear1_weights, linear1_bias = [], []
+        for linear in dense1s:
+            linear1_weights.append(linear.weight)
+            linear1_bias.append(linear.bias)
+        linear2_weights, linear2_bias = [], []
+        for linear in dense2s:
+            linear2_weights.append(linear.weight)
+            linear2_bias.append(linear.bias)
+        linear1_weight = torch.cat(linear1_weights, dim=0).view(
+            config.expert_num, config.hidden_size, config.intermediate_size
+        )
+        linear1_bias = torch.cat(linear1_bias, dim=0).view(
+            config.expert_num, 1, config.intermediate_size
+        )
+        linear2_weight = torch.cat(linear2_weights, dim=0).view(
+            config.expert_num, config.intermediate_size, config.hidden_size
+        )
+        linear2_bias = torch.cat(linear2_bias, dim=0).view(config.expert_num, 1, -1)
+        self.register_parameter("linear1_weight", nn.Parameter(linear1_weight))
+        self.register_parameter("linear1_bias", nn.Parameter(linear1_bias))
+        self.register_parameter("linear2_weight", nn.Parameter(linear2_weight))
+        self.register_parameter("linear2_bias", nn.Parameter(linear2_bias))
+
+    def forward(self, inter_state):
+        loads = inter_state.loads
+        route_indices = inter_state.route_indices
+        score = inter_state.score
+        inter_state = inter_state.view(self.expert_num, -1, inter_state.shape[-1])
+        hidden_state = (
+            torch.matmul(inter_state, self.linear1_weight) + self.linear1_bias
+        )
+        hidden_state = self.intermediate_act_fn(hidden_state)
+        expert2_out = (
+            torch.matmul(hidden_state, self.linear2_weight) + self.linear2_bias
+        )
+        expert2_out = expert2_out.view(-1, self.hidden_size)
+        expert2_out.route_indices = route_indices
+        expert2_out.loads = loads
+        expert2_out.score = score
         return expert2_out
 
 
@@ -164,56 +232,75 @@ class ThorMoE(nn.Module):
 class FusedThorMoE(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
+        self.token_num = config.token_num
+        max_exp = math.ceil(math.log2(self.token_num))
+        capacities = [2 ** (max_exp - 1)]
+        # capacities = [2**i for i in range(max_exp + 1)]
         self.scatter_router = RandScatter(
             path_num=config.expert_num,
             fabric_type="homo_fused_dispatch",
-            fabric_kwargs={
-                "supported_capacities": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+            protocol_kwargs={
+                "supported_capacities": torch.tensor(capacities, dtype=torch.int32),
             },
         )
         self.gather_router = GatherRouter(
             fabric_type="homo_fused_combine",
-            fabric_kwargs={
-                "supported_capacities": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
-            },
         )
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.fused_expert = FusedThorExpert(config)
-        self.start_event = torch.cuda.Event(enable_timing=True)
-        self.end_event = torch.cuda.Event(enable_timing=True)
-        self.stream = torch.cuda.default_stream()
 
     def forward(self, hidden_states):
         # B x T x H -> T x H
         inter_states = hidden_states.view(-1, hidden_states.size(-1))
-        # self.start_event.record(stream=self.stream)
         x = self.scatter_router(inter_states)
-        # self.end_event.record(stream=self.stream)
-        # self.stream.synchronize()
-        # print("fused scatter time: ", self.start_event.elapsed_time(self.end_event))
 
-        # self.start_event.record(stream=self.stream)
         x = self.fused_expert(x)
-        # self.end_event.record(stream=self.stream)
-        # self.stream.synchronize()
-        # print("fused expert time: ", self.start_event.elapsed_time(self.end_event))
 
-        # self.start_event.record(stream=self.stream)
         inter_states = self.gather_router(x)
-        # self.end_event.record(stream=self.stream)
-        # self.stream.synchronize()
-        # print("gather router time: ", self.start_event.elapsed_time(self.end_event))
 
         # T x H -> B x T x H
-        # self.start_event.record(stream=self.stream)
         inter_states = inter_states.view(
             hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
         )
         x = self.layer_norm(inter_states + hidden_states)
-        # self.end_event.record(stream=self.stream)
-        # self.stream.synchronize()
-        # print("layer norm time: ", self.start_event.elapsed_time(self.end_event))
+
+        return x
+
+
+class FusedThorMoEBmm(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+        self.token_num = config.token_num
+        max_exp = math.ceil(math.log2(self.token_num))
+        capacities = [2 ** (max_exp)]
+        self.scatter_router = RandScatter(
+            path_num=config.expert_num,
+            fabric_type="homo_fused_dispatch",
+            protocol_kwargs={
+                "supported_capacities": torch.tensor(capacities, dtype=torch.int32),
+            },
+        )
+        self.gather_router = GatherRouter(
+            fabric_type="homo_fused_combine",
+        )
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.fused_expert = FusedThorExpertBmm(config)
+
+    def forward(self, hidden_states):
+        # B x T x H -> T x H
+        inter_states = hidden_states.view(-1, hidden_states.size(-1))
+        x = self.scatter_router(inter_states)
+
+        x = self.fused_expert(x)
+
+        inter_states = self.gather_router(x)
+        # T x H -> B x T x H
+        inter_states = inter_states.view(
+            hidden_states.size(0), hidden_states.size(1), hidden_states.size(2)
+        )
+        x = self.layer_norm(inter_states + hidden_states)
 
         return x
 

@@ -29,7 +29,7 @@ class TopKProtocol(ProtocolBase):
             index_gen_opt (bool, optional): whether use optimized GPU kernel. Defaults to True.
         """
         super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
-        self.supported_capacities = supported_capacities
+        self.register_buffer("supported_capacities", supported_capacities)
         self.top_k = top_k
 
     def make_route_decision(self, score):

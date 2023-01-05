@@ -25,8 +25,10 @@ class DeadPathEliminatePass(PassBase):
 
     def run_on_graph(self):
         # eliminate dead path
+        node_id = 0
         for node in self.graph_mod.graph.nodes:
             if self.is_gather_node(node):
+                node_id += 1
                 node_m = self.sub_modules[node.target]
                 dead_paths = []
                 load_histroy = node_m.load_history

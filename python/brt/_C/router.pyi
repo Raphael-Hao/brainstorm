@@ -31,6 +31,13 @@ def dispatch_with_dst_indices_1d(
     auto_pad: bool = False,
     gates: torch.Tensor = None,
 ) -> torch.Tensor: ...
+def padded_dispatch_with_dst_indices_1d(
+    in_data: torch.Tensor,
+    route_indices: torch.Tensor,
+    loads: torch.Tensor,
+    pad_size: int,
+    gates: torch.Tensor = None,
+) -> torch.Tensor: ...
 def dispatch_with_dst_indices_2d(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
@@ -43,4 +50,5 @@ def combine_with_src_indices(
     loads: torch.Tensor,
     auto_pad: bool = False,
     gates: torch.Tensor = None,
+    out_data: torch.Tensor = None,
 ) -> torch.Tensor: ...

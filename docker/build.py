@@ -125,7 +125,7 @@ def build_docker():
 
     cmd.extend(["--build-arg", f"BASE_IMAGE={args.base_image}"])
     cmd.extend(["--build-arg", f"SSH_KEY_FILE={args.ssh_key}"])
-    cmd.extend(["--build-arg", f"BRANCH={args.branch}"])
+    cmd.extend(["--build-arg", f"BRT_BRANCH={args.branch}"])
     if args.type == "sing":
         validator_image, installer_image = get_singularity_image()
         cmd.extend(["--build-arg", f"VALIDATOR_IMAGE={validator_image}"])

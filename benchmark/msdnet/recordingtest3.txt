@@ -226,4 +226,26 @@ avg speed up of dead_path_eliminate1.5377885505651352
 avg speed up of constpropogationpass1.5406033841558648
 avg speed up of reorder_operatorpass1.8052803456066142
 avg speed up of vfusePass6.307128416325218
-finish vfuse
+finish vfuse[0.44246858, -1, -1, -1]
+[0.44246858, -1, -1, -1]
+[0.44246858, -1.0, -1.0, -1.0]
+[0.44246858, -1.0, -1.0, -1.0]
+[0.44246858, -1.0, -1.0, -1.0]
+[0.44246858, -1.0, -1.0, -1.0]
+[0.44246858, -1.0, -1.0, -1.0]
+[0.44246858, -1.0, -1.0, -1.0]
+[0.44246858, -1.0, -1.0, -1.0]
+[0.44246858, -1.0, -1.0, -1.0]
+Generate Logit: [0/50000]
+max speed up of dead_path_eliminate6.079956708321217
+max speed up of constpropogationpass5.937564039303573
+max speed up of reorder_operatorpass6.226591081395071
+max speed up of vfusePass4.430147084741372
+min speed up of dead_path_eliminate6.079956708321217
+min speed up of constpropogationpass5.937564039303573
+min speed up of reorder_operatorpass6.226591081395071
+min speed up of vfusePass4.430147084741372
+avg speed up of dead_path_eliminate6.079956708321217
+avg speed up of constpropogationpass5.937564039303573
+avg speed up of reorder_operatorpass6.226591081395071
+avg speed up of vfusePass4.430147084741372

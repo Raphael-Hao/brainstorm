@@ -136,7 +136,6 @@ class MoEMlp(nn.Module):
         self.dist_rank = dist.get_rank()
 
         MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
-        print(f"======>[{self.dist_rank}] MOE_LAYER_VENDOR = {MOE_LAYER_VENDOR}")
         if MOE_LAYER_VENDOR == "tutel":
             moe = tutel_moe
         elif MOE_LAYER_VENDOR == "pt":
@@ -1125,15 +1124,6 @@ class SwinTransformerBlockPre(nn.Module):
         if self.is_moe:
             x, l_aux = self.mlp(x)
             x = self.gamma_2 * x
-            if not hasattr(self, "pre_locality_aware"):
-                scatter_router = getattr(self.mlp._moe_layer.gates[0], "scatter", None)
-                if scatter_router is not None:
-                    self.pre_locality_aware = scatter_router.fabric.locality_aware
-                else:
-                    self.pre_locality_aware = False
-            if self.pre_locality_aware:
-                reorder_indices = brt_dist.get_reorder_indices()
-                shortcut = brt_dist.exchange(shortcut, reorder_indices)
         else:
             x = self.mlp(x)
             l_aux = torch.zeros(1).to(x.device)
@@ -1144,17 +1134,6 @@ class SwinTransformerBlockPre(nn.Module):
             x = shortcut + x
         else:
             x = shortcut + self.drop_path(x)
-
-        if self.is_moe:
-            if not hasattr(self, "post_locality_aware"):
-                gather_router = getattr(self.mlp._moe_layer.gates[0], "gather", None)
-                if gather_router is not None:
-                    self.post_locality_aware = gather_router.fabric.locality_aware
-                else:
-                    self.post_locality_aware = False
-            if self.post_locality_aware:
-                reorder_indices = brt_dist.get_reorder_indices()
-                x = brt_dist.reverse_exchange(x, reorder_indices)
 
         # if self.is_moe:
         #     print(f"rank: {dist.get_rank()}, drop output: {x.sum()}")
@@ -1535,6 +1514,7 @@ class BasicLayer(nn.Module):
                 x, cur_l_aux = checkpoint.checkpoint(blk, x)
                 ckpt_block += 1
             else:
+                # print(f"======> forwarding {idx}th block, is_moe: {blk.is_moe}")
                 x, cur_l_aux = blk(x)
             l_aux = cur_l_aux * self.aux_loss_scale[idx] + l_aux
         if self.downsample is not None:
@@ -2028,6 +2008,7 @@ class SwinV2TransformerMoE(nn.Module):
         x = self.pos_drop(x)
         l_aux = 0.0
         for _layer_id, layer in enumerate(self.layers):
+            # print(f"=====> forwarding layer {_layer_id}")
             x, cur_l_aux = layer(x)
             l_aux = cur_l_aux + l_aux
 

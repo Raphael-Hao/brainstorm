@@ -572,7 +572,7 @@ def threshold_dynamic_evaluate(
                     )
 
                 if i % 2 == 0:
-                    file = "recordingtest3.txt"
+                    file = "recordingtest9.txt"
 
                     with open(file, "a") as f:
                         f.write(str(args.thresholds) + "\n")
@@ -689,12 +689,377 @@ def threshold_dynamic_evaluate(
                         / len(speed_up_of_verticalfusetepass),
                     )
                     if i == 8:
-                        file = "recordingtest3.txt"
+                        file = "recordingtest9.txt"
                         with open(file, "a") as f:
                             f.write("finish vfuse")
                         break
 
         benchmarker.add_benchmark("vfuse", fuse_benchmark)
+        
+        
+        
+        def only_vfuse_benchmark():
+            from torch.fx.passes.graph_drawer import FxGraphDrawer
+
+            timer = CUDATimer(repeat=5)
+            naive_backbone = model1
+            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            targets = []
+            baseline_time = []
+            VerticalFusePass_time = []
+            speed_up_of_verticalfusetepass = []
+            ConstProPass_time = []
+            DeadPathEliminatePass_time = []
+            reorder_operatorPass_time = []
+            speed_up_of_constpropogationpass = []
+            speed_up_of_reorder_operatorpass = []
+            speed_up_of_deadpatheliminatepass = []
+
+            for i, (input, target) in enumerate(test_loader):
+                targets.append(target)
+                with torch.no_grad():
+                    input_var = torch.autograd.Variable(input.cuda())
+                    print("i", i)
+                    import copy
+
+                    naive_backbone.cuda()
+                    naive_backbone.train(False)
+                    model_copy = copy.deepcopy(naive_backbone)
+                    model_copy.train(False)
+                    model_copy = model_copy.cuda()
+                    ## to solve the decorator issue caused by DeepCopy
+                    model_copy.final_gather.__class__ = (
+                        naive_backbone.final_gather.__class__
+                    )
+                    for j in range(len(naive_backbone.scatters)):
+                        model_copy.scatters[j].__class__ = naive_backbone.scatters[
+                            j
+                        ].__class__
+                    timer.execute(lambda: model_copy(input_var), "naive2")
+                    output_naive = model_copy(input_var)
+                    raw_pass = TracePass(model_copy)
+                    raw_pass.run_on_graph()
+                    raw_pass_graph = raw_pass.finalize()
+                    # graph_drawer = FxGraphDrawer(raw_pass_graph, "raw_pass_graph")
+                    # with open("raw_const.svg", "wb") as f:
+                    #     f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(lambda: raw_pass_graph(input_var), "raw_pass_graph")
+                    print(timer.avg)
+                    baseline_time.append(timer.avg)
+                    print("finish baseline all avg{}".format(sum(baseline_time) / len(baseline_time)))
+                    if i == 8:
+                        print("finish baseline")
+                        break
+                    continue
+                    vertical_fuse_pass = VerticalFusePass(raw_pass_graph)
+                    vertical_fuse_pass.run_on_graph()
+                    new_backbone = vertical_fuse_pass.finalize()
+                    output1 = new_backbone(input_var)
+                    # graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    # with open("_dce_const_reorder_vfuse.svg", "wb") as f:
+                    #     f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
+                    VerticalFusePass_time.append(timer.avg)
+                    output1 = new_backbone(input_var)
+                    speed_up_of_verticalfusetepass.append(
+                        baseline_time[-1] / VerticalFusePass_time[-1]
+                    )
+
+                if i % 2 == 0:
+                    file = "recordingtest9.txt"
+
+                    with open(file, "a") as f:
+                        f.write(str(args.thresholds) + "\n")
+                        f.write("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                        f.write("\n")
+                        f.write("max speed up of vfusePass")
+                        f.write(str(max(speed_up_of_verticalfusetepass)))
+                        f.write("\n")
+                        f.write("min speed up of vfusePass")
+                        f.write(str(min(speed_up_of_verticalfusetepass)))
+                        f.write("\n")
+                        f.write("avg speed up of vfusePass")
+                        f.write(
+                            str(
+                                sum(speed_up_of_verticalfusetepass)
+                                / len(speed_up_of_verticalfusetepass)
+                            )
+                        )
+                        f.write("\n")
+                    print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    print(
+                        "max of speed_up_of_verticalfusetepass",
+                        max(speed_up_of_verticalfusetepass),
+                    )
+                    print(
+                        "min of speed_up_of_verticalfusetepass",
+                        min(speed_up_of_verticalfusetepass),
+                    )
+                    print(
+                        "avg of speed_up_of_verticalfusetepass",
+                        sum(speed_up_of_verticalfusetepass)
+                        / len(speed_up_of_verticalfusetepass),
+                    )
+                    if i == 8:
+                        file = "recordingtest9.txt"
+                        with open(file, "a") as f:
+                            f.write("finish vfuse")
+                        break
+
+        benchmarker.add_benchmark("only_vfuse", only_vfuse_benchmark)
+        
+        
+        
+        def vfusetrans_benchmark():
+            from torch.fx.passes.graph_drawer import FxGraphDrawer
+
+            timer = CUDATimer(repeat=5)
+            naive_backbone = model1
+            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            targets = []
+            baseline_time = []
+            VerticalFusePass_time = []
+            speed_up_of_verticalfusetepass = []
+            ConstProPass_time = []
+            DeadPathEliminatePass_time = []
+            reorder_operatorPass_time = []
+            speed_up_of_constpropogationpass = []
+            speed_up_of_reorder_operatorpass = []
+            speed_up_of_deadpatheliminatepass = []
+
+            for i, (input, target) in enumerate(test_loader):
+                targets.append(target)
+                with torch.no_grad():
+                    input_var = torch.autograd.Variable(input.cuda())
+                    print("i", i)
+                    import copy
+
+                    naive_backbone.cuda()
+                    naive_backbone.train(False)
+                    model_copy = copy.deepcopy(naive_backbone)
+                    model_copy.train(False)
+                    model_copy = model_copy.cuda()
+                    ## to solve the decorator issue caused by DeepCopy
+                    model_copy.final_gather.__class__ = (
+                        naive_backbone.final_gather.__class__
+                    )
+                    for j in range(len(naive_backbone.scatters)):
+                        model_copy.scatters[j].__class__ = naive_backbone.scatters[
+                            j
+                        ].__class__
+                    timer.execute(lambda: model_copy(input_var), "naive2")
+                    output_naive = model_copy(input_var)
+                    raw_pass = TracePass(model_copy)
+                    raw_pass.run_on_graph()
+                    new_backbone = raw_pass.finalize()
+                    # graph_drawer = FxGraphDrawer(raw_pass_graph, "raw_pass_graph")
+                    # with open("raw_const.svg", "wb") as f:
+                    #     f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(lambda: new_backbone(input_var), "raw_pass_graph")
+                    baseline_time.append(timer.avg)
+                    
+                    
+                    vertical_fuse_pass = VerticalFusePass(new_backbone)
+                    vertical_fuse_pass.run_on_graph()
+                    new_backbone = vertical_fuse_pass.finalize()
+                    output1 = new_backbone(input_var)
+                    # graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    # with open("_dce_const_reorder_vfuse.svg", "wb") as f:
+                    #     f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(lambda: new_backbone(input_var), "vertical_fuse_pass")
+                    VerticalFusePass_time.append(timer.avg)
+                    output1 = new_backbone(input_var)
+                    eliminate_pass = DeadPathEliminatePass(
+                        new_backbone, runtime_load=1
+                    )
+                    eliminate_pass.run_on_graph()
+                    new_dce_backbone = eliminate_pass.finalize()
+                    # graph_drawer = FxGraphDrawer(new_dce_backbone, "new_backbone")
+                    # with open("_dce.svg", "wb") as f:
+                    #     f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: new_dce_backbone(input_var), "dead_path_eliminated"
+                    )
+                    DeadPathEliminatePass_time.append(timer.avg)
+                    output_dce = new_dce_backbone(input_var)
+                    constant_propagation_pass = ConstantPropagationPass(
+                        new_dce_backbone, upper_perm_load=args.batch_size * n_batch
+                    )
+                    constant_propagation_pass.run_on_graph()
+                    new_backbone_const = constant_propagation_pass.finalize()
+                    # graph_drawer = FxGraphDrawer(new_backbone_const, "new_backbone")
+                    # with open("_dce_const.svg", "wb") as f:
+                    #     f.write(graph_drawer.get_dot_graph().create_svg())
+                    timer.execute(
+                        lambda: new_backbone_const(input_var), "constant_propagation"
+                    )
+                    ConstProPass_time.append(timer.avg)
+                    out_put_const = new_backbone_const(input_var)
+                    reorder_operator_pass = OperatorReorderPass(
+                        new_backbone_const, runtime_load=1
+                    )
+                    reorder_operator_pass.run_on_graph()
+                    new_backbone = reorder_operator_pass.finalize()
+                    timer.execute(lambda: new_backbone(input_var), "reorder_operator")
+                    output_reorder = new_backbone(input_var)
+                    reorder_operatorPass_time.append(timer.avg)
+                    # graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
+                    # with open("_dce_const_reorder.svg", "wb") as f:
+                    #     f.write(graph_drawer.get_dot_graph().create_svg())
+                    
+                    speed_up_of_verticalfusetepass.append(
+                        baseline_time[-1] / VerticalFusePass_time[-1]
+                    )
+                    speed_up_of_deadpatheliminatepass.append(
+                        baseline_time[-1] / DeadPathEliminatePass_time[-1]
+                    )
+                    speed_up_of_constpropogationpass.append(
+                        baseline_time[-1] / ConstProPass_time[-1]
+                    )
+                    speed_up_of_reorder_operatorpass.append(
+                        baseline_time[-1] / reorder_operatorPass_time[-1]
+                    )
+                    # import pdb; pdb.set_trace()
+
+                if i % 2 == 0:
+                    file = "recordingtest9.txt"
+
+                    with open(file, "a") as f:
+                        f.write(str(args.thresholds) + "\n")
+                        f.write("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                        f.write("\n")
+                        f.write('avg timer of "naive2"')
+                        f.write(str(sum(baseline_time) / len(baseline_time)))
+                        f.write("\n")
+                        f.write('avg timer of "vertical_fuse_pass"')
+                        f.write(str(sum(VerticalFusePass_time) / len(VerticalFusePass_time)))
+                        f.write("\n")
+                        f.write('avg timer of "dead_path_eliminated"')
+                        f.write(str(sum(DeadPathEliminatePass_time) / len(DeadPathEliminatePass_time)))
+                        f.write("\n")
+                        f.write('avg timer of "constant_propagation"')
+                        f.write(str(sum(ConstProPass_time) / len(ConstProPass_time)))
+                        f.write("\n")
+                        f.write('avg timer of "reorder_operator"')
+                        f.write(str(sum(reorder_operatorPass_time) / len(reorder_operatorPass_time)))
+                        f.write("\n")
+                        f.write("max speed up of dead_path_eliminate")
+                        f.write(str(max(speed_up_of_deadpatheliminatepass)))
+                        f.write("\n")
+                        f.write("max speed up of constpropogationpass")
+                        f.write(str(max(speed_up_of_constpropogationpass)))
+                        f.write("\n")
+                        f.write("max speed up of reorder_operatorpass")
+                        f.write(str(max(speed_up_of_reorder_operatorpass)))
+                        f.write("\n")
+                        f.write("max speed up of vfusePass")
+                        f.write(str(max(speed_up_of_verticalfusetepass)))
+                        f.write("\n")
+
+                        f.write("min speed up of dead_path_eliminate")
+                        f.write(str(min(speed_up_of_deadpatheliminatepass)))
+                        f.write("\n")
+                        f.write("min speed up of constpropogationpass")
+                        f.write(str(min(speed_up_of_constpropogationpass)))
+                        f.write("\n")
+                        f.write("min speed up of reorder_operatorpass")
+                        f.write(str(min(speed_up_of_reorder_operatorpass)))
+                        f.write("\n")
+                        f.write("min speed up of vfusePass")
+                        f.write(str(min(speed_up_of_verticalfusetepass)))
+                        f.write("\n")
+                        f.write("avg speed up of dead_path_eliminate")
+                        f.write(
+                            str(
+                                sum(speed_up_of_deadpatheliminatepass)
+                                / len(speed_up_of_deadpatheliminatepass)
+                            )
+                        )
+                        f.write("\n")
+                        f.write("avg speed up of constpropogationpass")
+                        f.write(
+                            str(
+                                sum(speed_up_of_constpropogationpass)
+                                / len(speed_up_of_constpropogationpass)
+                            )
+                        )
+                        f.write("\n")
+                        f.write("avg speed up of reorder_operatorpass")
+                        f.write(
+                            str(
+                                sum(speed_up_of_reorder_operatorpass)
+                                / len(speed_up_of_reorder_operatorpass)
+                            )
+                        )
+                        f.write("\n")
+                        f.write("avg speed up of vfusePass")
+                        f.write(
+                            str(
+                                sum(speed_up_of_verticalfusetepass)
+                                / len(speed_up_of_verticalfusetepass)
+                            )
+                        )
+                        f.write("\n")
+                    print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    print(
+                        "max speed up of dead_path_eliminate",
+                        max(speed_up_of_deadpatheliminatepass),
+                    )
+                    print(
+                        "max speed up of constpropogationpass",
+                        max(speed_up_of_constpropogationpass),
+                    )
+                    print(
+                        "max speed up of reorder_operatorpass",
+                        max(speed_up_of_reorder_operatorpass),
+                    )
+                    print(
+                        "max of speed_up_of_verticalfusetepass",
+                        max(speed_up_of_verticalfusetepass),
+                    )
+                    print(
+                        "min speed up of dead_path_eliminate",
+                        min(speed_up_of_deadpatheliminatepass),
+                    )
+                    print(
+                        "min speed up of constpropogationpass",
+                        min(speed_up_of_constpropogationpass),
+                    )
+                    print(
+                        "min speed up of reorder_operatorpass",
+                        min(speed_up_of_reorder_operatorpass),
+                    )
+                    print(
+                        "min of speed_up_of_verticalfusetepass",
+                        min(speed_up_of_verticalfusetepass),
+                    )
+                    print(
+                        "avg speed up of dead_path_eliminate",
+                        sum(speed_up_of_deadpatheliminatepass)
+                        / len(speed_up_of_deadpatheliminatepass),
+                    )
+                    print(
+                        "avg speed up of constpropogationpass",
+                        sum(speed_up_of_constpropogationpass)
+                        / len(speed_up_of_constpropogationpass),
+                    )
+                    print(
+                        "avg speed up of reorder_operatorpass",
+                        sum(speed_up_of_reorder_operatorpass)
+                        / len(speed_up_of_reorder_operatorpass),
+                    )
+                    print(
+                        "avg of speed_up_of_verticalfusetepass",
+                        sum(speed_up_of_verticalfusetepass)
+                        / len(speed_up_of_verticalfusetepass),
+                    )
+                    if i == 8:
+                        file = "recordingtest9.txt"
+                        with open(file, "a") as f:
+                            f.write("finish vfuse")
+                        break
+
+        benchmarker.add_benchmark("vfuse_trans", vfusetrans_benchmark)
 
         def hfuse_benchmark():
             from torch.fx.passes.graph_drawer import FxGraphDrawer
@@ -802,11 +1167,26 @@ def threshold_dynamic_evaluate(
                     )
 
                 if i % 2 == 0:
-                    file = "recordingtest3.txt"
+                    file = "recordingtest9.txt"
 
                     with open(file, "a") as f:
                         f.write(str(args.thresholds) + "\n")
                         f.write("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                        f.write("\n")
+                        f.write("avg baseline_time")
+                        f.write(str(sum(baseline_time) / len(baseline_time)))
+                        f.write("\n")
+                        f.write("avg DeadPathEliminatePass_time")
+                        f.write(str(sum(DeadPathEliminatePass_time) / len(DeadPathEliminatePass_time)))
+                        f.write("\n")
+                        f.write("avg ConstProPass_time")
+                        f.write(str(sum(ConstProPass_time) / len(ConstProPass_time)))
+                        f.write("\n")
+                        f.write("avg reorder_operatorPass_time")
+                        f.write(str(sum(reorder_operatorPass_time) / len(reorder_operatorPass_time)))
+                        f.write("\n")
+                        f.write("avg hfusePass_time")
+                        f.write(str(sum(hfusePass_time) / len(hfusePass_time)))
                         f.write("\n")
                         f.write("max speed up of dead_path_eliminate")
                         f.write(str(max(speed_up_of_deadpatheliminatepass)))
@@ -912,7 +1292,7 @@ def threshold_dynamic_evaluate(
                         sum(speed_up_of_hfusepass) / len(speed_up_of_hfusepass),
                     )
                     if i == 8:
-                        file = "recordingtest3.txt"
+                        file = "recordingtest9.txt"
 
                         with open(file, "a") as f:
                             f.write("finish")
@@ -920,34 +1300,35 @@ def threshold_dynamic_evaluate(
 
         benchmarker.add_benchmark("hfuse", hfuse_benchmark)
 
-        def memroy_plan_benchmark():
+
+        def capture_overhead_benchmark():
             timer = CUDATimer(repeat=5)
-            backbone_input = model1.backbone_input.detach().cuda()
+            naive_backbone = model1
+            from torch.fx.passes.graph_drawer import FxGraphDrawer
 
-            backbone = switch_router_mode(model1.backbone, False).eval()
+            targets = []
+            active_time=[]
+            in_active_time=[]
+            for i, (input, target) in enumerate(test_loader):
+                targets.append(target)
+                with torch.no_grad():
+                    naive_backbone = switch_router_mode(naive_backbone, True).eval()
+                    timer.execute(lambda: naive_backbone(input),'active_capture')
+                    active_time.append(timer.avg)
+                    naive_backbone = switch_router_mode(naive_backbone, False).eval()
+                    timer.execute(lambda: naive_backbone(input),'inactive_capture')
+                    in_active_time.append(timer.avg)
+                    
+                    
 
-            MemoryStats.reset_cuda_stats()
-
-            timer.execute(lambda: backbone(backbone_input), "naive")
-
-            MemoryStats.print_cuda_stats()
-
-            backbone = pin_memory(backbone.cpu())
-
-            # memory_plan_pass = OnDemandMemoryPlanPass(backbone)
-            memory_plan_pass = PredictMemoryPlanPass(backbone, 500)
-            memory_plan_pass.run_on_graph()
-            new_backbone = memory_plan_pass.finalize()
-            print(new_backbone.code)
-            torch.cuda.reset_accumulated_memory_stats()
-            torch.cuda.reset_peak_memory_stats()
-            torch.cuda.synchronize()
-            MemoryStats.reset_cuda_stats()
-            # profile(lambda: new_backbone(backbone_input))
-            timer.execute(lambda: new_backbone(backbone_input), "on_demand_load")
-            MemoryStats.print_cuda_stats()
-
-        benchmarker.add_benchmark("memory_plan", memroy_plan_benchmark)
+                if i % 5 == 0:
+                    print("Generate Logit: [{0}/{1}]".format(i, len(test_loader)))
+                    print("avg active_time", sum(active_time) / len(active_time))
+                    print("avg in_active_time", sum(in_active_time) / len(in_active_time))
+                    if i==5:
+                        break
+            return
+        benchmarker.add_benchmark("capture", capture_overhead_benchmark)
 
         print("Benchmarking... optimizer")
 

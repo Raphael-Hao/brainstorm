@@ -1,13 +1,14 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Iterator
+from typing import Iterator, List
 
 import time
 import argparse
 import torch
+import torch.nn as nn
 import torch.distributed as dist
 import numpy as np
-from brt.runtime import BRT_LOG_PATH
+from brt.runtime import BRT_LOG_PATH, BRT_CACHE_PATH
 
 __all__ = [
     "profile",
@@ -17,6 +18,31 @@ __all__ = [
     "CUDATimer",
     "CPUTimer",
 ]
+
+
+
+def profile_v2(model: nn.Module, data_collection, vendor: str):
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+        profile_memory=True,
+        schedule=torch.profiler.schedule(wait=2, warmup=2, active=5),
+        with_stack=False,
+
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(
+            (BRT_LOG_PATH / f"./profile_results/{vendor}").as_posix()
+        ),
+        record_shapes=True,
+    ) as p:
+        np.random.seed(0)
+        data_indices = np.random.randint(0, len(data_collection), 10)
+
+        with torch.inference_mode():
+            for step in range(10):
+                model(**data_collection[data_indices[step]])
+                p.step()
 
 
 def profile(func):
@@ -79,8 +105,55 @@ class Timer:
                 f"Configuration: warm_up: {self.warm_up} loop: {self.loop} repeat: {self.repeat}",
             )
 
-    def execute(self, func, msg):
+    def export(self, msg, export_path: str):
+        if self.root != 0:
+            return
+        result_path = BRT_CACHE_PATH / "results" / export_path
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result = result_path.open("a")
+        result.write(f"{msg},{self.avg:.3f},{self.max:.3f},{self.min:.3f}\n")
+
+    def execute(self, func, msg, export=False, export_path=None):
         with torch.inference_mode():
+            for _i in range(self.warm_up):
+                func()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            self.start()
+            for _i in range(self.repeat):
+                self.step_start()
+                for _ in range(self.loop):
+                    func()
+                self.step_stop()
+            self.stop()
+            if export:
+                self.export(msg, export_path)
+            else:
+                self.print(msg)
+
+    def memory_execute(self, model, x, msg, export=False, export_path=None):
+        assert self.loop == 1
+        with torch.inference_mode():
+            for _i in range(self.warm_up):
+                model(x)
+            model.cpu()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            self.start()
+            for _i in range(self.repeat):
+                self.step_start()
+                for _ in range(self.loop):
+                    model(x)
+                self.step_stop()
+                model.cpu()
+            self.stop()
+            if export:
+                self.export(msg, export_path)
+            else:
+                self.print(msg)
+
+    def deprecated_execute(self, func, msg):
+        with torch.no_grad():
             for _i in range(self.warm_up):
                 func()
             if torch.cuda.is_available():
