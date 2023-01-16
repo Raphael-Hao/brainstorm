@@ -30,16 +30,18 @@ __all__ = [
 make_proto_tensor_cls(["score"], [0])
 
 
-@register_fabric("fused_dispatch")
+@register_fabric("_fused_dispatch")
 class FusedDispatchFabric(DispatchFabric):
     def __init__(
         self,
         flow_num: int,
-        capacity_padding=False,
+        # capacity_padding=False,
+        fixed_capacity: torch.Tensor,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
     ):
-        self.capacity_padding = capacity_padding
+        # self.capacity_padding = capacity_padding
+        self.fixed_capacity = fixed_capacity
         super().__init__(
             flow_num,
             route_logic=route_logic,
@@ -51,71 +53,180 @@ class FusedDispatchFabric(DispatchFabric):
         self,
         in_flows: List[ProtoTensor],
         route_indices: torch.Tensor,
-        loads: torch.Tensor,
+        real_loads: torch.Tensor,
         score: torch.Tensor,
-    ) -> List[ProtoTensor]:
+    ) -> List[List[ProtoTensor]]:
+        # all_out_flows = []
+        # for flow_idx, flow in enumerate(in_flows):
+        #     (
+        #         in_flow_data,
+        #         in_flow_tag_stack,
+        #         in_flow_load_stack,
+        #         extra_attr_stack_dict,
+        #     ) = to_torch_tensor(flow, return_stack=True)
+
+        #     if self.route_logics[flow_idx] == "1d":
+        #         if self.transforms[flow_idx]:
+        #             out_flow_data = dispatch_with_dst_indices_1d(
+        #                 in_flow_data, route_indices, self.fixed_capacity, False, score
+        #             )
+        #         else:
+        #             out_flow_data = dispatch_with_dst_indices_1d(
+        #                 in_flow_data, route_indices, self.fixed_capacity, False
+        #             )
+        #         out_flow = init_proto_tensor(
+        #             out_flow_data,
+        #             in_flow_tag_stack,
+        #             in_flow_load_stack,
+        #             extra_attr_stack_dict,
+        #         )
+        #         out_flow.pack(route_indices, loads, score=score)
+        #     elif self.route_logics[flow_idx] == "2d":
+        #         raise NotImplementedError()
+        #         in_flow_data = in_flow_data.transpose(0, 1).contiguous()
+        #         out_flow_data = dispatch_with_dst_indices_2d(
+        #             in_flow_data, route_indices, loads, self.capacity_padding
+        #         )
+        #         out_flow = init_proto_tensor(
+        #             out_flow_data,
+        #             in_flow_tag_stack,
+        #             in_flow_load_stack,
+        #             extra_attr_stack_dict,
+        #         )
+        #         out_flow.pack(route_indices, loads)
+        #     else:
+        #         raise ValueError("route_logic must be 1d or 2d")
+        #     all_out_flows.append(out_flow)
+
+        # return all_out_flows
         all_out_flows = []
-        for flow_idx, flow in enumerate(in_flows):
+        path_num = route_indices.size(1)
+        # real_loads = real_loads.cpu()
+        route_indices_64 = route_indices.to(torch.int64)
+        for flow_idx in range(self.flow_num):
+            flow = in_flows[flow_idx]
             (
-                in_flow_data,
-                in_flow_tag_stack,
-                in_flow_load_stack,
+                flow_data,
+                flow_tag_stack,
+                flow_load_stack,
                 extra_attr_stack_dict,
             ) = to_torch_tensor(flow, return_stack=True)
 
+            flow_tag = flow_tag_stack[-1]
+            flow_load = flow_load_stack[-1]
+
+            flow_tag_stack = flow_tag_stack[:-1]
+            flow_load_stack = flow_load_stack[:-1]
+            flow_extra_attr_stack_dict = {}
+            for attr_dict, attr_stack in extra_attr_stack_dict.items():
+                flow_extra_attr_stack_dict[attr_dict] = attr_stack[:-1]
+
             if self.route_logics[flow_idx] == "1d":
-                if self.transforms[flow_idx]:
-                    out_flow_data = dispatch_with_dst_indices_1d(
-                        in_flow_data, route_indices, loads, self.capacity_padding, score
-                    )
-                else:
-                    out_flow_data = dispatch_with_dst_indices_1d(
-                        in_flow_data, route_indices, loads, self.capacity_padding
-                    )
-                out_flow = init_proto_tensor(
-                    out_flow_data,
-                    in_flow_tag_stack,
-                    in_flow_load_stack,
-                    extra_attr_stack_dict,
-                )
-                out_flow.pack(route_indices, loads, score=score)
+                route_shape = list(flow_data.shape[1:])
+                # route_size = np.prod(route_shape)
             elif self.route_logics[flow_idx] == "2d":
-                in_flow_data = in_flow_data.transpose(0, 1).contiguous()
-                out_flow_data = dispatch_with_dst_indices_2d(
-                    in_flow_data, route_indices, loads, self.capacity_padding
-                )
-                out_flow = init_proto_tensor(
-                    out_flow_data,
-                    in_flow_tag_stack,
-                    in_flow_load_stack,
-                    extra_attr_stack_dict,
-                )
-                out_flow.pack(route_indices, loads)
+                # flow_data = flow_data.transpose(0, 1).contiguous()
+                route_shape = list(flow_data.shape[1:])
+                route_shape[0] = 1
+                # route_size = np.prod(route_shape)
             else:
                 raise ValueError("route_logic must be 1d or 2d")
-            all_out_flows.append(out_flow)
+            # out_flows = []
+            # out_flow_tags = torch.gather(flow_tag, 0, route_indices_64) # TODO
+            if self.route_logics[flow_idx] != "1d":
+                raise NotImplementedError("currently only support 1d route_logic")
+            if self.transforms[flow_idx]:
+                fused_out_flow_data = dispatch_with_dst_indices_1d(
+                    flow_data, route_indices, self.fixed_capacity, False, score
+                )
+            else:
+                fused_out_flow_data = dispatch_with_dst_indices_1d(
+                    flow_data, route_indices, self.fixed_capacity, False
+                )
+            out_flows = []
+            fused_index = 0
+            for i in range(path_num):
+                next_index = fused_index + self.fixed_capacity[i]
+                out_flow_data = fused_out_flow_data[fused_index:next_index]
+                fused_index = next_index
+                out_flow = init_proto_tensor(
+                    out_flow_data,
+                    flow_tag_stack,
+                    flow_load_stack,
+                    flow_extra_attr_stack_dict,
+                )
+                tag_indices = route_indices_64[: real_loads[i], i : i + 1]
+                out_flow_tag = torch.gather(flow_tag, 0, tag_indices)
+                out_flow.pack(out_flow_tag, flow_load)
+                out_flows.append(out_flow)
+            # for i in range(path_num):
+            #     tag_indices = route_indices_64[: real_loads[i], i : i + 1]
 
+            #     if tag_indices.numel() > 0:
+            #         out_flow_tag = torch.gather(flow_tag, 0, tag_indices)
+            #         # if self.route_logics[flow_idx] == "1d":
+            #         #     dispatched_data = flow_data
+            #         # elif self.route_logics[flow_idx] == "2d":
+            #         #     raise NotImplementedError()
+            #         # else:
+            #         #     raise ValueError("route_logic must be 1d or 2d")
+            #         if self.route_logics[flow_idx] != "1d":
+            #             raise NotImplementedError("currently only support 1d route_logic")
+            #         if self.transforms[flow_idx]:
+            #             fused_out_flow_data = dispatch_with_dst_indices_1d(
+            #                 flow_data, route_indices, self.fixed_capacity, False, score
+            #             )
+            #         else:
+            #             fused_out_flow_data = dispatch_with_dst_indices_1d(
+            #                 flow_data, route_indices, self.fixed_capacity, False
+            #             )
+            #         out_flow_data = fused_out_flow_data
+            #         out_flow = init_proto_tensor(
+            #             out_flow_data,
+            #             flow_tag_stack,
+            #             flow_load_stack,
+            #             flow_extra_attr_stack_dict,
+            #         )
+            #         out_flow.pack(out_flow_tag, flow_load)
+            #     else:
+                    # out_flow = init_proto_tensor(
+                    #     torch.zeros(
+                    #         0,
+                    #         *route_shape,
+                    #         dtype=flow_data.dtype,
+                    #         device=flow_data.device,
+                    #     ),
+                    #     flow_tag_stack,
+                    #     flow_load_stack,
+                    #     flow_extra_attr_stack_dict,
+                    # )
+                    # out_flow.pack(
+                    #     torch.zeros(0, 1, dtype=torch.int64, device=flow_data.device),
+                    #     flow_load,
+                    # )
+                # out_flows.append(out_flow)
+            all_out_flows.append(out_flows)
         return all_out_flows
 
-    def pack_invalid_flow(self, in_flow):
+    # def pack_invalid_flow(self, in_flow):
 
-        from ...runtime.proto_tensor import (
-            ProtoTensor,
-        )  # we need to keep ProtoTensor updated
+    #     from ...runtime.proto_tensor import (
+    #         ProtoTensor,
+    #     )  # we need to keep ProtoTensor updated
 
-        if isinstance(in_flow, ProtoTensor):
-            pass
+    #     if isinstance(in_flow, ProtoTensor):
+    #         pass
 
-        elif isinstance(in_flow, torch.Tensor):
-            in_flow = init_proto_tensor(in_flow)
+    #     elif isinstance(in_flow, torch.Tensor):
+    #         in_flow = init_proto_tensor(in_flow)
 
-        elif isinstance(in_flow, (List, Tuple)):
-            in_flow = type(in_flow)([self.pack_invalid_flow(f) for f in in_flow])
+    #     elif isinstance(in_flow, (List, Tuple)):
+    #         in_flow = type(in_flow)([self.pack_invalid_flow(f) for f in in_flow])
 
-        return in_flow
+    #     return in_flow
 
-    def remove_needless_pack(self, out_flow):
-        return out_flow
+    # def remove_needless_pack(self, out_flow):
+    #     return out_flow
 
 
 @register_fabric("fused_combine")
