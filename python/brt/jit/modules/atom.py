@@ -2,14 +2,14 @@
 # Licensed under the MIT license.
 
 from abc import abstractmethod
-from typing import List, Tuple, Union, Literal, Any, Optional
+from typing import List, Tuple, Union, Literal, Any, Optional, Type, Dict
 
 import torch
 from torch import autograd
 from torch import nn
 
 from brt.runtime import log
-from brt.jit.modules.base import ModuleBase, AtomModuleInputType
+from brt.jit.modules.base import ModuleBase, JitModuleBase, AtomModuleInputType
 from brt.jit.codegen.module import ModuleKernel
 
 logger = log.get_logger(__file__)
@@ -91,3 +91,18 @@ class AtomModule(ModuleBase):
     @abstractmethod
     def ismodule(cls, module: nn.Module) -> bool:
         raise NotImplementedError()
+
+class JitAtomModule(JitModuleBase):
+    def __init__(
+        self,
+        function: autograd.Function,
+        module_name: str = "BRT.AtomModule",
+        extra_repr: str = "",
+        parameters: Dict[str, torch.Tensor] = {},
+    ):
+        super().__init__(function, module_name, extra_repr, parameters)
+        self._factory_cls = AtomModule
+    
+    @abstractmethod
+    def forward(self):
+        pass
