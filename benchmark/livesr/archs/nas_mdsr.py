@@ -29,10 +29,11 @@ class Conv_ReLU_Block(nn.Module):
 
 class ResBlock(nn.Module):
     def __init__(
-        self, nFeat, bias=True, bn=False, act=nn.ReLU(True), res_scale=1, kernel_size=3
+        self, nFeat, bias=True, bn=False, act=None, res_scale=1, kernel_size=3
     ):
 
         super(ResBlock, self).__init__()
+
         modules_body = []
         for i in range(2):
             modules_body.append(
@@ -48,6 +49,8 @@ class ResBlock(nn.Module):
             if bn:
                 modules_body.append(nn.BatchNorm2d(nFeat))
             if i == 0:
+                if act is None:
+                    act = nn.ReLU(True)
                 modules_body.append(act)
 
         self.body = nn.Sequential(*modules_body)
@@ -305,9 +308,12 @@ class SingleNetwork(nn.Module):
         scale,
         output_filter,
         bias=True,
-        act=nn.ReLU(True),
+        act=None,
     ):
         super(SingleNetwork, self).__init__()
+        if act is None:
+            act = nn.ReLU(True)
+
         self.num_block = num_block
         self.num_feature = num_feature
         self.num_channel = num_channel
@@ -340,7 +346,7 @@ class SingleNetwork(nn.Module):
 
         self.body = nn.ModuleList()
         for _ in range(self.num_block):
-            modules_body = [ResBlock(self.num_feature, bias=bias, act=act)]
+            modules_body = [ResBlock(self.num_feature, bias=bias)]
             self.body.append(nn.Sequential(*modules_body))
 
         body_end = []
