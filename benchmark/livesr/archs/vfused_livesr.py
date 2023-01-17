@@ -27,7 +27,7 @@ class vFusedLiveSR(nn.Module):
         self.subnet_num_block = raw.subnet_num_block
         self.num_feature = raw.num_feature
         self.classifier = raw.classifier
-        self.scatter = ScatterRouter()
+        self.scatter = ScatterRouter(capturing=True, capture_mode="max")
         self.subnets = nn.ModuleList(
             vFusedNAS(net, bs) for net, bs in zip(raw.subnets, subnet_bs)
         )
