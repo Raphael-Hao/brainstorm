@@ -21,7 +21,7 @@ ALL_SUBNET_BS = [
     [19, 25, 18, 36],
 ]
 ALL_NUM_CHANNELS = [8, 12, 16, 20]
-SUBNET_NUM_BLOCK = 80
+SUBNET_NUM_BLOCK = 1
 
 logger = logging.getLogger("benchmark")
 logger.setLevel(logging.DEBUG)
@@ -68,10 +68,10 @@ def build_module(subnet_bs, num_feature):
         logger.warning(str(e))
 
 
-# for subnet_bs in ALL_SUBNET_BS:
-#     build_module(subnet_bs, ALL_NUM_CHANNELS[0])
-for num_channels in [20]:
-# for num_channels in ALL_NUM_CHANNELS[1:]:
+for subnet_bs in ALL_SUBNET_BS:
+    build_module(subnet_bs, ALL_NUM_CHANNELS[0])
+# for num_channels in [20]:
+for num_channels in ALL_NUM_CHANNELS[1:]:
     build_module(ALL_SUBNET_BS[0], num_channels)
 
 dataloader = get_dataloader(DEFAULT_DATASET)

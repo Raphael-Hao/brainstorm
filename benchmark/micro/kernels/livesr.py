@@ -201,15 +201,16 @@ def update_db(subnet_bs, num_channels):
             module_function = None
         if module_function is None:
             try:
-                tvm_tuner.insert_top_n_netlet_to_storage("fastest")
+                # tvm_tuner.insert_top_n_netlet_to_storage("fastest", top=1)
+                tvm_tuner.insert_netlet_to_storage("fastest")
                 print("     insert kernel into db")
             except:
                 print(f"     can't find kernel")
 
 if __name__ == "__main__":
     for subnet_bs in all_subnet_bs:
-        # update_db(subnet_bs, all_num_channels[0])
-        tune(subnet_bs, all_num_channels[0])
+        update_db(subnet_bs, all_num_channels[0])
+        # tune(subnet_bs, all_num_channels[0])
     for num_channels in all_num_channels:
-        # update_db(all_subnet_bs[0], num_channels)
-        tune(all_subnet_bs[0], num_channels)
+        update_db(all_subnet_bs[0], num_channels)
+        # tune(all_subnet_bs[0], num_channels)

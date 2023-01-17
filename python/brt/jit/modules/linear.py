@@ -6,7 +6,7 @@ from typing import List, Tuple, Union
 import torch
 
 from brt.runtime import log
-from brt.jit.modules.atom import AtomModule
+from brt.jit.modules.atom import AtomModule, AtomModuleInputType
 from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
 
 logger = log.get_logger(__file__)
@@ -26,7 +26,7 @@ class LinearModule(AtomModule):
 
     def _make_global_kernel(
         self,
-        sample_inputs: torch.Tensor,
+        sample_inputs: AtomModuleInputType,
         method: str,
         objective_func: str = "fastest",
         rank: int = 1,
