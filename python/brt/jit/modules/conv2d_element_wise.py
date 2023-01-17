@@ -9,7 +9,7 @@ import torch
 from torch import nn, fx, autograd
 
 from brt.runtime import log
-from brt.jit.modules.atom import AtomModule, JitAtomModule
+from brt.jit.modules.atom import AtomModule, JitAtomModule, AtomModuleInputType
 from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
 
 logger = log.get_logger(__file__)
@@ -163,13 +163,16 @@ class Conv2dElementWiseModule(AtomModule):
 
     def _make_global_kernel(
         self,
-        sample_inputs: torch.Tensor,
+        sample_inputs: AtomModuleInputType,
         method: str,
         objective_func: str = "fastest",
         rank: int = 1,
     ) -> ModuleKernel:
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
+        if isinstance(sample_inputs, torch.Tensor):
+            sample_inputs = [sample_inputs]
+
         conv2d = self._conv2d
         parameters = {}
         parameters["in_channels"] = conv2d.in_channels
@@ -180,8 +183,10 @@ class Conv2dElementWiseModule(AtomModule):
         parameters["dilation"] = conv2d.dilation
         parameters["groups"] = conv2d.groups
 
-        sample_output = self.module(sample_inputs)
-        input_infos = {"input_0": list(sample_inputs.shape)}
+        sample_output = self.module(*sample_inputs)
+        input_infos = {}
+        for i, input in enumerate(sample_inputs):
+            input_infos[f"input_{i}"] = list(input.shape)
         output_infos = {"output_0": list(sample_output.shape)}
         logger.debug(
             f"""
@@ -202,7 +207,7 @@ parameters: {parameters}
 
     def make_module(
         self,
-        sample_inputs: torch.Tensor,
+        sample_inputs: AtomModuleInputType,
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> nn.Module:

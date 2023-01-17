@@ -27,8 +27,8 @@ class LiveSR(nn.Module):
         self.n_subnets = n_subnets
         self.subnet_num_block = subnet_num_block
         self.num_feature = num_feature
-        # self.classifier = Classifier(n_subnets).eval()
-        self.classifier = TunedClassifier(n_subnets, 88).eval()
+        self.classifier = Classifier(n_subnets).eval()
+        # self.classifier = TunedClassifier(n_subnets, 88).eval()
         self.scatter = ScatterRouter(capturing=True, capture_mode="max")
         self.subnets = nn.ModuleList(
             NAS_MDSR(
@@ -72,9 +72,9 @@ class Classifier(nn.Module):
         hook = self.resnet._modules.get("avgpool").register_forward_hook(copy_output)
         self.resnet(x)
         hook.remove()
-        labels = self.kmeans.predict(output.cpu())
-        labels = torch.from_numpy(labels).to(dtype=torch.long, device=x.device)
-        return labels
+        distacne = self.kmeans.transform(output.cpu())
+        t_distacne = 1.0 / torch.from_numpy(distacne).to(device=x.device)
+        return t_distacne
 
 
 @register_leaf_node

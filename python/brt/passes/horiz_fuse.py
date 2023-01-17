@@ -1,22 +1,21 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from brt.passes.base import PassBase, register_pass
-from torch.fx.graph import Graph
-import torch.nn as nn
-from ast import arg
-from hashlib import new
-from turtle import pd
-from typing import Union
 import operator
-import torch
-from torch.fx import GraphModule
+
 import numpy as np
-from brt.passes.base import PassBase, register_pass
-from brt.router import ScatterRouter
+
+import torch
+from torch.fx import GraphModule, Graph
+import torch.nn as nn
+
+import brt
+from brt.router import ScatterRouter, GatherRouter
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
-import brt.passes.fuse_util
+
+from brt.passes.base import PassBase, register_pass
+# import brt.passes.fuse_util
 
 
 @register_pass("horiz_fuse")

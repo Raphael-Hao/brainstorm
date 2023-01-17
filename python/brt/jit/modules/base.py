@@ -112,6 +112,7 @@ class JitModuleBase(nn.Module):
         extra_repr: str = "",
         parameters: Dict[str, torch.Tensor] = {},
     ):
+        super().__init__()
         self.function = function
         self._factory_cls = ModuleBase
         self._module_name = module_name

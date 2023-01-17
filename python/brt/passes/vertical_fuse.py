@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch import fx
 from torch.fx.immutable_collections import immutable_list, immutable_dict
 
+from brt.runtime import log
 from brt.jit import make_jit_module
 from brt.jit.modules.factory import JitModuleFactory
 from brt.router import ScatterRouter
@@ -22,6 +23,7 @@ from brt.trace.graph import symbolic_trace, GraphModule, Graph, Node
 # import brt.passes.fuse_util
 from brt.passes.base import PassBase, register_pass
 
+logger = log.get_logger(__file__)
 
 def _build_sub_graph(
     graph: Graph, nodes: List[Node], outputs: Union[List[Node], Node, int, None] = -1
@@ -65,7 +67,10 @@ def _build_sub_graph(
             outputs = [outputs]
         outputs = tuple(node_remap[o] for o in outputs)
         new_graph.create_node(
-            op="output", target="output", args=outputs, name="output",
+            op="output",
+            target="output",
+            args=outputs,
+            name="output",
         )
     return new_graph
 
@@ -145,15 +150,26 @@ class VerticalFusePass(PassBase):
                     router: ScatterRouter = subm
                     if (
                         router.capturing is True
+                        and "dispatch" in router.captured_fabric_type
                         and router.capture_mode == "max"
                         and all(rl == "1d" for rl in router.fabric.route_logics)
                     ):
-                        if router.fabric_type == "dispatch":
-                            fused_fabric_kwargs = router.fabric_kwargs.update(
-                                {"fixed_capacity": router.load_history}
+                        if (
+                            router.fabric_type == "dispatch"
+                            and router.load_history is not None
+                        ):
+                            router.fabric_type = "_fused_dispatch"
+                            router.fabric_kwargs.update(
+                                {
+                                    "fixed_capacity": torch.from_numpy(
+                                        router.load_history
+                                    )
+                                    .to(torch.int32)
+                                    .cuda()
+                                }
                             )
                             router.fabric = make_fabric(
-                                "_fused_dispatch", fused_fabric_kwargs
+                                "_fused_dispatch", router.fabric_kwargs
                             )
         if isinstance(m, GraphModule) and m.graph.is_shape_tracked:
             m.graph.lint()
@@ -163,6 +179,7 @@ class VerticalFusePass(PassBase):
             self.graph_mod = symbolic_trace(
                 m, tracing_shape=True, sample_inputs=sample_inputs, **tracer_kwargs
             )
+        logger.info(self.graph_mod.graph)
 
     def run_on_graph(self):
         origin_graph = self.graph_mod.graph
@@ -174,7 +191,7 @@ class VerticalFusePass(PassBase):
         for node in origin_graph.nodes:
             # May add `visited` field to node
             if getattr(node, "fused", False):
-                print(f"[DEBUG] node `{node.name}` already fused")
+                logger.debug(f"node `{node.name}` already fused")
                 continue
             fusing_nodes = []
             if (
@@ -184,31 +201,36 @@ class VerticalFusePass(PassBase):
                 while True:
                     fusing_nodes.append(cur_node)
                     if getattr(cur_node, "visited", False):
-                        print(
-                            f"[WARNING] node `{cur_node.name}` already visit, something wrong?"
+                        logger.debug(f"node `{cur_node.name}` already visit"
                         )
                         break
                     if self.is_router_node(cur_node):
-                        print(f"[DEBUG] router node `{cur_node.name}` found")
+                        logger.debug(f"router node `{cur_node.name}` found")
                         break
                     if not cur_node.is_fixed_inout:
-                        print(f"[DEBUG] node `{cur_node.name}` is not fixed")
+                        logger.debug(f"node `{cur_node.name}` is not fixed")
+                        break
+                    if not (
+                        self.is_get_attr_node(cur_node)
+                        or isinstance(cur_node.outshape, torch.Size)
+                    ):
+                        logger.debug(f"node `{cur_node.name}` has >1 outputs")
                         break
                     if len(cur_node.users) > 1:
-                        print(
-                            f"[DEBUG] node `{cur_node.name}` has {len(cur_node.users)} users"
+                        logger.debug(
+                            f"node `{cur_node.name}` has {len(cur_node.users)} users"
                         )
                         break
                     if len(cur_node.kwargs) != 0:
-                        print(
-                            f"[DEBUG] node `{cur_node.name}` has kwargs {cur_node.kwargs}"
+                        logger.debug(
+                            f"node `{cur_node.name}` has kwargs {cur_node.kwargs}"
                         )
                         break
                     try:
                         for arg in cur_node.args:
                             if isinstance(arg, (immutable_list, immutable_dict)):
-                                print(
-                                    f"[DEBUG] currently not support fuse node with complex args"
+                                logger.debug(
+                                    f"currently not support fuse node with complex args"
                                 )
                                 raise RuntimeError("Node with complex args")
                     except RuntimeError:
@@ -217,20 +239,20 @@ class VerticalFusePass(PassBase):
                     try:
                         fusing_graph.lint()
                     except RuntimeError as e:
-                        print(f"[DEBUG] graph lint failed")
-                        print(f"[DEBUG] \\\\\\\\ {e}")
+                        logger.debug(f"graph lint failed")
+                        logger.debug(f"\\\\\\\\ {e}")
                         break
                     self.graph_mod.graph = fusing_graph
                     if fusing_graph.eliminate_dead_code():
-                        print(f"[DEBUG] graph has dead code")
+                        logger.debug(f"graph has dead code")
                         break
                     self.graph_mod.recompile()
                     try:
                         JitModuleFactory.produce(self.graph_mod)
                     except ValueError:
-                        print(f"[DEBUG] find jit module failed")
+                        logger.debug(f"finding jit module failed")
                         break
-                    print(f"[DEBUG] fuse node `{cur_node.name}`")
+                    logger.debug(f"fuse node `{cur_node.name}`")
                     (cur_node,) = cur_node.users
             fusable_nodes = fusing_nodes[:-1]
             if len(fusable_nodes) >= 1:
@@ -245,12 +267,11 @@ class VerticalFusePass(PassBase):
                 node.fused = False
 
         # Fuse nodes and add them into graph
-        print("[DEBUG] start fusing")
+        logger.debug("start fusing")
         new_graph = Graph()
         node_remap = {}
         for node in origin_graph.nodes:
             if getattr(node, "inserted", False):
-                raise RuntimeError("Anything wrong?")
                 continue
             if not node.fused:
                 node_remap[node] = new_graph.node_copy(node, lambda n: node_remap[n])
@@ -268,9 +289,7 @@ class VerticalFusePass(PassBase):
                                     node_remap[arg] = new_graph.node_copy(
                                         arg, lambda n: node_remap[n]
                                     )
-                                if (
-                                    node_remap[arg] not in fused_node_args
-                                ):
+                                if node_remap[arg] not in fused_node_args:
                                     fused_node_args.append(node_remap[arg])
                                     fused_node_args_sample_inputs.append(
                                         Graph._get_output_from_node_or_list(
@@ -300,18 +319,37 @@ class VerticalFusePass(PassBase):
                 self.graph_mod.graph = fused_graph
                 self.graph_mod.recompile()
                 # TODO: make module
-                fused_jit_module = make_jit_module(
-                    modules=self.graph_mod,
-                    # TODO
-                    sample_inputs=fused_node_args_sample_inputs,
-                )
+                try:
+                    fused_jit_module = make_jit_module(
+                        modules=self.graph_mod,
+                        sample_inputs=fused_node_args_sample_inputs,
+                    )
+                except Exception as e:
+                    logger.debug(e)
+                    logger.info(
+                        f"Fail to make jit module for nodes {[n.name for n in node.fuse_parteners]}. Is this kernel already tuned?"
+                    )
+                    for n in node.fuse_parteners:
+                        if n not in node_remap:
+                            node_remap[n] = new_graph.node_copy(
+                                n, lambda n: node_remap[n]
+                            )
+                    continue
+
                 fused_module_target = "fused:" + "&".join(
                     fpn.name for fpn in node.fuse_parteners
                 )
                 self.graph_mod.add_submodule(fused_module_target, fused_jit_module)
-                # fused_node = _fuse_nodes_into(fusing_nodes, fused_jit_module._get_name(), working_graph)
-                fused_node = new_graph.call_module(
-                    module_name=fused_module_target, args=tuple(fused_node_args),
+                fused_node = new_graph.create_node(
+                    op="call_module",
+                    target=fused_module_target,
+                    args=tuple(fused_node_args),
+                    name=fused_module_target,
+                    is_fixed_inout=True,
+                    inshape=Graph._get_shape_from_tensor_or_list(
+                        fused_node_args_sample_inputs
+                    ),
+                    outshape=node.fuse_parteners[-1].outshape,
                 )
                 for fpn in node.fuse_parteners:
                     node_remap[fpn] = fused_node

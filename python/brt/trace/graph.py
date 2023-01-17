@@ -12,12 +12,15 @@ from torch.fx.node import Target, Argument, map_arg
 from torch.fx.graph import magic_methods
 
 from brt.router import is_router, RouterBase, ScatterRouter
+from brt.runtime import log
 
 from brt.trace.node import Node
 from brt.trace.leaf_node import is_leaf_node
 
 __all__ = ["symbolic_trace", "GraphTracer", "GraphModule", "Graph"]
 
+
+logger = log.get_logger(__file__)
 
 class GraphModule(fx.GraphModule):
     pass
@@ -201,15 +204,16 @@ class GraphTracer(fx.Tracer):
         """
         fx_graph = super().trace(root, concrete_args)
         graph = Graph(fx_graph.owning_module, fx_graph._tracer_cls)
-        graph.graph_copy(fx_graph, {})
-        if not tracing_shape:
-            return graph
-        else:
-            return self.trace_shape(graph, sample_inputs, fixed_inputs)
+        output_vals =  graph.graph_copy(fx_graph, {}, return_output_node=True)
+        output_val, old_output_val = output_vals
+        graph.output(output_val, type_expr=getattr(old_output_val, 'type', None))
+        if tracing_shape:
+            graph = self.trace_shape(graph, sample_inputs, fixed_inputs)
+        return graph
 
     def trace_shape(
         self, graph: Graph, sample_inputs: Dict[str, Tensor], fixed_inputs: bool
-    ):
+    )-> Graph:
         if sample_inputs is None:
             sample_inputs = {}
 
