@@ -221,6 +221,7 @@ class GraphTracer(fx.Tracer):
         root = self.root
         router_to_node = {}
         fixed_router_info = {}
+        all_hooks = []
         for node in graph.nodes:
             assert isinstance(node, Node), type(node)
             if node.op == "call_module" and isinstance(
@@ -228,8 +229,7 @@ class GraphTracer(fx.Tracer):
             ):
                 router: ScatterRouter = root.get_submodule(node.target)
                 if (
-                    router.capturing is True
-                    and router.capture_mode == "max"
+                    router.capture_mode == "max"
                     and router.fabric_type == "_fused_dispatch"
                     and all(rl == "1d" for rl in router.fabric.route_logics)
                 ):
@@ -245,11 +245,11 @@ class GraphTracer(fx.Tracer):
                             1
                         ] = graph._get_shape_from_tensor_or_list(output)
 
-                    router.register_forward_hook(get_shape_hook)
+                    all_hooks.append(router.register_forward_hook(get_shape_hook))
                 continue
         root(**sample_inputs)
-        for router in router_to_node:
-            router.capturing = True
+        for hook in all_hooks:
+            hook.remove()
         for node, (inshape, outshape) in fixed_router_info.items():
             assert isinstance(node, Node), type(node)
             # TODO
@@ -259,7 +259,8 @@ class GraphTracer(fx.Tracer):
         for node in graph.nodes:
             assert isinstance(node, Node), type(node)
             # TODO:
-            assert not node.kwargs, "Currently not support nodes with kwargs"
+            if node.kwargs:
+                logger.info(f"Currently not support nodes with kwargs (`{node.name}`), the info of kwargs won't be traced")
             if node.op == "placeholder":
                 if not fixed_inputs:
                     continue
@@ -283,17 +284,19 @@ class GraphTracer(fx.Tracer):
                 ):
                     # Assert that arg is either a node or a constant
                     node_inputs = graph._get_output_from_node_or_list(node.args)
+                    node_kw_inputs = {key: graph._get_output_from_node_or_list(kwarg) for key, kwarg in node.kwargs.items()}
                 else:
                     # Can't propagate shape
                     continue
                 if node.op == "call_method":
-                    func = getattr(root, node.target)
+
+                    func = getattr(torch if isinstance(node.args[0], Node) else type(node.args[0]), node.target)
                 elif node.op == "call_module":
                     func = root.get_submodule(node.target).forward
                 elif node.op == "call_function":
                     func = node.target
                 try:
-                    node_outputs = func(*node_inputs)
+                    node_outputs = func(*node_inputs, **node_kw_inputs)
                 except:
                     continue
                 inshape = graph._get_out_shape_from_node_or_list(node.args)
@@ -332,6 +335,15 @@ class GraphModule(fx.GraphModule):
         class_name: str = "GraphModule",
     ):
         super().__init__(root, graph, class_name)
+
+    @property
+    def graph(self) -> Graph:
+        return super().graph
+    
+    @graph.setter
+    def graph(self, g : Graph) -> None:
+        fx.GraphModule.graph.fset(self, g)
+
 
 
 def symbolic_trace(

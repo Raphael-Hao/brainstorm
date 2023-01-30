@@ -57,10 +57,11 @@ class ResBlock(nn.Module):
         self.res_scale = res_scale
 
     def forward(self, x):
-        if self.res_scale != 1:
-            res = self.body(x).mul(self.res_scale)
-        else:
-            res = self.body(x)
+        # if self.res_scale != 1:
+        #     res = self.body(x).mul(self.res_scale)
+        # else:
+        #     res = self.body(x)
+        res = torch.mul(self.body(x), (self.res_scale))
         res += x
 
         return res

@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import List, Tuple, Union, Literal, Callable, Dict
+from typing import List, Tuple, Union, Literal, Callable, Type, Dict
 
 import torch
 from torch import nn
@@ -27,7 +27,7 @@ class FusedModule(ModuleBase):
 class JitFusedModule(JitModuleBase):
     def __init__(
         self,
-        function: autograd.Function,
+        function: Type[autograd.Function],
         module_name: str = "BRT.FusedModule",
         extra_repr: str = "",
         parameters: Dict[str, torch.Tensor] = ...,

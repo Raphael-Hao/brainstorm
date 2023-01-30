@@ -1,5 +1,8 @@
 # Copyright (c) 2023 by Microsoft Corporation.
 # Licensed under the MIT license.
+
+from __future__ import annotations
+
 from typing import (
     TYPE_CHECKING,
     Union,
@@ -24,7 +27,7 @@ if TYPE_CHECKING:
 class Node(fx.Node):
     def __init__(
         self,
-        graph: "Graph",
+        graph: Graph,
         name: str,
         op: str,
         target: Target,
@@ -72,5 +75,7 @@ class Node(fx.Node):
         placeholder_names: Optional[List[str]] = None,
         maybe_return_typename: Optional[List[str]] = None,
     ) -> Optional[str]:
-        super_name = super().format_node(placeholder_names, maybe_return_typename)
-        return f"{super_name} | {'fixed' if self.is_fixed_inout else 'unfixed'}"
+        name = super().format_node(placeholder_names, maybe_return_typename)
+        if self.graph is not None and self.graph.is_shape_tracked:
+            name += f" | {'fixed' if self.is_fixed_inout else 'unfixed'}"
+        return name

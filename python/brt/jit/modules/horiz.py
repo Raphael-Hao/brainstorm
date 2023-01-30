@@ -1,13 +1,23 @@
+from typing import List, Tuple, Union, Literal, Callable, Type, Any, Dict
+
 import itertools
-from typing import List, Tuple, Union, Literal, Callable, Any, Dict
 
 import torch
 from torch import nn
 from torch import autograd
+from torch.overrides import (
+    handle_torch_function,
+    wrap_torch_function,
+    has_torch_function,
+)
 
 from brt.jit.codegen.horiz_fused import HorizFusedKernel
 from brt.jit.modules.base import FuseModuleInputType
 from brt.jit.modules.fused import FusedModule, JitFusedModule
+
+
+# Note: The `sampe_inputs` is a list of each candidates' inputs, but the runtime
+# inputs of the module's forward function should be like the chain of the `sampe_inputs`
 
 
 class HorizFusedModule(FusedModule):
@@ -49,6 +59,10 @@ class HorizFusedModule(FusedModule):
             input_arg_indices,
             output_arg_indices,
         ) = self._extract_arg_infos("forward")
+        input_arg_indices_chain = list(itertools.chain.from_iterable(input_arg_indices))
+        output_arg_indices_chain = list(
+            itertools.chain.from_iterable(output_arg_indices)
+        )
         out_data = [
             torch.empty(shp).to("cuda")
             for shp in self._get_output_shape("forward", sample_inputs)
@@ -58,10 +72,19 @@ class HorizFusedModule(FusedModule):
             @staticmethod
             def forward(ctx: Any, *inputs):
                 inputs = list(inputs)
-                for i, out_index in enumerate(output_arg_indices):
+                for i, out_index in enumerate(output_arg_indices_chain):
                     inputs.insert(out_index, out_data[i])
                 jit_kernel(*inputs)
-                outputs = [inputs[i] for i in output_arg_indices]
+                outputs = []
+                for branch_input_indices, branch_output_indices in zip(
+                    input_arg_indices, output_arg_indices
+                ):
+                    branch_inputs = [inputs[bii] for bii in branch_input_indices]
+                    branch_outputs = [inputs[boi] for boi in branch_output_indices]
+                    if has_torch_function(branch_inputs):
+                        packed_branch_outputs = handle_torch_function(lambda *x: branch_outputs, branch_inputs, *branch_inputs)
+                        outputs.extend(packed_branch_outputs)
+                # outputs = [inputs[i] for i in output_arg_indices_chain]
                 return tuple(outputs)
 
             @staticmethod
@@ -94,8 +117,11 @@ class HorizFusedModule(FusedModule):
 
         module_input_arg_indices = [
             in_index
-            - sum(1 for out_index in output_arg_indices if out_index < in_index)
-            for in_index in input_arg_indices
+            - [
+                out_index < in_index
+                for out_index in itertools.chain.from_iterable(output_arg_indices)
+            ].count(True)
+            for in_index in itertools.chain.from_iterable(input_arg_indices)
         ]
 
         submodule_params_and_buffs = list(
@@ -115,11 +141,16 @@ class HorizFusedModule(FusedModule):
         )
 
     def _extract_shared_arg_infos(
-        self, method: str, sample_inputs: FuseModuleInputType,
+        self,
+        method: str,
+        sample_inputs: FuseModuleInputType,
     ) -> Tuple[List, List]:
         raise NotImplementedError()
 
-    def _extract_arg_infos(self, method: str,) -> Tuple[int, int, List[int], List[int]]:
+    def _extract_arg_infos(
+        self,
+        method: str,
+    ) -> Tuple[int, int, List[List[int]], List[List[int]]]:
         input_arg_num = 0
         total_arg_num = 0
         input_arg_indices = []
@@ -131,10 +162,10 @@ class HorizFusedModule(FusedModule):
                 sub_input_arg_indices,
                 sub_output_arg_indices,
             ) = jsm._extract_arg_infos(method)
-            output_arg_indices.extend(
+            output_arg_indices.append(
                 [i + total_arg_num for i in sub_output_arg_indices]
             )
-            input_arg_indices.extend([i + total_arg_num for i in sub_input_arg_indices])
+            input_arg_indices.append([i + total_arg_num for i in sub_input_arg_indices])
             total_arg_num += sub_total_arg_num
             input_arg_num += sub_input_arg_num
         return (
@@ -165,7 +196,7 @@ class JitHorizFusedModule(JitFusedModule):
     def __init__(
         self,
         module_input_arg_indices: List[int],
-        function: autograd.Function,
+        function: Type[autograd.Function],
         module_name: str = "BRT.HorizFusedModule",
         extra_repr: str = "",
         parameters: Dict[str, torch.Tensor] = ...,
