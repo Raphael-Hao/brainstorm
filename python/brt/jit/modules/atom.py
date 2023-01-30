@@ -7,10 +7,12 @@ from typing import List, Tuple, Union, Literal, Any, Optional, Type, Dict
 import torch
 from torch import autograd
 from torch import nn
+from torch.overrides import handle_torch_function, wrap_torch_function, has_torch_function
 
 from brt.runtime import log
 from brt.jit.modules.base import ModuleBase, JitModuleBase, AtomModuleInputType
 from brt.jit.codegen.module import ModuleKernel
+from brt.runtime import ProtoTensor
 
 logger = log.get_logger(__file__)
 
@@ -37,6 +39,7 @@ class AtomModule(ModuleBase):
             jit_kernel = self.make_kernel(
                 sample_inputs, "forward", objective_func, rank
             )
+            # wrapped_jit_kernel = wrap_torch_function(lambda *x: x)(jit_kernel)
             (
                 input_arg_num,
                 total_arg_num,
@@ -50,11 +53,12 @@ class AtomModule(ModuleBase):
 
             class JitFunction(autograd.Function):
                 @staticmethod
+                @wrap_torch_function(lambda *x: x)
                 def forward(ctx: Any, *inputs):
                     inputs = list(inputs)
-                    # in_data = [inputs[i] for i in input_arg_indices]
                     for i, out_index in enumerate(output_arg_indices):
                         inputs.insert(out_index, out_data[i])
+                    # init proto tensor
                     jit_kernel(*inputs)
                     outputs = [inputs[i] for i in output_arg_indices]
                     return tuple(outputs)
@@ -95,7 +99,7 @@ class AtomModule(ModuleBase):
 class JitAtomModule(JitModuleBase):
     def __init__(
         self,
-        function: autograd.Function,
+        function: Type[autograd.Function],
         module_name: str = "BRT.AtomModule",
         extra_repr: str = "",
         parameters: Dict[str, torch.Tensor] = {},

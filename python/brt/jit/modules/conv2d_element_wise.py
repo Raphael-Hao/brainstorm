@@ -289,7 +289,7 @@ parameters: {parameters}
 class JitConv2dElemwiseModule(JitAtomModule):
     def __init__(
         self,
-        function: autograd.Function,
+        function: Type[autograd.Function],
         module_name: str = "BRT.Conv2dElemwiseModule",
         extra_repr: str = "",
         parameters: Dict[str, torch.Tensor] = ...,
