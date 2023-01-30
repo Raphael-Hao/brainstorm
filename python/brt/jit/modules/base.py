@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Literal, Callable, Dict
+from typing import List, Tuple, Union, Literal, Callable, Type, Dict
 
 import torch
 from torch import nn
@@ -11,6 +11,7 @@ from torch import autograd
 from brt.runtime import log, BRT_KERNEL_TEMPLATE_PATH
 from brt.jit.codegen.cuda import GlobalKernel
 from brt.jit.compiler import CUDACompiler
+from brt.trace.leaf_node import register_leaf_node
 
 logger = log.get_logger(__file__)
 
@@ -104,10 +105,11 @@ class ModuleBase(ABC):
         raise NotImplementedError()
 
 
+@register_leaf_node
 class JitModuleBase(nn.Module):
     def __init__(
         self,
-        function: autograd.Function,
+        function: Type[autograd.Function],
         module_name: str = "BRT.Module",
         extra_repr: str = "",
         parameters: Dict[str, torch.Tensor] = {},

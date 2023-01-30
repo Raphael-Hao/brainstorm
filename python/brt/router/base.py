@@ -242,6 +242,9 @@ class RouterBase(nn.Module):
 
         return True
 
+    def extra_repr(self) -> str:
+        return f"capturing = {self.capturing}, capture_mode = {self.capture_mode}"
+
     def placement(self, route_indices, loads, capacities):
         route_indices = route_indices[:, self.placement_index]
         loads = loads[:, self.placement_index]
