@@ -1,5 +1,7 @@
 import sys
-sys.path.append("/home/zhehan/tvm")
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from transformers.utils import fx as t_fx
 
@@ -13,7 +15,6 @@ import graphviz
 from mono_infer import MonoTensorInference
 from sympy import *
 from symbolic.symbolic_tensor import SymbolicTensor, symbolify, _simplify_symbol
-import os
 
 
 

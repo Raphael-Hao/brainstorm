@@ -24,6 +24,9 @@ def torch_embedding(args, kwargs, mod, target):
     return out
 
 def torch_layer_norm(args, kwargs, mod, target):
+    '''
+    LayerNorm. Currently, only support norm on the last dimension
+    '''
     input = args[0]
     out = SymbolicTensor(target, input.shape)
     assert input.shape[-1] == mod.normalized_shape[0]
