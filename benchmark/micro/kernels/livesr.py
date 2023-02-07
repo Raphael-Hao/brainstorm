@@ -76,7 +76,7 @@ def tune(subnet_bs, num_channels):
             operator,
         ) = parse_params(conv_param)
 
-        if module_name == "Conv2dBiasMulAdd":
+        if module_name == "Conv2dBiasAdd":
             operator = Conv2dMulAdd(
                 operator,
                 scale=1,
@@ -167,7 +167,7 @@ def update_db(subnet_bs, num_channels):
             operator,
         ) = parse_params(conv_param)
 
-        if module_name == "Conv2dBiasMulAdd":
+        if module_name == "Conv2dBiasAdd":
             operator = Conv2dMulAdd(
                 operator,
                 scale=1,
