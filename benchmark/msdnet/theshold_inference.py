@@ -186,7 +186,6 @@ def threshold_dynamic_evaluate(
                     reorder_operator_pass.run_on_graph()
                     new_backbone = reorder_operator_pass.finalize()
                     timer.execute(lambda: new_backbone(input_var), "reorder_operator")
-                    output_dce = new_backbone(input_var)
                     reorder_operatorPass_time.append(timer.avg)
                     graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
                     with open("dce_trans.svg", "wb") as f:
@@ -378,6 +377,8 @@ def threshold_dynamic_evaluate(
                     )
                     eliminate_pass.run_on_graph()
                     new_dce_backbone = eliminate_pass.finalize()
+                    print("########## after DeadPathEliminatePass")
+                    print(new_dce_backbone.graph)
                     graph_drawer = FxGraphDrawer(new_dce_backbone, "new_backbone")
                     with open("dce_backbone_const.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
@@ -391,6 +392,8 @@ def threshold_dynamic_evaluate(
                     )
                     constant_propagation_pass.run_on_graph()
                     new_backbone_const = constant_propagation_pass.finalize()
+                    print("########## after ConstantPropagationPass")
+                    print(new_backbone_const.graph)
                     graph_drawer = FxGraphDrawer(new_backbone_const, "new_backbone")
                     with open("dce_const_pro_backbone.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
@@ -404,6 +407,8 @@ def threshold_dynamic_evaluate(
                     )
                     reorder_operator_pass.run_on_graph()
                     new_backbone = reorder_operator_pass.finalize()
+                    print("########## after OperatorReorderPass")
+                    print(new_backbone.graph)
                     timer.execute(lambda: new_backbone(input_var), "reorder_operator")
                     output_reorder = new_backbone(input_var)
                     reorder_operatorPass_time.append(timer.avg)

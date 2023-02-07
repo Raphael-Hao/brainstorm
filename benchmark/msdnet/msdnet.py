@@ -539,6 +539,7 @@ class MSDNet(nn.Module):
                         "transform": [False, False, False, False, False],
                     },
                     capturing=True,
+                    capture_mode="max",
                 )
             )
         self.final_gather = GatherRouter(
@@ -547,6 +548,8 @@ class MSDNet(nn.Module):
             # fabric_kwargs={"sparse": True}
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
+        if "combine" not in self.final_gather.captured_fabric_type:
+            self.final_gather.captured_fabric_type.append("combine")
 
     def forward(self, x, _is_measure=False):
 
