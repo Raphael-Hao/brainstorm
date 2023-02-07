@@ -28,7 +28,7 @@ class LiveSR(nn.Module):
         self.subnet_num_block = subnet_num_block
         self.num_feature = num_feature
         self.classifier = Classifier(n_subnets).eval()
-        # self.classifier = TunedClassifier(n_subnets, 88).eval()
+    # self.classifier = TunedClassifier(n_subnets, 88).eval()
         self.scatter = ScatterRouter(capturing=True, capture_mode="max")
         self.subnets = nn.ModuleList(
             NAS_MDSR(
@@ -51,7 +51,7 @@ class LiveSR(nn.Module):
         for i in range(self.n_subnets):
             m = self.subnets[i]
             x = scattered[i]
-            subnet_outputs.append(m(x, m.num_block))
+            subnet_outputs.append(m(x))
         # subnet_outputs = [m(x, m.num_block) for m, x in zip(self.subnets, scattered)]
         gathered = self.gather(subnet_outputs)
         return gathered
