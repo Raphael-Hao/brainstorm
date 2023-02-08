@@ -84,7 +84,8 @@ class identity(nn.Module):
         print(x)
         return x
 
-
+# from brt.trace.leaf_node import register_leaf_node
+# @register_leaf_node
 class ConvBN(nn.Module):
     def __init__(self, nIn, nOut, type: str, bottleneck, bnWidth):
         """
