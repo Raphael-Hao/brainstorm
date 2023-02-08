@@ -1,19 +1,26 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Union, Dict, Any
+from typing import List, Union, Dict, Any, Callable, Set
 
 from torch.fx import Node
 
 from brt.trace.graph import Graph, Node
 
-__all__ = ["debug_node"]
+__all__ = [
+    "debug_node",
+    "build_sub_graph",
+    "map_args_aggregate",
+    "is_at_wavefront",
+    "update_wavefront",
+]
 
 
 def debug_node(node: Node):
     print(
         f"node:{node}, op:{node.op}, target:{node.target}, users:{node.users}, args:{node.args}, input_nodes:{node.all_input_nodes}"
     )
+
 
 def build_sub_graph(
     graph: Graph, nodes: List[Node], outputs: Union[List[Node], Node, int, None] = -1
@@ -63,3 +70,34 @@ def build_sub_graph(
             name="output",
         )
     return new_graph
+
+
+def map_args_aggregate(
+    args,
+    func: Callable[[Union[Node, list, tuple]], Any],
+    aggr: Callable[[List[Any]], Any],
+) -> Any:
+    if isinstance(args, (list, tuple)):
+        return aggr([map_args_aggregate(arg, func, aggr) for arg in args])
+    # elif isinstance(args, Node):
+    else:
+        return aggr([func(args)])
+
+
+def is_at_wavefront(node: Node, visited: Set[Node], default: bool = True):
+    if not isinstance(node, Node):
+        return default
+    return map_args_aggregate(
+        node.args,
+        func=lambda n: (n in visited) if isinstance(n, Node) else default,
+        aggr=all,
+    )
+
+
+def update_wavefront(node: Node, visited: Set[Node], wavefront: Set[Node]):
+    # add `node`'s user into wavefront if aviliable
+    wavefront.discard(node)
+    visited.add(node)
+    for user in node.users:
+        if is_at_wavefront(user, visited):
+            wavefront.add(user)
