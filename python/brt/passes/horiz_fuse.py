@@ -21,7 +21,7 @@ from brt.jit import make_jit_module
 
 from brt.passes.base import PassBase, register_pass
 from brt.passes.vertical_fuse import VerticalFusePass
-from brt.passes.utils import build_sub_graph
+from brt.passes.utils import *
 
 logger = log.get_logger(__file__)
 
@@ -71,101 +71,64 @@ def topo_succ(node: Node, visited: Set[Node] = None):
             cur = cur._next
 
 
-def map_args_aggregate(
-    args,
-    func: Callable[[Union[Node, List, Tuple]], Any],
-    aggr: Callable[[List[Any]], Any],
-) -> Any:
-    if isinstance(args, (list, tuple)):
-        return aggr([map_args_aggregate(arg, func, aggr) for arg in args])
-    # elif isinstance(args, Node):
-    else:
-        return aggr([func(args)])
-
-
-def is_at_wavefront(node: Node, visited: Set[Node], default: bool = True):
-    if not isinstance(node, Node):
-        return default
-    return map_args_aggregate(
-        node.args,
-        func=lambda n: (n in visited) if isinstance(n, Node) else default,
-        aggr=all,
-    )
-
-
 @register_pass("horiz_fuse")
 class HorizFusePass(VerticalFusePass):
     def run_on_graph(self):
-        # new_graph = Graph()
-        visited_nodes = set()  # visited nodes in the origin graph
-        # node_remap = {}
+        visited = set()  # visited nodes in the origin graph
 
         for node in self.origin_graph.nodes:
-            visited_nodes.add(node)
-            # node_remap[node] = new_graph.node_copy(node, lambda n: node_remap[n])
+            visited.add(node)
             if not (self.is_scatter_node(node) and node.is_fixed_inout):
                 continue
             logger.info(f"Scatter node `{node.name}` founded")
-            branch_entrances = list(node.users)
-            cur_nodes = list(branch_entrances)
-            # while True:
-            for ccccc in itt.count():
-                assert ccccc < 500, f"max iteration time reached, \n  cur_nodes = {list(map(lambda n: f'{n.name}|{n.args}' if isinstance(n, Node) else n, cur_nodes))}\n  {visited_nodes = }"
-                if all(cur_node is None for cur_node in cur_nodes):
-                    break  # TODO
-                assert not all(
-                    not is_at_wavefront(cur, visited_nodes) for cur in cur_nodes
-                ), f"no node is at wavefront!, \n  {cur_nodes = }\n  {visited_nodes = }"
-                if all(
-                    not is_at_wavefront(cur, visited_nodes) for cur in cur_nodes
-                ):
-                    assert False
+            wavefront = set()
+            update_wavefront(node, visited, wavefront)
+            while wavefront:
                 hfusable_nodes = []
                 # Try to fuse node horizontally layer by layer
+                # for i, cur_node in enumerate(wavefront):
+                cur_nodes = list(wavefront)
                 for i, cur_node in enumerate(cur_nodes):
                     if cur_node is None:
+                        raise RuntimeError()
                         continue
                     if self.is_router_node(cur_node):
                         logger.info(
                             f"At branch {i}, router node `{cur_node.name}` founded"
                         )
-                        cur_nodes[i] = None
+                        wavefront.discard(cur_node)
                         continue
-                    if not is_at_wavefront(cur_node, visited_nodes):
+                    if not is_at_wavefront(cur_node, visited):
                         logger.info(
                             f"At branch {i}, node `{cur_node.name}` is not at wavefront"
                         )
+                        raise RuntimeError()
                         continue
-                    fuse_parteners = self.find_fuse_parteners(
-                        cur_node,
-                        lambda n: n not in visited_nodes
-                        and is_at_wavefront(n, visited_nodes),
-                    )
+                    fuse_parteners = self.find_fuse_parteners(cur_node, visited)
+                    # The `cur_node` is unfusable, go ahead
                     if fuse_parteners is None:
+                        # TODO: assume there is no branch cross other than the gather router
                         logger.info(
                             f"At branch {i}, node `{cur_node.name}` is not vfusable"
                         )
-                        visited_nodes.add(cur_node)
-                        # node_remap[node] = new_graph.node_copy(node, lambda n: node_remap[n])
-                        # WARNING: assume there is no branch cross other than the gather router
-                        cur_nodes[i] = bfs_succ(branch_entrances[i], visited_nodes)
+                        visited.add(cur_node)
+                        update_wavefront(cur_node, visited, wavefront)
                         continue
-
+                    # Try to make fused module
                     try:
                         VerticalFusePass._make_fused_module(self, fuse_parteners)
                     except Exception as e:
                         logger.info(
                             f"At branch {i}, fail to make vfused jit module for nodes {[n.name for n in fuse_parteners]}. Is this kernel already tuned?",
                         )
-                        visited_nodes.add(cur_node)
-                        # node_remap[node] = new_graph.node_copy(node, lambda n: node_remap[n])
-                        cur_nodes[i] = bfs_succ(branch_entrances[i], visited_nodes)
+                        visited.add(cur_node)
+                        update_wavefront(cur_node, visited, wavefront)
                         continue
                     logger.info(
                         f"At branch {i}, vfusable nodes founded, {[fp.name for fp in fuse_parteners]}"
                     )
-                    visited_nodes.update(fuse_parteners)
-                    cur_nodes[i] = bfs_succ(branch_entrances[i], visited_nodes)
+                    visited.update(fuse_parteners)
+                    update_wavefront(fuse_parteners[-1], visited, wavefront)
                     hfusable_nodes.append(fuse_parteners)
                 if len(hfusable_nodes) == 0:
                     logger.info(f"No nodes are h-fusable, continue")
@@ -222,7 +185,7 @@ class HorizFusePass(VerticalFusePass):
                             for fuse_parteners in hfusable_nodes
                         ],
                     )
-                visited_nodes.add(hfused_node)
+                visited.add(hfused_node)
 
                 for i, fuse_parteners in enumerate(hfusable_nodes):
                     with self.origin_graph.inserting_after(hfused_node):
@@ -235,10 +198,9 @@ class HorizFusePass(VerticalFusePass):
                             inshape=hfused_node.outshape,
                             outshape=hfused_node.outshape[i],
                         )
-                    visited_nodes.add(get_item_node)
+                    visited.add(get_item_node)
                     logger.info(f"create node `{get_item_node.name}`")
                     fuse_parteners[-1].replace_all_uses_with(get_item_node)
-                    # node_remap[fuse_parteners[-1]] = get_item_node
                 # for fuse_parteners in hfusable_nodes:
                 #     for fp in reversed(fuse_parteners):
                 #         self.origin_graph.erase_node(fp)
@@ -402,40 +364,6 @@ class HorizFusePass(VerticalFusePass):
         self.graph_mod.recompile()
 
     def finalize(self) -> GraphModule:
-        # def topological():
-        #     in_degrees = dict((u, 0) for u in self.graph_mod.graph.nodes)
-        #     num = len(in_degrees)
-        #     for u in self.graph_mod.graph.nodes:
-        #         for v in u.users.copy().keys():
-        #             in_degrees[v] += 1
-        #     Q = [u for u in in_degrees if in_degrees[u] == 0]
-        #     Seq = []
-        #     import torch.fx as fx
-
-        #     while Q:
-        #         u = Q.pop(0)
-        #         Seq.append(u)
-        #         for v in u.users.copy().keys():
-        #             in_degrees[v] -= 1
-        #             if in_degrees[v] == 0:
-        #                 Q.append(v)
-        #     if not len(Seq) == num:
-        #         raise Exception("failed to finish topological search")
-        #     return Seq
-
-        # def topo_prepend():
-        #     topological_seq = topological()
-        #     i = 0
-        #     for front_node in self.graph_mod.graph.nodes:
-        #         new_node = topological_seq[i]
-        #         if new_node == front_node:
-        #             i += 1
-        #             continue
-        #         while not new_node == front_node:
-        #             front_node.prepend(new_node)
-        #             i += 1
-        #             new_node = topological_seq[i]
-        #     return
         def topological_inner(cur: Node, visited: Set[Node], sequence: List[Node]):
             assert cur not in visited
             visited.add(cur)
@@ -448,22 +376,23 @@ class HorizFusePass(VerticalFusePass):
             # Get topoligically ordered sequence
             visited = set()
             sequence = []
+            placeholders = []
             for node in graph.nodes:
+                if self.is_placeholder_node(node):
+                    visited.add(node)
+                    placeholders.append(node)
+                    continue
                 if node not in visited:
                     topological_inner(node, visited, sequence)
             # Make topoligically link list
             pre_node = graph._root
-            for node in reversed(sequence):
+            for node in itt.chain(placeholders, reversed(sequence)):
                 pre_node._next = node
                 node._prev = pre_node
                 pre_node = node
             graph._root._prev = pre_node
             pre_node._next = graph._root
 
-        print("########## start topoligical_sort")
-        print(self.graph_mod.graph)
         topoligical_sort(self.graph_mod.graph)
-        print("########## start printing")
-        print(self.graph_mod.graph)
         # self.graph_mod.graph.eliminate_dead_code()
         return super().finalize()

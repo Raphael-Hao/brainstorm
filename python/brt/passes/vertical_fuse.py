@@ -23,7 +23,7 @@ from brt.trace.graph import symbolic_trace, GraphModule, Graph, Node
 
 # import brt.passes.fuse_util
 from brt.passes.base import PassBase, register_pass
-from brt.passes.utils import build_sub_graph
+from brt.passes.utils import *
 
 logger = log.get_logger(__file__)
 
@@ -49,11 +49,12 @@ class VerticalFusePass(PassBase):
         logger.info(self.graph_mod.graph)
 
     def find_fuse_parteners(
-        self, start: Node, enable: Callable[[Node], bool] = None
-        # , excludes: List[Node] = None
+        self,
+        start: Node,
+        visited: List[Node] = None,
     ) -> Union[List[Node], None]:
-        if enable is None:
-            enable = lambda n: True
+        if visited is None:
+            visited = lambda n: True
 
         if not (self.is_module_node(start) and start.is_fixed_inout):
             logger.debug(f"start node `{start.name}` should be a fixed module node")
@@ -64,8 +65,10 @@ class VerticalFusePass(PassBase):
         is_last_try = False
         while not is_last_try:
             fusing_nodes.append(cur_node)
-            if not enable(cur_node):
-                logger.debug(f"node `%{cur_node.name}` is disabled")
+            if cur_node in visited or not is_at_wavefront(
+                cur_node, visited | set(fusing_nodes)
+            ):
+                logger.debug(f"node `%{cur_node.name}` is not aviliable")
                 break
             if self.is_router_node(cur_node):
                 logger.debug(f"node `%{cur_node.name}` is a router node")
@@ -132,16 +135,16 @@ class VerticalFusePass(PassBase):
         origin_graph = self.origin_graph
         # fusable_nodes_group = []
         # Searching fusable nodes
-        visited_nodes = set()
+        visited = set()
         fused_nodes = set()
         fuse_parteners_of = {}
         for node in origin_graph.nodes:
-            fuse_parteners = self.find_fuse_parteners(node, lambda n: n not in visited_nodes)
+            fuse_parteners = self.find_fuse_parteners(node, visited)
             if fuse_parteners is None:
-                visited_nodes.add(node)
+                visited.add(node)
             else:
                 assert len(fuse_parteners) > 0
-                visited_nodes.update(fuse_parteners)
+                visited.update(fuse_parteners)
                 fused_nodes.update(fuse_parteners)
                 for fp in fuse_parteners:
                     fuse_parteners_of[fp] = fuse_parteners
@@ -299,15 +302,15 @@ class VerticalFusePass(PassBase):
     def run_on_graph(self):
         # fused_nodes, fuse_parteners_of = self.find_fusable_nodes()
         # self.fuse_nodes(fused_nodes, fuse_parteners_of)
-        visited_nodes = set()
+        visited = set()
         # fused_nodes = set()
         # fuse_parteners_of = {}
         # node_remap = {}
         # new_graph = Graph()
         for node in self.origin_graph.nodes:
-            fuse_parteners = self.find_fuse_parteners(node, lambda n: n not in visited_nodes)
+            fuse_parteners = self.find_fuse_parteners(node, visited)
             if fuse_parteners is None:
-                visited_nodes.add(node)
+                visited.add(node)
                 continue
                 # node_remap[node] = new_graph.node_copy(node, lambda n: node_remap[n])
             assert len(fuse_parteners) > 0
@@ -318,14 +321,14 @@ class VerticalFusePass(PassBase):
                 logger.info(
                     f"Fail to make jit module for nodes {[n.name for n in fuse_parteners]}. Is this kernel already tuned?"
                 )
-                visited_nodes.add(fuse_parteners[0])
+                visited.add(fuse_parteners[0])
                 # for fpn in fuse_parteners_of[node]:
                 #     if fpn not in node_remap:
                 #         node_remap[fpn] = new_graph.node_copy(
                 #             fpn, lambda n: node_remap[n]
                 #         )
                 continue
-            visited_nodes.update(fuse_parteners)
+            visited.update(fuse_parteners)
 
         self.origin_graph._owners = 0
         self.graph_mod.graph = self.origin_graph
