@@ -163,7 +163,7 @@ class Graph(fx.Graph):
                 )
             else:
                 return None
-        elif isinstance(node_or_list, tuple):
+        elif isinstance(node_or_list, (list, tuple)):
             return [
                 cls._get_output_from_node_or_list(elem, tensor_init_func, **init_kwargs)
                 for elem in node_or_list
@@ -177,7 +177,7 @@ class Graph(fx.Graph):
     ) -> Union[Size, None, List]:
         if isinstance(node_or_list, Node):
             return node_or_list.outshape
-        elif isinstance(node_or_list, tuple):
+        elif isinstance(node_or_list, (tuple, list)):
             return [cls._get_out_shape_from_node_or_list(elem) for elem in node_or_list]
         else:
             return None
@@ -230,7 +230,8 @@ class GraphTracer(fx.Tracer):
                 router: ScatterRouter = root.get_submodule(node.target)
                 if (
                     router.capture_mode == "max"
-                    and router.fabric_type == "_fused_dispatch"
+                    and "dispatch" in router.fabric_type
+                    and router.load_history is not None
                     and all(rl == "1d" for rl in router.fabric.route_logics)
                 ):
                     router.capturing = False
@@ -252,7 +253,15 @@ class GraphTracer(fx.Tracer):
             hook.remove()
         for node, (inshape, outshape) in fixed_router_info.items():
             assert isinstance(node, Node), type(node)
-            # TODO
+            scatter = root.get_submodule(node.target)
+            for i, bs in enumerate(scatter.load_history):
+                if scatter.fabric.flow_num == 1:
+                    outshape[i][0] = bs
+                    outshape[i] = torch.Size([int(bs), *outshape[i][1:]])
+                else:
+                    for flow_outshape in outshape:
+                        flow_outshape[i] = torch.Size([int(bs), *flow_outshape[i][1:]])
+
             node.set_inout_shape(inshape, outshape)
 
         # Shape propagation
@@ -289,15 +298,14 @@ class GraphTracer(fx.Tracer):
                     # Can't propagate shape
                     continue
                 if node.op == "call_method":
-
-                    func = getattr(torch if isinstance(node.args[0], Node) else type(node.args[0]), node.target)
+                    func = getattr(torch.Tensor if isinstance(node.args[0], Node) else type(node.args[0]), node.target)
                 elif node.op == "call_module":
                     func = root.get_submodule(node.target).forward
                 elif node.op == "call_function":
                     func = node.target
                 try:
                     node_outputs = func(*node_inputs, **node_kw_inputs)
-                except:
+                except Exception as e:
                     continue
                 inshape = graph._get_out_shape_from_node_or_list(node.args)
                 outshape = graph._get_shape_from_tensor_or_list(node_outputs)
