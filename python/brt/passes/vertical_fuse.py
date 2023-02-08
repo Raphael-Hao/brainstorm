@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Union, Dict, Any
+from typing import List, Union, Dict, Any, Callable
 
 from copy import deepcopy
 from hashlib import new
@@ -34,42 +34,14 @@ class VerticalFusePass(PassBase):
         self,
         m: Union[torch.nn.Module, GraphModule],
         sample_inputs: Dict[str, Any],
-        fixing_scatters: bool = False,
         **tracer_kwargs,
     ):
         self.sub_modules = dict(m.named_modules())
-        if isinstance(m, GraphModule) and m.graph.is_shape_tracked and not fixing_scatters:
+        if isinstance(m, GraphModule) and m.graph.is_shape_tracked:
             m.graph.lint()
             m.recompile()
             self.graph_mod = m
         else:
-            if fixing_scatters:
-                for subm in self.sub_modules.values():
-                    if isinstance(subm, ScatterRouter):
-                        router: ScatterRouter = subm
-                        if (
-                            router.capturing is True
-                            and "dispatch" in router.captured_fabric_type
-                            and router.capture_mode == "max"
-                            and all(rl == "1d" for rl in router.fabric.route_logics)
-                        ):
-                            if (
-                                router.fabric_type == "dispatch"
-                                and router.load_history is not None
-                            ):
-                                router.fabric_type = "_fused_dispatch"
-                                router.fabric_kwargs.update(
-                                    {
-                                        "fixed_capacity": torch.from_numpy(
-                                            router.load_history
-                                        )
-                                        .to(torch.int32)
-                                        .cuda()
-                                    }
-                                )
-                                router.fabric = make_fabric(
-                                    "_fused_dispatch", router.fabric_kwargs
-                                )
             self.graph_mod = symbolic_trace(
                 m, tracing_shape=True, sample_inputs=sample_inputs, **tracer_kwargs
             )
@@ -77,10 +49,11 @@ class VerticalFusePass(PassBase):
         logger.info(self.graph_mod.graph)
 
     def find_fuse_parteners(
-        self, start: Node, excludes: List[Node] = None
+        self, start: Node, enable: Callable[[Node], bool] = None
+        # , excludes: List[Node] = None
     ) -> Union[List[Node], None]:
-        if excludes is None:
-            excludes = []
+        if enable is None:
+            enable = lambda n: True
 
         if not (self.is_module_node(start) and start.is_fixed_inout):
             logger.debug(f"start node `{start.name}` should be a fixed module node")
@@ -90,8 +63,9 @@ class VerticalFusePass(PassBase):
         fusing_nodes = []
         is_last_try = False
         while not is_last_try:
-            if cur_node in excludes:
-                logger.debug(f"node `%{cur_node.name}` is in exclude list")
+            fusing_nodes.append(cur_node)
+            if not enable(cur_node):
+                logger.debug(f"node `%{cur_node.name}` is disabled")
                 break
             if self.is_router_node(cur_node):
                 logger.debug(f"node `%{cur_node.name}` is a router node")
@@ -109,12 +83,12 @@ class VerticalFusePass(PassBase):
             if not isinstance(cur_node.outshape, torch.Size):
                 logger.debug(f"node `%{cur_node.name}` has more than 1 outputs")
                 break
-            if len(cur_node.users) > 1:
-                logger.debug(f"node `%{cur_node.name}` has more than 1 users, last try")
-                is_last_try = True
             if len(cur_node.kwargs) != 0:
                 logger.debug(f"node `%{cur_node.name}` has kwargs {cur_node.kwargs}")
                 break
+            if len(cur_node.users) > 1:
+                logger.debug(f"node `%{cur_node.name}` has more than 1 users, last try")
+                is_last_try = True
             try:
                 for arg in cur_node.args:
                     if isinstance(arg, immutable_list):
@@ -124,7 +98,6 @@ class VerticalFusePass(PassBase):
                         raise RuntimeError("Node with complex args")
             except RuntimeError:
                 pass
-            fusing_nodes.append(cur_node)
             fusing_graph = build_sub_graph(self.origin_graph, fusing_nodes)
             try:
                 fusing_graph.lint()
@@ -146,7 +119,7 @@ class VerticalFusePass(PassBase):
             if not is_last_try:
                 (cur_node,) = cur_node.users
             else:
-                cur_noed = None
+                cur_node = None
                 fusing_nodes.append(None)
         fusable_nodes = fusing_nodes[:-1]
         if len(fusable_nodes) >= 1:
@@ -163,7 +136,7 @@ class VerticalFusePass(PassBase):
         fused_nodes = set()
         fuse_parteners_of = {}
         for node in origin_graph.nodes:
-            fuse_parteners = self.find_fuse_parteners(node, visited_nodes)
+            fuse_parteners = self.find_fuse_parteners(node, lambda n: n not in visited_nodes)
             if fuse_parteners is None:
                 visited_nodes.add(node)
             else:
@@ -332,7 +305,7 @@ class VerticalFusePass(PassBase):
         # node_remap = {}
         # new_graph = Graph()
         for node in self.origin_graph.nodes:
-            fuse_parteners = self.find_fuse_parteners(node, visited_nodes)
+            fuse_parteners = self.find_fuse_parteners(node, lambda n: n not in visited_nodes)
             if fuse_parteners is None:
                 visited_nodes.add(node)
                 continue
@@ -356,7 +329,3 @@ class VerticalFusePass(PassBase):
 
         self.origin_graph._owners = 0
         self.graph_mod.graph = self.origin_graph
-
-    def finalize(self) -> GraphModule:
-        self.graph_mod.graph.lint()
-        return super().finalize()
