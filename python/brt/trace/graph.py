@@ -256,7 +256,6 @@ class GraphTracer(fx.Tracer):
             scatter = root.get_submodule(node.target)
             for i, bs in enumerate(scatter.load_history):
                 if scatter.fabric.flow_num == 1:
-                    outshape[i][0] = bs
                     outshape[i] = torch.Size([int(bs), *outshape[i][1:]])
                 else:
                     for flow_outshape in outshape:

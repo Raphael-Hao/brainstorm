@@ -377,8 +377,6 @@ def threshold_dynamic_evaluate(
                     )
                     eliminate_pass.run_on_graph()
                     new_dce_backbone = eliminate_pass.finalize()
-                    print("########## after DeadPathEliminatePass")
-                    print(new_dce_backbone.graph)
                     graph_drawer = FxGraphDrawer(new_dce_backbone, "new_backbone")
                     with open("dce_backbone_const.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
@@ -392,8 +390,6 @@ def threshold_dynamic_evaluate(
                     )
                     constant_propagation_pass.run_on_graph()
                     new_backbone_const = constant_propagation_pass.finalize()
-                    print("########## after ConstantPropagationPass")
-                    print(new_backbone_const.graph)
                     graph_drawer = FxGraphDrawer(new_backbone_const, "new_backbone")
                     with open("dce_const_pro_backbone.svg", "wb") as f:
                         f.write(graph_drawer.get_dot_graph().create_svg())
@@ -407,8 +403,6 @@ def threshold_dynamic_evaluate(
                     )
                     reorder_operator_pass.run_on_graph()
                     new_backbone = reorder_operator_pass.finalize()
-                    print("########## after OperatorReorderPass")
-                    print(new_backbone.graph)
                     timer.execute(lambda: new_backbone(input_var), "reorder_operator")
                     output_reorder = new_backbone(input_var)
                     reorder_operatorPass_time.append(timer.avg)
@@ -1151,7 +1145,7 @@ def threshold_dynamic_evaluate(
                     # with open("dce_const_reorder.svg", "wb") as f:
                     #     f.write(graph_drawer.get_dot_graph().create_svg())
 
-                    vertical_fuse_pass = HorizFusePass(new_backbone)
+                    vertical_fuse_pass = HorizFusePass(new_backbone, sample_inputs={"x": input_var})
                     vertical_fuse_pass.run_on_graph()
                     new_backbone = vertical_fuse_pass.finalize()
                     # graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")

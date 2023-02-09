@@ -80,7 +80,7 @@ class HorizFusePass(VerticalFusePass):
             visited.add(node)
             if not (self.is_scatter_node(node) and node.is_fixed_inout):
                 continue
-            logger.info(f"Scatter node `{node.name}` founded")
+            logger.debug(f"Scatter node `{node.name}` founded")
             wavefront = set()
             update_wavefront(node, visited, wavefront)
             while wavefront:
@@ -93,13 +93,13 @@ class HorizFusePass(VerticalFusePass):
                         raise RuntimeError()
                         continue
                     if self.is_router_node(cur_node):
-                        logger.info(
+                        logger.debug(
                             f"At branch {i}, router node `{cur_node.name}` founded"
                         )
                         wavefront.discard(cur_node)
                         continue
                     if not is_at_wavefront(cur_node, visited):
-                        logger.info(
+                        logger.debug(
                             f"At branch {i}, node `{cur_node.name}` is not at wavefront"
                         )
                         raise RuntimeError()
@@ -108,7 +108,7 @@ class HorizFusePass(VerticalFusePass):
                     # The `cur_node` is unfusable, go ahead
                     if fuse_parteners is None:
                         # TODO: assume there is no branch cross other than the gather router
-                        logger.info(
+                        logger.debug(
                             f"At branch {i}, node `{cur_node.name}` is not vfusable"
                         )
                         visited.add(cur_node)
@@ -118,20 +118,20 @@ class HorizFusePass(VerticalFusePass):
                     try:
                         VerticalFusePass._make_fused_module(self, fuse_parteners)
                     except Exception as e:
-                        logger.info(
+                        logger.debug(
                             f"At branch {i}, fail to make vfused jit module for nodes {[n.name for n in fuse_parteners]}. Is this kernel already tuned?",
                         )
                         visited.add(cur_node)
                         update_wavefront(cur_node, visited, wavefront)
                         continue
-                    logger.info(
+                    logger.debug(
                         f"At branch {i}, vfusable nodes founded, {[fp.name for fp in fuse_parteners]}"
                     )
                     visited.update(fuse_parteners)
                     update_wavefront(fuse_parteners[-1], visited, wavefront)
                     hfusable_nodes.append(fuse_parteners)
                 if len(hfusable_nodes) == 0:
-                    logger.info(f"No nodes are h-fusable, continue")
+                    logger.debug(f"No nodes are h-fusable, continue")
                     continue
                 # Build h-fuse candidates
                 hfusable_modules = nn.ModuleList()
@@ -167,7 +167,7 @@ class HorizFusePass(VerticalFusePass):
                     "__".join(fpn.name for fpn in fuse_parteners)
                     for fuse_parteners in hfusable_nodes
                 )
-                logger.info(f"add h-fused module `{hfused_module_target}`")
+                logger.debug(f"add h-fused module `{hfused_module_target}`")
                 self.graph_mod.add_submodule(hfused_module_target, hfused_jit_module)
                 self.sub_modules[hfused_module_target] = hfused_jit_module
                 with self.origin_graph.inserting_before():
@@ -199,7 +199,7 @@ class HorizFusePass(VerticalFusePass):
                             outshape=hfused_node.outshape[i],
                         )
                     visited.add(get_item_node)
-                    logger.info(f"create node `{get_item_node.name}`")
+                    logger.debug(f"create node `{get_item_node.name}`")
                     fuse_parteners[-1].replace_all_uses_with(get_item_node)
                 # for fuse_parteners in hfusable_nodes:
                 #     for fp in reversed(fuse_parteners):
@@ -207,161 +207,6 @@ class HorizFusePass(VerticalFusePass):
 
         self.origin_graph._owners = 0
         self.graph_mod.graph = self.origin_graph
-
-    def _old_run_on_graph(self):
-        ## TODO
-        self.graph_mod.graph.eliminate_dead_code()
-
-        def BFS(s):
-            queue = [s]
-            outList = []
-            seen = set()
-            node_visited = {}
-            for node_1 in self.graph_mod.graph.nodes:
-                node_visited.update({node_1: 0})
-            while queue:
-                ## begin a new level
-                res = []
-                nextQueue = []
-                fuse_sequece = []
-                fuse_inputs_shape = []
-                fuse_outputs_shape = []
-                fuse_target = ""
-                fuse_graphnode = []
-                for i in range(len(queue)):
-                    point = queue[i]
-                    res.append(point)
-                    node_visited.update({point: 1})
-                    if point.op == "call_module":
-                        node_m = self.sub_modules[point.target]
-                        if isinstance(node_m, nn.Conv2d) and node_m.bias is None:
-                            if len(point.users) > 1:
-                                print("conv2d has users")
-                                continue
-                            (bn,) = point.users
-                            if len(bn.users) > 1:
-                                print("bn has users")
-                                continue
-                            (activate,) = bn.users
-                            node_visited.update({activate: 1})
-                            node_visited.update({bn: 1})
-                            bn_module = self.sub_modules[bn.target]
-                            activate_module = self.sub_modules[activate.target]
-                            sequence = nn.Sequential(node_m, bn_module, activate_module)
-                            fuse_inputs_shape.append(list(node_m.input_shape))
-                            fuse_outputs_shape.append(list(node_m.output_shape))
-                            fuse_sequece.append(sequence)
-                            fuse_graphnode.append([point, bn, activate])
-                            fuse_target += point.target
-                            queue[i] = activate
-                if len(fuse_sequece) > 0:
-                    fuselayer = brt.passes.fuse_util.FusedLayer(
-                        fuse_sequece, fuse_inputs_shape, fuse_outputs_shape
-                    )
-                    construct_new_args = []
-                    for i, seq in enumerate(fuse_sequece):
-                        construct_new_args.append(fuse_graphnode[i][0].args[0])
-                    pre_node = outList[-1][-1]
-                    with self.graph_mod.graph.inserting_after(pre_node):
-                        new_args = (construct_new_args,)
-                        self.graph_mod.add_module(
-                            fuse_target.replace(".", "_"), fuselayer
-                        )
-                        self.sub_modules[fuse_target.replace(".", "_")] = fuselayer
-                        new_node_insert = self.graph_mod.graph.create_node(
-                            "call_module",
-                            fuse_target.replace(".", "_"),
-                            args=new_args,
-                            kwargs={},
-                        )
-                    res.append(new_node_insert)
-
-                for i in range(len(queue)):
-                    point = queue[i]
-                    for son in point.users:
-                        if (
-                            son.target == torch.cat
-                            or self.is_scatter_node(son)
-                            or self.is_gather_node(son)
-                            or son.target == "view"
-                        ):
-                            visitall_cat_arg = True
-                            if son.target == "view":
-                                iterargs = son.args[:2]
-                            else:
-                                iterargs = son.args[0]
-                            for cat_fa in iterargs:
-                                if node_visited[cat_fa] == 0:
-                                    visitall_cat_arg = False
-
-                            if visitall_cat_arg and node_visited[son] == 0:
-                                node_visited.update({son: 1})
-                                if self.is_scatter_node(son):
-                                    assert len(queue) == 1
-                                    for git in son.users:
-                                        for git2 in git.users:
-                                            nextQueue.append(git2)
-                                    break
-                                for son_son in son.users:
-                                    if (
-                                        son_son.target == torch.cat
-                                        or self.is_scatter_node(son_son)
-                                    ):
-                                        continue
-                                    nextQueue.append(son_son)
-                            continue
-                        nextQueue.append(son)
-                outList.append(res)
-                queue = nextQueue
-            return outList
-
-        for node in self.graph_mod.graph.nodes:
-            out_list = BFS(node)
-            break
-        for i in range(len(out_list)):
-            fuse_sequece = []
-            fuse_inputs_shape = []
-            fuse_outputs_shape = []
-            fuse_target = ""
-            fuse_graphnode = []
-            queue = out_list[i]
-            for j in range(len(queue)):
-                point = queue[j]
-                if point.op == "call_module":
-                    node_m = self.sub_modules[point.target]
-                    if isinstance(node_m, nn.Conv2d) and node_m.bias is None:
-                        if len(point.users) > 1:
-                            print("conv2d has users")
-                            continue
-                        (bn,) = point.users
-                        if len(bn.users) > 1:
-                            print("bn has users")
-                            continue
-                        (activate,) = bn.users
-                        bn_module = self.sub_modules[bn.target]
-                        activate_module = self.sub_modules[activate.target]
-                        sequence = nn.Sequential(node_m, bn_module, activate_module)
-                        fuse_inputs_shape.append(list(node_m.input_shape))
-                        fuse_outputs_shape.append(list(node_m.output_shape))
-                        fuse_sequece.append(sequence)
-                        fuse_graphnode.append([point, bn, activate])
-                        fuse_target += point.target
-            if len(fuse_sequece) > 0:
-                for j, seq in enumerate(fuse_sequece):
-                    conv = fuse_graphnode[j][0]
-                    bn = fuse_graphnode[j][1]
-                    activate = fuse_graphnode[j][2]
-                    node_insert = out_list[i][-1]
-                    with self.graph_mod.graph.inserting_after(node_insert):
-                        new_gititem = self.graph_mod.graph.call_function(
-                            operator.getitem, args=(node_insert, j)
-                        )
-                    activate.replace_all_uses_with(new_gititem)
-                    self.graph_mod.graph.erase_node(activate)
-                    self.graph_mod.graph.erase_node(bn)
-                    self.graph_mod.graph.erase_node(conv)
-
-        self.graph_mod.recompile()
 
     def finalize(self) -> GraphModule:
         def topological_inner(cur: Node, visited: Set[Node], sequence: List[Node]):
