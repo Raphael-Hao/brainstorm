@@ -11,6 +11,8 @@ from torch.overrides import (
     has_torch_function,
 )
 
+from brt.runtime.log import get_logger
+
 from brt.jit.codegen.horiz_fused import HorizFusedKernel
 from brt.jit.modules.base import FuseModuleInputType
 from brt.jit.modules.fused import FusedModule, JitFusedModule
@@ -18,6 +20,8 @@ from brt.jit.modules.fused import FusedModule, JitFusedModule
 
 # Note: The `sampe_inputs` is a list of each candidates' inputs, but the runtime
 # inputs of the module's forward function should be like the chain of the `sampe_inputs`
+
+logger = get_logger(__file__)
 
 
 class HorizFusedModule(FusedModule):
@@ -63,15 +67,31 @@ class HorizFusedModule(FusedModule):
         output_arg_indices_chain = list(
             itertools.chain.from_iterable(output_arg_indices)
         )
+        output_shape = list(self._get_output_shape("forward", sample_inputs))
+        print(output_shape)
+        empty_output_shape = list(torch.Size([0, *oshp[1:]]) for oshp in output_shape)
         out_data = [
             torch.empty(shp).to("cuda")
-            for shp in self._get_output_shape("forward", sample_inputs)
+            for shp in output_shape
         ]
 
         class JitFunction(autograd.Function):
             @staticmethod
             def forward(ctx: Any, *inputs):
                 inputs = list(inputs)
+                # if any(
+                #     input.numel() == 0
+                #     if isinstance(input, torch.Tensor)
+                #     else input is None
+                #     for input in inputs
+                # ):
+                for input in inputs:
+                    if (
+                        isinstance(input, torch.Tensor) and input.numel() == 0
+                    # ) or input is None:
+                    ):
+                        # logger.debug("empty input found, exits")
+                        return [torch.empty(eoshp).cuda() for eoshp in empty_output_shape]
                 for i, out_index in enumerate(output_arg_indices_chain):
                     inputs.insert(out_index, out_data[i])
                 jit_kernel(*inputs)
@@ -82,7 +102,9 @@ class HorizFusedModule(FusedModule):
                     branch_inputs = [inputs[bii] for bii in branch_input_indices]
                     branch_outputs = [inputs[boi] for boi in branch_output_indices]
                     if has_torch_function(branch_inputs):
-                        packed_branch_outputs = handle_torch_function(lambda *x: branch_outputs, branch_inputs, *branch_inputs)
+                        packed_branch_outputs = handle_torch_function(
+                            lambda *x: branch_outputs, branch_inputs, *branch_inputs
+                        )
                         outputs.extend(packed_branch_outputs)
                 # outputs = [inputs[i] for i in output_arg_indices_chain]
                 return tuple(outputs)
@@ -211,6 +233,7 @@ class JitHorizFusedModule(JitFusedModule):
         # self.forward(list(itertools.chain.from_iterable(sample_inputs)))
 
     def forward(self, *inputs: torch.Tensor):
+
         for input, input_index in zip(inputs, self._module_input_arg_indices):
             self._function_input_templete["forward"][input_index] = input
         output = self.function.apply(*self._function_input_templete["forward"])

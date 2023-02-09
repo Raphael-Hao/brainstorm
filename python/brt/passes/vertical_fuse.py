@@ -46,7 +46,6 @@ class VerticalFusePass(PassBase):
                 m, tracing_shape=True, sample_inputs=sample_inputs, **tracer_kwargs
             )
         self.origin_graph = self.graph_mod.graph
-        logger.info(self.graph_mod.graph)
 
     def find_fuse_parteners(
         self,
@@ -202,7 +201,7 @@ class VerticalFusePass(PassBase):
                     )
                 except Exception as e:
                     logger.debug(e)
-                    logger.info(
+                    logger.debug(
                         f"Fail to make jit module for nodes {[n.name for n in fuse_parteners_of[node]]}. Is this kernel already tuned?"
                     )
                     for fpn in fuse_parteners_of[node]:
@@ -318,7 +317,7 @@ class VerticalFusePass(PassBase):
                 self._replace_with_fused_module(fuse_parteners)
             except Exception as e:
                 logger.debug(e)
-                logger.info(
+                logger.debug(
                     f"Fail to make jit module for nodes {[n.name for n in fuse_parteners]}. Is this kernel already tuned?"
                 )
                 visited.add(fuse_parteners[0])
