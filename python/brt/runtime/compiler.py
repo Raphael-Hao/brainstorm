@@ -67,7 +67,7 @@ class KernelCompiler(metaclass=Singleton):
         source (str): The CUDA source string.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, CU_JIT_OPTIMIZATION_LEVEL=4, CU_JIT_MAX_REGISTERS=False) -> None:
         self.supported_launch_mode = ["static", "mask", "dispatch"]
         self.supported_kernel_type = [
             "global",
@@ -76,11 +76,17 @@ class KernelCompiler(metaclass=Singleton):
             "homo_fuse",
         ]
         self.bin_cache: Dict[int, Dict[str, KernelBinary]] = defaultdict(dict)
-        self.reset()
+        self._reset_kernel()
+        self.set_compiler(CU_JIT_OPTIMIZATION_LEVEL, CU_JIT_MAX_REGISTERS)
 
-    def reset(self):
+    def _reset_kernel(self):
         self.source: str = None
         self.config: KernelConfig = None
+
+    def set_compiler(self, CU_JIT_OPTIMIZATION_LEVEL=4,CU_JIT_MAX_REGISTERS=False):
+        self.CU_JIT_OPTIMIZATION_LEVEL = CU_JIT_OPTIMIZATION_LEVEL
+        self.CU_JIT_MAX_REGISTERS = CU_JIT_MAX_REGISTERS
+        return self
 
     def compile(self, source: str) -> KernelBinary:
         """Compile the CUDA source string into a callable.
@@ -89,7 +95,7 @@ class KernelCompiler(metaclass=Singleton):
             Callable: A callable that can be invoked with the same arguments as
                 the kernel.
         """
-        self.reset()
+        self._reset_kernel()
         self.source = source
         kernel_device = torch.cuda.current_device()
         kernel_key = hashlib.md5(source.encode("utf-8")).hexdigest()
@@ -108,7 +114,7 @@ class KernelCompiler(metaclass=Singleton):
             KernelConfig: The kernel configuration.
         """
         if source is not None:
-            self.reset()
+            self._reset_kernel()
             self.source = source
         kernel_type, launch_mode = self._get_type_and_launch_mode()
         grid_dims, block_dims = self._get_launch_dim(launch_mode)
@@ -131,6 +137,30 @@ class KernelCompiler(metaclass=Singleton):
             fusion_info,
         )
         return self.config
+
+    def make_kernel_binary(self, config: KernelConfig = None) -> KernelBinary:
+        """Generate the binary of the kernel.
+
+        Args:
+            config (KernelConfig): The configuration of the kernel.
+
+        Returns:
+            bytes: The binary of the kernel.
+        """
+        if config is not None:
+            self._reset_kernel()
+            self.source = config.source
+            self.config = config
+        if self.config.launch_mode == "static":
+            return self._make_static_kernel_binary()
+        elif self.config.launch_mode == "mask":
+            return self._make_mask_kernel_binary()
+        elif self.config.launch_mode == "dispatch":
+            return self._make_dispatch_kernel_binary()
+        else:
+            raise NotImplementedError(
+                f"Kernel of type: {self.config.kernel_type} and launch mode: {self.config.launch_mode} is not supported "
+            )
 
     def _get_type_and_launch_mode(self) -> Tuple[str, str]:
         """Get the launch mode of the kernel from the source string.
@@ -279,7 +309,9 @@ class KernelCompiler(metaclass=Singleton):
                     min_blocks = int(signature_match.groups()[2])
                 launch_bounds = LaunchBounds(max_threads, min_blocks)
             raw_args = signature_match.groups()[3]
-            arg_pattern = re.compile(r"(\s*\w+(\s*\*)?)\s+(__restrict__\s+)?(\w+(\[\])?)\s*")
+            arg_pattern = re.compile(
+                r"(\s*\w+(\s*\*)?)\s+(__restrict__\s+)?(\w+(\[\])?)\s*"
+            )
             args = raw_args.split(",")
             for arg in args:
                 arg_match = arg_pattern.match(arg)
@@ -294,18 +326,62 @@ class KernelCompiler(metaclass=Singleton):
         else:
             raise ValueError("Cannot find the kernel signature in the source string.")
 
-    def make_kernel_binary(self, config: KernelConfig = None) -> KernelBinary:
-        """Generate the binary of the kernel.
-
-        Args:
-            config (KernelConfig): The configuration of the kernel.
+    def _make_binary(self) -> str:
+        """Generate the skeleton of the binary string.
 
         Returns:
-            bytes: The binary of the kernel.
+            str: The skeleton of the binary string.
         """
-        return KernelBinary(None, None)
+        headers = self._make_headers()
+        cuModule_generator = self._make_cuModule_generator()
+        parameter_struct = self._make_paramer_struct()
+        kernel_launcher = self._make_kernel_launcher()
+        skeleton_code = f"""
+{headers}
+namespace brt {{
+namespace kernel {{
+{cuModule_generator}
+{parameter_struct}
+{kernel_launcher}
+}}  // namespace kernel
+}} // namespace brt
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {{
+  m.def("launch", &brt::kernel::launch, "launch");
+}}
+"""
 
-    def make_paramer_struct(self):
+
+    def _make_headers(self):
+        """Generate the headers of the binary string.
+
+        Returns:
+            source code for generating the headers: The headers of the binary string.
+        """
+        return f"""
+include <brt/runtime/utils.h>
+#include <brt/runtime/cuda_utils.h>
+
+#include <ATen/cuda/CUDAContext.h>
+#include <ATen/cuda/CUDAEvent.h>
+// #include <c10/cuda/CUDACachingAllocator.h>
+#include <torch/extension.h>
+
+#undef CHECK
+#undef CHECK_EQ
+#undef CHECK_NE
+#undef CHECK_ON_CPU
+#undef CHECK_ON_CUDA
+#undef CHECK_CONTIGUOUS
+
+#define CHECK(x) TORCH_INTERNAL_ASSERT((x), "CHECK fails.")
+#define CHECK_EQ(x, y) TORCH_INTERNAL_ASSERT((x) == (y), "CHECK_EQ fails.")
+#define CHECK_NE(x, y) TORCH_INTERNAL_ASSERT((x) != (y), "CHECK_NE fails.")
+#define CHECK_ON_CPU(x) TORCH_INTERNAL_ASSERT(!x.is_cuda(), #x " must be a CPU tensor")
+#define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
+#define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
+"""
+
+    def _make_paramer_struct(self):
         """Generate the struct of the kernel parameters.
 
         Returns:
@@ -313,43 +389,52 @@ class KernelCompiler(metaclass=Singleton):
         """
 
         if self.config.launch_mode == "dispatch":
+            branch_num = self.config.fuse_info.branch_num
             return f"""
 Struct KernelParam {{
-    {";".join(f"{self.config.arg_types[i]} {self.config.arg_names[i]}" for i in range(self.config.branch_num))  }
-}}
+    {";".join(f"{self.config.arg_types[i]} {self.config.arg_names[i][:-2]}[{branch_num}]" for i in range(branch_num))};
+}};
 """
         else:
             return ""
 
-    def make_cuModule_generator(self):
+    def _make_cuModule_generator(self):
         """Generate the cumodule from the source string.
 
         Returns:
             source code for generating cuModule: The cumodule of the kernel.
         """
         cuModule_generator_header = """
-#include <cuda.h>
-
+#include <brt/runtime/utils.h>
+#include <brt/runtime/cuda_utils.h>
+using namespace brt;
 """
-        cuModule_generator_src = """
+        cuModule_generator_src = f"""
+CUfunction get_cuFunction(const char* name) {{
+  int major, minor;
+  CUDA_CHECK(cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev));
+  CUDA_CHECK(cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, dev));
+  std::string arch = std::to_string(major) + std::to_string(minor);
+
   std::string arch_option = "--gpu-architecture=compute_" + arch;
-  std::vector<const char*> param_cstrings = {
+  std::vector<const char*> param_cstrings = {{
       "--restrict",        "--include-path=/usr/local/cuda/include",
       arch_option.c_str(), "--use_fast_math",
-      "--std=c++14",       "--extra-device-vectorization"};
+      "--std=c++14",       "--extra-device-vectorization"}};
   nvrtcProgram prog;
   NVRTC_CHECK(nvrtcCreateProgram(&prog, code, nullptr, 0, nullptr, nullptr));
   nvrtcResult nvrtc_compile_result =
       nvrtcCompileProgram(prog, param_cstrings.size(), param_cstrings.data());
 
-  if (nvrtc_compile_result != NVRTC_SUCCESS) {
+  if (nvrtc_compile_result != NVRTC_SUCCESS) {{
     size_t log_size;
     NVRTC_CHECK(nvrtcGetProgramLogSize(prog, &log_size));
     std::string log;
     log.resize(log_size);
     NVRTC_CHECK(nvrtcGetProgramLog(prog, &log[0]));
-    LOG(FATAL) << "nvrtcCompileProgram failed: \\n" << log;
-  }
+    std::cerr << log << std::endl;
+    std::abort();
+  }}
 
   size_t ptx_size;
   NVRTC_CHECK(nvrtcGetPTXSize(prog, &ptx_size));
@@ -358,27 +443,33 @@ Struct KernelParam {{
   ptx.resize(ptx_size);
   NVRTC_CHECK(nvrtcGetPTX(prog, &ptx[0]));
   NVRTC_CHECK(nvrtcDestroyProgram(&prog));
+
+  long max_threads_per_block = {self.config.launch_bounds.max_threads};
+  long min_blocks_per_sm = {self.config.launch_bounds.min_blocks};
+  {"long max_registers = 65536 / launch_bound / 2;" if self.CU_JIT_MAX_REGISTERS else ""}
+  long optimization_level = {self.CU_JIT_OPTIMIZATION_LEVEL};
+  static CUjit_option options[] = {{CU_JIT_OPTIMIZATION_LEVEL, CU_JIT_THREADS_PER_BLOCK{", CU_JIT_MAX_REGISTERS" if self.CU_JIT_MAX_REGISTERS else ""}}};
+  static void* option_values[] = {{(void*)optimization_level, (void*)max_threads_per_block{", (void*)max_registers" if self.CU_JIT_MAX_REGISTERS else ""}}};
+
+  CUmodule module = nullptr;
+  CU_CHECK(cuModuleLoadDataEx(&hMod, ptx.c_str(), sizeof(options) / sizeof(*options), options,
+                                option_values));
+  CHECK(nullptr != hMod);
+
+  int func_entry = image.find(" .entry ");
+  func_entry += 8;
+  int func_end = image.find("(", func_entry);
+  std::string func_name = image.substr(func_entry, func_end - func_entry);
+  func_name;
+
+  CUfunction hFunc;
+  CU_CHECK(cuModuleGetFunction(&hFunc, hMod, func_name.c_str()));
+  return hFunc;
+}}
 """
+        return cuModule_generator_src
 
-    def make_kernel_launcher(self):
-        launcher_torch_header = """
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/CUDAEvent.h>
-// #include <c10/cuda/CUDACachingAllocator.h>
-#include <torch/extension.h>
-
-#undef CHECK_EQ
-#undef CHECK_NE
-#undef CHECK_ON_CPU
-#undef CHECK_ON_CUDA
-#undef CHECK_CONTIGUOUS
-
-#define CHECK_EQ(x, y) TORCH_INTERNAL_ASSERT((x) == (y), "CHECK_EQ fails.")
-#define CHECK_NE(x, y) TORCH_INTERNAL_ASSERT((x) != (y), "CHECK_NE fails.")
-#define CHECK_ON_CPU(x) TORCH_INTERNAL_ASSERT(!x.is_cuda(), #x " must be a CPU tensor")
-#define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
-#define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
-"""
+    def _make_kernel_launcher(self):
         static_launcher_src = """
 static void launch(const std::vector<::torch::Tensor>& ts, const std::vector<long>& args) {
   std::vector<const void*> pargs(ts.size() + args.size()), ppargs(ts.size() + args.size());
@@ -399,6 +490,7 @@ static void launch(const std::vector<::torch::Tensor>& ts, const std::vector<lon
 }
 
 """
+        return static_launcher_src
 
 
 # %%
@@ -419,6 +511,7 @@ def test_cuda_compiler():
     # print(compiler.parse_kernel_config(horiz_fuse_code.read_text()))
     # print(compiler.parse_kernel_config(hetero_fuse_code.read_text()))
     print(compiler.parse_kernel_config(homo_fuse_code.read_text()))
+    print(compiler._make_paramer_struct())
 
 
 test_cuda_compiler()

@@ -6,12 +6,14 @@
 // #include <c10/cuda/CUDACachingAllocator.h>
 #include <torch/extension.h>
 
+#undef CHECK
 #undef CHECK_EQ
 #undef CHECK_NE
 #undef CHECK_ON_CPU
 #undef CHECK_ON_CUDA
 #undef CHECK_CONTIGUOUS
 
+#define CHECK(x) TORCH_INTERNAL_ASSERT((x), "CHECK fails.")
 #define CHECK_EQ(x, y) TORCH_INTERNAL_ASSERT((x) == (y), "CHECK_EQ fails.")
 #define CHECK_NE(x, y) TORCH_INTERNAL_ASSERT((x) != (y), "CHECK_NE fails.")
 #define CHECK_ON_CPU(x) TORCH_INTERNAL_ASSERT(!x.is_cuda(), #x " must be a CPU tensor")
