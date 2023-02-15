@@ -90,7 +90,8 @@ CUfunction CUDACompiler::Activate(int fd, int dev) {
         CaptureWithDefault(kernel.code, std::regex(R"(\s+__launch_bounds__\((\d+)\)\s+)"), 0);
 
     long max_registers = 65536 / launch_bound / 2;
-    static CUjit_option options[] = {CU_JIT_OPTIMIZATION_LEVEL, CU_JIT_THREADS_PER_BLOCK, CU_JIT_MAX_REGISTERS};
+    static CUjit_option options[] = {CU_JIT_OPTIMIZATION_LEVEL, CU_JIT_THREADS_PER_BLOCK,
+                                     CU_JIT_MAX_REGISTERS};
     static void* values[] = {(void*)4L, (void*)launch_bound, (void*)max_registers};
 
     CUmodule hMod = nullptr;
@@ -120,7 +121,7 @@ void CUDACompiler::Execute(const std::vector<const void*>& ppargs, int fd, int d
 }
 
 void CUDACompiler::StaticExecute(const std::vector<const void*>& ppargs, int fd, int dev,
-                                  cudaStream_t stream) {
+                                 cudaStream_t stream) {
   CUfunction hfunc = Activate(fd, dev);
   auto& blocks = kernels_[fd].blocks;
   auto& threads = kernels_[fd].threads;
@@ -130,8 +131,8 @@ void CUDACompiler::StaticExecute(const std::vector<const void*>& ppargs, int fd,
 }
 
 void CUDACompiler::HeteroExecute(const std::vector<const void*>& ppargs,
-                                  const std::vector<long>& active_blocks, int fd, int dev,
-                                  cudaStream_t stream) {
+                                 const std::vector<long>& active_blocks, int fd, int dev,
+                                 cudaStream_t stream) {
   CUfunction hfunc = Activate(fd, dev);
   auto& blocks = kernels_[fd].blocks;
   auto& threads = kernels_[fd].threads;
@@ -148,9 +149,9 @@ void CUDACompiler::HeteroExecute(const std::vector<const void*>& ppargs,
 }
 
 void CUDACompiler::HomoExecute(const std::vector<const void*>& shared_inputs_ptr,
-                                const std::vector<const void*>& standalone_inputs_ptr,
-                                const std::vector<int>& branch_capacities, int fd, int dev,
-                                cudaStream_t stream) {
+                               const std::vector<const void*>& standalone_inputs_ptr,
+                               const std::vector<int>& branch_capacities, int fd, int dev,
+                               cudaStream_t stream) {
   auto& kernel = kernels_[fd];
 
   // for (auto i = 0; i < kernel.shared_arg_num; i++) {
@@ -222,7 +223,7 @@ void CUDACompiler::HomoExecute(const std::vector<const void*>& shared_inputs_ptr
   for (int i = (int)kernel.arg_num; i < (int)pargs.size(); ++i) {
     pargs[i] = (void*)active_blocks[i - kernel.arg_num];
     ppargs[i] = &pargs[i];
-    //ppargs[i] = (void*)&active_blocks[i - kernel.arg_num];
+    // ppargs[i] = (void*)&active_blocks[i - kernel.arg_num];
   }
 
   CUfunction hfunc = Activate(fd, dev);
