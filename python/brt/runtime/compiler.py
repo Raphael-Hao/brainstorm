@@ -7,9 +7,9 @@ import hashlib
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Union, Tuple, NamedTuple
 
+# from dataclasses import dataclass
+
 import torch
-import torch.nn as nn
-from brt.jit import make_jit_kernel
 from brt.runtime.singleton import Singleton
 
 
@@ -23,12 +23,21 @@ class LaunchBounds(NamedTuple):
 
 
 class Dim(NamedTuple):
-    x = 1
-    y = 1
-    z = 1
+    x: int = 1
+    y: int = 1
+    z: int = 1
+
+
+class HomoFuseInfo(NamedTuple):
+    branch_num: int
+    capacities: List[int]
+    arg_num: int
+    shared_arg_num: int
+    shared_arg_granularities: List[int]
 
 
 class KernelConfig(NamedTuple):
+    source: str
     kernel_type: str
     launch_mode: str
     launch_bounds: LaunchBounds
@@ -37,8 +46,7 @@ class KernelConfig(NamedTuple):
     shared_memory_bytes: int
     arg_types: List[str]
     arg_names: List[str]
-    branch_num: int
-    capacities: List[int]
+    fuse_info: Union[HomoFuseInfo, None]
 
 
 class KernelBinary:
@@ -60,14 +68,19 @@ class KernelCompiler(metaclass=Singleton):
     """
 
     def __init__(self) -> None:
-        self.supported_mode = ["static", "mask", "dispatch"]
+        self.supported_launch_mode = ["static", "mask", "dispatch"]
+        self.supported_kernel_type = [
+            "global",
+            "horiz_fuse",
+            "hetero_fuse",
+            "homo_fuse",
+        ]
         self.bin_cache: Dict[int, Dict[str, KernelBinary]] = defaultdict(dict)
         self.reset()
 
     def reset(self):
         self.source: str = None
-        self.target_kernel_type: str = None
-        self.target_launch_mode: str = None
+        self.config: KernelConfig = None
 
     def compile(self, source: str) -> KernelBinary:
         """Compile the CUDA source string into a callable.
@@ -83,19 +96,8 @@ class KernelCompiler(metaclass=Singleton):
         try:
             return self.bin_cache[kernel_device][kernel_key]
         except KeyError:
-            kernel_config = self.parse_kernel_config()
-            if kernel_config.launch_type == "global":
-                kernel_bin = self.compile_global(source)
-            elif kernel_config.launch_type == "horiz_fuse":
-                kernel_bin = self.compile_horiz_fuse(source)
-            elif kernel_config.launch_type == "hetero_fuse":
-                kernel_bin = self.compile_hetero_fuse(source)
-            elif kernel_config.launch_type == "homo_fuse":
-                kernel_bin = self.compile_homo_fuse(source)
-            else:
-                raise NotImplementedError(
-                    f"Kernel launch type: {kernel_config.launch_type} is not supported."
-                )
+            self.parse_kernel_config()
+            kernel_bin = self.make_kernel_binary()
             self.bin_cache[kernel_device][kernel_key] = kernel_bin
             return kernel_bin
 
@@ -106,19 +108,18 @@ class KernelCompiler(metaclass=Singleton):
             KernelConfig: The kernel configuration.
         """
         if source is not None:
+            self.reset()
             self.source = source
-        kernel_type, launch_mode = self.get_type_and_launch_mode()
-        self.target_kernel_type = kernel_type
-        self.target_launch_mode = launch_mode
-        grid_dims, block_dims = self.get_launch_dim()
-        shared_memory_bytes = self.get_launch_shared_memory()
-        if self.target_kernel_type is "homo_fuse":
-            branch_num, capacities = self.get_homo_fuse_info()
-        else:
-            branch_num = len(grid_dims)
-            capacities = None
-        launch_bounds, arg_types, arg_names = self.extract_signature()
-        return KernelConfig(
+        kernel_type, launch_mode = self._get_type_and_launch_mode()
+        grid_dims, block_dims = self._get_launch_dim(launch_mode)
+        shared_memory_bytes = self._get_launch_shared_memory()
+        launch_bounds, arg_types, arg_names = self._extract_signature()
+        fusion_info = None
+        if kernel_type == "homo_fuse":
+            fusion_info = self._get_homo_fuse_info()
+
+        self.config = KernelConfig(
+            self.source,
             kernel_type,
             launch_mode,
             launch_bounds,
@@ -127,11 +128,11 @@ class KernelCompiler(metaclass=Singleton):
             shared_memory_bytes,
             arg_types,
             arg_names,
-            branch_num,
-            capacities,
+            fusion_info,
         )
+        return self.config
 
-    def get_type_and_launch_mode(self) -> Tuple[str, str]:
+    def _get_type_and_launch_mode(self) -> Tuple[str, str]:
         """Get the launch mode of the kernel from the source string.
 
         Raises:
@@ -144,7 +145,7 @@ class KernelCompiler(metaclass=Singleton):
         kernel_type = re.search(
             r"\/\/\s+\[kernel_type\]\s+(\w+)\s*", self.source
         ).groups()[0]
-        if kernel_type not in self.supported_mode:
+        if kernel_type not in self.supported_kernel_type:
             raise NotImplementedError(f"Kernel type: {kernel_type} is not supported.")
         if kernel_type in ["global", "horiz_fuse"]:
             launch_mode = "static"
@@ -154,7 +155,7 @@ class KernelCompiler(metaclass=Singleton):
             launch_mode = "dispatch"
         return kernel_type, launch_mode
 
-    def get_launch_dim(self) -> Tuple[List[Dim], List[Dim]]:
+    def _get_launch_dim(self, launch_mode) -> Tuple[List[Dim], List[Dim]]:
         """Get the launch dimension of the kernel from the source string.
 
         Args:
@@ -171,12 +172,12 @@ class KernelCompiler(metaclass=Singleton):
         for dim in dims:
             for axis in axiss:
                 raw_dims[dim].append(self._get_dim_axis(dim, axis))
-        if self.target_launch_mode is "static":
+        if launch_mode == "static":
             assert all(isinstance(x, int) for x in raw_dims["blockIdx"]) and all(
                 isinstance(x, int) for x in raw_dims["threadIdx"]
             )
-            return [Dim(*raw_dims["blockIdx"])], [Dim(*raw_dims["threadIdx"])], 1
-        elif self.target_launch_mode is "mask" or self.target_launch_mode is "dispatch":
+            return [Dim(*raw_dims["blockIdx"])], [Dim(*raw_dims["threadIdx"])]
+        elif launch_mode == "mask" or launch_mode == "dispatch":
             fused_kernel_num = len(raw_dims["blockIdx"][0])
             assert all(len(raw_dims["threadIdx"]) == fused_kernel_num)
             assert all(isinstance(x, int) for x in raw_dims["threadIdx"][1:])
@@ -186,9 +187,7 @@ class KernelCompiler(metaclass=Singleton):
                 [Dim(x) for x in raw_dims["threadIdx"][0]],
             )
         else:
-            raise NotImplementedError(
-                f"Launch mode {self.target_launch_mode} is not supported."
-            )
+            raise NotImplementedError(f"Launch mode: {launch_mode} is not supported.")
 
     def _get_dim_axis(self, which_dim: str, which_axis: str) -> Union[int, List[int]]:
         axis_match = re.search(
@@ -206,7 +205,7 @@ class KernelCompiler(metaclass=Singleton):
                 f"Cannot find launch configuration {which_dim}.{which_axis} in the source string."
             )
 
-    def get_launch_shared_memory(self) -> int:
+    def _get_launch_shared_memory(self) -> int:
         """Get the shared memory size of the kernel from the source string.
 
         Returns:
@@ -221,7 +220,7 @@ class KernelCompiler(metaclass=Singleton):
         else:
             return 0
 
-    def get_homo_fuse_info(self) -> Tuple[int, List[int]]:
+    def _get_homo_fuse_info(self) -> HomoFuseInfo:
         """Get the information of the fused kernels.
 
         Returns:
@@ -230,15 +229,32 @@ class KernelCompiler(metaclass=Singleton):
         raw_branch_num = re.search(
             r"\/\/\s+\[homo_fuse_info\]\s+branch_num\s*=\s*(\d+)\s*", self.source
         ).groups()[0]
+        branch_num = int(raw_branch_num)
         raw_capacities = re.search(
             r"\/\/\s+\[homo_fuse_info\]\s+supported_capacity\s*=\s*\[([0-9,\s]+)\]",
             self.source,
         ).groups()[0]
-        branch_num = int(raw_branch_num)
         capacities = [int(x) for x in raw_capacities.split(",")]
-        return branch_num, capacities
+        raw_arg_num = re.search(
+            r"\/\/\s+\[homo_fuse_info\]\s+arg_num\s*=\s*(\d+)\s*", self.source
+        ).groups()[0]
+        arg_num = int(raw_arg_num)
+        raw_shared_arg_num = re.search(
+            r"\/\/\s+\[homo_fuse_info\]\s+shared_arg_num\s*=\s*(\d+)\s*", self.source
+        ).groups()[0]
+        shared_arg_num = int(raw_shared_arg_num)
+        raw_shared_arg_granularities = re.search(
+            r"\/\/\s+\[homo_fuse_info\]\s+shared_arg_grans\s*=\s*\[([0-9,\s]+)\]",
+            self.source,
+        ).groups()[0]
+        shared_arg_granularities = [
+            int(x) for x in raw_shared_arg_granularities.split(",")
+        ]
+        return HomoFuseInfo(
+            branch_num, capacities, arg_num, shared_arg_num, shared_arg_granularities
+        )
 
-    def extract_signature(self) -> Tuple[LaunchBounds, List[str], List[str]]:
+    def _extract_signature(self) -> Tuple[LaunchBounds, List[str], List[str]]:
         """Extract the arguments of the kernel from the source string.
 
         Returns:
@@ -248,13 +264,15 @@ class KernelCompiler(metaclass=Singleton):
 
         signature_match = re.search(signature_pattern, self.source)
         if signature_match:
-            launch_bounds = LaunchBounds()
             arg_types = []
             arg_names = []
+            launch_bounds = None
             if signature_match.groups()[1]:
-                launch_bounds.max_threads = int(signature_match.groups()[1])
+                max_threads = int(signature_match.groups()[1])
+                min_blocks = None
                 if signature_match.groups()[2]:
-                    launch_bounds.min_blocks = int(signature_match.groups()[2])
+                    min_blocks = int(signature_match.groups()[2])
+                launch_bounds = LaunchBounds(max_threads, min_blocks)
             raw_args = signature_match.groups()[3]
             arg_pattern = re.compile(r"(\s*\w+\s*\*)\s+(__restrict__)?\s+(\w+)\s*")
             args = raw_args.split(",")
@@ -271,11 +289,11 @@ class KernelCompiler(metaclass=Singleton):
         else:
             raise ValueError("Cannot find the kernel signature in the source string.")
 
-    def make_kernel_binary(self, arch: str) -> bytes:
+    def make_kernel_binary(self, config: KernelConfig = None) -> KernelBinary:
         """Generate the binary of the kernel.
 
         Args:
-            arch (str): The architecture of the GPU.
+            config (KernelConfig): The configuration of the kernel.
 
         Returns:
             bytes: The binary of the kernel.
@@ -288,10 +306,11 @@ class KernelCompiler(metaclass=Singleton):
         Returns:
             source code for generating the struct: The struct of the kernel parameters.
         """
-        if self.target_launch_mode is "dispatch":
+
+        if self.config.launch_mode == "dispatch":
             return f"""
 Struct KernelParam {{
-
+    {";".join(f"{self.config.arg_types[i]} {self.config.arg_names[i]}" for i in range(self.config.branch_num))  }
 }}
 """
         else:
@@ -376,15 +395,26 @@ static void launch(const std::vector<::torch::Tensor>& ts, const std::vector<lon
 
 """
 
-def test_cuda_compiler():
-    linear = nn.Linear(512, 1024).cuda().eval()
-    sample_inputs = torch.randn((16, 512)).cuda()
-    module_kernel = make_jit_kernel(linear, sample_inputs=sample_inputs)
-    source = module_kernel.code
-    compiler = KernelCompiler()
-
 
 # %%
+import pathlib
+
+
+def test_cuda_compiler():
+    kernel_code_dir = pathlib.Path(
+        "/home/whcui/brainstorm_project/brainstorm/.cache/kernel_template"
+    )
+    global_code = kernel_code_dir / "global.cu"
+    horiz_fuse_code = kernel_code_dir / "horiz_fuse.cu"
+    hetero_fuse_code = kernel_code_dir / "hetero_fuse.cu"
+    homo_fuse_code = kernel_code_dir / "homo_fuse.cu"
+
+    compiler = KernelCompiler()
+    compiler.parse_kernel_config(global_code.read_text())
+    print(compiler.parse_kernel_config(horiz_fuse_code.read_text()))
+    print(compiler.parse_kernel_config(hetero_fuse_code.read_text()))
+    # print(compiler.parse_kernel_config(homo_fuse_code.read_text()))
+
 
 test_cuda_compiler()
 # %%

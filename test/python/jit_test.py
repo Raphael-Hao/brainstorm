@@ -157,27 +157,26 @@ class JitKernelTest(unittest.TestCase):
     def test_homo_fused_kernel(self):
         cuda_timer = CUDATimer()
         linears = nn.ModuleList(
-            nn.Linear(768, 3072, bias=False) for _ in range(4)
+            nn.Linear(512, 1024) for _ in range(4)
         ).cuda()
-        sample_inputs = [torch.randn((2, 768)).cuda()]# for i in range(1, 5)]
-        sample_inputs += [torch.randn((512, 768)).cuda()]
+        sample_inputs = [torch.randn((2**i, 512)).cuda() for i in range(0, 5)]
         homo_fused_kernel = make_jit_kernel(
-            linears, sample_inputs=sample_inputs, opt_level="homo_fuse",rank=[1,11]
+            linears, sample_inputs=sample_inputs, opt_level="homo_fuse"
         )
 
         shared_inputs = [
-            torch.randn((514, 768), device="cuda"),
-            torch.randn((514, 3072), device="cuda"),
+            torch.randn((18, 512), device="cuda"),
+            torch.randn((18, 1024), device="cuda"),
         ]
         standalone_inputs = []
         for linear in linears:
             standalone_inputs.append(linear.weight)
-            # standalone_inputs.append(linear.bias)
-        capacities = torch.tensor([512, 2], dtype=torch.int32, device="cuda")
+            standalone_inputs.append(linear.bias)
+        capacities = torch.tensor([16, 2], dtype=torch.int32, device="cuda")
         homo_fused_kernel(shared_inputs, standalone_inputs, capacities)
         cuda_timer.start()
         for i in range(100):
-            shared_inputs[1] = torch.empty((514, 3072), device="cuda")
+            shared_inputs[1] = torch.empty((18, 1024), device="cuda")
             homo_fused_kernel(shared_inputs, standalone_inputs, capacities)
         cuda_timer.stop(100, "brt_homo_fusion")
 
