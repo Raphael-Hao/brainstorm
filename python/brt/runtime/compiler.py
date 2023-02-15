@@ -179,7 +179,8 @@ class KernelCompiler(metaclass=Singleton):
             return [Dim(*raw_dims["blockIdx"])], [Dim(*raw_dims["threadIdx"])]
         elif launch_mode == "mask" or launch_mode == "dispatch":
             fused_kernel_num = len(raw_dims["blockIdx"][0])
-            assert all(len(raw_dims["threadIdx"]) == fused_kernel_num)
+            print(raw_dims["threadIdx"][1:])
+            assert len(raw_dims["threadIdx"][0]) == fused_kernel_num
             assert all(isinstance(x, int) for x in raw_dims["threadIdx"][1:])
             assert all(isinstance(x, int) for x in raw_dims["threadIdx"][1:])
             return (
@@ -260,8 +261,12 @@ class KernelCompiler(metaclass=Singleton):
         Returns:
             Tuple[List[str],List[str]]: [list of argument types, list of argument names]
         """
-        signature_pattern = r"__global__\s+void\s+(__launch_bounds__\(\s*(\d+)\s*,?\s*(\d+)?\s*\))?\s*\w+\((((\s*\w+\s*\*)\s+(__restrict__)?\s+(\w+)\s*(,)?)+)\)"
-
+        signature_pattern = (
+            r"__global__\s+void\s+"
+            r"(__launch_bounds__\(\s*(\d+)\s*,?\s*(\d+)?\s*\)\s+)?"
+            r"\w+"
+            r"\((((\s*\w+(\s*\*)?)\s+(__restrict__\s+)?(\w+(\[\])?)\s*(,)?)+)\)"
+        )
         signature_match = re.search(signature_pattern, self.source)
         if signature_match:
             arg_types = []
@@ -274,13 +279,13 @@ class KernelCompiler(metaclass=Singleton):
                     min_blocks = int(signature_match.groups()[2])
                 launch_bounds = LaunchBounds(max_threads, min_blocks)
             raw_args = signature_match.groups()[3]
-            arg_pattern = re.compile(r"(\s*\w+\s*\*)\s+(__restrict__)?\s+(\w+)\s*")
+            arg_pattern = re.compile(r"(\s*\w+(\s*\*)?)\s+(__restrict__\s+)?(\w+(\[\])?)\s*")
             args = raw_args.split(",")
             for arg in args:
                 arg_match = arg_pattern.match(arg)
                 if arg_match:
                     arg_types.append(arg_match.groups()[0])
-                    arg_names.append(arg_match.groups()[2])
+                    arg_names.append(arg_match.groups()[3])
                 else:
                     raise ValueError(
                         f"Cannot parse the argument: {arg} in the source string."
@@ -410,10 +415,10 @@ def test_cuda_compiler():
     homo_fuse_code = kernel_code_dir / "homo_fuse.cu"
 
     compiler = KernelCompiler()
-    compiler.parse_kernel_config(global_code.read_text())
-    print(compiler.parse_kernel_config(horiz_fuse_code.read_text()))
-    print(compiler.parse_kernel_config(hetero_fuse_code.read_text()))
-    # print(compiler.parse_kernel_config(homo_fuse_code.read_text()))
+    # compiler.parse_kernel_config(global_code.read_text())
+    # print(compiler.parse_kernel_config(horiz_fuse_code.read_text()))
+    # print(compiler.parse_kernel_config(hetero_fuse_code.read_text()))
+    print(compiler.parse_kernel_config(homo_fuse_code.read_text()))
 
 
 test_cuda_compiler()
