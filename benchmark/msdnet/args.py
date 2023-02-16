@@ -17,6 +17,10 @@ arg_parser = argparse.ArgumentParser(description="Image classification PK main s
 
 exp_group = arg_parser.add_argument_group("exp", "experiment setting")
 exp_group.add_argument(
+    "--re-gen-pth",
+    action = "store_true"
+)
+exp_group.add_argument(
     "--save",
     default="save/default-{}".format(time.time()),
     type=str,
@@ -268,6 +272,3 @@ bench_arg_manager.add_item("only_vfuse")
 bench_arg_manager.add_item("vfuse_trans")
 bench_arg_manager.add_item("hfuse")
 bench_arg_manager.add_item("capture")
-
-
-

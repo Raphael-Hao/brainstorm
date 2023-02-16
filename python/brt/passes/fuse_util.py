@@ -377,7 +377,6 @@ class FusedLayer(nn.Module):
         self.forward(sample_inputs)
 
     def forward(self, inputs: List[torch.Tensor]) -> List[torch.Tensor]:
-
         ## TODO cope with bs==0
         for i in range(self.num_submodels):
             if inputs[i].size(0) == 0:

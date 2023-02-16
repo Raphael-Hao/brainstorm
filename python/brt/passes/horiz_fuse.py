@@ -76,6 +76,14 @@ class HorizFusePass(VerticalFusePass):
     def run_on_graph(self):
         visited = set()  # visited nodes in the origin graph
 
+        if self.fusing_head:
+            wavefront = set()
+            for node in self.origin_graph.nodes:
+                if self.is_placeholder_node(node) and node.is_fixed_inout:
+                    visited.add(node)
+                    update_wavefront(node, visited, wavefront)
+            self.horiz_fusing(wavefront, visited)
+
         for node in self.origin_graph.nodes:
             visited.add(node)
             if not (self.is_scatter_node(node) and node.is_fixed_inout):
@@ -83,130 +91,141 @@ class HorizFusePass(VerticalFusePass):
             logger.debug(f"Scatter node `{node.name}` founded")
             wavefront = set()
             update_wavefront(node, visited, wavefront)
-            while wavefront:
-                hfusable_nodes = []
-                # Try to fuse node horizontally layer by layer
-                # for i, cur_node in enumerate(wavefront):
-                cur_nodes = list(wavefront)
-                for i, cur_node in enumerate(cur_nodes):
-                    if cur_node is None:
-                        raise RuntimeError()
-                        continue
-                    if self.is_router_node(cur_node):
-                        logger.debug(
-                            f"At branch {i}, router node `{cur_node.name}` founded"
-                        )
-                        wavefront.discard(cur_node)
-                        continue
-                    if not is_at_wavefront(cur_node, visited):
-                        logger.debug(
-                            f"At branch {i}, node `{cur_node.name}` is not at wavefront"
-                        )
-                        raise RuntimeError()
-                        continue
-                    fuse_parteners = self.find_fuse_parteners(cur_node, visited)
-                    # The `cur_node` is unfusable, go ahead
-                    if fuse_parteners is None:
-                        # TODO: assume there is no branch cross other than the gather router
-                        logger.debug(
-                            f"At branch {i}, node `{cur_node.name}` is not vfusable"
-                        )
-                        visited.add(cur_node)
-                        update_wavefront(cur_node, visited, wavefront)
-                        continue
-                    # Try to make fused module
-                    try:
-                        VerticalFusePass._make_fused_module(self, fuse_parteners)
-                    except Exception as e:
-                        logger.debug(
-                            f"At branch {i}, fail to make vfused jit module for nodes {[n.name for n in fuse_parteners]}. Is this kernel already tuned?",
-                        )
-                        visited.add(cur_node)
-                        update_wavefront(cur_node, visited, wavefront)
-                        continue
-                    logger.debug(
-                        f"At branch {i}, vfusable nodes founded, {[fp.name for fp in fuse_parteners]}"
-                    )
-                    visited.update(fuse_parteners)
-                    update_wavefront(fuse_parteners[-1], visited, wavefront)
-                    hfusable_nodes.append(fuse_parteners)
-                if len(hfusable_nodes) == 0:
-                    logger.debug(f"No nodes are h-fusable, continue")
-                    continue
-                # Build h-fuse candidates
-                hfusable_modules = nn.ModuleList()
-                for fuse_parteners in hfusable_nodes:
-                    hfusable_candidate = GraphModule(
-                        self.graph_mod,
-                        build_sub_graph(self.origin_graph, fuse_parteners),
-                    )
-                    hfusable_candidate.recompile()
-                    hfusable_modules.append(hfusable_candidate)
-                # Generate h-fused inputs
-                hfused_sample_inputs = []
-                hfused_args = []
-                for fuse_parteners in hfusable_nodes:
-                    (
-                        vfused_node_args,
-                        vfused_node_args_sample_inputs,
-                    ) = VerticalFusePass._generate_fused_inputs(self, fuse_parteners)
-                    hfused_sample_inputs.append(vfused_node_args_sample_inputs)
-                    hfused_args.extend(vfused_node_args)
-                # Build h-fused module and node
-                try:
-                    hfused_jit_module = make_jit_module(
-                        hfusable_modules, hfused_sample_inputs, opt_level="horiz_fuse"
-                    )
-                except:
-                    # NOTE: Remember to handle the visited_nodes
-                    logger.warning(
-                        f"Horizontal fusion failed. There might be something wrong!",
-                        exc_info=True,
-                    )
-                hfused_module_target = "BRT_HF__V_" + "__V_".join(
-                    "__".join(fpn.name for fpn in fuse_parteners)
-                    for fuse_parteners in hfusable_nodes
-                )
-                logger.debug(f"add h-fused module `{hfused_module_target}`")
-                self.graph_mod.add_submodule(hfused_module_target, hfused_jit_module)
-                self.sub_modules[hfused_module_target] = hfused_jit_module
-                with self.origin_graph.inserting_before():
-                    hfused_node = self.origin_graph.create_node(
-                        op="call_module",
-                        target=hfused_module_target,
-                        args=tuple(hfused_args),
-                        name=hfused_module_target,
-                        is_fixed_inout=True,
-                        inshape=Graph._get_shape_from_tensor_or_list(
-                            itt.chain.from_iterable(hfused_sample_inputs)
-                        ),
-                        outshape=[
-                            fuse_parteners[-1].outshape
-                            for fuse_parteners in hfusable_nodes
-                        ],
-                    )
-                visited.add(hfused_node)
-
-                for i, fuse_parteners in enumerate(hfusable_nodes):
-                    with self.origin_graph.inserting_after(hfused_node):
-                        get_item_node = self.origin_graph.create_node(
-                            op="call_function",
-                            target=operator.getitem,
-                            args=(hfused_node, i),
-                            # name="BRT_getitem",
-                            is_fixed_inout=True,
-                            inshape=hfused_node.outshape,
-                            outshape=hfused_node.outshape[i],
-                        )
-                    visited.add(get_item_node)
-                    logger.debug(f"create node `{get_item_node.name}`")
-                    fuse_parteners[-1].replace_all_uses_with(get_item_node)
-                # for fuse_parteners in hfusable_nodes:
-                #     for fp in reversed(fuse_parteners):
-                #         self.origin_graph.erase_node(fp)
+            self.horiz_fusing(wavefront, visited)
 
         self.origin_graph._owners = 0
         self.graph_mod.graph = self.origin_graph
+
+    def horiz_fusing(self, wavefront: Set[Node], visited: Set[Node]):
+        while wavefront:
+            hfusable_nodes = []
+            # Try to fuse node horizontally layer by layer
+            # for i, cur_node in enumerate(wavefront):
+            cur_nodes = list(wavefront)
+            for i, cur_node in enumerate(cur_nodes):
+                if cur_node is None:
+                    raise RuntimeError()
+                    continue
+                if self.is_router_node(cur_node):
+                    logger.debug(
+                        f"At branch {i}, router node `{cur_node.name}` founded"
+                    )
+                    wavefront.discard(cur_node)
+                    continue
+                if not is_at_wavefront(cur_node, visited):
+                    logger.debug(
+                        f"At branch {i}, node `{cur_node.name}` is not at wavefront, {self.origin_graph}"
+                    )
+                    raise RuntimeError()
+                    continue
+                fuse_parteners = self.find_fuse_parteners(cur_node, visited)
+                # The `cur_node` is unfusable, go ahead
+                if fuse_parteners is None:
+                    # TODO: assume there is no branch cross other than the gather router
+                    logger.debug(
+                        f"At branch {i}, node `{cur_node.name}` is not vfusable"
+                    )
+                    visited.add(cur_node)
+                    update_wavefront(cur_node, visited, wavefront)
+                    continue
+                # Try to make fused module
+                try:
+                    VerticalFusePass._make_fused_module(self, fuse_parteners)
+                except Exception as e:
+                    logger.debug(
+                        f"At branch {i}, fail to make vfused jit module for nodes {[n.name for n in fuse_parteners]}. Is this kernel already tuned?",
+                    )
+                    visited.add(cur_node)
+                    update_wavefront(cur_node, visited, wavefront)
+                    continue
+                logger.debug(
+                    f"At branch {i}, vfusable nodes founded, {[fp.name for fp in fuse_parteners]}"
+                )
+                visited.update(fuse_parteners)
+                update_wavefront(fuse_parteners[-1], visited, wavefront)
+                hfusable_nodes.append(fuse_parteners)
+
+            if len(hfusable_nodes) == 0:
+                logger.debug(f"No nodes are h-fusable, continue")
+                continue
+            elif len(hfusable_nodes) == 1:
+                logger.debug(f"Only 1 fuse_parteners found, using v-fuse")
+                vfused_node = VerticalFusePass._replace_with_fused_module(self, hfusable_nodes[0])
+                visited.add(vfused_node)
+                continue
+            else:
+                logger.debug(f"{len(hfusable_nodes)} fuse_parteners found")
+            # Build h-fuse candidates
+            hfusable_modules = nn.ModuleList()
+            for fuse_parteners in hfusable_nodes:
+                hfusable_candidate = GraphModule(
+                    self.graph_mod,
+                    build_sub_graph(self.origin_graph, fuse_parteners),
+                )
+                hfusable_candidate.recompile()
+                hfusable_candidate.delete_all_unused_submodules()
+                hfusable_modules.append(hfusable_candidate)
+            # Generate h-fused inputs
+            hfused_sample_inputs = []
+            hfused_args = []
+            for fuse_parteners in hfusable_nodes:
+                (
+                    vfused_node_args,
+                    vfused_node_args_sample_inputs,
+                ) = VerticalFusePass._generate_fused_inputs(self, fuse_parteners)
+                hfused_sample_inputs.append(vfused_node_args_sample_inputs)
+                hfused_args.extend(vfused_node_args)
+            # Build h-fused module and node
+            try:
+                hfused_jit_module = make_jit_module(
+                    hfusable_modules, hfused_sample_inputs, opt_level="horiz_fuse"
+                )
+            except:
+                # NOTE: Remember to handle the visited_nodes
+                logger.warning(
+                    f"Horizontal fusion failed. There might be something wrong!",
+                    exc_info=True,
+                )
+            hfused_module_target = "BRT_HF__V_" + "__V_".join(
+                "__".join(fpn.name for fpn in fuse_parteners)
+                for fuse_parteners in hfusable_nodes
+            )
+            logger.debug(f"add h-fused module `{hfused_module_target}`")
+            self.graph_mod.add_submodule(hfused_module_target, hfused_jit_module)
+            self.sub_modules[hfused_module_target] = hfused_jit_module
+            with self.origin_graph.inserting_before():
+                hfused_node = self.origin_graph.create_node(
+                    op="call_module",
+                    target=hfused_module_target,
+                    args=tuple(hfused_args),
+                    name=hfused_module_target,
+                    is_fixed_inout=True,
+                    inshape=Graph._get_shape_from_tensor_or_list(
+                        itt.chain.from_iterable(hfused_sample_inputs)
+                    ),
+                    outshape=[
+                        fuse_parteners[-1].outshape for fuse_parteners in hfusable_nodes
+                    ],
+                )
+            visited.add(hfused_node)
+
+            for i, fuse_parteners in enumerate(hfusable_nodes):
+                with self.origin_graph.inserting_after(hfused_node):
+                    get_item_node = self.origin_graph.create_node(
+                        op="call_function",
+                        target=operator.getitem,
+                        args=(hfused_node, i),
+                        # name="BRT_getitem",
+                        is_fixed_inout=True,
+                        inshape=hfused_node.outshape,
+                        outshape=hfused_node.outshape[i],
+                    )
+                visited.add(get_item_node)
+                logger.debug(f"create node `{get_item_node.name}`")
+                fuse_parteners[-1].replace_all_uses_with(get_item_node)
+            # for fuse_parteners in hfusable_nodes:
+            #     for fp in reversed(fuse_parteners):
+            #         self.origin_graph.erase_node(fp)
 
     def finalize(self) -> GraphModule:
         def topological_inner(cur: Node, visited: Set[Node], sequence: List[Node]):

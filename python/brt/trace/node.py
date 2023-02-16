@@ -38,7 +38,7 @@ class Node(fx.Node):
         inshape: Union[torch.Size, None, List] = None,
         outshape: Union[torch.Size, None, List] = None,
     ) -> None:
-        """ Appending torch.fx.Node to enable shape propagation.
+        """Appending torch.fx.Node to enable shape propagation.
 
         Members:
             is_fixed_inout (bool): True if the node has fixed inputs and outputs. 'Fixed' means

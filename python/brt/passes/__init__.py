@@ -13,3 +13,4 @@ from brt.passes.constant_propagation import ConstantPropagationPass
 from brt.passes.trace import TracePass
 from brt.passes.vertical_fuse import VerticalFusePass
 from brt.passes.horiz_fuse import HorizFusePass
+from brt.passes.router_fix import RouterFixPass
