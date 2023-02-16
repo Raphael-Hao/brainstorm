@@ -204,7 +204,8 @@ def update_db(subnet_bs, num_channels):
                 # tvm_tuner.insert_top_n_netlet_to_storage("fastest", top=1)
                 tvm_tuner.insert_netlet_to_storage("fastest")
                 print("     insert kernel into db")
-            except:
+            except Exception as e:
+                print(e)
                 print(f"     can't find kernel")
 
 if __name__ == "__main__":

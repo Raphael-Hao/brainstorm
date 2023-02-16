@@ -255,7 +255,10 @@ class MemoryPlanPass(PassBase):
                         collected_params.update(params)
                         collected_buffers.update(buffers)
                 else:
-                    (params, buffers,) = self._get_function_method_params_or_buffers(
+                    (
+                        params,
+                        buffers,
+                    ) = self._get_function_method_params_or_buffers(
                         node, traveled_nodes, memo
                     )
                     collected_params.update(params)

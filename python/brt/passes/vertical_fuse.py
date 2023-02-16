@@ -34,8 +34,11 @@ class VerticalFusePass(PassBase):
         self,
         m: Union[torch.nn.Module, GraphModule],
         sample_inputs: Dict[str, Any],
+        fusing_head: bool = False,
         **tracer_kwargs,
     ):
+        override_tracer_kwargs = {"fixed_inputs": bool(fusing_head)}
+        tracer_kwargs.update(override_tracer_kwargs)
         self.sub_modules = dict(m.named_modules())
         if isinstance(m, GraphModule) and m.graph.is_shape_tracked:
             m.graph.lint()
@@ -46,6 +49,7 @@ class VerticalFusePass(PassBase):
                 m, tracing_shape=True, sample_inputs=sample_inputs, **tracer_kwargs
             )
         self.origin_graph = self.graph_mod.graph
+        self.fusing_head = fusing_head
 
     def find_fuse_parteners(
         self,
@@ -100,21 +104,19 @@ class VerticalFusePass(PassBase):
                         raise RuntimeError("Node with complex args")
             except RuntimeError:
                 pass
-            fusing_graph = build_sub_graph(self.origin_graph, fusing_nodes)
+            fusing_module = GraphModule(
+                self.graph_mod, build_sub_graph(self.origin_graph, fusing_nodes)
+            )
             try:
-                fusing_graph.lint()
+                fusing_module.recompile()
+                fusing_module.delete_all_unused_submodules()
             except RuntimeError as e:
-                logger.debug(f"graph lint failed")
+                logger.debug(f"fusing module recompiling failed")
                 logger.debug(f"\\\\\\\\ {e}")
                 break
-            self.graph_mod.graph = fusing_graph
-            if fusing_graph.eliminate_dead_code():
-                logger.debug(f"graph has dead code")
-                break
-            self.graph_mod.recompile()
             try:
-                JitModuleFactory.produce(self.graph_mod)
-            except ValueError:
+                JitModuleFactory.produce(fusing_module)
+            except ValueError as e:
                 logger.debug(f"can't find jit module")
                 break
             logger.debug(f"fuse node `%{cur_node.name}`")
@@ -129,27 +131,6 @@ class VerticalFusePass(PassBase):
             return fusable_nodes
         else:
             return None
-
-    def find_fusable_nodes(self):
-        origin_graph = self.origin_graph
-        # fusable_nodes_group = []
-        # Searching fusable nodes
-        visited = set()
-        fused_nodes = set()
-        fuse_parteners_of = {}
-        for node in origin_graph.nodes:
-            fuse_parteners = self.find_fuse_parteners(node, visited)
-            if fuse_parteners is None:
-                visited.add(node)
-            else:
-                assert len(fuse_parteners) > 0
-                visited.update(fuse_parteners)
-                fused_nodes.update(fuse_parteners)
-                for fp in fuse_parteners:
-                    fuse_parteners_of[fp] = fuse_parteners
-                # fusable_nodes_group.append(fuse_parteners)
-            self.graph_mod.graph = origin_graph
-        return fused_nodes, fuse_parteners_of
 
     def fuse_nodes(self, fused_nodes, fuse_parteners_of):
         # Fuse nodes and add them into graph
@@ -190,13 +171,16 @@ class VerticalFusePass(PassBase):
                 if len(fused_node_args_sample_inputs) == 1:
                     fused_node_args_sample_inputs = fused_node_args_sample_inputs[0]
                 # Build fused module and insert
-                fused_graph = build_sub_graph(origin_graph, fuse_parteners_of[node])
-                self.graph_mod.graph = fused_graph
-                self.graph_mod.recompile()
+                fused_module = GraphModule(
+                    self.graph_mod,
+                    build_sub_graph(origin_graph, fuse_parteners_of[node]),
+                )
+                fused_module.recompile()
+                fused_module.delete_all_unused_submodules()
                 # TODO: make module
                 try:
                     fused_jit_module = make_jit_module(
-                        modules=self.graph_mod,
+                        modules=fused_module,
                         sample_inputs=fused_node_args_sample_inputs,
                     )
                 except Exception as e:
@@ -260,11 +244,14 @@ class VerticalFusePass(PassBase):
     def _make_fused_module(self, fuse_parteners: List[Node]):
         args, sample_inputs = self._generate_fused_inputs(fuse_parteners)
         # Build fused module and insert
-        fused_module_graph = build_sub_graph(self.origin_graph, fuse_parteners)
-        self.graph_mod.graph = fused_module_graph
-        self.graph_mod.recompile()
+        vfused_module = GraphModule(
+            self.graph_mod,
+            build_sub_graph(self.origin_graph, fuse_parteners),
+        )
+        vfused_module.recompile()
+        vfused_module.delete_all_unused_submodules()
         fused_jit_module = make_jit_module(
-            modules=self.graph_mod,
+            modules=vfused_module,
             sample_inputs=sample_inputs,
         )
         return fused_jit_module, args, sample_inputs
@@ -290,6 +277,7 @@ class VerticalFusePass(PassBase):
                 outshape=fuse_parteners[-1].outshape,
             )
         fuse_parteners[-1].replace_all_uses_with(fused_node)
+        return fused_node
         # user_node.args = map_arg(
         #     user_node.args, lambda n: fused_node if n is fuse_parteners[-1] else n
         # )
@@ -299,13 +287,7 @@ class VerticalFusePass(PassBase):
         #     node_remap[fpn] = fused_node
 
     def run_on_graph(self):
-        # fused_nodes, fuse_parteners_of = self.find_fusable_nodes()
-        # self.fuse_nodes(fused_nodes, fuse_parteners_of)
         visited = set()
-        # fused_nodes = set()
-        # fuse_parteners_of = {}
-        # node_remap = {}
-        # new_graph = Graph()
         for node in self.origin_graph.nodes:
             fuse_parteners = self.find_fuse_parteners(node, visited)
             if fuse_parteners is None:

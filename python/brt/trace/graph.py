@@ -22,6 +22,7 @@ __all__ = ["symbolic_trace", "GraphTracer", "GraphModule", "Graph"]
 
 logger = log.get_logger(__file__)
 
+
 class GraphModule(fx.GraphModule):
     pass
 
@@ -204,16 +205,16 @@ class GraphTracer(fx.Tracer):
         """
         fx_graph = super().trace(root, concrete_args)
         graph = Graph(fx_graph.owning_module, fx_graph._tracer_cls)
-        output_vals =  graph.graph_copy(fx_graph, {}, return_output_node=True)
+        output_vals = graph.graph_copy(fx_graph, {}, return_output_node=True)
         output_val, old_output_val = output_vals
-        graph.output(output_val, type_expr=getattr(old_output_val, 'type', None))
+        graph.output(output_val, type_expr=getattr(old_output_val, "type", None))
         if tracing_shape:
             graph = self.trace_shape(graph, sample_inputs, fixed_inputs)
         return graph
 
     def trace_shape(
         self, graph: Graph, sample_inputs: Dict[str, Tensor], fixed_inputs: bool
-    )-> Graph:
+    ) -> Graph:
         if sample_inputs is None:
             sample_inputs = {}
 
@@ -222,6 +223,8 @@ class GraphTracer(fx.Tracer):
         router_to_node = {}
         fixed_router_info = {}
         all_hooks = []
+        # Get outshape of routers
+        # TODO: using RouterBase.ptu_grain_history
         for node in graph.nodes:
             assert isinstance(node, Node), type(node)
             if node.op == "call_module" and isinstance(
@@ -268,7 +271,9 @@ class GraphTracer(fx.Tracer):
             assert isinstance(node, Node), type(node)
             # TODO:
             if node.kwargs:
-                logger.info(f"Currently not support nodes with kwargs (`{node.name}`), the info of kwargs won't be traced")
+                logger.info(
+                    f"Currently not support nodes with kwargs (`{node.name}`), the info of kwargs won't be traced"
+                )
             if node.op == "placeholder":
                 if not fixed_inputs:
                     continue
@@ -292,12 +297,20 @@ class GraphTracer(fx.Tracer):
                 ):
                     # Assert that arg is either a node or a constant
                     node_inputs = graph._get_output_from_node_or_list(node.args)
-                    node_kw_inputs = {key: graph._get_output_from_node_or_list(kwarg) for key, kwarg in node.kwargs.items()}
+                    node_kw_inputs = {
+                        key: graph._get_output_from_node_or_list(kwarg)
+                        for key, kwarg in node.kwargs.items()
+                    }
                 else:
                     # Can't propagate shape
                     continue
                 if node.op == "call_method":
-                    func = getattr(torch.Tensor if isinstance(node.args[0], Node) else type(node.args[0]), node.target)
+                    func = getattr(
+                        torch.Tensor
+                        if isinstance(node.args[0], Node)
+                        else type(node.args[0]),
+                        node.target,
+                    )
                 elif node.op == "call_module":
                     func = root.get_submodule(node.target).forward
                 elif node.op == "call_function":
@@ -327,7 +340,6 @@ class GraphTracer(fx.Tracer):
         return graph
 
     def is_leaf_module(self, m: torch.nn.Module, module_qualified_name: str) -> bool:
-
         ##FIXME this is error when we use deepcopy is_router always returns false
         if is_router(m) or is_leaf_node(m):
             return True
@@ -346,17 +358,16 @@ class GraphModule(fx.GraphModule):
     @property
     def graph(self) -> Graph:
         return super().graph
-    
-    @graph.setter
-    def graph(self, g : Graph) -> None:
-        fx.GraphModule.graph.fset(self, g)
 
+    @graph.setter
+    def graph(self, g: Graph) -> None:
+        fx.GraphModule.graph.fset(self, g)
 
 
 def symbolic_trace(
     m: nn.Module, name=None, tracing_shape: bool = False, **tracer_kwargs
 ) -> fx.GraphModule:
-    """ Trace a module and propagation the node input and output shapes.
+    """Trace a module and propagation the node input and output shapes.
 
     Args:
         m (nn.Module): the module to be traced.

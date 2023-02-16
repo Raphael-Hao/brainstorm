@@ -13,7 +13,6 @@ logger = log.get_logger(__file__)
 
 
 class LinearModule(AtomModule):
-
     _input_arg_indices = {"forward": [0]}
     _output_arg_indices = {"forward": [2]}
     _shared_arg_indices = {"forward": [0, 2]}
