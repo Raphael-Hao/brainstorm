@@ -11,4 +11,5 @@ from brt.router.base import (
     make_router,
     register_router,
     switch_router_mode,
+    reset_router_stats,
 )

@@ -11,7 +11,6 @@ __all__ = ["make_jit_function"]
 
 def make_jit_function(modules, sample_inputs=None, mode="eval", opt_level=None):
     if mode == "eval":
-
         assert sample_inputs is not None, "sample_inputs must be provided in eval mode"
 
         jit_kernel = make_jit_kernel(modules, sample_inputs, "forward", opt_level)

@@ -25,3 +25,6 @@ graphviz
 ipykernel
 nvitop
 sentencepiece
+opencv-python
+pydot
+pathos

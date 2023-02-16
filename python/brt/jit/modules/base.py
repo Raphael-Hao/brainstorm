@@ -38,6 +38,7 @@ class ModuleBase(ABC):
             rank=rank,
         )
         kernel_code, _, _, _ = global_kernel.get_code()
+        self.kernel_code = kernel_code
         processed_template_fname = str(
             BRT_KERNEL_TEMPLATE_PATH
             / ("processed_" + global_kernel.func_name[:10] + ".cu")

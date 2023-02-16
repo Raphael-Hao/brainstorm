@@ -18,6 +18,7 @@ def dump_scatter_trace(mod: nn.Module):
     return scatter_results
     # np.save("scatter_results.npy", scatter_results, allow_pickle=True)
 
+
 def load_scatter_trace(trace_path):
     return np.load(trace_path, allow_pickle=True)
 

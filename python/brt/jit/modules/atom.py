@@ -7,7 +7,11 @@ from typing import List, Tuple, Union, Literal, Any, Optional, Type, Dict
 import torch
 from torch import autograd
 from torch import nn
-from torch.overrides import handle_torch_function, wrap_torch_function, has_torch_function
+from torch.overrides import (
+    handle_torch_function,
+    wrap_torch_function,
+    has_torch_function,
+)
 
 from brt.runtime import log
 from brt.jit.modules.base import ModuleBase, JitModuleBase, AtomModuleInputType
@@ -46,16 +50,26 @@ class AtomModule(ModuleBase):
                 input_arg_indices,
                 output_arg_indices,
             ) = self._extract_arg_infos("forward")
-            out_data = [
-                torch.empty(shp, device="cuda")
-                for shp in self._get_output_shape("forward", sample_inputs)
-            ]
+            output_shape = list(self._get_output_shape("forward", sample_inputs))
+            out_data = [torch.empty(shp, device="cuda") for shp in output_shape]
+            empty_output_shape = list(
+                torch.Size([0, *oshp[1:]]) for oshp in output_shape
+            )
+            empty_outputs = [torch.empty(eoshp).cuda() for eoshp in empty_output_shape]
 
             class JitFunction(autograd.Function):
                 @staticmethod
                 @wrap_torch_function(lambda *x: x)
                 def forward(ctx: Any, *inputs):
                     inputs = list(inputs)
+                    for input in inputs:
+                        if (
+                            isinstance(input, torch.Tensor)
+                            and input.numel() == 0
+                            # ) or input is None:
+                        ):
+                            # logger.debug("empty input found, exits")
+                            return empty_outputs
                     for i, out_index in enumerate(output_arg_indices):
                         inputs.insert(out_index, out_data[i])
                     # init proto tensor
@@ -96,6 +110,7 @@ class AtomModule(ModuleBase):
     def ismodule(cls, module: nn.Module) -> bool:
         raise NotImplementedError()
 
+
 class JitAtomModule(JitModuleBase):
     def __init__(
         self,
@@ -106,7 +121,7 @@ class JitAtomModule(JitModuleBase):
     ):
         super().__init__(function, module_name, extra_repr, parameters)
         self._factory_cls = AtomModule
-    
+
     @abstractmethod
     def forward(self):
         pass

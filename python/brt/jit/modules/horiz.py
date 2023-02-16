@@ -68,12 +68,9 @@ class HorizFusedModule(FusedModule):
             itertools.chain.from_iterable(output_arg_indices)
         )
         output_shape = list(self._get_output_shape("forward", sample_inputs))
-        print(output_shape)
+        out_data = [torch.empty(shp).to("cuda") for shp in output_shape]
         empty_output_shape = list(torch.Size([0, *oshp[1:]]) for oshp in output_shape)
-        out_data = [
-            torch.empty(shp).to("cuda")
-            for shp in output_shape
-        ]
+        empty_outputs = [torch.empty(eoshp).cuda() for eoshp in empty_output_shape]
 
         class JitFunction(autograd.Function):
             @staticmethod
@@ -87,11 +84,12 @@ class HorizFusedModule(FusedModule):
                 # ):
                 for input in inputs:
                     if (
-                        isinstance(input, torch.Tensor) and input.numel() == 0
-                    # ) or input is None:
+                        isinstance(input, torch.Tensor)
+                        and input.numel() == 0
+                        # ) or input is None:
                     ):
                         # logger.debug("empty input found, exits")
-                        return [torch.empty(eoshp).cuda() for eoshp in empty_output_shape]
+                        return empty_outputs
                 for i, out_index in enumerate(output_arg_indices_chain):
                     inputs.insert(out_index, out_data[i])
                 jit_kernel(*inputs)
@@ -106,6 +104,8 @@ class HorizFusedModule(FusedModule):
                             lambda *x: branch_outputs, branch_inputs, *branch_inputs
                         )
                         outputs.extend(packed_branch_outputs)
+                    else:
+                        outputs.extend(branch_outputs)
                 # outputs = [inputs[i] for i in output_arg_indices_chain]
                 return tuple(outputs)
 
@@ -127,8 +127,10 @@ class HorizFusedModule(FusedModule):
             objective_func=objective_func,
             rank=rank,
         )
-        module_name = f"BRT.HorizFused_{self.num_submodule}"
-        extra_repr = "\n".join([str(m) for m in self.module])
+        module_name = f"BRT.HorizFused_{self.num_submodule}_" + "_".join(
+            jsm.module_name for jsm in self.jit_submodules
+        )
+        extra_repr = "\n".join([nn.Module.__str__(m) for m in self.module])
 
         (
             input_arg_num,
@@ -151,7 +153,7 @@ class HorizFusedModule(FusedModule):
                 jsm._extract_parameters_and_buffers() for jsm in self.jit_submodules
             )
         )
-        return JitHorizFusedModule(
+        fused_module = JitHorizFusedModule(
             module_input_arg_indices,
             function=jit_function,
             module_name=module_name,
@@ -161,6 +163,8 @@ class HorizFusedModule(FusedModule):
                 for i, param in enumerate(submodule_params_and_buffs)
             },
         )
+        fused_module.cuda_code = self.kernel_code
+        return fused_module
 
     def _extract_shared_arg_infos(
         self,
@@ -184,10 +188,10 @@ class HorizFusedModule(FusedModule):
                 sub_input_arg_indices,
                 sub_output_arg_indices,
             ) = jsm._extract_arg_infos(method)
+            input_arg_indices.append([i + total_arg_num for i in sub_input_arg_indices])
             output_arg_indices.append(
                 [i + total_arg_num for i in sub_output_arg_indices]
             )
-            input_arg_indices.append([i + total_arg_num for i in sub_input_arg_indices])
             total_arg_num += sub_total_arg_num
             input_arg_num += sub_input_arg_num
         return (
@@ -233,7 +237,6 @@ class JitHorizFusedModule(JitFusedModule):
         # self.forward(list(itertools.chain.from_iterable(sample_inputs)))
 
     def forward(self, *inputs: torch.Tensor):
-
         for input, input_index in zip(inputs, self._module_input_arg_indices):
             self._function_input_templete["forward"][input_index] = input
         output = self.function.apply(*self._function_input_templete["forward"])
