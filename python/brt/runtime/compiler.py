@@ -326,7 +326,7 @@ class KernelCompiler(metaclass=Singleton):
         else:
             raise ValueError("Cannot find the kernel signature in the source string.")
 
-    def _make_binary(self) -> str:
+    def _make_binary_source(self) -> str:
         """Generate the skeleton of the binary string.
 
         Returns:
@@ -350,14 +350,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {{
 }}
 """
 
-
     def _make_headers(self):
         """Generate the headers of the binary string.
 
         Returns:
             source code for generating the headers: The headers of the binary string.
         """
-        return f"""
+        headers = """
 include <brt/runtime/utils.h>
 #include <brt/runtime/cuda_utils.h>
 
@@ -380,6 +379,7 @@ include <brt/runtime/utils.h>
 #define CHECK_ON_CUDA(x) TORCH_INTERNAL_ASSERT(x.is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CONTIGUOUS(x) TORCH_INTERNAL_ASSERT(x.is_contiguous(), #x " must be contiguous")
 """
+        return headers
 
     def _make_paramer_struct(self):
         """Generate the struct of the kernel parameters.
