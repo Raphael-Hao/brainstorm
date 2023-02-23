@@ -37,6 +37,7 @@ class Node(fx.Node):
         is_fixed_inout: Optional[bool] = False,
         inshape: Union[torch.Size, None, List] = None,
         outshape: Union[torch.Size, None, List] = None,
+        proto_depth: Union[int, List] = 0,
     ) -> None:
         """Appending torch.fx.Node to enable shape propagation.
 
@@ -48,12 +49,22 @@ class Node(fx.Node):
                 only if the dependent node is fixed and without a None `outshape`.
             outshape (torch.Size, None, List): (for each member if a list) a `torch.Size` instance
                 only if the return value is a tensor with fixed shape, unless it's constant.
+            proto_depth (int, List): (for each member if a list) the length of the tag_stack of
+                the input tensor. 0 for `torch.Tensor`.
         """
         super().__init__(graph, name, op, target, args, kwargs, return_type)
         # True if the node is after a router with fixable cell distrubution
         self.is_fixed_inout = is_fixed_inout
         self.inshape: Union[torch.Size, None, List] = inshape
         self.outshape: Union[torch.Size, None, List] = outshape
+        if (
+            isinstance(proto_depth, int)
+            and not isinstance(inshape, torch.Size)
+            and inshape is not None
+        ):
+            self.proto_depth = [proto_depth] * len(inshape)
+        else:
+            self.proto_depth = proto_depth
 
     def set_inout_shape(
         self,

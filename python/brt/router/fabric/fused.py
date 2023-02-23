@@ -233,6 +233,8 @@ class FusedDispatchFabric(DispatchFabric):
 class FusedCombineFabric(CombineFabric):
     def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
         assert granularity_padding == False
+        if flow_num != 1:
+            raise NotImplementedError
         super().__init__(
             flow_num=flow_num,
             reduction=reduction,

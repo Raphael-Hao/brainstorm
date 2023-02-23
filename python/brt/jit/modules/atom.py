@@ -59,7 +59,7 @@ class AtomModule(ModuleBase):
 
             class JitFunction(autograd.Function):
                 @staticmethod
-                @wrap_torch_function(lambda *x: x)
+                # @wrap_torch_function(lambda *x: x)
                 def forward(ctx: Any, *inputs):
                     inputs = list(inputs)
                     for input in inputs:

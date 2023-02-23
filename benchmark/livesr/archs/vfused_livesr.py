@@ -53,4 +53,3 @@ class vFusedLiveSR(nn.Module):
             )
         gathered = self.gather(subnet_outputs)
         return gathered
-

@@ -99,13 +99,14 @@ class HorizFusedModule(FusedModule):
                 ):
                     branch_inputs = [inputs[bii] for bii in branch_input_indices]
                     branch_outputs = [inputs[boi] for boi in branch_output_indices]
-                    if has_torch_function(branch_inputs):
-                        packed_branch_outputs = handle_torch_function(
-                            lambda *x: branch_outputs, branch_inputs, *branch_inputs
-                        )
-                        outputs.extend(packed_branch_outputs)
-                    else:
-                        outputs.extend(branch_outputs)
+                    # if has_torch_function(branch_inputs):
+                    #     packed_branch_outputs = handle_torch_function(
+                    #         lambda *x: branch_outputs, branch_inputs, *branch_inputs
+                    #     )
+                    #     outputs.extend(packed_branch_outputs)
+                    # else:
+                    #     outputs.extend(branch_outputs)
+                    outputs.extend(branch_outputs)
                 # outputs = [inputs[i] for i in output_arg_indices_chain]
                 return tuple(outputs)
 
@@ -163,7 +164,6 @@ class HorizFusedModule(FusedModule):
                 for i, param in enumerate(submodule_params_and_buffs)
             },
         )
-        fused_module.cuda_code = self.kernel_code
         return fused_module
 
     def _extract_shared_arg_infos(
