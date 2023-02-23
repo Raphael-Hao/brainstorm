@@ -5,7 +5,7 @@ import torch
 from brt.runtime import log
 
 __all__ = [
-    "Cell",
+    "GridTensor",
     "init_cell",
     "deinit_cell",
     "to_cell",
@@ -15,26 +15,6 @@ __all__ = [
 ]
 
 logger = log.get_logger(__file__)
-
-
-def proto_attr_factory(name):
-    def getter(self):
-        return self._get_proto_attr(name)
-
-    def setter(self, value):
-        self._set_proto_attr(name, value)
-
-    return property(getter, setter, doc=f"brt Mono attr: {name}")
-
-
-def proto_attr_stack_factory(name):
-    def getter(self):
-        return self._get_proto_attr_stack(name)
-
-    def setter(self, value):
-        self._set_proto_attr_stack(name, value)
-
-    return property(getter, setter, doc=f"brt Mono attr stack: {name}")
 
 
 def collect_cell_attr_stack(
@@ -52,28 +32,43 @@ def collect_cell_attr_stack(
     """
     all_tag_stack = None
     all_load_stack = None
-    all_extra_attrs_stack_dict = {
-        attr_stack: [] for attr_stack in Cell.EXTRA_ATTRS_STACK
-    }
+    all_dims_stack = None
+    all_shape_stack = None
+    all_extra_attrs_dict = None
 
-    if isinstance(args, Cell):
+    if isinstance(args, GridTensor):
         all_tag_stack = args.tag_stack
         all_load_stack = args.load_stack
-        for attr_stack in Cell.EXTRA_ATTRS_STACK:
-            all_extra_attrs_stack_dict[attr_stack] = getattr(args, attr_stack)
-        return all_tag_stack, all_load_stack, all_extra_attrs_stack_dict
+        all_dims_stack = args.dims_stack
+        all_shape_stack = args.shape_stack
+        all_extra_attrs_dict = args.extra_attrs_dict
+        return (
+            all_tag_stack,
+            all_load_stack,
+            all_dims_stack,
+            all_shape_stack,
+            all_extra_attrs_dict,
+        )
 
     if isinstance(args, (Tuple, List)):
         for a in args:
             (
                 _all_tags,
                 _all_loads,
-                _all_extra_attrs_stack_dict,
+                _all_dims,
+                _all_shape,
+                _all_extra_attrs_dict,
             ) = collect_cell_attr_stack(a)
             if _all_tags is not None and _all_loads is not None:
-                return _all_tags, _all_loads, _all_extra_attrs_stack_dict
+                return (
+                    _all_tags,
+                    _all_loads,
+                    _all_dims,
+                    _all_shape,
+                    all_extra_attrs_dict,
+                )
 
-    return all_tag_stack, all_load_stack, all_extra_attrs_stack_dict
+    return all_tag_stack, all_load_stack,all_dims_stack, all_shape_stack, all_extra_attrs_dict
 
 
 def pack_proto_attr_stack(
@@ -83,7 +78,7 @@ def pack_proto_attr_stack(
     extra_attrs_stack_dict: Dict[str, List[Any]] = None,
 ):
 
-    if isinstance(ret, Cell):
+    if isinstance(ret, GridTensor):
         extra_attrs_stack_dict = extra_attrs_stack_dict or {}
         ret = ret.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
 
@@ -96,19 +91,42 @@ def pack_proto_attr_stack(
     return ret
 
 
-class Cell(torch.Tensor):
+class GridTensor(torch.Tensor):
     SHALLOW_TRANSPORT = True
     CHECK_TAGS = False
 
-    def init_cell(self, dims: List[int]):
+    def init_cell(self):
         if not self.cell_initilized:
             self.__dict__["cell_tag_stack"] = []
             self.__dict__["cell_load_stack"] = []
+            self.__dict__["cell_dims_stack"] = []
+            self.__dict__["cell_shape_stack"] = []
+            self.__dict__["cell_extra_attr_dict"] = {}
 
     def annotation_empty(self):
         if not self.tag_stack or not self.load_stack:
             return True
         return False
+
+    @property
+    def cell_initilized(self):
+        return hasattr(self, "cell_tag_stack") and hasattr(self, "cell_load_stack")
+
+    @property
+    def tag(self) -> torch.Tensor:
+        return self._get_attr("tag")
+
+    @tag.setter
+    def tag(self, value):
+        self._set_stacked_attr("tag", value)
+
+    @property
+    def load(self) -> int:
+        return self._get_attr("load")
+
+    @load.setter
+    def load(self, value):
+        self._set_stacked_attr("load", value)
 
     @property
     def tag_stack(self) -> List[torch.Tensor]:
@@ -126,75 +144,49 @@ class Cell(torch.Tensor):
     def load_stack(self, value):
         self._set_attr_stack("load_stack", value)
 
-    @property
-    def cell_initilized(self):
-        return hasattr(self, "cell_tag_stack") and hasattr(self, "cell_load_stack")
-
-    @property
-    def tag(self) -> torch.Tensor:
-        return self._get_attr("tag")
-
-    @tag.setter
-    def tag(self, value):
-        self._set_attr("tag", value)
-
-    @property
-    def load(self) -> int:
-        return self._get_attr("load")
-
-    @load.setter
-    def load(self, value):
-        self._set_attr("load", value)
-
     def _get_attr_stack(self, attr_stack):
         return self.__dict__["cell_" + attr_stack]
 
     def _set_attr_stack(self, attr_stack, value):
-        """We need at least a shadow copy here because the attr_stack can be shared with other Mono.
-        otherwise, modifying other Mono will modify the attr_stack of this Mono.
+        """We need at least a shadow copy here because the attr_stack can be shared with other GridTensor.
+        otherwise, modifying other GridTensor will modify the attr_stack of this GridTensor.
         """
-        if Cell.SHALLOW_TRANSPORT:
+        if GridTensor.SHALLOW_TRANSPORT:
             self.__dict__["cell_" + attr_stack] = value
         else:
             self.__dict__["cell_" + attr_stack] = copy.copy(value)
 
-    def _get_attr(self, attr):
-        assert (
-            not self.annotation_empty()
-        ), f"Trying to get {attr} from a Mono without packed tag and load"
+    def _get_stacked_attr(self, attr):
         return self.__dict__["cell_" + attr + "_stack"][-1]
 
-    def _set_attr(self, attr, value):
-        assert (
-            not self.annotation_empty()
-        ), f"Trying to set {attr} to {value} for a Mono without packed tag and load"
+    def _set_stacked_attr(self, attr, value):
         self.__dict__["cell_" + attr + "_stack"][-1] = value
 
-    def _push_attr(self, attr, value):
+    def _push_stacked_attr(self, attr, value):
         self.__dict__["cell_" + attr + "_stack"].append(value)
 
-    def _pop_attr(self, attr):
+    def _pop_stacked_attr(self, attr):
         return self.__dict__["cell_" + attr + "_stack"].pop()
 
     def pack(self, tag: torch.Tensor, load: int, **kwargs):
         self.init_cell()
-        self._push_attr("tag", tag)
-        self._push_attr("load", load)
+        self._push_stacked_attr("tag", tag)
+        self._push_stacked_attr("load", load)
 
-        for attr in Cell.EXTRA_ATTRS:
-            value = kwargs.pop(attr, Cell.EXTRA_ATTRS_DEFAULT_VALUES[attr])
-            self._push_attr(attr, value)
+        for attr in GridTensor.EXTRA_ATTRS:
+            value = kwargs.pop(attr, GridTensor.EXTRA_ATTRS_DEFAULT_VALUES[attr])
+            self._push_stacked_attr(attr, value)
 
         return self
 
     def unpack(self):
         assert self.cell_initilized and not self.annotation_empty()
-        tag = self._pop_attr("tag")
-        load = self._pop_attr("load")
+        tag = self._pop_stacked_attr("tag")
+        load = self._pop_stacked_attr("load")
         extra_attrs_dict = {}
 
-        for attr in Cell.EXTRA_ATTRS:
-            value = self._pop_attr(attr)
+        for attr in GridTensor.EXTRA_ATTRS:
+            value = self._pop_stacked_attr(attr)
             extra_attrs_dict[attr] = value
 
         return self, tag, load, extra_attrs_dict
@@ -206,9 +198,9 @@ class Cell(torch.Tensor):
         self.tag_stack = tag_stack
         self.load_stack = load_stack
 
-        for attr_stack in Cell.EXTRA_ATTRS_STACK:
+        for attr_stack in GridTensor.EXTRA_ATTRS_STACK:
             value = kwargs.pop(
-                attr_stack, Cell.EXTRA_ATTRS_STACK_DEFAULT_VALUES[attr_stack]
+                attr_stack, GridTensor.EXTRA_ATTRS_STACK_DEFAULT_VALUES[attr_stack]
             )
             assert isinstance(value, List)
             self._set_attr_stack(attr_stack, value)
@@ -222,7 +214,7 @@ class Cell(torch.Tensor):
         load_stack, self.load_stack = self.load_stack, []
         extra_attrs_stack_dict = {}
 
-        for attr_stack in Cell.EXTRA_ATTRS_STACK:
+        for attr_stack in GridTensor.EXTRA_ATTRS_STACK:
             value = self._get_attr_stack(attr_stack)
             extra_attrs_stack_dict[attr_stack] = value
             self._set_attr_stack(attr_stack, [])
@@ -231,12 +223,12 @@ class Cell(torch.Tensor):
 
     def copy_stacks(self):
         assert self.cell_initilized
-        if Cell.SHALLOW_TRANSPORT:
+        if GridTensor.SHALLOW_TRANSPORT:
             tag_stack = self.tag_stack
             load_stack = self.load_stack
             extra_attrs_stack_dict = {}
 
-            for attr_stack in Cell.EXTRA_ATTRS_STACK:
+            for attr_stack in GridTensor.EXTRA_ATTRS_STACK:
                 value = self._get_attr_stack(attr_stack)
                 extra_attrs_stack_dict[attr_stack] = value
         else:
@@ -244,7 +236,7 @@ class Cell(torch.Tensor):
             load_stack = copy.copy(self.load_stack)
             extra_attrs_stack_dict = {}
 
-            for attr_stack in Cell.EXTRA_ATTRS_STACK:
+            for attr_stack in GridTensor.EXTRA_ATTRS_STACK:
                 value = self._get_attr_stack(attr_stack)
                 extra_attrs_stack_dict[attr_stack] = copy.copy(value)
 
@@ -277,8 +269,8 @@ def init_cell(
     tag_stack: List[torch.Tensor] = None,
     load_stack: List[int] = None,
     extra_attrs_stack_dict: Dict[str, List[Any]] = None,
-) -> Cell:
-    cell = tensor.as_subclass(Cell)
+) -> GridTensor:
+    cell = tensor.as_subclass(GridTensor)
     extra_attrs_stack_dict = extra_attrs_stack_dict or {}
     if tag_stack and load_stack:
         cell.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
@@ -288,7 +280,7 @@ def init_cell(
 
 
 def deinit_cell(
-    cell: Cell,
+    cell: GridTensor,
     retrieve_attr=True,
 ) -> Union[Tuple[torch.Tensor, List[torch.Tensor], List[int]], torch.Tensor]:
     if retrieve_attr:
@@ -304,11 +296,30 @@ def deinit_cell(
         return cell.as_subclass(torch.Tensor)
 
 
-def annotate(tensor: torch.Tensor, from_mono: Cell) -> Cell:
-    return init_cell(tensor, *collect_cell_attr_stack(from_mono))
+def annotate(
+    tensor: torch.Tensor, dims: List[int], cell_shape: List[int] = None
+) -> GridTensor:
+    """
+    annotate a torch.Tensor with dims
+    """
+    assert isinstance(dims, list)
+    dims = sorted(dims)
+    assert dims[-1] < len(tensor.shape)
+    if cell_shape is not None:
+        assert isinstance(cell_shape, list)
+        assert len(cell_shape) == len(tensor.shape) - len(dims)
+    else:
+        cell_shape = [
+            tensor.shape[i] for i in range(len(tensor.shape)) if i not in dims
+        ]
+    transposed_dims = dims + [i for i in range(len(tensor.shape)) if i not in dims]
+    transposed_tensor = tensor.permute(*transposed_dims).contiguous()
+    reshaped_tensor = transposed_tensor.reshape(-1, *cell_shape)
+
+    return init_cell(reshaped_tensor)
 
 
-def unannotate(mono: Cell, return_att=False) -> torch.Tensor:
+def unannotate(mono: GridTensor, return_att=False) -> torch.Tensor:
     return deinit_cell(mono)[0]
 
 
@@ -316,12 +327,12 @@ def to_cell(_torch_tensor: torch.Tensor):
     """
     restore a torch.Tensor to a Mono without any pack operation
     """
-    proto_tensor: Cell = _torch_tensor.as_subclass(Cell)
+    proto_tensor: GridTensor = _torch_tensor.as_subclass(GridTensor)
     assert proto_tensor.cell_initilized
     return proto_tensor
 
 
-def to_tensor(proto_tensor: Cell, return_stack=False):
+def to_tensor(proto_tensor: GridTensor, return_stack=False):
     """
     we avoid broadcasting stack information by restore a Mono to
     torch.Tensor when we do not need it, e.g., inside the routers
