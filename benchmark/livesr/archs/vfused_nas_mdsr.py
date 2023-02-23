@@ -6,6 +6,7 @@ from torch import nn
 from brt.jit import make_jit_module
 
 from archs.conv2d_mul_add import Conv2dMulAdd
+
 # from archs.fuse import TunedKernel
 from archs.nas_mdsr import SingleNetwork as NAS, ResBlock, Upsampler
 
@@ -76,7 +77,9 @@ class vFusedResBlock(nn.Module):
         # )
         self.body_0 = make_jit_module(
             nn.Sequential(raw.body[0], raw.body[1]),
-            sample_inputs=torch.empty([bs, raw.body[0].in_channels, 32, 32], device="cuda"),
+            sample_inputs=torch.empty(
+                [bs, raw.body[0].in_channels, 32, 32], device="cuda"
+            ),
         )
         self.body_1 = make_jit_module(
             Conv2dMulAdd(raw.body[2], raw.res_scale),

@@ -62,7 +62,9 @@ class Classifier(nn.Module):
     def __init__(self, n_subnets: int):
         super().__init__()
         self.resnet = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).eval()
-        with open(f"/home/v-louyang/brt/benchmark/livesr/kmeans_{n_subnets}.pkl", "rb") as pkl:
+        with open(
+            f"/home/v-louyang/brt/benchmark/livesr/kmeans_{n_subnets}.pkl", "rb"
+        ) as pkl:
             self.kmeans: MiniBatchKMeans = pickle.load(pkl)["kmeans"]
 
     def forward(self, x: torch.Tensor):
@@ -119,6 +121,7 @@ class TunedClassifier(nn.Module):
         tvm_out = dlpack.from_dlpack(self.resnet.get_output(0).to_dlpack()).squeeze()
         dis = self.kmeans(tvm_out)
         return dis
+
 
 @register_leaf_node
 class kMeans(nn.Module):

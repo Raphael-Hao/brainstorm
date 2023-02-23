@@ -31,7 +31,6 @@ class ResBlock(nn.Module):
     def __init__(
         self, nFeat, bias=True, bn=False, act=None, res_scale=1, kernel_size=3
     ):
-
         super(ResBlock, self).__init__()
 
         modules_body = []

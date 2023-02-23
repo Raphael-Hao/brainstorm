@@ -19,10 +19,13 @@ def crop_image(image: torch.Tensor, size: int, stride: int):
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, path: Path, device: str):
+        self.NUM_IMGS = 100
         self.device = torch.device(device)
         self.imgs = list(path.iterdir())
 
     def __getitem__(self, index: int):
+        if index >= self.NUM_IMGS:
+            raise IndexError
         image_path = self.imgs[index]
         # image = cv2.imread(str(image_path), cv2.IMREAD_COLOR).astype(np.float32) / 255.0
         image = torchvision.io.read_image(str(image_path)).to(dtype=torch.float32)
@@ -32,7 +35,7 @@ class Dataset(torch.utils.data.Dataset):
         return sub_images.to(self.device)
 
     def __len__(self):
-        return len(self.imgs)
+        return self.NUM_IMGS
 
 
 class DataLoader:
