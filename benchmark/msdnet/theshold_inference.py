@@ -381,7 +381,16 @@ def threshold_dynamic_evaluate(
                     timer.execute(lambda: raw_backbone(input_var), "raw_backbone")
                     raw_time.append(timer.avg)
 
-
+                vf_pass = VerticalFusePass(raw_backbone, sample_inputs={"x": input_var}, fusing_head=True)
+                vf_pass.run_on_graph()
+                vf_backbone = vf_pass.finalize()
+                # print(f"str(vf_backbone.graph) = {str(vf_backbone.graph)}\n\n")
+                for i, (input, target) in enumerate(test_loader):
+                    if i >= num_trials:
+                        break
+                    input_var = torch.autograd.Variable(input.cuda())
+                    timer.execute(lambda: vf_backbone(input_var), "verti_fuse")
+                    vf_time.append(timer.avg)
 
                 dpe_pass = DeadPathEliminatePass(raw_backbone, runtime_load=1)
                 dpe_pass.run_on_graph()
@@ -394,17 +403,6 @@ def threshold_dynamic_evaluate(
                         lambda: dce_backbone(input_var), "dead_path_eliminated"
                     )
                     dpe_time.append(timer.avg)
-
-                vf_pass = VerticalFusePass(dce_backbone, sample_inputs={"x": input_var}, fusing_head=True)
-                vf_pass.run_on_graph()
-                vf_backbone = vf_pass.finalize()
-                # print(f"str(vf_backbone.graph) = {str(vf_backbone.graph)}\n\n")
-                for i, (input, target) in enumerate(test_loader):
-                    if i >= num_trials:
-                        break
-                    input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(lambda: vf_backbone(input_var), "verti_fuse")
-                    vf_time.append(timer.avg)
 
                 constant_propagation_pass = ConstantPropagationPass(
                     dce_backbone, upper_perm_load=1

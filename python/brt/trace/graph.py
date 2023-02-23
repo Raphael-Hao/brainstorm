@@ -56,6 +56,7 @@ class Graph(fx.Graph):
                 node.is_fixed_inout,
                 node.inshape,
                 node.outshape,
+                node.proto_depth,
             )
             result_node.meta = copy.copy(node.meta)
             return result_node
@@ -74,6 +75,7 @@ class Graph(fx.Graph):
         is_fixed_inout: Optional[bool] = False,
         inshape: Union[torch.Size, None, List] = None,
         outshape: Union[torch.Size, None, List] = None,
+        proto_depth: Union[int, List] = 0,
     ) -> Node:
         assert op in (
             "call_function",
@@ -101,6 +103,7 @@ class Graph(fx.Graph):
             is_fixed_inout,
             inshape,
             outshape,
+            proto_depth,
         )
 
         self._graph_namespace.associate_name_with_obj(name, n)
@@ -239,7 +242,7 @@ class GraphTracer(fx.Tracer):
                 ):
                     router.capturing = False
                     router_to_node[router] = node
-                    fixed_router_info[node] = [None, None]
+                    fixed_router_info[node] = [None, None]  # [inshape, outshape]
 
                     def get_shape_hook(module, input, output):
                         fixed_router_info[router_to_node[module]][
@@ -276,17 +279,23 @@ class GraphTracer(fx.Tracer):
                 )
             if node.op == "placeholder":
                 if not fixed_inputs:
-                    continue
+                    node.proto_depth = 0
                 if node.target in sample_inputs:
                     shape = getattr(sample_inputs[node.target], "shape", None)
                     if shape is not None:
                         node.set_inout_shape(None, shape)
+                    tag_stack = getattr(sample_inputs[node.target], "tag_stack", None)
+                    if tag_stack is not None:
+                        node.proto_depth = len(tag_stack)
                 elif node.args is not None:
                     shape = getattr(node.args[0], "shape", None)
                     if shape is not None:
                         # This is typically unreachable, unless the module has an argument
                         # with a tensor-type default value
                         node.set_inout_shape(None, shape)
+                    tag_stack = getattr(node.args[0], "tag_stack", None)
+                    if tag_stack is not None:
+                        node.proto_depth = len(tag_stack)
             elif "call_" in node.op:
                 if node.op == "call_module" and is_router(
                     root.get_submodule(node.target)

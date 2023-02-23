@@ -4,9 +4,13 @@ import sys
 from pathlib import Path
 
 import torch
+from torch import nn
 from torch.utils.benchmark import Timer
 
-from brt.runtime.benchmark import profile
+from brt.runtime.benchmark import profile, CUDATimer
+from brt.runtime.log import get_logger, set_level_to_debug
+from brt.passes import RouterFixPass, VerticalFusePass, HorizFusePass
+from brt.router import switch_router_mode, RouterBase
 
 from archs.livesr import LiveSR
 from archs.vfused_livesr import vFusedLiveSR
@@ -20,90 +24,123 @@ ALL_SUBNET_BS = [
     [9, 32, 18, 16, 18, 7],
     [19, 25, 18, 36],
 ]
+ALL_NUM_SUBNETS = [len(subnet_bs) for subnet_bs in ALL_SUBNET_BS]
 ALL_NUM_CHANNELS = [8, 12, 16, 20]
-SUBNET_NUM_BLOCK = 1
+SUBNET_NUM_BLOCK = 80
 
-logger = logging.getLogger("benchmark")
+
+logger = get_logger(__file__)
 logger.setLevel(logging.DEBUG)
-logger_handler = logging.StreamHandler(stream=sys.stdout)
-logger_handler.setFormatter(
-    logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-)
-logger.addHandler(logger_handler)
+for hdlr in logger.handlers:
+    if isinstance(hdlr, logging.StreamHandler) and hdlr.stream is sys.stdout:
+        hdlr.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        )
+        break
+# logger_handler = logging.StreamHandler(stream=sys.stdout)
+# logger_handler.setFormatter(
+#     logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+# )
+# logger.addHandler(logger_handler)
 
-bench_module_list = [
-    "LiveSR",
-    "vFusedLiveSR",
-    "hFusedLiveSR",
-]
-
-logger.info(f"{SUBNET_NUM_BLOCK = }")
-logger.info(f"{ALL_SUBNET_BS = }")
-logger.info(f"{ALL_NUM_CHANNELS = }")
-
-module_dict = {}
-logger.info("Start")
+# set_level_to_debug()
 
 
-def build_module(subnet_bs, num_feature):
-    global module_dict
-    num_subnets = len(subnet_bs)
-    try:
-        if "LiveSR" in bench_module_list:
-            module_dict[("LiveSR", num_feature, num_subnets)] = LiveSR(
-                num_subnets, SUBNET_NUM_BLOCK, num_feature
-            ).cuda()
-            logger.info(f"LiveSR {num_feature} {num_subnets} builded")
-        if "vFusedLiveSR" in bench_module_list:
-            module_dict[("vFusedLiveSR", num_feature, num_subnets)] = vFusedLiveSR(
-                module_dict[("LiveSR", num_feature, num_subnets)], subnet_bs
-            )
-            logger.info(f"vFusedLiveSR {num_feature} {num_subnets} builded")
-        if "hFusedLiveSR" in bench_module_list:
-            module_dict[("hFusedLiveSR", num_feature, num_subnets)] = hFusedLiveSR(
-                module_dict[("LiveSR", num_feature, num_subnets)], subnet_bs
-            )
-            logger.info(f"hFusedLiveSR {num_feature} {num_subnets} builded")
-    except Exception as e:
-        logger.warning(str(e))
+timer = CUDATimer(loop=100, repeat=2)
 
 
-for subnet_bs in ALL_SUBNET_BS:
-    build_module(subnet_bs, ALL_NUM_CHANNELS[0])
-# for num_channels in [20]:
-for num_channels in ALL_NUM_CHANNELS[1:]:
-    build_module(ALL_SUBNET_BS[0], num_channels)
+def print_load_history(module: nn.Module):
+    for subn, subm in module.named_modules():
+        if isinstance(subm, RouterBase) and subm.fabric_type == "dispatch":
+            load_history = getattr(subm, "load_history", "no load_history found")
+            logger.debug(f"{subn}, {load_history}")
 
-dataloader = get_dataloader(DEFAULT_DATASET)
 
-for input_tensor in dataloader:
-    break
+def time_it(func, func_args, msg):
+    # profile(lambda: func(func_args))
 
-print(module_dict.keys())
-print(input_tensor.shape, input_tensor.device, input_tensor.dtype)
-
-for n in [10, 100]:
-    logger.info(f"* Start timeit: Run {n} times")
-    for (module_type, num_feature, num_subnets), model in module_dict.items():
-        x = input_tensor
-        time = (
+    USING_BRT_CUDA_TIMER = True
+    # USING_BRT_CUDA_TIMER = False
+    if USING_BRT_CUDA_TIMER:
+        timer.execute(lambda: func(func_args), msg)
+        return timer.avg
+    else:
+        return (
             Timer(
                 f"model(x)",
-                # f"model.classifier(x)",
                 setup="import torch; torch.cuda.synchronize()",
                 # setup="import torch; torch.cuda.synchronize(); torch.backends.cudnn.allow_tf32 = False; torch.backends.cudnn.allow_tf32 = False",
-                globals={"model": model, "x": x},
+                globals={"model": func, "x": func_args},
             )
-            .timeit(n)
+            .timeit(100)
             .mean
-            * 10e6
+            * 1e3
         )
-        logger.info(f"{module_type}, {num_feature}, {num_subnets}:\t\t {time} us/run")
 
 
-input("Press any key to start profiling")
-for (module_type, num_feature, num_subnets), model in module_dict.items():
-    logger.info(f"Profiling {module_type}")
-    model = module_dict[module_type]
-    x = input_tensor
-    profile(lambda: model(x))
+def benchmark(num_subnets: int, num_feature: int, input: torch.Tensor) -> None:
+    livesr = LiveSR(num_subnets, SUBNET_NUM_BLOCK, num_feature).cuda()
+    logger.info(f"LiveSR {num_feature} {num_subnets} builded")
+
+    switch_router_mode(livesr, True)
+    for input in dataloader:
+        livesr(input)
+    switch_router_mode(livesr, False)
+    print_load_history(livesr)
+
+    raw_time = time_it(livesr, input, "raw livesr")
+
+    router_fix_pass = RouterFixPass(livesr)
+    router_fix_pass.run_on_graph()
+    livesr_rf = router_fix_pass.finalize()
+
+    vfuse_pass = VerticalFusePass(livesr_rf, sample_inputs={"inputs": input_tensor})
+    vfuse_pass.run_on_graph()
+    livesr_vf = vfuse_pass.finalize()
+    logger.info(f"vFusedLiveSR {num_feature} {num_subnets} builded")
+    # logger.debug(f"livesr_vf = {livesr_vf.graph}")
+
+    vfuse_time = time_it(livesr_vf, input, "vfused livesr")
+
+    hfuse_pass = HorizFusePass(livesr_rf, sample_inputs={"inputs": input_tensor})
+    hfuse_pass.run_on_graph()
+    livesr_hf = hfuse_pass.finalize()
+    logger.info(f"hFusedLiveSR {num_feature} {num_subnets} builded")
+    # logger.debug(f"livesr_hf = {livesr_hf.graph}")
+
+    hfuse_time = time_it(livesr_hf, input, "hfused livesr")
+
+    logger.info(
+        f"Raw LiveSR,    {num_feature=}, {num_subnets=}: {raw_time:3.06} ms/run"
+    )
+    logger.info(
+        f"vFused LiveSR, {num_feature=}, {num_subnets=}: {vfuse_time:3.06} ms/run"
+    )
+    logger.info(
+        f"hFused LiveSR, {num_feature=}, {num_subnets=}: {hfuse_time:3.06} ms/run"
+    )
+
+
+logger.info(f"{SUBNET_NUM_BLOCK = }")
+logger.info(f"{ALL_NUM_SUBNETS = }")
+logger.info(f"{ALL_NUM_CHANNELS = }")
+
+logger.info("Starts")
+
+dataloader = get_dataloader(DEFAULT_DATASET)
+for input_tensor in dataloader:
+    break
+logger.debug(f"{input_tensor.shape}, {input_tensor.device}, {input_tensor.dtype}")
+
+for num_subnets in ALL_NUM_SUBNETS:
+    benchmark(num_subnets, ALL_NUM_CHANNELS[0], input_tensor)
+# for num_channels in [8]:
+for num_channels in ALL_NUM_CHANNELS[1:]:
+    benchmark(ALL_NUM_SUBNETS[0], num_channels, input_tensor)
+
+# input("Press any key to start profiling")
+# for (module_type, num_feature, num_subnets), model in module_dict.items():
+#     logger.info(f"Profiling {module_type}")
+#     model = module_dict[module_type]
+#     x = input_tensor
+#     profile(lambda: model(x))

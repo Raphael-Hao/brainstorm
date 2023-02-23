@@ -118,7 +118,9 @@ for n in [10, 100]:
             .mean
             * 10e6
         )
-        logger.info(f"{module_type}, {num_feature}, {num_subnets}:\t\t {time} us/run (no capture)")
+        logger.info(
+            f"{module_type}, {num_feature}, {num_subnets}:\t\t {time} us/run (no capture)"
+        )
 
 
 input("Press any key to start profiling")
