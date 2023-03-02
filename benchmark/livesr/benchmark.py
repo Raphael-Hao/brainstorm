@@ -53,7 +53,7 @@ def print_load_history(module: nn.Module):
     for subn, subm in module.named_modules():
         if isinstance(subm, RouterBase) and subm.fabric_type == "dispatch":
             load_history = getattr(subm, "load_history", "no load_history found")
-            logger.debug(f"{subn}, {load_history}")
+            logger.debug(f"{subn}, {subm.capturing}, {load_history}")
 
 
 def time_it(func, func_args, msg):
@@ -78,17 +78,20 @@ def time_it(func, func_args, msg):
         )
 
 
-def benchmark(num_subnets: int, num_feature: int, input: torch.Tensor) -> None:
+def benchmark(num_subnets: int, num_feature: int) -> None:
     livesr = LiveSR(num_subnets, SUBNET_NUM_BLOCK, num_feature).cuda()
     logger.info(f"LiveSR {num_feature} {num_subnets} builded")
 
     switch_router_mode(livesr, True)
-    for input in dataloader:
-        livesr(input)
+    for input_tensor in dataloader:
+        livesr(input_tensor)
     switch_router_mode(livesr, False)
     print_load_history(livesr)
 
-    raw_time = time_it(livesr, input, "raw livesr")
+    raw_time = time_it(livesr, input_tensor, "raw livesr")
+    logger.info(
+        f"Raw LiveSR,    {num_feature=}, {num_subnets=}: {raw_time:3.06} ms/run"
+    )
 
     router_fix_pass = RouterFixPass(livesr)
     router_fix_pass.run_on_graph()
@@ -100,7 +103,10 @@ def benchmark(num_subnets: int, num_feature: int, input: torch.Tensor) -> None:
     logger.info(f"vFusedLiveSR {num_feature} {num_subnets} builded")
     # logger.debug(f"livesr_vf = {livesr_vf.graph}")
 
-    vfuse_time = time_it(livesr_vf, input, "vfused livesr")
+    vfuse_time = time_it(livesr_vf, input_tensor, "vfused livesr")
+    logger.info(
+        f"vFused LiveSR, {num_feature=}, {num_subnets=}: {vfuse_time:3.06} ms/run"
+    )
 
     hfuse_pass = HorizFusePass(livesr_rf, sample_inputs={"inputs": input_tensor})
     hfuse_pass.run_on_graph()
@@ -108,14 +114,7 @@ def benchmark(num_subnets: int, num_feature: int, input: torch.Tensor) -> None:
     logger.info(f"hFusedLiveSR {num_feature} {num_subnets} builded")
     # logger.debug(f"livesr_hf = {livesr_hf.graph}")
 
-    hfuse_time = time_it(livesr_hf, input, "hfused livesr")
-
-    logger.info(
-        f"Raw LiveSR,    {num_feature=}, {num_subnets=}: {raw_time:3.06} ms/run"
-    )
-    logger.info(
-        f"vFused LiveSR, {num_feature=}, {num_subnets=}: {vfuse_time:3.06} ms/run"
-    )
+    hfuse_time = time_it(livesr_hf, input_tensor, "hfused livesr")
     logger.info(
         f"hFused LiveSR, {num_feature=}, {num_subnets=}: {hfuse_time:3.06} ms/run"
     )
@@ -130,13 +129,14 @@ logger.info("Starts")
 dataloader = get_dataloader(DEFAULT_DATASET)
 for input_tensor in dataloader:
     break
+input_tensor = input_tensor.cuda()
 logger.debug(f"{input_tensor.shape}, {input_tensor.device}, {input_tensor.dtype}")
 
 for num_subnets in ALL_NUM_SUBNETS:
-    benchmark(num_subnets, ALL_NUM_CHANNELS[0], input_tensor)
+    benchmark(num_subnets, ALL_NUM_CHANNELS[0])
 # for num_channels in [8]:
 for num_channels in ALL_NUM_CHANNELS[1:]:
-    benchmark(ALL_NUM_SUBNETS[0], num_channels, input_tensor)
+    benchmark(ALL_NUM_SUBNETS[0], num_channels)
 
 # input("Press any key to start profiling")
 # for (module_type, num_feature, num_subnets), model in module_dict.items():
