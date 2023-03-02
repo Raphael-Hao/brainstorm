@@ -141,4 +141,6 @@ class kMeans(nn.Module):
             .square()
             .sum(dim=2)
         )
-        return 1.0 / distance
+        weight = 1.0 / distance
+        weight = weight.cuda()
+        return weight

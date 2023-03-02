@@ -346,7 +346,8 @@ class SingleNetwork(nn.Module):
 
         self.body = nn.ModuleList()
         for _ in range(self.num_block):
-            modules_body = [ResBlock(self.num_feature, bias=bias)]
+            # modules_body = [ResBlock(self.num_feature, bias=bias)]
+            modules_body = [ResBlock(self.num_feature, bias=bias, act=act)]
             self.body.append(nn.Sequential(*modules_body))
 
         body_end = []
