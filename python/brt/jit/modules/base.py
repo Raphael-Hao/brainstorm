@@ -44,6 +44,7 @@ class ModuleBase(ABC):
         with open(processed_template_fname, "w") as f:
             f.write(kernel_code)
         jit_kernel = CUDACompiler.generate_kernel(None, kernel_code)
+        jit_kernel.code = kernel_code
         return jit_kernel
 
     @abstractmethod

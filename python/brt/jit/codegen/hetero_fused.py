@@ -19,7 +19,7 @@ class HeteroFusedKernel(HorizFusedKernel):
     def generate_new_args(self):
         super().generate_new_args()
         for i, func in enumerate(self.candidates):
-            self.args += f", uint {func.func_name}_active = 1"
+            self.args += f", uint {func.func_name}_active"
 
     def calcu_culaunch_dims(self):
         self.grid_size = []
