@@ -329,12 +329,16 @@ def annotate(
     transposed_dims = dims + [i for i in range(len(t.shape)) if i not in dims]
     transposed_tensor = t.permute(*transposed_dims).contiguous()
     reshaped_tensor = transposed_tensor.reshape(-1, *cell_shape)
-    tag = torch.arange(reshaped_tensor.shape[0], device=reshaped_tensor.device)
-    load = torch.tensor([reshaped_tensor.shape[0]], device=reshaped_tensor.device)
-    initialized_tensor = init_grid_tensor(reshaped_tensor, [tag], [load])
+    if isinstance(reshaped_tensor, GridTensor):
+        initialized_tensor = reshaped_tensor.pack(None, None)
+    else:
+        initialized_tensor = init_grid_tensor(reshaped_tensor, [None], [None])
 
     return initialized_tensor
 
+def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
+    t, tag_stack, load_stack, extra_attr_dict = deinit_grid_tensor(from_gird_tensor, True)
+    return init_grid_tensor(tensor, tag_stack, load_stack, extra_attr_dict)
 
 def to_grid_tensor(torch_t: torch.Tensor):
     """

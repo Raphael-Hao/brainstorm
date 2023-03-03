@@ -8,7 +8,7 @@ import torch
 from brt.runtime import log
 from brt.router.utils import pad_to_max
 from brt.router.fabric.base import FabricBase, register_fabric
-from brt.runtime.proto_tensor import ProtoTensor, init_proto_tensor, to_torch_tensor
+from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, deinit_grid_tensor
 
 logger = log.get_logger(__file__)
 
@@ -52,33 +52,27 @@ class DispatchFabric(FabricBase):
 
     def forward(
         self,
-        in_flow: Union[ProtoTensor, List[ProtoTensor]],
+        in_flow: Union[GridTensor, List[GridTensor]],
         route_indices: torch.Tensor,
         real_loads: torch.Tensor,
         score: torch.Tensor = None,
-    ) -> Union[List[ProtoTensor], List[List[ProtoTensor]]]:
-        in_flow = self.pack_invalid_flow(in_flow)
-
+    ) -> Union[List[GridTensor], List[List[GridTensor]]]:
         if self.flow_num == 1:
             in_flows = [in_flow]
         else:
             in_flows = in_flow
 
         all_out_flows = self.dispatch(in_flows, route_indices, real_loads, score)
-        if self.flow_num == 1:
-            return self.remove_needless_pack(all_out_flows[0])
-        return self.remove_needless_pack(all_out_flows)
-
-    def dispatch(
+        return all_out_flows
+    def dispatch_v2(
         self,
-        in_flows: List[ProtoTensor],
+        in_flows: List[GridTensor],
         route_indices: torch.Tensor,
         real_loads: torch.Tensor,
         score: torch.Tensor,
-    ) -> List[List[ProtoTensor]]:
+    ):
         all_out_flows = []
         path_num = route_indices.size(1)
-        # real_loads = real_loads.cpu()
         route_indices_64 = route_indices.to(torch.int64)
         for flow_idx in range(self.flow_num):
             flow = in_flows[flow_idx]
@@ -86,17 +80,44 @@ class DispatchFabric(FabricBase):
                 flow_data,
                 flow_tag_stack,
                 flow_load_stack,
-                extra_attr_stack_dict,
-            ) = to_torch_tensor(flow, return_stack=True)
+                extra_attr_dict,
+            ) = deinit_grid_tensor(flow, retrieve_attr=True)
 
             flow_tag = flow_tag_stack[-1]
             flow_load = flow_load_stack[-1]
 
             flow_tag_stack = flow_tag_stack[:-1]
             flow_load_stack = flow_load_stack[:-1]
-            flow_extra_attr_stack_dict = {}
-            for attr_dict, attr_stack in extra_attr_stack_dict.items():
-                flow_extra_attr_stack_dict[attr_dict] = attr_stack[:-1]
+            flow_extra_attr_dict = extra_attr_dict
+
+            if self.route_logics[flow_idx]:
+                pass
+
+    def dispatch(
+        self,
+        in_flows: List[GridTensor],
+        route_indices: torch.Tensor,
+        real_loads: torch.Tensor,
+        score: torch.Tensor,
+    ) -> List[List[GridTensor]]:
+        all_out_flows = []
+        path_num = route_indices.size(1)
+        route_indices_64 = route_indices.to(torch.int64)
+        for flow_idx in range(self.flow_num):
+            flow = in_flows[flow_idx]
+            (
+                flow_data,
+                flow_tag_stack,
+                flow_load_stack,
+                extra_attr_dict,
+            ) = deinit_grid_tensor(flow, retrieve_attr=True)
+
+            flow_tag = flow_tag_stack[-1]
+            flow_load = flow_load_stack[-1]
+
+            flow_tag_stack = flow_tag_stack[:-1]
+            flow_load_stack = flow_load_stack[:-1]
+            flow_extra_attr_dict = extra_attr_dict
 
             if self.route_logics[flow_idx] == "1d":
                 route_shape = list(flow_data.shape[1:])
@@ -127,15 +148,15 @@ class DispatchFabric(FabricBase):
                     out_flow_data = torch.index_select(
                         dispatched_data, 0, tag_indices.view(-1)
                     )
-                    out_flow = init_proto_tensor(
+                    out_flow = init_grid_tensor(
                         out_flow_data,
                         flow_tag_stack,
                         flow_load_stack,
-                        flow_extra_attr_stack_dict,
+                        flow_extra_attr_dict,
                     )
                     out_flow.pack(out_flow_tag, flow_load)
                 else:
-                    out_flow = init_proto_tensor(
+                    out_flow = init_grid_tensor(
                         torch.zeros(
                             0,
                             *route_shape,
@@ -144,7 +165,7 @@ class DispatchFabric(FabricBase):
                         ),
                         flow_tag_stack,
                         flow_load_stack,
-                        flow_extra_attr_stack_dict,
+                        flow_extra_attr_dict,
                     )
                     out_flow.pack(
                         torch.zeros(0, 1, dtype=torch.int64, device=flow_data.device),
@@ -155,6 +176,8 @@ class DispatchFabric(FabricBase):
         return all_out_flows
 
 
+
+
 @register_fabric("combine")
 class CombineFabric(FabricBase):
     def __init__(
@@ -162,18 +185,16 @@ class CombineFabric(FabricBase):
         flow_num: int,
         reduction="add",
         sparse=False,
-        granularity_padding=False,
         **kwargs,
     ):
         super().__init__(flow_num=flow_num, index_format="src_index", **kwargs)
 
         self.sparse = sparse
         self.reduction = reduction
-        self.granularity_padding = granularity_padding
 
     def forward(
-        self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]]
-    ) -> Union[ProtoTensor, List[ProtoTensor]]:
+        self, in_flows: Union[List[GridTensor], List[List[GridTensor]]]
+    ) -> Union[GridTensor, List[GridTensor]]:
         in_flows = self.pack_invalid_flow(in_flows)
 
         if self.flow_num == 1:
@@ -186,7 +207,7 @@ class CombineFabric(FabricBase):
 
         return self.remove_needless_pack(out_flows)
 
-    def combine(self, in_flows: List[List[ProtoTensor]]) -> List[ProtoTensor]:
+    def combine(self, in_flows: List[List[GridTensor]]) -> List[GridTensor]:
 
         out_flows = []
 
@@ -200,8 +221,8 @@ class CombineFabric(FabricBase):
             in_flows_load = []
 
             for flow in in_flow:
-                data, flow_tags, flow_loads, extra_attr_stack_dict = to_torch_tensor(
-                    flow, return_stack=True
+                data, flow_tags, flow_loads, extra_attr_stack_dict = deinit_grid_tensor(
+                    flow, retrieve_attr=True
                 )
                 in_flows_data.append(data)
                 in_flows_tag.append(flow_tags[-1])
@@ -250,7 +271,7 @@ class CombineFabric(FabricBase):
                     dtype=in_flows_data.dtype,
                     device=in_flows_data.device,
                 ).scatter_(0, route_indices, in_flows_data, reduce=self.reduction)
-            out_flow = init_proto_tensor(
+            out_flow = init_grid_tensor(
                 out_flow_data,
                 in_flows_tag_stack,
                 in_flows_load_stack,
