@@ -389,7 +389,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "capacities",
         pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none(),
         pybind11 ::arg("capacity_padding") = false, pybind11::arg("is_dst_index") = true,
-        pybind11::arg("load_on_cpu") = true);
+        pybind11::arg("load_on_cpu") = false);
   m.def("convert_index_format", &brt::backend::torch::convert_index_format,
         "convert indices to the new index format");
   m.def("dispatch_with_dst_indices_1d", &brt::backend::torch::dispatch_with_dst_indices_1d,
