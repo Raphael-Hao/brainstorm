@@ -5,16 +5,6 @@ from typing import Tuple
 
 import torch
 
-def generate_dst_indices(
-    hot_mask: torch.Tensor,
-    supported_capacities: torch.Tensor,
-    load_on_cpu: bool = True,
-) -> Tuple[torch.Tensor, torch.Tensor]: ...
-def generate_src_indices(
-    hot_mask: torch.Tensor,
-    supported_capacities: torch.Tensor,
-    load_on_cpu: bool = True,
-) -> Tuple[torch.Tensor, torch.Tensor]: ...
 def convert_index_format(
     origin_indices: torch.Tensor,
     loads: torch.Tensor,
@@ -46,6 +36,18 @@ def dispatch_with_dst_indices_2d(
     route_indices: torch.Tensor,
     loads: torch.Tensor,
     auto_pad: bool = False,
+) -> torch.Tensor: ...
+def dispatch_with_indices_and_loads(
+    in_data: torch.Tensor,
+    route_indices: torch.Tensor,
+    loads: torch.Tensor,
+    gates: torch.Tensor = None,
+    max_path_padding: bool = False,
+    cell_num_per_path: int = None,
+    is_1d_routing: bool = True,
+    tag_generating: bool = False,
+    tags: torch.Tensor = None,
+    is_dst_index: bool = True,
 ) -> torch.Tensor: ...
 def combine_with_src_indices(
     in_data: torch.Tensor,

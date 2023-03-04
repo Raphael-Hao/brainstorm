@@ -67,10 +67,10 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
                                  const int& cell_num,
                                  const int& cell_size,
                                  const int& path_num,
-                                 cudaStream_t stream,
-                                 const int& cell_num_per_path = 0,
-                                 bool is_1d_routing = true,
-                                 bool is_dst_index = true);
+                                 const int& cell_num_per_path,
+                                 bool is_1d_routing,
+                                 bool is_dst_index,
+                                 cudaStream_t stream);
 
 template <typename dtype>
 void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
@@ -81,10 +81,10 @@ void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
                                 const int& cell_num,
                                 const int& cell_size,
                                 const int& path_num,
-                                cudaStream_t stream,
-                                const int& cell_num_per_path = 0,
-                                bool is_residual = false,
-                                bool is_dst_index = true);
+                                const int& cell_num_per_path,
+                                bool is_residual,
+                                bool is_dst_index,
+                                cudaStream_t stream);
 }  // namespace router
 }  // namespace brt
 

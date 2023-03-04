@@ -542,10 +542,10 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
                                  const int& cell_num,
                                  const int& cell_size,
                                  const int& path_num,
-                                 cudaStream_t stream,
                                  const int& cell_num_per_path,
                                  bool is_1d_routing,
-                                 bool is_dst_index) {
+                                 bool is_dst_index,
+                                 cudaStream_t stream) {
   dtype* src_data_ptr = static_cast<dtype*>(src_data);
   dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
   dtype* gates_ptr = static_cast<dtype*>(gates);
@@ -605,10 +605,10 @@ void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
                                 const int& cell_num,
                                 const int& cell_size,
                                 const int& path_num,
-                                cudaStream_t stream,
                                 const int& cell_num_per_path,
                                 bool is_residual,
-                                bool is_dst_index) {
+                                bool is_dst_index,
+                                cudaStream_t stream) {
   dtype* src_data_ptr = static_cast<dtype*>(src_data);
   dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
   dtype* gates_ptr = static_cast<dtype*>(gates);
@@ -761,10 +761,10 @@ template void DispatchWithIndicesAndLoads<float>(void* src_data /*[cell_num, cel
                                                  const int& cell_num,
                                                  const int& cell_size,
                                                  const int& path_num,
-                                                 cudaStream_t stream,
                                                  const int& cell_num_per_path,
                                                  bool is_1d_routing,
-                                                 bool is_dst_index);
+                                                 bool is_dst_index,
+                                                 cudaStream_t stream);
 
 template void DispatchWithIndicesAndLoads<__half2>(void* src_data /*[cell_num, cell_size]*/,
                                                    void* dst_data /*[total_loads, cell_size]*/,
@@ -774,10 +774,10 @@ template void DispatchWithIndicesAndLoads<__half2>(void* src_data /*[cell_num, c
                                                    const int& cell_num,
                                                    const int& cell_size,
                                                    const int& path_num,
-                                                   cudaStream_t stream,
                                                    const int& cell_num_per_path,
                                                    bool is_1d_routing,
-                                                   bool is_dst_index);
+                                                   bool is_dst_index,
+                                                   cudaStream_t stream);
 template void CombineWithIndicesAndLoads<float>(void* src_data /*[total_loads, cell_size]*/,
                                                 void* dst_data /*[cell_num, cell_size]*/,
                                                 void* gates /*[cell_num, dst_num]*/,
@@ -786,10 +786,10 @@ template void CombineWithIndicesAndLoads<float>(void* src_data /*[total_loads, c
                                                 const int& cell_num,
                                                 const int& cell_size,
                                                 const int& path_num,
-                                                cudaStream_t stream,
                                                 const int& cell_num_per_path,
                                                 bool is_residual,
-                                                bool is_dst_index);
+                                                bool is_dst_index,
+                                                cudaStream_t stream);
 
 template void CombineWithIndicesAndLoads<__half>(void* src_data /*[total_loads, cell_size]*/,
                                                  void* dst_data /*[cell_num, cell_size]*/,
@@ -799,9 +799,9 @@ template void CombineWithIndicesAndLoads<__half>(void* src_data /*[total_loads, 
                                                  const int& cell_num,
                                                  const int& cell_size,
                                                  const int& path_num,
-                                                 cudaStream_t stream,
                                                  const int& cell_num_per_path,
                                                  bool is_residual,
-                                                 bool is_dst_index);
+                                                 bool is_dst_index,
+                                                 cudaStream_t stream);
 }  // namespace router
 }  // namespace brt
