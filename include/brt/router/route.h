@@ -16,32 +16,83 @@ void DispatchWithDstIndices1D(void* src_data /*[sample_num, sample_size]*/,
                               void* dst_data /*[total_loads, sample_size]*/,
                               void* gates /*[sample_num, dst_num]*/,
                               int* route_indices /*[sample_num, dst_num]*/,
-                              int* loads /*[dst_num]*/, const int& capacity, const int& sample_num,
-                              const int& sample_size, const int& path_num, cudaStream_t stream);
+                              int* loads /*[dst_num]*/,
+                              const int& capacity,
+                              const int& sample_num,
+                              const int& sample_size,
+                              const int& path_num,
+                              cudaStream_t stream);
 
 template <typename dtype>
 void DispatchWithDstIndices2D(void* src_data /*[sample_num, sample_size]*/,
                               void* dst_data /*[total_loads, sample_size]*/,
                               int* route_indices /*[sample_num, dst_num]*/,
-                              int* loads /*[dst_num]*/, const int& capacity, const int& sample_num,
-                              const int& sample_size, const int& path_num, cudaStream_t stream);
+                              int* loads /*[dst_num]*/,
+                              const int& capacity,
+                              const int& sample_num,
+                              const int& sample_size,
+                              const int& path_num,
+                              cudaStream_t stream);
 
 template <typename dtype>
 void CombineWithSrcIndices(void* src_data /*[total_loads, sample_size]*/,
                            void* dst_data /*[sample_num, sample_size]*/,
                            void* gates /*[sample_num, dst_num]*/,
-                           int* route_indices /*[sample_num, dst_num]*/, int* loads /*[dst_num]*/,
-                           const int& capacity, const int& sample_num, const int& sample_size,
-                           const int& path_num, cudaStream_t stream);
+                           int* route_indices /*[sample_num, dst_num]*/,
+                           int* loads /*[dst_num]*/,
+                           const int& capacity,
+                           const int& sample_num,
+                           const int& sample_size,
+                           const int& path_num,
+                           cudaStream_t stream);
+
+template <typename dtype>
+void CombineWithSrcIndices(void* src_data /*[total_loads, sample_size]*/,
+                           void* dst_data /*[sample_num, sample_size]*/,
+                           void* gates /*[sample_num, dst_num]*/,
+                           int* route_indices /*[sample_num, dst_num]*/,
+                           int* loads /*[dst_num]*/,
+                           const int& capacity,
+                           const int& sample_num,
+                           const int& sample_size,
+                           const int& path_num,
+                           cudaStream_t stream);
 
 template <typename dtype>
 void ResidualCombineWithSrcIndices(void* src_data /*[total_loads, sample_size]*/,
                                    void* dst_data /*[sample_num, sample_size]*/,
                                    void* gates /*[sample_num x path_num]*/,
                                    int* route_indices /*[sample_num x path_num]*/,
-                                   int* loads /*[path_num]*/, const int& capacity,
-                                   const int& sample_num, const int& sample_size,
-                                   const int& path_num, cudaStream_t stream);
+                                   int* loads /*[path_num]*/,
+                                   const int& capacity,
+                                   const int& sample_num,
+                                   const int& sample_size,
+                                   const int& path_num,
+                                   cudaStream_t stream);
+
+template <typename dtype>
+void DispatchWithIndicesAndLoads(void* src_data /*[sample_num, sample_size]*/,
+                                 void* dst_data /*[total_loads, sample_size]*/,
+                                 void* gates /*[sample_num, dst_num]*/,
+                                 int* route_indices /*[sample_num, dst_num]*/,
+                                 int* loads /*[dst_num]*/,
+                                 const int& capacity,
+                                 const int& sample_num,
+                                 const int& sample_size,
+                                 const int& path_num,
+                                 cudaStream_t stream);
+
+template <typename dtype>
+void CombineWithIndicesAndLoads(void* src_data /*[total_loads, sample_size]*/,
+                                void* dst_data /*[sample_num, sample_size]*/,
+                                void* gates /*[sample_num, dst_num]*/,
+                                int* route_indices /*[sample_num, dst_num]*/,
+                                int* loads /*[dst_num]*/,
+                                const int& capacity,
+                                const int& sample_num,
+                                const int& sample_size,
+                                const int& path_num,
+                                cudaStream_t stream);
 }  // namespace router
 }  // namespace brt
 

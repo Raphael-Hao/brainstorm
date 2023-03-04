@@ -10,7 +10,10 @@ __global__ void __launch_bounds__(1024) dispatch_with_dst_indices_2d(
     dtype* __restrict__ in_data /*[path_num x sample_num x sample_size]*/,
     dtype* __restrict__ out_data /*[?load*path_num x sample_size]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_size, int path_num) {
+    int* __restrict__ loads /*[path_num]*/,
+    int sample_num,
+    int sample_size,
+    int path_num) {
   in_data += sample_num * sample_size * blockIdx.x;
 
   int load_start = 0;
@@ -38,7 +41,10 @@ __global__ void __launch_bounds__(1024) padded_dispatch_with_dst_indices_2d(
     dtype* __restrict__ in_data /*[path_num x sample_num x sample_size]*/,
     dtype* __restrict__ out_data /*[?load*path_num x sample_size]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int capacity, int sample_num, int sample_size,
+    int* __restrict__ loads /*[path_num]*/,
+    int capacity,
+    int sample_num,
+    int sample_size,
     int path_num) {
   in_data += sample_num * sample_size * blockIdx.x;
 
@@ -64,8 +70,10 @@ __global__ void __launch_bounds__(1024)
     dispatch_with_dst_indices(dtype* __restrict__ in_data /*[sample_num x sample_size]*/,
                               dtype* __restrict__ out_data /*[?load*path_num x sample_size]*/,
                               int* __restrict__ route_indices /*[sample_num x path_num]*/,
-                              int* __restrict__ loads /*[path_num]*/, int sample_num,
-                              int sample_size, int path_num) {
+                              int* __restrict__ loads /*[path_num]*/,
+                              int sample_num,
+                              int sample_size,
+                              int path_num) {
   int load_start = 0;
   for (int i = 0; i < blockIdx.y; i++) {
     load_start += loads[i];
@@ -91,7 +99,10 @@ __global__ void __launch_bounds__(1024) padded_dispatch_with_dst_indices(
     dtype* __restrict__ in_data /*[sample_num x sample_size]*/,
     dtype* __restrict__ out_data /*[?load*path_num x sample_size]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int capacity, int sample_num, int sample_size,
+    int* __restrict__ loads /*[path_num]*/,
+    int capacity,
+    int sample_num,
+    int sample_size,
     int path_num) {
   int load_start = blockIdx.y * capacity;
 
@@ -116,7 +127,10 @@ __global__ void __launch_bounds__(1024) weighted_dipatch_with_dst_indices(
     dtype* __restrict__ out_data /*[?load*path_num x sample_size]*/,
     dtype* __restrict__ gates /*[sample_num x path_num]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_size, int path_num) {
+    int* __restrict__ loads /*[path_num]*/,
+    int sample_num,
+    int sample_size,
+    int path_num) {
   int load_start = 0;
   for (int i = 0; i < blockIdx.y; i++) {
     load_start += loads[i];
@@ -145,7 +159,10 @@ __global__ void __launch_bounds__(1024) padded_weighted_dipatch_with_dst_indices
     dtype* __restrict__ out_data /*[?load*path_num x sample_size]*/,
     dtype* __restrict__ gates /*[sample_num x path_num]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int capacity, int sample_num, int sample_size,
+    int* __restrict__ loads /*[path_num]*/,
+    int capacity,
+    int sample_num,
+    int sample_size,
     int path_num) {
   int load_start = blockIdx.y * capacity;
 
@@ -169,8 +186,10 @@ __global__ void __launch_bounds__(1024)
     combine_with_src_indices(dtype* __restrict__ in_data /*[?load*path_num x sample_size]*/,
                              dtype* __restrict__ out_data /*[sample_num x sample_size]*/,
                              int* __restrict__ route_indices /*[sample_num x path_num]*/,
-                             int* __restrict__ loads /*[path_num]*/, int sample_num,
-                             int sample_size, int path_num) {
+                             int* __restrict__ loads /*[path_num]*/,
+                             int sample_num,
+                             int sample_size,
+                             int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
       int route_index = i * path_num + j;
@@ -196,8 +215,11 @@ __global__ void __launch_bounds__(1024)
     padded_combine_with_src_indices(dtype* __restrict__ in_data /*[?load*path_num x sample_size]*/,
                                     dtype* __restrict__ out_data /*[sample_num x sample_size]*/,
                                     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-                                    int* __restrict__ loads /*[path_num]*/, int capacity,
-                                    int sample_num, int sample_size, int path_num) {
+                                    int* __restrict__ loads /*[path_num]*/,
+                                    int capacity,
+                                    int sample_num,
+                                    int sample_size,
+                                    int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
       int route_index = i * path_num + j;
@@ -221,7 +243,10 @@ __global__ void __launch_bounds__(1024) weighted_combine_with_src_indices(
     dtype* __restrict__ out_data /*[sample_num x sample_size]*/,
     dtype* __restrict__ gates /*[sample_num x path_num]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_size, int path_num) {
+    int* __restrict__ loads /*[path_num]*/,
+    int sample_num,
+    int sample_size,
+    int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
       int route_index = i * path_num + j;
@@ -246,7 +271,10 @@ __global__ void __launch_bounds__(1024) padded_weighted_combine_with_src_indices
     dtype* __restrict__ out_data /*[sample_num x sample_size]*/,
     dtype* __restrict__ gates /*[sample_num x path_num]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int capacity, int sample_num, int sample_size,
+    int* __restrict__ loads /*[path_num]*/,
+    int capacity,
+    int sample_num,
+    int sample_size,
     int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
@@ -268,7 +296,10 @@ __global__ void __launch_bounds__(1024) residual_combine_with_src_indices(
     dtype* __restrict__ in_data /*[?load*path_num x sample_size]*/,
     dtype* __restrict__ out_data /*[sample_num x sample_size]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_size, int path_num) {
+    int* __restrict__ loads /*[path_num]*/,
+    int sample_num,
+    int sample_size,
+    int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
       int route_index = i * path_num + j;
@@ -294,7 +325,10 @@ __global__ void __launch_bounds__(1024) residual_padded_combine_with_src_indices
     dtype* __restrict__ in_data /*[?load*path_num x sample_size]*/,
     dtype* __restrict__ out_data /*[sample_num x sample_size]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int capacity, int sample_num, int sample_size,
+    int* __restrict__ loads /*[path_num]*/,
+    int capacity,
+    int sample_num,
+    int sample_size,
     int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
@@ -319,7 +353,10 @@ __global__ void __launch_bounds__(1024) residual_weighted_combine_with_src_indic
     dtype* __restrict__ out_data /*[sample_num x sample_size]*/,
     dtype* __restrict__ gates /*[sample_num x path_num]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int sample_num, int sample_size, int path_num) {
+    int* __restrict__ loads /*[path_num]*/,
+    int sample_num,
+    int sample_size,
+    int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
       int route_index = i * path_num + j;
@@ -344,7 +381,10 @@ __global__ void __launch_bounds__(1024) residual_padded_weighted_combine_with_sr
     dtype* __restrict__ out_data /*[sample_num x sample_size]*/,
     dtype* __restrict__ gates /*[sample_num x path_num]*/,
     int* __restrict__ route_indices /*[sample_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/, int capacity, int sample_num, int sample_size,
+    int* __restrict__ loads /*[path_num]*/,
+    int capacity,
+    int sample_num,
+    int sample_size,
     int path_num) {
   for (int i = blockIdx.x; i < sample_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
@@ -366,8 +406,12 @@ void DispatchWithDstIndices1D(void* src_data /*[sample_num x sample_size]*/,
                               void* dst_data /*[?load*path_num x sample_size]*/,
                               void* gates /*[sample_num x path_num]*/,
                               int* route_indices /*[sample_num x path_num]*/,
-                              int* loads /*[path_num]*/, const int& capacity, const int& sample_num,
-                              const int& sample_size, const int& path_num, cudaStream_t stream) {
+                              int* loads /*[path_num]*/,
+                              const int& capacity,
+                              const int& sample_num,
+                              const int& sample_size,
+                              const int& path_num,
+                              cudaStream_t stream) {
   dtype* src_data_ptr = static_cast<dtype*>(src_data);
   dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
   dtype* gates_ptr = static_cast<dtype*>(gates);
@@ -403,8 +447,12 @@ template <typename dtype>
 void DispatchWithDstIndices2D(void* src_data /*[sample_num x sample_size]*/,
                               void* dst_data /*[?load*path_num x sample_size]*/,
                               int* route_indices /*[sample_num x path_num]*/,
-                              int* loads /*[path_num]*/, const int& capacity, const int& sample_num,
-                              const int& sample_size, const int& path_num, cudaStream_t stream) {
+                              int* loads /*[path_num]*/,
+                              const int& capacity,
+                              const int& sample_num,
+                              const int& sample_size,
+                              const int& path_num,
+                              cudaStream_t stream) {
   dtype* src_data_ptr = static_cast<dtype*>(src_data);
   dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
   constexpr dim3 block_size(1024);
@@ -424,8 +472,12 @@ void CombineWithSrcIndices(void* src_data /*[?load*path_num x sample_size]*/,
                            void* dst_data /*[sample_num x sample_size]*/,
                            void* gates /*[sample_num x path_num]*/,
                            int* route_indices /*[sample_num x path_num]*/,
-                           int* loads /*[path_num]*/, const int& capacity, const int& sample_num,
-                           const int& sample_size, const int& path_num, cudaStream_t stream) {
+                           int* loads /*[path_num]*/,
+                           const int& capacity,
+                           const int& sample_num,
+                           const int& sample_size,
+                           const int& path_num,
+                           cudaStream_t stream) {
   dtype* src_data_ptr = static_cast<dtype*>(src_data);
   dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
   dtype* gates_ptr = static_cast<dtype*>(gates);
@@ -458,9 +510,12 @@ void ResidualCombineWithSrcIndices(void* src_data /*[?load*path_num x sample_siz
                                    void* dst_data /*[sample_num x sample_size]*/,
                                    void* gates /*[sample_num x path_num]*/,
                                    int* route_indices /*[sample_num x path_num]*/,
-                                   int* loads /*[path_num]*/, const int& capacity,
-                                   const int& sample_num, const int& sample_size,
-                                   const int& path_num, cudaStream_t stream) {
+                                   int* loads /*[path_num]*/,
+                                   const int& capacity,
+                                   const int& sample_num,
+                                   const int& sample_size,
+                                   const int& path_num,
+                                   cudaStream_t stream) {
   dtype* src_data_ptr = static_cast<dtype*>(src_data);
   dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
   dtype* gates_ptr = static_cast<dtype*>(gates);
@@ -494,63 +549,87 @@ template void DispatchWithDstIndices1D<float>(void* src_data /*[sample_num, samp
                                               void* dst_data /*[total_loads, sample_size]*/,
                                               void* gates /*[sample_num, dst_num]*/,
                                               int* route_indices /*[sample_num, dst_num]*/,
-                                              int* loads /*[dst_num]*/, const int& capacity,
-                                              const int& sample_num, const int& sample_size,
-                                              const int& path_num, cudaStream_t stream);
+                                              int* loads /*[dst_num]*/,
+                                              const int& capacity,
+                                              const int& sample_num,
+                                              const int& sample_size,
+                                              const int& path_num,
+                                              cudaStream_t stream);
 
 template void DispatchWithDstIndices2D<float>(void* src_data /*[sample_num, sample_size]*/,
                                               void* dst_data /*[total_loads, sample_size]*/,
                                               int* route_indices /*[sample_num, dst_num]*/,
-                                              int* loads /*[dst_num]*/, const int& capacity,
-                                              const int& sample_num, const int& sample_size,
-                                              const int& path_num, cudaStream_t stream);
+                                              int* loads /*[dst_num]*/,
+                                              const int& capacity,
+                                              const int& sample_num,
+                                              const int& sample_size,
+                                              const int& path_num,
+                                              cudaStream_t stream);
 
 template void CombineWithSrcIndices<float>(void* src_data /*[total_loads, sample_size]*/,
                                            void* dst_data /*[sample_num, sample_size]*/,
                                            void* gates /*[sample_num, dst_num]*/,
                                            int* route_indices /*[sample_num, dst_num]*/,
-                                           int* loads /*[dst_num]*/, const int& capacity,
-                                           const int& sample_num, const int& sample_size,
-                                           const int& path_num, cudaStream_t stream);
+                                           int* loads /*[dst_num]*/,
+                                           const int& capacity,
+                                           const int& sample_num,
+                                           const int& sample_size,
+                                           const int& path_num,
+                                           cudaStream_t stream);
 
 template void ResidualCombineWithSrcIndices<float>(void* src_data /*[total_loads, sample_size]*/,
                                                    void* dst_data /*[sample_num, sample_size]*/,
                                                    void* gates /*[sample_num x path_num]*/,
                                                    int* route_indices /*[sample_num x path_num]*/,
-                                                   int* loads /*[path_num]*/, const int& capacity,
-                                                   const int& sample_num, const int& sample_size,
-                                                   const int& path_num, cudaStream_t stream);
+                                                   int* loads /*[path_num]*/,
+                                                   const int& capacity,
+                                                   const int& sample_num,
+                                                   const int& sample_size,
+                                                   const int& path_num,
+                                                   cudaStream_t stream);
 
 template void DispatchWithDstIndices1D<__half2>(void* src_data /*[sample_num, sample_size]*/,
                                                 void* dst_data /*[total_loads, sample_size]*/,
                                                 void* gates /*[sample_num, dst_num]*/,
                                                 int* route_indices /*[sample_num, dst_num]*/,
-                                                int* loads /*[dst_num]*/, const int& capacity,
-                                                const int& sample_num, const int& sample_size,
-                                                const int& path_num, cudaStream_t stream);
+                                                int* loads /*[dst_num]*/,
+                                                const int& capacity,
+                                                const int& sample_num,
+                                                const int& sample_size,
+                                                const int& path_num,
+                                                cudaStream_t stream);
 
 template void DispatchWithDstIndices2D<__half2>(void* src_data /*[sample_num, sample_size]*/,
                                                 void* dst_data /*[total_loads, sample_size]*/,
                                                 int* route_indices /*[sample_num, dst_num]*/,
-                                                int* loads /*[dst_num]*/, const int& capacity,
-                                                const int& sample_num, const int& sample_size,
-                                                const int& path_num, cudaStream_t stream);
+                                                int* loads /*[dst_num]*/,
+                                                const int& capacity,
+                                                const int& sample_num,
+                                                const int& sample_size,
+                                                const int& path_num,
+                                                cudaStream_t stream);
 
 template void CombineWithSrcIndices<__half2>(void* src_data /*[total_loads, sample_size]*/,
                                              void* dst_data /*[sample_num, sample_size]*/,
                                              void* gates /*[sample_num, dst_num]*/,
                                              int* route_indices /*[sample_num, dst_num]*/,
-                                             int* loads /*[dst_num]*/, const int& capacity,
-                                             const int& sample_num, const int& sample_size,
-                                             const int& path_num, cudaStream_t stream);
+                                             int* loads /*[dst_num]*/,
+                                             const int& capacity,
+                                             const int& sample_num,
+                                             const int& sample_size,
+                                             const int& path_num,
+                                             cudaStream_t stream);
 
 template void ResidualCombineWithSrcIndices<__half2>(void* src_data /*[total_loads, sample_size]*/,
                                                      void* dst_data /*[sample_num, sample_size]*/,
                                                      void* gates /*[sample_num, path_num]*/,
                                                      int* route_indices /*[sample_num, path_num]*/,
-                                                     int* loads /*[path_num]*/, const int& capacity,
-                                                     const int& sample_num, const int& sample_size,
-                                                     const int& path_num, cudaStream_t stream);
+                                                     int* loads /*[path_num]*/,
+                                                     const int& capacity,
+                                                     const int& sample_num,
+                                                     const int& sample_size,
+                                                     const int& path_num,
+                                                     cudaStream_t stream);
 
 }  // namespace router
 }  // namespace brt
