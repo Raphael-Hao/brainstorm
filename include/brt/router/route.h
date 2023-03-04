@@ -6,93 +6,85 @@
 #ifndef BRT_ROUTER_ROUTE_H_
 #define BRT_ROUTER_ROUTE_H_
 
-#include <cuda_fp16.h>
+#include <cuda_runtime.h>
 
 namespace brt {
 namespace router {
 
 template <typename dtype>
-void DispatchWithDstIndices1D(void* src_data /*[sample_num, sample_size]*/,
-                              void* dst_data /*[total_loads, sample_size]*/,
-                              void* gates /*[sample_num, dst_num]*/,
-                              int* route_indices /*[sample_num, dst_num]*/,
+void DispatchWithDstIndices1D(void* src_data /*[cell_num, cell_size]*/,
+                              void* dst_data /*[total_loads, cell_size]*/,
+                              void* gates /*[cell_num, dst_num]*/,
+                              int* route_indices /*[cell_num, dst_num]*/,
                               int* loads /*[dst_num]*/,
-                              const int& capacity,
-                              const int& sample_num,
-                              const int& sample_size,
+                              const int& cell_num_per_path,
+                              const int& cell_num,
+                              const int& cell_size,
                               const int& path_num,
                               cudaStream_t stream);
 
 template <typename dtype>
-void DispatchWithDstIndices2D(void* src_data /*[sample_num, sample_size]*/,
-                              void* dst_data /*[total_loads, sample_size]*/,
-                              int* route_indices /*[sample_num, dst_num]*/,
+void DispatchWithDstIndices2D(void* src_data /*[cell_num, cell_size]*/,
+                              void* dst_data /*[total_loads, cell_size]*/,
+                              int* route_indices /*[cell_num, dst_num]*/,
                               int* loads /*[dst_num]*/,
-                              const int& capacity,
-                              const int& sample_num,
-                              const int& sample_size,
+                              const int& cell_num_per_path,
+                              const int& cell_num,
+                              const int& cell_size,
                               const int& path_num,
                               cudaStream_t stream);
 
 template <typename dtype>
-void CombineWithSrcIndices(void* src_data /*[total_loads, sample_size]*/,
-                           void* dst_data /*[sample_num, sample_size]*/,
-                           void* gates /*[sample_num, dst_num]*/,
-                           int* route_indices /*[sample_num, dst_num]*/,
+void CombineWithSrcIndices(void* src_data /*[total_loads, cell_size]*/,
+                           void* dst_data /*[cell_num, cell_size]*/,
+                           void* gates /*[cell_num, dst_num]*/,
+                           int* route_indices /*[cell_num, dst_num]*/,
                            int* loads /*[dst_num]*/,
-                           const int& capacity,
-                           const int& sample_num,
-                           const int& sample_size,
+                           const int& cell_num_per_path,
+                           const int& cell_num,
+                           const int& cell_size,
                            const int& path_num,
                            cudaStream_t stream);
 
 template <typename dtype>
-void CombineWithSrcIndices(void* src_data /*[total_loads, sample_size]*/,
-                           void* dst_data /*[sample_num, sample_size]*/,
-                           void* gates /*[sample_num, dst_num]*/,
-                           int* route_indices /*[sample_num, dst_num]*/,
-                           int* loads /*[dst_num]*/,
-                           const int& capacity,
-                           const int& sample_num,
-                           const int& sample_size,
-                           const int& path_num,
-                           cudaStream_t stream);
-
-template <typename dtype>
-void ResidualCombineWithSrcIndices(void* src_data /*[total_loads, sample_size]*/,
-                                   void* dst_data /*[sample_num, sample_size]*/,
-                                   void* gates /*[sample_num x path_num]*/,
-                                   int* route_indices /*[sample_num x path_num]*/,
+void ResidualCombineWithSrcIndices(void* src_data /*[total_loads, cell_size]*/,
+                                   void* dst_data /*[cell_num, cell_size]*/,
+                                   void* gates /*[cell_num x path_num]*/,
+                                   int* route_indices /*[cell_num x path_num]*/,
                                    int* loads /*[path_num]*/,
-                                   const int& capacity,
-                                   const int& sample_num,
-                                   const int& sample_size,
+                                   const int& cell_num_per_path,
+                                   const int& cell_num,
+                                   const int& cell_size,
                                    const int& path_num,
                                    cudaStream_t stream);
 
 template <typename dtype>
-void DispatchWithIndicesAndLoads(void* src_data /*[sample_num, sample_size]*/,
-                                 void* dst_data /*[total_loads, sample_size]*/,
-                                 void* gates /*[sample_num, dst_num]*/,
-                                 int* route_indices /*[sample_num, dst_num]*/,
+void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
+                                 void* dst_data /*[total_loads, cell_size]*/,
+                                 void* gates /*[cell_num, dst_num]*/,
+                                 int* route_indices /*[cell_num, dst_num]*/,
                                  int* loads /*[dst_num]*/,
-                                 const int& capacity,
-                                 const int& sample_num,
-                                 const int& sample_size,
+                                 const int& cell_num,
+                                 const int& cell_size,
                                  const int& path_num,
-                                 cudaStream_t stream);
+                                 cudaStream_t stream,
+                                 const int& cell_num_per_path = 0,
+                                 bool is_1d_routing = true,
+                                 bool is_dst_index = true);
 
 template <typename dtype>
-void CombineWithIndicesAndLoads(void* src_data /*[total_loads, sample_size]*/,
-                                void* dst_data /*[sample_num, sample_size]*/,
-                                void* gates /*[sample_num, dst_num]*/,
-                                int* route_indices /*[sample_num, dst_num]*/,
+void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
+                                void* dst_data /*[cell_num, cell_size]*/,
+                                void* gates /*[cell_num, dst_num]*/,
+                                int* route_indices /*[cell_num, dst_num]*/,
                                 int* loads /*[dst_num]*/,
-                                const int& capacity,
-                                const int& sample_num,
-                                const int& sample_size,
+                                const int& cell_num,
+                                const int& cell_size,
                                 const int& path_num,
-                                cudaStream_t stream);
+                                cudaStream_t stream,
+                                const int& cell_num_per_path = 0,
+                                bool is_residual = false,
+                                bool is_dst_index = true);
 }  // namespace router
 }  // namespace brt
 

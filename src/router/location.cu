@@ -169,16 +169,16 @@ __device__ __forceinline__ void blockwise_cum_sum(int* input,
 }
 template <bool capacity_padding>
 __global__ void generate_src_indices_and_loads(
-    int* __restrict__ hot_mask /* [sample_num, path_num] */,
-    int* __restrict__ src_indices /* [sample_num, path_num] */,
+    int* __restrict__ hot_mask /* [cell_num, path_num] */,
+    int* __restrict__ src_indices /* [cell_num, path_num] */,
     int* __restrict__ loads /* [path_num] */,
-    int sample_num,
+    int cell_num,
     int* __restrict__ supported_capacities = nullptr,
     int supported_capacity_num = 0) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
-  blockwise_generate_src_indices(hot_mask, src_indices, sample_num, prefix);
+  blockwise_generate_src_indices(hot_mask, src_indices, cell_num, prefix);
   if (threadIdx.x == 0) {
     auto& real_load = prefix;
     if (real_load == 0) {
@@ -210,30 +210,30 @@ __global__ void generate_src_indices_and_loads(
 }
 
 __global__ void generate_src_indices_and_load(
-    int* __restrict__ hot_mask /* [sample_num, path_num] */,
-    int* __restrict__ src_indices /* [sample_num, path_num] */,
+    int* __restrict__ hot_mask /* [cell_num, path_num] */,
+    int* __restrict__ src_indices /* [cell_num, path_num] */,
     int* __restrict__ loads /* [path_num] */,
-    int sample_num) {
+    int cell_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
-  blockwise_generate_src_indices(hot_mask, src_indices, sample_num, prefix);
+  blockwise_generate_src_indices(hot_mask, src_indices, cell_num, prefix);
   if (threadIdx.x == 0) {
     loads[blockIdx.x] = prefix;
   }
 }
 
 __global__ void generate_src_indices_and_load_map(
-    int* __restrict__ hot_mask /* [sample_num, path_num] */,
-    int* __restrict__ src_indices /* [sample_num, path_num] */,
+    int* __restrict__ hot_mask /* [cell_num, path_num] */,
+    int* __restrict__ src_indices /* [cell_num, path_num] */,
     int* __restrict__ loads /* [path_num] */,
     int* __restrict__ supported_capacities,
-    int sample_num,
+    int cell_num,
     int supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
-  blockwise_generate_src_indices(hot_mask, src_indices, sample_num, prefix);
+  blockwise_generate_src_indices(hot_mask, src_indices, cell_num, prefix);
   if (threadIdx.x == 0) {
     auto& real_load = prefix;
     for (int i = 0; i < supported_capacity_num; i++) {
@@ -247,16 +247,16 @@ __global__ void generate_src_indices_and_load_map(
 
 template <bool capacity_padding>
 __global__ void generate_dst_indices_and_loads(
-    int* __restrict__ hot_mask /* [sample_num, path_num] */,
-    int* __restrict__ dst_indices /* [sample_num, path_num] */,
+    int* __restrict__ hot_mask /* [cell_num, path_num] */,
+    int* __restrict__ dst_indices /* [cell_num, path_num] */,
     int* __restrict__ loads /* [path_num] */,
-    int sample_num,
+    int cell_num,
     int* __restrict__ supported_capacities = nullptr /* [supported_capacity_num]*/,
     int supported_capacity_num = 0) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
-  blockwise_mask_cum_sum(hot_mask, dst_indices, sample_num, prefix);
+  blockwise_mask_cum_sum(hot_mask, dst_indices, cell_num, prefix);
   if (threadIdx.x == 0) {
     auto& real_load = prefix;
     if (real_load == 0) {
@@ -288,30 +288,30 @@ __global__ void generate_dst_indices_and_loads(
 }
 
 __global__ void generate_dst_indices_and_load(
-    int* __restrict__ hot_mask /* [sample_num, path_num] */,
-    int* __restrict__ dst_indices /* [sample_num, path_num] */,
+    int* __restrict__ hot_mask /* [cell_num, path_num] */,
+    int* __restrict__ dst_indices /* [cell_num, path_num] */,
     int* __restrict__ loads /* [path_num] */,
-    int sample_num) {
+    int cell_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
-  blockwise_mask_cum_sum(hot_mask, dst_indices, sample_num, prefix);
+  blockwise_mask_cum_sum(hot_mask, dst_indices, cell_num, prefix);
   if (threadIdx.x == 0) {
     loads[blockIdx.x] = prefix;
   }
 }
 
 __global__ void generate_dst_indices_and_load_map(
-    int* __restrict__ hot_mask /* [sample_num, path_num] */,
-    int* __restrict__ dst_indices /* [sample_num, path_num] */,
+    int* __restrict__ hot_mask /* [cell_num, path_num] */,
+    int* __restrict__ dst_indices /* [cell_num, path_num] */,
     int* __restrict__ loads /* [path_num] */,
     int* __restrict__ supported_capacities /* [supported_capacity_num]*/,
-    int sample_num,
+    int cell_num,
     int supported_capacity_num) {
   // [thread_extent] blockIdx.x = branch_num
   // [thread_extent] threadIdx.x = 1024
   int prefix = 0;
-  blockwise_mask_cum_sum(hot_mask, dst_indices, sample_num, prefix);
+  blockwise_mask_cum_sum(hot_mask, dst_indices, cell_num, prefix);
   if (threadIdx.x == 0) {
     auto& real_load = prefix;
     for (int i = 0; i < supported_capacity_num; i++) {
@@ -324,16 +324,15 @@ __global__ void generate_dst_indices_and_load_map(
   }
 }
 
-__global__ void convert_dst_to_src_indices(
-    int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* __restrict__ src_indices /* [sample_num, path_num] */,
-    int sample_num,
-    int path_num) {
+__global__ void convert_dst_to_src_indices(int* __restrict__ dst_indices /* [cell_num, path_num] */,
+                                           int* __restrict__ src_indices /* [cell_num, path_num] */,
+                                           int cell_num,
+                                           int path_num) {
   // [thread_extent] blockIdx.x = path_num
   // [thread_extent] threadIdx.x = 1024
   constexpr int thread_num = 1024;
-  for (int s_id = 0; s_id < sample_num; s_id += thread_num) {
-    if (s_id + threadIdx.x < sample_num) {
+  for (int s_id = 0; s_id < cell_num; s_id += thread_num) {
+    if (s_id + threadIdx.x < cell_num) {
       int sample_id = s_id + threadIdx.x;
       int dst_index_id = sample_id * path_num + blockIdx.x;
       int dst_index = dst_indices[dst_index_id];
@@ -345,12 +344,11 @@ __global__ void convert_dst_to_src_indices(
   }
 }
 
-__global__ void convert_src_to_dst_indices(
-    int* __restrict__ src_indices /* [sample_num, path_num] */,
-    int* __restrict__ dst_indices /* [sample_num, path_num] */,
-    int* loads /* [path_num] */,
-    int sample_num,
-    int path_num) {
+__global__ void convert_src_to_dst_indices(int* __restrict__ src_indices /* [cell_num, path_num] */,
+                                           int* __restrict__ dst_indices /* [cell_num, path_num] */,
+                                           int* loads /* [path_num] */,
+                                           int cell_num,
+                                           int path_num) {
   // [thread_extent] blockIdx.x = path_num
   // [thread_extent] threadIdx.x = 1024
   constexpr int thread_num = 1024;
@@ -370,7 +368,7 @@ __global__ void convert_src_to_dst_indices(
 void ConvertIndexFormat(int* origin_indices,
                         int* new_indices,
                         int* loads,
-                        const int& sample_num,
+                        const int& cell_num,
                         const int& path_num,
                         const int& target_index_fmt_id,
                         cudaStream_t stream) {
@@ -378,18 +376,18 @@ void ConvertIndexFormat(int* origin_indices,
   const dim3 grid_size = path_num;
   if (target_index_fmt_id == 0) {  // dst_indices -> src_indices
     convert_dst_to_src_indices<<<grid_size, block_size, 0, stream>>>(origin_indices, new_indices,
-                                                                     sample_num, path_num);
+                                                                     cell_num, path_num);
   } else if (target_index_fmt_id == 1) {  // src_indices -> dst_indices
     convert_src_to_dst_indices<<<grid_size, block_size, 0, stream>>>(origin_indices, new_indices,
-                                                                     loads, sample_num, path_num);
+                                                                     loads, cell_num, path_num);
   }
 }
 
-void GenerateSrcIndices(int* hot_mask /*[sample_num x path_num]*/,
-                        int* src_indices /*[sample_num x path_num]*/,
+void GenerateSrcIndices(int* hot_mask /*[cell_num x path_num]*/,
+                        int* src_indices /*[cell_num x path_num]*/,
                         int* loads /*[path_num]*/,
                         int* supported_capacities /*[supported_capacity_num]*/,
-                        const int& sample_num,
+                        const int& cell_num,
                         const int& path_num,
                         const int& supported_capacity_num,
                         cudaStream_t stream) {
@@ -397,18 +395,18 @@ void GenerateSrcIndices(int* hot_mask /*[sample_num x path_num]*/,
   const dim3 grid_size = path_num;
   if (supported_capacity_num == 0) {
     generate_src_indices_and_load<<<grid_size, block_size, 0, stream>>>(hot_mask, src_indices,
-                                                                        loads, sample_num);
+                                                                        loads, cell_num);
   } else {
     generate_src_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
-        hot_mask, src_indices, loads, supported_capacities, sample_num, supported_capacity_num);
+        hot_mask, src_indices, loads, supported_capacities, cell_num, supported_capacity_num);
   }
 }
 
-void GenerateDstIndices(int* hot_mask /*[sample_num x path_num]*/,
-                        int* dst_indices /*[sample_num x path_num]*/,
+void GenerateDstIndices(int* hot_mask /*[cell_num x path_num]*/,
+                        int* dst_indices /*[cell_num x path_num]*/,
                         int* loads /*[path_num]*/,
                         int* supported_capacities /*[supported_capacity_num]*/,
-                        const int& sample_num,
+                        const int& cell_num,
                         const int& path_num,
                         const int& supported_capacity_num,
                         cudaStream_t stream) {
@@ -416,19 +414,19 @@ void GenerateDstIndices(int* hot_mask /*[sample_num x path_num]*/,
   const dim3 grid_size = path_num;
   if (supported_capacity_num == 0) {
     generate_dst_indices_and_load<<<grid_size, block_size, 0, stream>>>(hot_mask, dst_indices,
-                                                                        loads, sample_num);
+                                                                        loads, cell_num);
   } else {
     CHECK_GE(supported_capacity_num, 1);
     generate_dst_indices_and_load_map<<<grid_size, block_size, 0, stream>>>(
-        hot_mask, dst_indices, loads, supported_capacities, sample_num, supported_capacity_num);
+        hot_mask, dst_indices, loads, supported_capacities, cell_num, supported_capacity_num);
   }
 }
 
 template <bool is_dst_index>
-void GenerateIndicesAndLoads(int* hot_mask /*[sample_num x path_num]*/,
-                             int* indices /*[sample_num x path_num]*/,
+void GenerateIndicesAndLoads(int* hot_mask /*[cell_num x path_num]*/,
+                             int* indices /*[cell_num x path_num]*/,
                              int* loads /*[path_num]*/,
-                             const int& sample_num,
+                             const int& cell_num,
                              const int& path_num,
                              int* supported_capacities /*[supported_capacity_num]*/,
                              const int& supported_capacity_num,
@@ -440,36 +438,36 @@ void GenerateIndicesAndLoads(int* hot_mask /*[sample_num x path_num]*/,
     if (capacity_padding) {
       CHECK_GE(supported_capacity_num, 1);
       generate_dst_indices_and_loads<true><<<grid_size, block_size, 0, stream>>>(
-          hot_mask, indices, loads, sample_num, supported_capacities, supported_capacity_num);
+          hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
     } else {
       generate_dst_indices_and_loads<false><<<grid_size, block_size, 0, stream>>>(
-          hot_mask, indices, loads, sample_num, supported_capacities, supported_capacity_num);
+          hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
     }
   } else {
     if (capacity_padding) {
       CHECK_GE(supported_capacity_num, 1);
       generate_src_indices_and_loads<true><<<grid_size, block_size, 0, stream>>>(
-          hot_mask, indices, loads, sample_num, supported_capacities, supported_capacity_num);
+          hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
     } else {
       generate_src_indices_and_loads<false><<<grid_size, block_size, 0, stream>>>(
-          hot_mask, indices, loads, sample_num, supported_capacities, supported_capacity_num);
+          hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
     }
   }
 }
 
-template void GenerateIndicesAndLoads<true>(int* hot_mask /*[sample_num x path_num]*/,
-                                            int* indices /*[sample_num x path_num]*/,
+template void GenerateIndicesAndLoads<true>(int* hot_mask /*[cell_num x path_num]*/,
+                                            int* indices /*[cell_num x path_num]*/,
                                             int* loads /*[path_num]*/,
-                                            const int& sample_num,
+                                            const int& cell_num,
                                             const int& path_num,
                                             int* supported_capacities /*[supported_capacity_num]*/,
                                             const int& supported_capacity_num,
                                             const bool& capacity_padding,
                                             cudaStream_t stream);
-template void GenerateIndicesAndLoads<false>(int* hot_mask /*[sample_num x path_num]*/,
-                                             int* indices /*[sample_num x path_num]*/,
+template void GenerateIndicesAndLoads<false>(int* hot_mask /*[cell_num x path_num]*/,
+                                             int* indices /*[cell_num x path_num]*/,
                                              int* loads /*[path_num]*/,
-                                             const int& sample_num,
+                                             const int& cell_num,
                                              const int& path_num,
                                              int* supported_capacities /*[supported_capacity_num]*/,
                                              const int& supported_capacity_num,

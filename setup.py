@@ -56,7 +56,7 @@ def use_cpp_develop_helper():
     Returns ``True`` if we need to develop underlining C++ code with intelligence, ``False`` otherwise.
     """
     use_helper = os.environ.get("BRT_DEV_HELPER", "OFF")
-    return use_helper == "ON"
+    return use_helper == "ON" or use_helper == "on"
 
 
 class BRTBuildExtension(BuildExtension):
