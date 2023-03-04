@@ -11,20 +11,26 @@
 
 namespace brt {
 namespace router {
-template <typename dtype>
+template <typename dtype, bool max_padding, bool is_tag_raouting>
 __global__ void __launch_bounds__(1024)
     dispatch_with_dst_indices_2d(dtype* __restrict__ in_data /*[path_num x cell_num x cell_size]*/,
                                  dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
+                                 int* __restrict__ in_tags,
+                                 int* __restrict__ out_tags,
                                  int* __restrict__ route_indices /*[cell_num x path_num]*/,
                                  int* __restrict__ loads /*[path_num]*/,
                                  int cell_num,
                                  int cell_size,
-                                 int path_num) {
-  in_data += cell_num * cell_size * blockIdx.x;
-
+                                 int path_num,
+                                 int cell_num_per_path) {
+  in_data += cell_num * cell_size * blockIdx.y;
   int load_start = 0;
-  for (int i = 0; i < blockIdx.y; i++) {
-    load_start += loads[i];
+  if (max_padding) {
+    load_start = cell_num_per_path * blockIdx.y;
+  } else {
+    for (int i = 0; i < blockIdx.y; i++) {
+      load_start += loads[i];
+    }
   }
 
   for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
@@ -39,34 +45,11 @@ __global__ void __launch_bounds__(1024)
     for (int j = threadIdx.x; j < cell_size; j += 1024) {
       out_data[global_dst * cell_size + j] = in_data[i * cell_size + j];
     }
-  }
-}
 
-template <typename dtype>
-__global__ void __launch_bounds__(1024) padded_dispatch_with_dst_indices_2d(
-    dtype* __restrict__ in_data /*[path_num x cell_num x cell_size]*/,
-    dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
-    int* __restrict__ route_indices /*[cell_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/,
-    int cell_num_per_path,
-    int cell_num,
-    int cell_size,
-    int path_num) {
-  in_data += cell_num * cell_size * blockIdx.x;
-
-  int load_start = cell_num_per_path * blockIdx.y;
-
-  for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
-    int route_index = i * path_num + blockIdx.y;
-    int local_dst = route_indices[route_index];
-
-    if (local_dst == 0 || local_dst > loads[blockIdx.y]) {
-      continue;
-    }
-
-    int global_dst = local_dst - 1 + load_start;
-    for (int j = threadIdx.x; j < cell_size; j += 1024) {
-      out_data[global_dst * cell_size + j] = in_data[i * cell_size + j];
+    if (is_tag_raouting) {
+      if (threadIdx.x == 0) {
+        out_tags[global_dst] = in_tags[i];
+      }
     }
   }
 }
@@ -464,12 +447,13 @@ void DispatchWithDstIndices2D(void* src_data /*[cell_num x cell_size]*/,
   constexpr dim3 block_size(1024);
   dim3 grid_size(512, path_num);
   if (cell_num_per_path == 0) {
-    dispatch_with_dst_indices_2d<<<grid_size, block_size, 0, stream>>>(
-        src_data_ptr, dst_data_ptr, route_indices, loads, cell_num, cell_size, path_num);
+    dispatch_with_dst_indices_2d<dtype, false, false><<<grid_size, block_size, 0, stream>>>(
+        src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num, cell_size,
+        path_num, cell_num_per_path);
   } else {
-    padded_dispatch_with_dst_indices_2d<<<grid_size, block_size, 0, stream>>>(
-        src_data_ptr, dst_data_ptr, route_indices, loads, cell_num_per_path, cell_num, cell_size,
-        path_num);
+    dispatch_with_dst_indices_2d<dtype, true, false><<<grid_size, block_size, 0, stream>>>(
+        src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num, cell_size,
+        path_num, cell_num_per_path);
   }
 }
 
@@ -598,12 +582,13 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
     } else {
       CHECK(gates_ptr == nullptr);
       if (cell_num_per_path == 0) {
-        dispatch_with_dst_indices_2d<<<grid_size, block_size, 0, stream>>>(
-            src_data_ptr, dst_data_ptr, route_indices, loads, cell_num, cell_size, path_num);
+        dispatch_with_dst_indices_2d<dtype, false, false><<<grid_size, block_size, 0, stream>>>(
+            src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num, cell_size,
+            path_num, cell_num_per_path);
       } else {
-        padded_dispatch_with_dst_indices_2d<<<grid_size, block_size, 0, stream>>>(
-            src_data_ptr, dst_data_ptr, route_indices, loads, cell_num_per_path, cell_num,
-            cell_size, path_num);
+        dispatch_with_dst_indices_2d<dtype, true, false><<<grid_size, block_size, 0, stream>>>(
+            src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num, cell_size,
+            path_num, cell_num_per_path);
       }
     }
   } else {

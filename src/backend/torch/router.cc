@@ -134,7 +134,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
 /*!
  * \brief dispatch data to different pathes according to the indices and loads
  *
- * \param in_data shape: [cell_num, sample_size]
+ * \param in_data shape: [cell_num, cell_size]
  * \param route_indices shape: [cell_num, path_num]
  * \param loads shape: [path_num]
  * \param gates (optional) shape: [cell_num, path_num]
@@ -143,7 +143,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
  * \param load_limit load limit
  */
 std::vector<::torch::Tensor> dispatch_with_indices_and_load(
-    const ::torch::Tensor& in_data /*[cell_num x sample_size]*/,
+    const ::torch::Tensor& in_data /*[cell_num x cell_size]*/,
     const ::torch::Tensor& route_indices /*[cell_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/,
     const ::c10::optional<::torch::Tensor>& gates = {} /*[cell_num x path_num]*/,
@@ -151,6 +151,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
     const ::c10::optional<int>& cell_num_per_path = {} /* load limit*/,
     const bool& is_1d_routing = 1 /* available dimensions: [1, 2] */,
     const bool& out_fused = true,
+    const ::c10::optional<::torch::Tensor>& in_data_tags = {},
     const bool& is_dst_index = true) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
@@ -195,6 +196,14 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
   } else {
     total_load = loads.sum().item<int>();
   }
+  ::torch::Tensor old_cell_tags;
+  ::torch::Tensor new_cell_tags;
+
+  if (!out_fused) {
+    AT_ASSERT(in_data_tags.has_value());
+    old_cell_tags = in_data_tags.value();
+    new_cell_tags = ::torch::zeros({total_load}, route_indices.options());
+  }
 
   auto out_shape = in_data.sizes().vec();
   out_shape[0] = total_load;
@@ -207,15 +216,23 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
         at::cuda::getDefaultCUDAStream().stream(), cell_num_per_path_value, is_1d_routing,
         is_dst_index);
   } else if (data_type == ::torch::kFloat16) {
+    router::DispatchWithIndicesAndLoads<__half2>(
+        in_data.data_ptr(), out_data.data_ptr(), gates_data_ptr, route_indices.data_ptr<int>(),
+        cuda_loads.data_ptr<int>(), cell_num, cell_size, path_num,
+        at::cuda::getDefaultCUDAStream().stream(), cell_num_per_path_value, is_1d_routing,
+        is_dst_index);
   } else {
     AT_ERROR("Unsupported data type: ", data_type);
+  }
+  if (out_fused) {
+    return {out_data};
   }
 
   return {out_data};
 }
 
 ::torch::Tensor dispatch_with_dst_indices_1d(
-    const ::torch::Tensor& in_data /*[cell_num x sample_size]*/,
+    const ::torch::Tensor& in_data /*[cell_num x cell_size]*/,
     const ::torch::Tensor& route_indices /*[cell_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/,
     const bool& auto_pad = false,
@@ -224,7 +241,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
   CHECK_ON_CUDA(route_indices);
 
   int cell_num = in_data.size(0);
-  int sample_size = in_data.numel() / cell_num;
+  int cell_size = in_data.numel() / cell_num;
   int path_num = route_indices.size(1);
 
   int total_load = 0;
@@ -255,13 +272,13 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
 
   router::DispatchWithDstIndices1D<float>(in_data.data_ptr(), out_data.data_ptr(), gates_data_ptr,
                                           route_indices.data_ptr<int>(), cuda_loads.data_ptr<int>(),
-                                          capacity, cell_num, sample_size, path_num,
+                                          capacity, cell_num, cell_size, path_num,
                                           at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
 ::torch::Tensor padded_dispatch_with_dst_indices_1d(
-    const ::torch::Tensor& in_data /*[cell_num x sample_size]*/,
+    const ::torch::Tensor& in_data /*[cell_num x cell_size]*/,
     const ::torch::Tensor& route_indices /*[cell_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/,
     const int& pad_size,
@@ -270,7 +287,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
   CHECK_ON_CUDA(route_indices);
 
   int cell_num = in_data.size(0);
-  int sample_size = in_data.numel() / cell_num;
+  int cell_size = in_data.numel() / cell_num;
   int path_num = route_indices.size(1);
 
   int total_load = 0;
@@ -299,13 +316,13 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
 
   router::DispatchWithDstIndices1D<float>(in_data.data_ptr(), out_data.data_ptr(), gates_data_ptr,
                                           route_indices.data_ptr<int>(), cuda_loads.data_ptr<int>(),
-                                          capacity, cell_num, sample_size, path_num,
+                                          capacity, cell_num, cell_size, path_num,
                                           at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
 ::torch::Tensor dispatch_with_dst_indices_2d(
-    const ::torch::Tensor& in_data /*[cell_num x sample_size]*/,
+    const ::torch::Tensor& in_data /*[cell_num x cell_size]*/,
     const ::torch::Tensor& route_indices /*[cell_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/,
     const bool& auto_pad = false) {
@@ -314,8 +331,8 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
   CHECK_ON_CUDA(loads);
 
   int cell_num = in_data.size(0);
-  int sample_size = in_data.numel() / cell_num;
   int path_num = route_indices.size(1);
+  int cell_size = in_data.numel() / (cell_num * path_num);
 
   int total_load = 0;
   int capacity = 0;
@@ -326,24 +343,26 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
     total_load = loads.sum().item<int>();
   }
 
+  auto in_data_to_be_route = in_data.transpose(0, 1).contiguous();
+
   auto out_shape = in_data.sizes().vec();
-  out_shape[0] = total_load;
-  auto out_data = ::torch::zeros(out_shape, in_data.options());
-  CHECK_ON_CUDA(out_data);
+  out_shape[1] = total_load;
+  at::IntArrayRef out_shape_ref(out_shape.data() + 1, out_shape.data() + out_shape.size());
+  auto out_data = ::torch::zeros(out_shape_ref, in_data.options());
 
   router::DispatchWithDstIndices2D<float>(
-      in_data.data_ptr(), out_data.data_ptr(), route_indices.data_ptr<int>(), loads.data_ptr<int>(),
-      capacity, cell_num, sample_size, path_num, at::cuda::getDefaultCUDAStream().stream());
+      in_data_to_be_route.data_ptr(), out_data.data_ptr(), route_indices.data_ptr<int>(), loads.data_ptr<int>(),
+      capacity, cell_num, cell_size, path_num, at::cuda::getDefaultCUDAStream().stream());
   return out_data;
 }
 
 ::torch::Tensor combine_with_src_indices(
-    const ::torch::Tensor& in_data /*[load*path_num x sample_size]*/,
+    const ::torch::Tensor& in_data /*[load*path_num x cell_size]*/,
     const ::torch::Tensor& route_indices /*[cell_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/,
     const bool& auto_pad = false,
     const ::c10::optional<::torch::Tensor>& gates = {} /*[cell_num x path_num]*/,
-    const ::c10::optional<::torch::Tensor>& out_data = {} /*[cell_num x sample_size]*/) {
+    const ::c10::optional<::torch::Tensor>& out_data = {} /*[cell_num x cell_size]*/) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
   ::torch::Tensor cuda_loads;
@@ -354,7 +373,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
   }
 
   int cell_num = route_indices.size(0);
-  int sample_size = in_data.numel() / in_data.size(0);
+  int cell_size = in_data.numel() / in_data.size(0);
   int path_num = route_indices.size(1);
 
   void* gates_data_ptr = nullptr;
@@ -376,7 +395,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
     out_data_t = out_data.value();
     router::ResidualCombineWithSrcIndices<float>(
         in_data.data_ptr(), out_data_t.data_ptr(), gates_data_ptr, route_indices.data_ptr<int>(),
-        cuda_loads.data_ptr<int>(), capacity, cell_num, sample_size, path_num,
+        cuda_loads.data_ptr<int>(), capacity, cell_num, cell_size, path_num,
         at::cuda::getDefaultCUDAStream().stream());
   } else {
     out_shape[0] = cell_num;
@@ -384,7 +403,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_load(
     CHECK_ON_CUDA(out_data_t);
     router::CombineWithSrcIndices<float>(in_data.data_ptr(), out_data_t.data_ptr(), gates_data_ptr,
                                          route_indices.data_ptr<int>(), cuda_loads.data_ptr<int>(),
-                                         capacity, cell_num, sample_size, path_num,
+                                         capacity, cell_num, cell_size, path_num,
                                          at::cuda::getDefaultCUDAStream().stream());
   }
   return out_data_t;
