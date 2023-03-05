@@ -4,8 +4,7 @@ import torch
 
 # pylint: disable=no-name-in-module
 from brt._C.router import (
-    dispatch_with_dst_indices_1d,
-    dispatch_with_dst_indices_2d,
+    dispatch_with_indices_and_loads,
     combine_with_src_indices,
 )
 
@@ -65,13 +64,20 @@ class FusedDispatchFabric(DispatchFabric):
 
             if self.route_logics[flow_idx] == "1d":
                 if self.transforms[flow_idx]:
-                    out_flow_data = dispatch_with_dst_indices_1d(
-                        in_flow_data, route_indices, loads, self.capacity_padding, score
-                    )
+                    out_flow_data = dispatch_with_indices_and_loads(
+                        in_flow_data,
+                        route_indices,
+                        loads,
+                        score,
+                        max_path_padding=self.capacity_padding,
+                    )[0]
                 else:
-                    out_flow_data = dispatch_with_dst_indices_1d(
-                        in_flow_data, route_indices, loads, self.capacity_padding
-                    )
+                    out_flow_data = dispatch_with_indices_and_loads(
+                        in_flow_data,
+                        route_indices,
+                        loads,
+                        max_path_padding=self.capacity_padding,
+                    )[0]
                 out_flow = init_proto_tensor(
                     out_flow_data,
                     in_flow_tag_stack,
@@ -80,9 +86,12 @@ class FusedDispatchFabric(DispatchFabric):
                 )
                 out_flow.pack(route_indices, loads, score=score)
             elif self.route_logics[flow_idx] == "2d":
-                in_flow_data = in_flow_data.transpose(0, 1).contiguous()
-                out_flow_data = dispatch_with_dst_indices_2d(
-                    in_flow_data, route_indices, loads, self.capacity_padding
+                out_flow_data = dispatch_with_indices_and_loads(
+                    in_flow_data,
+                    route_indices,
+                    loads,
+                    max_path_padding=self.capacity_padding,
+                    is_1d_routing=False,
                 )
                 out_flow = init_proto_tensor(
                     out_flow_data,
@@ -198,11 +207,11 @@ class HomoFusedDispatchFabric(DispatchFabric):
         for flow_idx, in_flow in enumerate(in_flows):
             if self.route_logics[flow_idx] == "1d":
                 if self.transforms[flow_idx]:
-                    out_flow = dispatch_with_dst_indices_1d(
+                    out_flow = dispatch_with_indices_and_loads(
                         in_flow, route_indices, loads, self.capacity_padding, score
                     )
                 else:
-                    out_flow = dispatch_with_dst_indices_1d(
+                    out_flow = dispatch_with_indices_and_loads(
                         in_flow, route_indices, loads, self.capacity_padding
                     )
                 out_flow.route_indices = route_indices
@@ -210,7 +219,7 @@ class HomoFusedDispatchFabric(DispatchFabric):
                 out_flow.score = score
             elif self.route_logics[flow_idx] == "2d":
                 in_flow = in_flow.transpose(0, 1).contiguous()
-                out_flow = dispatch_with_dst_indices_2d(
+                out_flow = dispatch_with_indices_and_loads(
                     in_flow, route_indices, loads, self.capacity_padding
                 )
                 out_flow.route_indices = route_indices
@@ -255,7 +264,6 @@ class HomoFusedCombineFabric(CombineFabric):
                 )
             else:
                 out_flow = combine_with_src_indices(in_flow, local_indices, loads, None)
-
 
             out_flows.append(out_flow)
 

@@ -10,7 +10,7 @@
 
 namespace brt {
 namespace router {
-template <typename dtype, bool weighted, bool max_padding, bool tag_generating>
+template <typename dtype, bool weighted, bool max_path_padding, bool tag_generating>
 __global__ void __launch_bounds__(1024)
     dispatch_with_dst_indices_1d(dtype* __restrict__ in_data /*[cell_num x cell_size]*/,
                                  dtype* __restrict__ out_data /*[total_load x cell_size]*/,
@@ -24,7 +24,7 @@ __global__ void __launch_bounds__(1024)
                                  int path_num,
                                  int max_path_load) {
   int load_start = 0;
-  if (max_padding) {
+  if (max_path_padding) {
     load_start = blockIdx.y * max_path_load;
   } else {
     for (int i = 0; i < blockIdx.y; i++) {
@@ -49,29 +49,32 @@ __global__ void __launch_bounds__(1024)
         out_data[global_dst_index * cell_size + j] = in_data[i * cell_size + j];
       }
     }
-    if (tag_generating) {
-      if (threadIdx.x == 0) {
+    if (threadIdx.x == 0) {
+      if (tag_generating) {
         new_tags[global_dst_index] = old_tags[i];
       }
     }
   }
+  if (threadIdx.x == 0 && max_path_padding) {
+    loads[blockIdx.y] = max_path_load;
+  }
 }
 
-template <typename dtype, bool max_padding, bool tag_generating>
+template <typename dtype, bool max_path_padding, bool tag_generating>
 __global__ void __launch_bounds__(1024)
     dispatch_with_dst_indices_2d(dtype* __restrict__ in_data /*[path_num x cell_num x cell_size]*/,
                                  dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
                                  int* __restrict__ route_indices /*[cell_num x path_num]*/,
                                  int* __restrict__ loads /*[path_num]*/,
-                                 int* __restrict__ in_tags,
-                                 int* __restrict__ out_tags,
+                                 int* __restrict__ old_tags,
+                                 int* __restrict__ new_tags,
                                  int cell_num,
                                  int cell_size,
                                  int path_num,
                                  int max_path_load) {
   in_data += cell_num * cell_size * blockIdx.y;
   int load_start = 0;
-  if (max_padding) {
+  if (max_path_padding) {
     load_start = max_path_load * blockIdx.y;
   } else {
     for (int i = 0; i < blockIdx.y; i++) {
@@ -92,125 +95,12 @@ __global__ void __launch_bounds__(1024)
       out_data[global_dst_index * cell_size + j] = in_data[i * cell_size + j];
     }
 
-    if (tag_generating) {
-      if (threadIdx.x == 0) {
-        out_tags[global_dst_index] = in_tags[i];
-      }
+    if (threadIdx.x == 0 && tag_generating) {
+      new_tags[global_dst_index] = old_tags[i];
     }
   }
-}
-
-template <typename dtype>
-__global__ void __launch_bounds__(1024)
-    dispatch_with_dst_indices(dtype* __restrict__ in_data /*[cell_num x cell_size]*/,
-                              dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
-                              int* __restrict__ route_indices /*[cell_num x path_num]*/,
-                              int* __restrict__ loads /*[path_num]*/,
-                              int cell_num,
-                              int cell_size,
-                              int path_num) {
-  int load_start = 0;
-  for (int i = 0; i < blockIdx.y; i++) {
-    load_start += loads[i];
-  }
-
-  for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
-    int route_index = i * path_num + blockIdx.y;
-    int local_dst = route_indices[route_index];
-
-    if (local_dst == 0 || local_dst > loads[blockIdx.y]) {
-      continue;
-    }
-
-    int global_dst = local_dst - 1 + load_start;
-    for (int j = threadIdx.x; j < cell_size; j += 1024) {
-      out_data[global_dst * cell_size + j] = in_data[i * cell_size + j];
-    }
-  }
-}
-
-template <typename dtype>
-__global__ void __launch_bounds__(1024)
-    padded_dispatch_with_dst_indices(dtype* __restrict__ in_data /*[cell_num x cell_size]*/,
-                                     dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
-                                     int* __restrict__ route_indices /*[cell_num x path_num]*/,
-                                     int* __restrict__ loads /*[path_num]*/,
-                                     int max_path_load,
-                                     int cell_num,
-                                     int cell_size,
-                                     int path_num) {
-  int load_start = blockIdx.y * max_path_load;
-
-  for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
-    int route_index = i * path_num + blockIdx.y;
-    int local_dst = route_indices[route_index];
-
-    if (local_dst == 0 || local_dst > loads[blockIdx.y]) {
-      continue;
-    }
-
-    int global_dst = local_dst - 1 + load_start;
-    for (int j = threadIdx.x; j < cell_size; j += 1024) {
-      out_data[global_dst * cell_size + j] = in_data[i * cell_size + j];
-    }
-  }
-}
-
-template <typename dtype>
-__global__ void __launch_bounds__(1024)
-    weighted_dipatch_with_dst_indices(dtype* __restrict__ in_data /*[cell_num x cell_size]*/,
-                                      dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
-                                      dtype* __restrict__ gates /*[cell_num x path_num]*/,
-                                      int* __restrict__ route_indices /*[cell_num x path_num]*/,
-                                      int* __restrict__ loads /*[path_num]*/,
-                                      int cell_num,
-                                      int cell_size,
-                                      int path_num) {
-  int load_start = 0;
-  for (int i = 0; i < blockIdx.y; i++) {
-    load_start += loads[i];
-  }
-
-  for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
-    int route_index = i * path_num + blockIdx.y;
-    int local_dst = route_indices[route_index];
-
-    if (local_dst == 0 || local_dst > loads[blockIdx.y]) {
-      continue;
-    }
-
-    int global_dst = local_dst - 1 + load_start;
-    for (int j = threadIdx.x; j < cell_size; j += 1024) {
-      out_data[global_dst * cell_size + j] = in_data[i * cell_size + j] * gates[route_index];
-    }
-  }
-}
-
-template <typename dtype>
-__global__ void __launch_bounds__(1024) padded_weighted_dipatch_with_dst_indices(
-    dtype* __restrict__ in_data /*[cell_num x cell_size]*/,
-    dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
-    dtype* __restrict__ gates /*[cell_num x path_num]*/,
-    int* __restrict__ route_indices /*[cell_num x path_num]*/,
-    int* __restrict__ loads /*[path_num]*/,
-    int max_path_load,
-    int cell_num,
-    int cell_size,
-    int path_num) {
-  int load_start = blockIdx.y * max_path_load;
-
-  for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
-    int route_index = i * path_num + blockIdx.y;
-
-    int local_dst = route_indices[route_index];
-    if (local_dst == 0 || local_dst > loads[blockIdx.y]) {
-      continue;
-    }
-
-    int global_dst = local_dst - 1 + load_start;
-    for (int j = threadIdx.x; j < cell_size; j += 1024) {
-      out_data[global_dst * cell_size + j] = in_data[i * cell_size + j] * gates[route_index];
-    }
+  if (threadIdx.x == 0 && max_path_padding) {
+    loads[blockIdx.y] = max_path_load;
   }
 }
 
@@ -435,73 +325,6 @@ __global__ void __launch_bounds__(1024) residual_padded_weighted_combine_with_sr
 }
 
 template <typename dtype>
-void DispatchWithDstIndices1D(void* src_data /*[cell_num x cell_size]*/,
-                              void* dst_data /*[?load*path_num x cell_size]*/,
-                              void* gates /*[cell_num x path_num]*/,
-                              int* route_indices /*[cell_num x path_num]*/,
-                              int* loads /*[path_num]*/,
-                              const int& max_path_load,
-                              const int& cell_num,
-                              const int& cell_size,
-                              const int& path_num,
-                              cudaStream_t stream) {
-  dtype* src_data_ptr = static_cast<dtype*>(src_data);
-  dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
-  dtype* gates_ptr = static_cast<dtype*>(gates);
-  constexpr dim3 block_size(1024);
-  dim3 grid_size(512, path_num);
-  if (max_path_load == 0) {
-    if (gates == nullptr) {
-      dispatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
-          src_data_ptr, dst_data_ptr, route_indices, loads, cell_num, cell_size, path_num);
-      // CUDA_CHECK(cudaDeviceSynchronize());
-    } else {
-      weighted_dipatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
-          src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, cell_num, cell_size,
-          path_num);
-      // CUDA_CHECK(cudaDeviceSynchronize());
-    }
-  } else {
-    if (gates == nullptr) {
-      padded_dispatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
-          src_data_ptr, dst_data_ptr, route_indices, loads, max_path_load, cell_num, cell_size,
-          path_num);
-      // CUDA_CHECK(cudaDeviceSynchronize());
-    } else {
-      padded_weighted_dipatch_with_dst_indices<<<grid_size, block_size, 0, stream>>>(
-          src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, max_path_load, cell_num,
-          cell_size, path_num);
-      // CUDA_CHECK(cudaDeviceSynchronize());
-    }
-  }
-}
-
-template <typename dtype>
-void DispatchWithDstIndices2D(void* src_data /*[cell_num x cell_size]*/,
-                              void* dst_data /*[?load*path_num x cell_size]*/,
-                              int* route_indices /*[cell_num x path_num]*/,
-                              int* loads /*[path_num]*/,
-                              const int& max_path_load,
-                              const int& cell_num,
-                              const int& cell_size,
-                              const int& path_num,
-                              cudaStream_t stream) {
-  dtype* src_data_ptr = static_cast<dtype*>(src_data);
-  dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
-  constexpr dim3 block_size(1024);
-  dim3 grid_size(512, path_num);
-  if (max_path_load == 0) {
-    dispatch_with_dst_indices_2d<dtype, false, false><<<grid_size, block_size, 0, stream>>>(
-        src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num, cell_size,
-        path_num, max_path_load);
-  } else {
-    dispatch_with_dst_indices_2d<dtype, true, false><<<grid_size, block_size, 0, stream>>>(
-        src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num, cell_size,
-        path_num, max_path_load);
-  }
-}
-
-template <typename dtype>
 void CombineWithSrcIndices(void* src_data /*[?load*path_num x cell_size]*/,
                            void* dst_data /*[cell_num x cell_size]*/,
                            void* gates /*[cell_num x path_num]*/,
@@ -659,21 +482,21 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
       if (max_path_load != 0) {
         if (old_tags != nullptr) {
           dispatch_with_dst_indices_2d<dtype, true, true><<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num,
+              src_data_ptr, dst_data_ptr, route_indices, loads, old_tags, new_tags, cell_num,
               cell_size, path_num, max_path_load);
         } else {
           dispatch_with_dst_indices_2d<dtype, true, false><<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num,
+              src_data_ptr, dst_data_ptr, route_indices, loads, old_tags, new_tags, cell_num,
               cell_size, path_num, max_path_load);
         }
       } else {
         if (old_tags != nullptr) {
-          dispatch_with_dst_indices_2d<dtype, false, false><<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, nullptr, nullptr, route_indices, loads, cell_num,
+          dispatch_with_dst_indices_2d<dtype, false, true><<<grid_size, block_size, 0, stream>>>(
+              src_data_ptr, dst_data_ptr, route_indices, loads, old_tags, new_tags, cell_num,
               cell_size, path_num, max_path_load);
         } else {
           dispatch_with_dst_indices_2d<dtype, false, false><<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, old_tags, new_tags, route_indices, loads, cell_num,
+              src_data_ptr, dst_data_ptr, route_indices, loads, old_tags, new_tags, cell_num,
               cell_size, path_num, max_path_load);
         }
       }
@@ -756,27 +579,6 @@ void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
 
 // explicit instantiation
 
-template void DispatchWithDstIndices1D<float>(void* src_data /*[cell_num, cell_size]*/,
-                                              void* dst_data /*[total_loads, cell_size]*/,
-                                              void* gates /*[cell_num, dst_num]*/,
-                                              int* route_indices /*[cell_num, dst_num]*/,
-                                              int* loads /*[dst_num]*/,
-                                              const int& max_path_load,
-                                              const int& cell_num,
-                                              const int& cell_size,
-                                              const int& path_num,
-                                              cudaStream_t stream);
-
-template void DispatchWithDstIndices2D<float>(void* src_data /*[cell_num, cell_size]*/,
-                                              void* dst_data /*[total_loads, cell_size]*/,
-                                              int* route_indices /*[cell_num, dst_num]*/,
-                                              int* loads /*[dst_num]*/,
-                                              const int& max_path_load,
-                                              const int& cell_num,
-                                              const int& cell_size,
-                                              const int& path_num,
-                                              cudaStream_t stream);
-
 template void CombineWithSrcIndices<float>(void* src_data /*[total_loads, cell_size]*/,
                                            void* dst_data /*[cell_num, cell_size]*/,
                                            void* gates /*[cell_num, dst_num]*/,
@@ -798,27 +600,6 @@ template void ResidualCombineWithSrcIndices<float>(void* src_data /*[total_loads
                                                    const int& cell_size,
                                                    const int& path_num,
                                                    cudaStream_t stream);
-
-template void DispatchWithDstIndices1D<__half2>(void* src_data /*[cell_num, cell_size]*/,
-                                                void* dst_data /*[total_loads, cell_size]*/,
-                                                void* gates /*[cell_num, dst_num]*/,
-                                                int* route_indices /*[cell_num, dst_num]*/,
-                                                int* loads /*[dst_num]*/,
-                                                const int& max_path_load,
-                                                const int& cell_num,
-                                                const int& cell_size,
-                                                const int& path_num,
-                                                cudaStream_t stream);
-
-template void DispatchWithDstIndices2D<__half2>(void* src_data /*[cell_num, cell_size]*/,
-                                                void* dst_data /*[total_loads, cell_size]*/,
-                                                int* route_indices /*[cell_num, dst_num]*/,
-                                                int* loads /*[dst_num]*/,
-                                                const int& max_path_load,
-                                                const int& cell_num,
-                                                const int& cell_size,
-                                                const int& path_num,
-                                                cudaStream_t stream);
 
 template void CombineWithSrcIndices<__half2>(void* src_data /*[total_loads, cell_size]*/,
                                              void* dst_data /*[cell_num, cell_size]*/,

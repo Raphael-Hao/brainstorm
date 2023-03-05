@@ -7,12 +7,7 @@ import brt.runtime.distributed as brt_dist
 import torch
 
 # pylint: disable=no-name-in-module
-from brt._C.router import (
-    combine_with_src_indices,
-    padded_dispatch_with_dst_indices_1d,
-    dispatch_with_dst_indices_2d,
-    dispatch_with_dst_indices_1d,
-)
+from brt._C.router import combine_with_src_indices, dispatch_with_indices_and_loads
 
 # pylint: enable=no-name-in-module
 from brt.router.fabric.base import register_fabric
@@ -50,20 +45,29 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
         capacity = loads.capacity
 
         if self.route_logics[0] == "1d":
+
             if self.transforms[0]:
-                out_flow = padded_dispatch_with_dst_indices_1d(
-                    in_flow, route_indices, loads, capacity, score
-                )
+                out_flow = dispatch_with_indices_and_loads(
+                    in_flow,
+                    route_indices,
+                    loads,
+                    gates=score,
+                    max_path_padding=self.capacity_padding,
+                    max_path_load=capacity,
+                )[0]
             else:
-                out_flow = padded_dispatch_with_dst_indices_1d(
-                    in_flow, route_indices, loads, capacity
-                )
+                out_flow = dispatch_with_indices_and_loads(
+                    in_flow,
+                    route_indices,
+                    loads,
+                    max_path_padding=self.capacity_padding,
+                    max_path_load=capacity,
+                )[0]
             # print(out_flow)
         elif self.route_logics[0] == "2d":
-            in_flow = in_flow.transpose(0, 1).contiguous()
-            out_flow = dispatch_with_dst_indices_2d(
-                in_flow, route_indices, loads, self.capacity_padding
-            )
+            out_flow = dispatch_with_indices_and_loads(
+                in_flow, route_indices, loads, is_1d_routing=False
+            )[0]
         else:
             raise ValueError("route_logic must be 1d or 2d")
 
@@ -129,7 +133,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
         reduction,
         granularity_padding,
         locality_aware: bool = False,
-        transform = True,
+        transform=True,
     ) -> None:
         assert granularity_padding == False
         self.locality_aware = locality_aware
@@ -141,10 +145,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
         )
         self.transform = transform
 
-    def forward(
-        self,
-        in_flow: torch.Tensor,
-    ) -> List[torch.Tensor]:
+    def forward(self, in_flow: torch.Tensor,) -> List[torch.Tensor]:
         route_indices = in_flow.route_indices
         in_loads = in_flow.in_loads
         out_loads = in_flow.out_loads
@@ -161,6 +162,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
             out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
         out_flow.score = score
         return out_flow
+
 
 @register_fabric("distributed_placement_dispatch")
 class DistributedPlacementDispatchFabric(FusedDispatchFabric):
@@ -187,7 +189,7 @@ class DistributedPlacementDispatchFabric(FusedDispatchFabric):
         loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[torch.Tensor]:
-        out_flow = dispatch_with_dst_indices_1d(in_flow, route_indices, loads)
+        out_flow = dispatch_with_indices_and_loads(in_flow, route_indices, loads)[0]
         out_flow, out_loads, in_loads = brt_dist.group_sparse_a2a(out_flow, loads)
         if self.task_locality:
             world_size = dist.get_world_size()
@@ -219,12 +221,7 @@ class DistributedPlacementDispatchFabric(FusedDispatchFabric):
 @register_fabric("distributed_placement_combine")
 class DistributedPlacementCombineFabric(FusedCombineFabric):
     def __init__(
-        self,
-        flow_num,
-        sparse,
-        reduction,
-        granularity_padding,
-        transform = True,
+        self, flow_num, sparse, reduction, granularity_padding, transform=True,
     ) -> None:
         assert granularity_padding == False
         super().__init__(
@@ -235,10 +232,7 @@ class DistributedPlacementCombineFabric(FusedCombineFabric):
         )
         self.transform = transform
 
-    def forward(
-        self,
-        in_flow: torch.Tensor,
-    ) -> List[torch.Tensor]:
+    def forward(self, in_flow: torch.Tensor,) -> List[torch.Tensor]:
         route_indices = in_flow.route_indices
         in_loads = in_flow.in_loads
         out_loads = in_flow.out_loads

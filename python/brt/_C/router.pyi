@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Tuple
+from typing import Tuple, List, Union
 
 import torch
 
@@ -29,26 +29,6 @@ def dispatch_with_indices_and_loads(
     is_1d_routing: bool = True,
     is_dst_index: bool = True,
 ) -> torch.Tensor: ...
-def dispatch_with_dst_indices_1d(
-    in_data: torch.Tensor,
-    route_indices: torch.Tensor,
-    loads: torch.Tensor,
-    auto_pad: bool = False,
-    gates: torch.Tensor = None,
-) -> torch.Tensor: ...
-def padded_dispatch_with_dst_indices_1d(
-    in_data: torch.Tensor,
-    route_indices: torch.Tensor,
-    loads: torch.Tensor,
-    pad_size: int,
-    gates: torch.Tensor = None,
-) -> torch.Tensor: ...
-def dispatch_with_dst_indices_2d(
-    in_data: torch.Tensor,
-    route_indices: torch.Tensor,
-    loads: torch.Tensor,
-    auto_pad: bool = False,
-) -> torch.Tensor: ...
 def combine_with_src_indices(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
@@ -57,3 +37,12 @@ def combine_with_src_indices(
     gates: torch.Tensor = None,
     out_data: torch.Tensor = None,
 ) -> torch.Tensor: ...
+def split_fused_cells_to_paths(
+    in_data: torch.Tensor,
+    loads: torch.Tensor,
+    max_path_padding: bool = False,
+    tags: torch.Tensor = None,
+) -> Union[
+    Tuple[List[torch.Tensor], List[torch.Tensor]],
+    Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]],
+]: ...

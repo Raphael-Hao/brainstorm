@@ -263,7 +263,7 @@ __global__ void convert_dst_to_src_indices(int* __restrict__ dst_indices /* [cel
       int cell_id = s_id + threadIdx.x;
       int dst_index_id = cell_id * path_num + blockIdx.x;
       int dst_index = dst_indices[dst_index_id];
-      if (dst_index != 0 && dst_index) {
+      if (dst_index != 0) {
         int src_index_id = (dst_index - 1) * path_num + blockIdx.x;
         src_indices[src_index_id] = cell_id + 1;
       }
