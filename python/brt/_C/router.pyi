@@ -17,6 +17,18 @@ def generate_indices_and_loads(
     is_dst_index=True,
     load_on_cpu: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
+def dispatch_with_indices_and_loads(
+    in_data: torch.Tensor,
+    route_indices: torch.Tensor,
+    loads: torch.Tensor,
+    gates: torch.Tensor = None,
+    tag_generating: bool = False,
+    tags: torch.Tensor = None,
+    max_path_padding: bool = False,
+    max_path_load: int = None,
+    is_1d_routing: bool = True,
+    is_dst_index: bool = True,
+) -> torch.Tensor: ...
 def dispatch_with_dst_indices_1d(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
@@ -36,18 +48,6 @@ def dispatch_with_dst_indices_2d(
     route_indices: torch.Tensor,
     loads: torch.Tensor,
     auto_pad: bool = False,
-) -> torch.Tensor: ...
-def dispatch_with_indices_and_loads(
-    in_data: torch.Tensor,
-    route_indices: torch.Tensor,
-    loads: torch.Tensor,
-    gates: torch.Tensor = None,
-    max_path_padding: bool = False,
-    cell_num_per_path: int = None,
-    is_1d_routing: bool = True,
-    tag_generating: bool = False,
-    tags: torch.Tensor = None,
-    is_dst_index: bool = True,
 ) -> torch.Tensor: ...
 def combine_with_src_indices(
     in_data: torch.Tensor,

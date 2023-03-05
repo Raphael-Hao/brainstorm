@@ -279,10 +279,9 @@ __global__ void convert_src_to_dst_indices(int* __restrict__ src_indices /* [cel
   // [thread_extent] blockIdx.x = path_num
   // [thread_extent] threadIdx.x = 1024
   constexpr int thread_num = 1024;
-  __shared__ int load;
-  load = loads[blockIdx.x];
-  for (int s_id = 0; s_id < load; s_id += thread_num) {
-    if (s_id + threadIdx.x < load) {
+  int path_load = loads[blockIdx.x];
+  for (int s_id = 0; s_id < path_load; s_id += thread_num) {
+    if (s_id + threadIdx.x < path_load) {
       int cell_id = s_id + threadIdx.x;
       int src_index_id = cell_id * path_num + blockIdx.x;
       int src_index = src_indices[src_index_id];
