@@ -49,10 +49,8 @@ __global__ void __launch_bounds__(1024)
         out_data[global_dst_index * cell_size + j] = in_data[i * cell_size + j];
       }
     }
-    if (threadIdx.x == 0) {
-      if (tag_generating) {
-        new_tags[global_dst_index] = old_tags[i];
-      }
+    if (threadIdx.x == 0 && tag_generating) {
+      new_tags[global_dst_index] = old_tags[i];
     }
   }
   if (threadIdx.x == 0 && max_path_padding) {
@@ -101,6 +99,35 @@ __global__ void __launch_bounds__(1024)
   }
   if (threadIdx.x == 0 && max_path_padding) {
     loads[blockIdx.y] = max_path_load;
+  }
+}
+
+template <typename dtype, bool weighted, bool max_path_padding, bool is_residual>
+__global__ void __launch_bounds__(1024)
+    combine_with_src_indices(dtype* __restrict__ in_data /*[?load*path_num x cell_size]*/,
+                             dtype* __restrict__ out_data /*[cell_num x cell_size]*/,
+                             int* __restrict__ route_indices /*[cell_num x path_num]*/,
+                             int* __restrict__ loads /*[path_num]*/,
+                             int cell_num,
+                             int cell_size,
+                             int path_num) {
+  for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
+    for (int j = 0; j < path_num; j++) {
+      int route_index = i * path_num + j;
+      int local_dst = route_indices[route_index];
+
+      if (local_dst == 0 || local_dst > loads[j]) {
+        continue;
+      }
+
+      int global_dst = local_dst - 1;
+      for (int k = 0; k < j; k++) {
+        global_dst += loads[k];
+      }
+      for (int k = threadIdx.x; k < cell_size; k += 1024) {
+        out_data[i * cell_size + k] += in_data[global_dst * cell_size + k];
+      }
+    }
   }
 }
 
