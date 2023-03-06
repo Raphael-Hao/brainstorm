@@ -280,6 +280,13 @@ def init_grid_tensor(
     return cell
 
 
+def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
+    t, tag_stack, load_stack, extra_attrs_stack_dict = deinit_grid_tensor(from_gird_tensor, True)
+    print([t.shape if isinstance(t, torch.Tensor) else t for t in tag_stack])
+    print(tensor.shape, from_gird_tensor.shape)
+    return init_grid_tensor(tensor, tag_stack, load_stack, extra_attrs_stack_dict)
+
+
 def deinit_grid_tensor(
     grid_t: GridTensor, retrieve_attr=True,
 ) -> Union[

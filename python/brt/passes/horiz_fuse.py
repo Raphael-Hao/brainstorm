@@ -13,6 +13,7 @@ from torch import nn
 
 import brt
 from brt.runtime import log
+from brt.runtime.grid_tensor import init_grid_tensor_from, deinit_grid_tensor
 from brt.router import ScatterRouter, GatherRouter
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
@@ -73,28 +74,10 @@ def topo_succ(node: Node, visited: Set[Node] = None):
 
 @register_pass("horiz_fuse")
 class HorizFusePass(VerticalFusePass):
-    def run_on_graph(self):
-        visited = set()  # visited nodes in the origin graph
-
-        if self.fusing_head:
-            wavefront = set()
-            for node in self.origin_graph.nodes:
-                if self.is_placeholder_node(node) and node.is_fixed_inout:
-                    visited.add(node)
-                    update_wavefront(node, visited, wavefront)
-            self.horiz_fusing(wavefront, visited)
-
-        for node in self.origin_graph.nodes:
-            visited.add(node)
-            if not (self.is_scatter_node(node) and node.is_fixed_inout):
-                continue
-            logger.debug(f"Scatter node `{node.name}` founded")
-            wavefront = set()
-            update_wavefront(node, visited, wavefront)
-            self.horiz_fusing(wavefront, visited)
-
-        self.origin_graph._owners = 0
-        self.graph_mod.graph = self.origin_graph
+    def is_hfused_node(self, node: Node):
+        if self.is_module_node(node) and "BRT_HF" in node.target:
+            return True
+        return False
 
     def horiz_fusing(self, wavefront: Set[Node], visited: Set[Node]):
         while wavefront:
@@ -150,7 +133,9 @@ class HorizFusePass(VerticalFusePass):
                 continue
             elif len(hfusable_nodes) == 1:
                 logger.debug(f"Only 1 fuse_parteners found, using v-fuse")
-                vfused_node = VerticalFusePass._replace_with_fused_module(self, hfusable_nodes[0])
+                vfused_node = VerticalFusePass._replace_with_fused_module(
+                    self, hfusable_nodes[0]
+                )
                 visited.add(vfused_node)
                 continue
             else:
@@ -227,7 +212,7 @@ class HorizFusePass(VerticalFusePass):
             #     for fp in reversed(fuse_parteners):
             #         self.origin_graph.erase_node(fp)
 
-    def finalize(self) -> GraphModule:
+    def topologicalize(self):
         def topological_inner(cur: Node, visited: Set[Node], sequence: List[Node]):
             assert cur not in visited
             visited.add(cur)
@@ -236,7 +221,7 @@ class HorizFusePass(VerticalFusePass):
                     topological_inner(user, visited, sequence)
             sequence.append(cur)
 
-        def topoligical_sort(graph: Graph):
+        def topological_sort(graph: Graph):
             # Get topoligically ordered sequence
             visited = set()
             sequence = []
@@ -257,6 +242,113 @@ class HorizFusePass(VerticalFusePass):
             graph._root._prev = pre_node
             pre_node._next = graph._root
 
-        topoligical_sort(self.graph_mod.graph)
-        # self.graph_mod.graph.eliminate_dead_code()
-        return super().finalize()
+        topological_sort(self.graph_mod.graph)
+
+    def add_annotation_dfs(self, start: Node, source: Node, skiped: Set[Node]):
+        # TODO: handle index-changing node not following a scatter, e.g. getitem, index_select
+        if start in skiped:
+            return
+        skiped.add(start)
+
+        getitem_users: Set[Node] = set()
+        indexing_users: Set[Node] = set()
+        hfused_users: Set[Node] = set()
+        other_users: Set[Node] = set()
+        for user in start.users:
+            if self.is_function_node(user) and user.target is operator.getitem:
+                getitem_users.add(user)
+                indexing_users.add(user)
+            elif self.is_router_node(user):
+                indexing_users.add(user)
+            elif self.is_hfused_node(user):
+                hfused_users.add(user)
+            else:
+                other_users.add(user)
+
+        for hfused_node in hfused_users:
+            arg_index = hfused_node.args.index(start)
+            for hf_user in hfused_node.users:
+                assert self.is_function_node(hf_user) and hf_user.target is operator.getitem
+                if hf_user.args[1] == arg_index:
+                    other_users.add(hf_user)
+                    break
+            else:
+                logger.info(f"Branch {arg_index} of `{hfused_node.name}` is not used")
+
+        if start is source:  # only if is a index-changing node (e.g. getitem, router)
+            for indexing_node in indexing_users:
+                self.add_annotation_dfs(indexing_node, indexing_node, skiped)
+            if other_users:
+                with self.origin_graph.inserting_after(start):
+                    depacking_node = self.origin_graph.create_node(
+                        op="call_function",
+                        target=deinit_grid_tensor,
+                        args=(start, False),
+                    )
+                if start.is_fixed_inout:
+                    depacking_node.set_inout_shape(start.outshape, start.outshape)
+                start.replace_all_uses_with(
+                    depacking_node, lambda user: user in other_users
+                )
+                self.add_annotation_dfs(depacking_node, start, skiped)
+        else:
+            for other_node in other_users:
+                self.add_annotation_dfs(other_node, source, skiped)
+            if indexing_users:
+                with self.origin_graph.inserting_after(start):
+                    packing_node = self.origin_graph.create_node(
+                        op="call_function",
+                        target=init_grid_tensor_from,
+                        args=(start, source),
+                    )
+                if start.is_fixed_inout:
+                    packing_node.set_inout_shape(start.outshape, start.outshape)
+                start.replace_all_uses_with(
+                    packing_node, lambda user: user in indexing_users
+                )
+                skiped.add(packing_node)
+                for getitem_node in getitem_users:
+                    raise NotImplementedError
+                    self.add_annotation_dfs(getitem_node, getitem_node, skiped)
+
+    def add_annotation(self):
+        skiped: Set[Node] = set()
+        for node in self.origin_graph.nodes:
+            if node in skiped:
+                continue
+            if self.is_scatter_node(node):
+                self.add_annotation_dfs(node, node, skiped)
+            else:
+                skiped.add(node)
+
+
+    def run_on_graph(self):
+        visited = set()  # visited nodes in the origin graph
+
+        if self.fusing_head:
+            wavefront = set()
+            for node in self.origin_graph.nodes:
+                if self.is_placeholder_node(node) and node.is_fixed_inout:
+                    visited.add(node)
+                    update_wavefront(node, visited, wavefront)
+            self.horiz_fusing(wavefront, visited)
+
+        for node in self.origin_graph.nodes:
+            visited.add(node)
+            if not (self.is_scatter_node(node) and node.is_fixed_inout):
+                continue
+            logger.debug(f"Scatter node `{node.name}` founded")
+            wavefront = set()
+            update_wavefront(node, visited, wavefront)
+            self.horiz_fusing(wavefront, visited)
+
+        self.origin_graph._owners = 0
+        self.graph_mod.graph = self.origin_graph
+
+        self.topologicalize()
+        self.finalize()
+
+        self.add_annotation()
+
+
+
