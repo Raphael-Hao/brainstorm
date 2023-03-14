@@ -131,16 +131,16 @@ class FabricCPPTest(unittest.TestCase):
             mask, supported_capacities, capacity_padding=True, is_tag_index=True
         )
 
-
-
     def test_dispatch(self):
         cell_num = 4096
         path_num = 16
-        input_cells = torch.zeros((cell_num, 1, 2, 3), device="cuda")
+        input_cells = torch.randn((cell_num, 1, 2, 3), device="cuda")
         mask = self.generate_mask(cell_num, path_num, 1)
         indices, loads = self.brt_generate_indices(mask, is_tag_index=False)
-        output_cells = router.dispatch_with_indices_and_loads(input_cells, indices, loads)
-
+        output_cells = router.dispatch_with_indices_and_loads(
+            input_cells, indices, loads
+        )
+        print(output_cells)
 
     def test_combine(self):
         pass

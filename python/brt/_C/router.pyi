@@ -17,17 +17,6 @@ def generate_indices_and_loads(
     is_tag_index=False,
     load_on_cpu: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
-def dispatch_with_indices(
-    in_data: torch.Tensor,
-    route_indices: torch.Tensor,
-    gates: torch.Tensor = None,
-    tag_generating: Literal = True,
-    tags: torch.Tensor = None,
-    max_path_padding: bool = False,
-    max_path_load: int = None,
-    is_1d_routing: bool = True,
-    is_tag_index: bool = False,
-) -> Tuple[torch.Tensor,torch.Tensor]: ...
 def dispatch_with_indices_and_loads(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
@@ -39,7 +28,7 @@ def dispatch_with_indices_and_loads(
     max_path_load: int = None,
     is_1d_routing: bool = True,
     is_tag_index: bool = False,
-) -> torch.Tensor: ...
+) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: ...
 def combine_with_src_indices(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
@@ -48,57 +37,18 @@ def combine_with_src_indices(
     gates: torch.Tensor = None,
     out_data: torch.Tensor = None,
 ) -> torch.Tensor: ...
-@overload
-def split_fused_cells_to_paths(
-    in_data: torch.Tensor,
-    loads: torch.Tensor,
-    max_path_padding: bool = False,
-    is_load_split: Literal[False] = False,
-    is_tag_split: Literal[False] = False,
-    tags: torch.Tensor = None,
-) -> Tuple[List[torch.Tensor]]: ...
-@overload
-def split_fused_cells_to_paths(
-    in_data: torch.Tensor,
-    loads: torch.Tensor,
-    max_path_padding: bool = False,
-    is_load_split: Literal[True] = False,
-    is_tag_split: Literal[False] = False,
-    tags: torch.Tensor = None,
-) -> Tuple[List[torch.Tensor], List[torch.Tensor]]: ...
-@overload
 def split_fused_cells_to_paths(
     in_data: torch.Tensor,
     loads: torch.Tensor,
     max_path_padding: bool = False,
     is_load_split: bool = False,
-    is_tag_split: Literal[True] = False,
+    is_tag_split: bool = False,
     tags: torch.Tensor = None,
-) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]: ...
-@overload
-def fuse_split_cells_from_paths(
-    in_data: List[torch.Tensor],
-    is_load_fuse: Literal[True],
-    is_tag_fuse: Literal[False],
-    loads: List[torch.Tensor] = None,
-    tags: List[torch.Tensor] = None,
-) -> Tuple[torch.Tensor, torch.Tensor]: ...
-@overload
-def fuse_split_cells_from_paths(
-    in_data: List[torch.Tensor],
-    is_load_fuse: Literal[False],
-    is_tag_fuse: Literal[True],
-    loads: List[torch.Tensor] = None,
-    tags: List[torch.Tensor] = None,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
-@overload
-def fuse_split_cells_from_paths(
-    in_data: List[torch.Tensor],
-    is_load_fuse: Literal[False],
-    is_tag_fuse: Literal[False],
-    loads: List[torch.Tensor] = None,
-    tags: List[torch.Tensor] = None,
-) -> Tuple[torch.Tensor]: ...
+) -> Union[
+    Tuple[List[torch.Tensor]],
+    Tuple[List[torch.Tensor], List[torch.Tensor]],
+    Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]],
+]: ...
 def fuse_split_cells_from_paths(
     in_data: List[torch.Tensor],
     is_load_fuse: bool = False,
