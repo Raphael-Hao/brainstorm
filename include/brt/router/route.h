@@ -71,7 +71,7 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
                                  const int& path_num,
                                  const int& max_path_load,
                                  bool is_1d_routing,
-                                 bool is_dst_index,
+                                 bool is_tag_index,
                                  cudaStream_t stream);
 
 template <typename dtype>
@@ -87,7 +87,7 @@ void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
                                 const int& path_num,
                                 const int& max_path_load,
                                 bool is_residual,
-                                bool is_dst_index,
+                                bool is_tag_index,
                                 cudaStream_t stream);
 }  // namespace router
 }  // namespace brt

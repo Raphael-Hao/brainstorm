@@ -15,7 +15,7 @@ void ConvertIndexFormat(int* origin_indices,
                         int* loads,
                         const int& cell_num,
                         const int& path_num,
-                        const bool& dst_to_src,
+                        const bool& tag_to_seat,
                         cudaStream_t stream);
 
 void GenerateIndicesAndLoads(int* hot_mask /*[cell_num x path_num]*/,
@@ -26,7 +26,7 @@ void GenerateIndicesAndLoads(int* hot_mask /*[cell_num x path_num]*/,
                              int* supported_capacities /*[supported_capacity_num]*/,
                              const int& supported_capacity_num,
                              const bool& capacity_padding,
-                             const bool& is_dst_index,
+                             const bool& is_tag_index,
                              cudaStream_t stream);
 
 }  // namespace router

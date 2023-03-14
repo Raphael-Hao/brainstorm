@@ -14,7 +14,7 @@ def generate_indices_and_loads(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor = None,
     capacity_padding: bool = False,
-    is_dst_index=True,
+    is_tag_index=False,
     load_on_cpu: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
 def dispatch_with_indices_and_loads(
@@ -27,7 +27,7 @@ def dispatch_with_indices_and_loads(
     max_path_padding: bool = False,
     max_path_load: int = None,
     is_1d_routing: bool = True,
-    is_dst_index: bool = True,
+    is_tag_index: bool = False,
 ) -> torch.Tensor: ...
 def combine_with_src_indices(
     in_data: torch.Tensor,
@@ -64,10 +64,34 @@ def split_fused_cells_to_paths(
     is_tag_split: Literal[True] = False,
     tags: torch.Tensor = None,
 ) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]: ...
+@overload
 def fuse_split_cells_from_paths(
     in_data: List[torch.Tensor],
-    is_load_fuse: bool,
+    is_load_fuse: Literal[True],
+    is_tag_fuse: Literal[False],
+    loads: List[torch.Tensor] = None,
+    tags: List[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]: ...
+@overload
+def fuse_split_cells_from_paths(
+    in_data: List[torch.Tensor],
+    is_load_fuse: Literal[False],
     is_tag_fuse: Literal[True],
+    loads: List[torch.Tensor] = None,
+    tags: List[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
+@overload
+def fuse_split_cells_from_paths(
+    in_data: List[torch.Tensor],
+    is_load_fuse: Literal[False],
+    is_tag_fuse: Literal[False],
+    loads: List[torch.Tensor] = None,
+    tags: List[torch.Tensor] = None,
+) -> Tuple[torch.Tensor]: ...
+def fuse_split_cells_from_paths(
+    in_data: List[torch.Tensor],
+    is_load_fuse: bool = False,
+    is_tag_fuse: bool = False,
     loads: List[torch.Tensor] = None,
     tags: List[torch.Tensor] = None,
 ) -> Union[
@@ -84,6 +108,7 @@ def combine_with_indices_and_loads(
     max_path_padding: bool = False,
     tag_generating: bool = False,
     tags: torch.Tensor = None,
-    is_dst_index: bool = True,
+    ever_padded=True,
+    is_tag_index: bool = False,
 ) -> torch.Tensor: ...
 

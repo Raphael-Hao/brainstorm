@@ -16,7 +16,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
     const ::torch::Tensor& hot_mask /*[cell_num, path_num]*/,
     const ::c10::optional<::torch::Tensor>& supported_capacities = {},
     const bool& capacity_padding = false,
-    const bool& is_dst_index = true,
+    const bool& is_tag_index = false,
     const bool& load_on_cpu = false) {
   CHECK_ON_CUDA(hot_mask);
   const at::cuda::OptionalCUDAGuard device_guard(at::device_of(hot_mask));
@@ -37,7 +37,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
   ::torch::Tensor loads = ::torch::zeros({path_num}, hot_mask.options());
   router::GenerateIndicesAndLoads(
       hot_mask.data_ptr<int>(), indices.data_ptr<int>(), loads.data_ptr<int>(), cell_num, path_num,
-      supported_capacities_data_ptr, supported_capacity_num, capacity_padding, is_dst_index,
+      supported_capacities_data_ptr, supported_capacity_num, capacity_padding, is_tag_index,
       at::cuda::getDefaultCUDAStream().stream());
   if (load_on_cpu) {
     loads = loads.cpu();
@@ -48,12 +48,12 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
 ::torch::Tensor convert_index_format(
     const ::torch::Tensor& origin_indices /*[cell_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/,
-    const bool& dst_to_src) {
+    const bool& is_to_tag) {
   CHECK_ON_CUDA(origin_indices);
   const at::cuda::OptionalCUDAGuard device_guard(at::device_of(origin_indices));
 
   ::torch::Tensor cuda_loads;
-  if (!loads.is_cuda() && !dst_to_src) {
+  if (!loads.is_cuda() && !is_to_tag) {
     cuda_loads = loads.to(loads.options().device(::torch::kCUDA), true);
   } else {
     cuda_loads = loads;
@@ -62,7 +62,7 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
   auto cell_num = origin_indices.size(0);
   auto path_num = origin_indices.size(1);
   router::ConvertIndexFormat(origin_indices.data_ptr<int>(), new_indices.data_ptr<int>(),
-                             cuda_loads.data_ptr<int>(), cell_num, path_num, dst_to_src,
+                             cuda_loads.data_ptr<int>(), cell_num, path_num, is_to_tag,
                              at::cuda::getDefaultCUDAStream().stream());
   return new_indices;
 }
@@ -89,7 +89,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
     const bool& max_path_padding = false,
     const ::c10::optional<int>& max_path_load = {},
     const bool& is_1d_routing = true,
-    const bool& is_dst_index = true) {
+    const bool& is_tag_index = false) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
   const at::cuda::OptionalCUDAGuard device_guard(at::device_of(in_data));
@@ -180,13 +180,13 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
     router::DispatchWithIndicesAndLoads<float>(
         in_data_to_be_route.data_ptr(), out_data.data_ptr(), gates_data_ptr,
         route_indices.data_ptr<int>(), cuda_loads.data_ptr<int>(), old_tags_ptr, new_tags_ptr,
-        cell_num, cell_size, path_num, max_path_load_value, is_1d_routing, is_dst_index,
+        cell_num, cell_size, path_num, max_path_load_value, is_1d_routing, is_tag_index,
         at::cuda::getDefaultCUDAStream().stream());
   } else if (data_type == ::torch::kFloat16) {
     router::DispatchWithIndicesAndLoads<__half2>(
         in_data_to_be_route.data_ptr(), out_data.data_ptr(), gates_data_ptr,
         route_indices.data_ptr<int>(), cuda_loads.data_ptr<int>(), old_tags_ptr, new_tags_ptr,
-        cell_num, cell_size, path_num, max_path_load_value, is_1d_routing, is_dst_index,
+        cell_num, cell_size, path_num, max_path_load_value, is_1d_routing, is_tag_index,
         at::cuda::getDefaultCUDAStream().stream());
   } else {
     TORCH_CHECK_NOT_IMPLEMENTED(data_type == ::torch::kFloat32 || data_type == ::torch::kFloat16,
@@ -278,16 +278,18 @@ std::vector<::torch::Tensor> fuse_split_cells_from_paths(
     const ::torch::Tensor& loads /*[path_num]*/,
     const ::c10::optional<::torch::Tensor>& gates = {} /*[cell_num x path_num]*/,
     const ::c10::optional<::torch::Tensor>& out_data = {} /*[cell_num x cell_size]*/,
-    const bool& max_path_padding = false,
     const bool& tag_generating = false,
     const ::c10::optional<::torch::Tensor>& tags = {},
-    const bool& is_dst_index = true) {
+    const bool& max_path_padding = false,
+    const bool& ever_padded = true,
+    const bool& is_tag_index = false) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
 
   int cell_num = route_indices.size(0);
   int cell_size = in_data.numel() / in_data.size(0);
-  if (is_dst_index) {
+  ::torch::Tensor out_data_t;
+  if (!is_tag_index) {
     ::torch::Tensor cuda_loads;
     if (!loads.is_cuda()) {
       cuda_loads = loads.to(loads.options().device(::torch::kCUDA), true);
@@ -308,7 +310,6 @@ std::vector<::torch::Tensor> fuse_split_cells_from_paths(
       max_path_load = out_shape[0] / path_num;
     }
 
-    ::torch::Tensor out_data_t;
     if (out_data.has_value()) {
       CHECK_ON_CUDA(out_data.value());
       out_data_t = out_data.value();
@@ -325,9 +326,7 @@ std::vector<::torch::Tensor> fuse_split_cells_from_paths(
           cuda_loads.data_ptr<int>(), max_path_load, cell_num, cell_size, path_num,
           at::cuda::getDefaultCUDAStream().stream());
     }
-    return out_data_t;
   } else {
-    ::torch::Tensor out_data_t;
     CHECK(tags.has_value());
     auto out_shape = in_data.sizes().vec();
     auto new_indices = route_indices.view({-1, 1}).repeat({1, cell_size}).view_as(in_data);
@@ -342,12 +341,12 @@ std::vector<::torch::Tensor> fuse_split_cells_from_paths(
       out_shape[0] = tmp_cell_num;
       out_data_t = ::torch::zeros(out_shape, in_data.options());
       out_data_t = ::torch::scatter_reduce(out_data_t, 0, new_indices, in_data, "sum");
-      if (tags_value[0].item<int>() == 0) {
+      if (ever_padded && tags_value[0].item<int>() == 0) {
         out_data_t = out_data_t.narrow(0, 1, tmp_cell_num - 1);
       }
     }
-    return out_data_t;
   }
+  return out_data_t;
 }
 
 ::torch::Tensor combine_with_src_indices(
@@ -412,7 +411,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Generate indices and loads for all paths, loads can be padded or throttled by supported "
         "capacities",
         pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none(),
-        pybind11 ::arg("capacity_padding") = false, pybind11::arg("is_dst_index") = true,
+        pybind11 ::arg("capacity_padding") = false, pybind11::arg("is_tag_index") = false,
         pybind11::arg("load_on_cpu") = false);
   m.def("convert_index_format", &brt::backend::torch::convert_index_format,
         "convert indices to the new index format", pybind11::arg("origin_indices"),
@@ -423,7 +422,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("gates") = pybind11::none(), pybind11::arg("tag_generating") = false,
         pybind11::arg("tags") = pybind11::none(), pybind11::arg("max_path_padding") = false,
         pybind11::arg("max_path_load") = pybind11::none(), pybind11::arg("is_1d_routing") = true,
-        pybind11::arg("is_dst_index") = true);
+        pybind11::arg("is_tag_index") = false);
   m.def("split_fused_cells_to_paths", &brt::backend::torch::split_fused_cells_to_paths,
         pybind11::arg("in_data"), pybind11::arg("loads"), pybind11::arg("max_path_padding") = false,
         pybind11::arg("is_load_split") = false, pybind11::arg("is_tag_split") = false,
@@ -436,8 +435,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Route data back with indices and loads, indices can be in dst or src format",
         pybind11::arg("in_data"), pybind11::arg("route_indices"), pybind11::arg("loads"),
         pybind11::arg("gates") = pybind11::none(), pybind11::arg("out_data") = pybind11::none(),
-        pybind11::arg("max_path_padding") = false, pybind11::arg("tag_generating") = false,
-        pybind11::arg("tags") = pybind11::none(), pybind11::arg("is_dst_index") = true);
+        pybind11::arg("tag_generating") = false, pybind11::arg("tags") = pybind11::none(),
+        pybind11::arg("max_path_padding") = false, pybind11::arg("ever_padded") = true,
+        pybind11::arg("is_tag_index") = false);
   m.def("combine_with_src_indices", &brt::backend::torch::combine_with_src_indices,
         "Route data back with dst indices", pybind11::arg("in_data"),
         pybind11::arg("route_indices"), pybind11::arg("loads"), pybind11::arg("auto_pad") = false,

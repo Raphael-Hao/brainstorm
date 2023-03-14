@@ -440,7 +440,7 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
                                  const int& path_num,
                                  const int& max_path_load,
                                  bool is_1d_routing,
-                                 bool is_dst_index,
+                                 bool is_tag_index,
                                  cudaStream_t stream) {
   dtype* src_data_ptr = static_cast<dtype*>(src_data);
   dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
@@ -449,7 +449,7 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
   constexpr dim3 block_size(1024);
   dim3 grid_size(512, path_num);
 
-  if (is_dst_index) {
+  if (!is_tag_index) {
     if (is_1d_routing) {
       if (gates != nullptr) {
         if (max_path_load != 0) {
@@ -529,7 +529,7 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
       }
     }
   } else {
-    LOG(FATAL) << "Dispatch with src indices is not supported yet.";
+    LOG(FATAL) << "Dispatch with tag indices is not supported yet.";
   }
 }
 
@@ -546,7 +546,7 @@ void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
                                 const int& path_num,
                                 const int& max_path_load,
                                 bool is_residual,
-                                bool is_dst_index,
+                                bool is_tag_index,
                                 cudaStream_t stream) {
   dtype* src_data_ptr = static_cast<dtype*>(src_data);
   dtype* dst_data_ptr = static_cast<dtype*>(dst_data);
@@ -555,7 +555,7 @@ void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
   constexpr dim3 block_size(1024);
   dim3 grid_size(512);
 
-  if (is_dst_index) {
+  if (!is_tag_index) {
     if (is_residual) {
       if (max_path_load == 0) {
         if (gates == nullptr) {
@@ -662,7 +662,7 @@ template void DispatchWithIndicesAndLoads<float>(void* src_data /*[cell_num, cel
                                                  const int& path_num,
                                                  const int& max_path_load,
                                                  bool is_1d_routing,
-                                                 bool is_dst_index,
+                                                 bool is_tag_index,
                                                  cudaStream_t stream);
 
 template void DispatchWithIndicesAndLoads<__half2>(void* src_data /*[cell_num, cell_size]*/,
@@ -677,7 +677,7 @@ template void DispatchWithIndicesAndLoads<__half2>(void* src_data /*[cell_num, c
                                                    const int& path_num,
                                                    const int& max_path_load,
                                                    bool is_1d_routing,
-                                                   bool is_dst_index,
+                                                   bool is_tag_index,
                                                    cudaStream_t stream);
 template void CombineWithIndicesAndLoads<float>(void* src_data /*[total_loads, cell_size]*/,
                                                 void* dst_data /*[cell_num, cell_size]*/,
@@ -691,7 +691,7 @@ template void CombineWithIndicesAndLoads<float>(void* src_data /*[total_loads, c
                                                 const int& path_num,
                                                 const int& max_path_load,
                                                 bool is_residual,
-                                                bool is_dst_index,
+                                                bool is_tag_index,
                                                 cudaStream_t stream);
 
 template void CombineWithIndicesAndLoads<__half>(void* src_data /*[total_loads, cell_size]*/,
@@ -706,7 +706,7 @@ template void CombineWithIndicesAndLoads<__half>(void* src_data /*[total_loads, 
                                                  const int& path_num,
                                                  const int& max_path_load,
                                                  bool is_residual,
-                                                 bool is_dst_index,
+                                                 bool is_tag_index,
                                                  cudaStream_t stream);
 }  // namespace router
 }  // namespace brt
