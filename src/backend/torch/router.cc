@@ -313,18 +313,18 @@ std::vector<::torch::Tensor> fuse_split_cells_from_paths(
     if (out_data.has_value()) {
       CHECK_ON_CUDA(out_data.value());
       out_data_t = out_data.value();
-      router::ResidualCombineWithSrcIndices<float>(
+      router::CombineWithIndicesAndLoads<float>(
           in_data.data_ptr(), out_data_t.data_ptr(), gates_data_ptr, route_indices.data_ptr<int>(),
-          cuda_loads.data_ptr<int>(), max_path_load, cell_num, cell_size, path_num,
-          at::cuda::getDefaultCUDAStream().stream());
+          cuda_loads.data_ptr<int>(), nullptr, nullptr, cell_num, cell_size, path_num,
+          max_path_load, true, false, at::cuda::getDefaultCUDAStream().stream());
     } else {
       out_shape[0] = cell_num;
       out_data_t = ::torch::zeros(out_shape, in_data.options());
       CHECK_ON_CUDA(out_data_t);
-      router::CombineWithSrcIndices<float>(
+      router::CombineWithIndicesAndLoads<float>(
           in_data.data_ptr(), out_data_t.data_ptr(), gates_data_ptr, route_indices.data_ptr<int>(),
-          cuda_loads.data_ptr<int>(), max_path_load, cell_num, cell_size, path_num,
-          at::cuda::getDefaultCUDAStream().stream());
+          cuda_loads.data_ptr<int>(), nullptr, nullptr, cell_num, cell_size, path_num,
+          max_path_load, false, false, at::cuda::getDefaultCUDAStream().stream());
     }
   } else {
     CHECK(tags.has_value());

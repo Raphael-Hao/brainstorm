@@ -105,9 +105,9 @@ def combine_with_indices_and_loads(
     loads: torch.Tensor,
     gates: torch.Tensor = None,
     out_data: torch.Tensor = None,
-    max_path_padding: bool = False,
     tag_generating: bool = False,
     tags: torch.Tensor = None,
+    max_path_padding: bool = False,
     ever_padded=True,
     is_tag_index: bool = False,
 ) -> torch.Tensor: ...

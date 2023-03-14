@@ -12,17 +12,17 @@ namespace brt {
 namespace router {
 template <typename dtype, bool weighted, bool max_path_padding, bool tag_generating>
 __global__ void __launch_bounds__(1024)
-    dispatch_with_dst_indices_1d(dtype* __restrict__ in_data /*[cell_num x cell_size]*/,
-                                 dtype* __restrict__ out_data /*[total_load x cell_size]*/,
-                                 dtype* __restrict__ gates /*[cell_num x path_num]*/,
-                                 int* __restrict__ route_indices /*[cell_num x path_num]*/,
-                                 int* __restrict__ loads /*[path_num]*/,
-                                 int* __restrict__ old_tags,
-                                 int* __restrict__ new_tags,
-                                 int cell_num,
-                                 int cell_size,
-                                 int path_num,
-                                 int max_path_load) {
+    dispatch_with_seat_indices_1d(dtype* __restrict__ in_data /*[cell_num x cell_size]*/,
+                                  dtype* __restrict__ out_data /*[total_load x cell_size]*/,
+                                  dtype* __restrict__ gates /*[cell_num x path_num]*/,
+                                  int* __restrict__ route_indices /*[cell_num x path_num]*/,
+                                  int* __restrict__ loads /*[path_num]*/,
+                                  int* __restrict__ old_tags,
+                                  int* __restrict__ new_tags,
+                                  int cell_num,
+                                  int cell_size,
+                                  int path_num,
+                                  int max_path_load) {
   int load_start = 0;
   if (max_path_padding) {
     load_start = blockIdx.y * max_path_load;
@@ -34,23 +34,23 @@ __global__ void __launch_bounds__(1024)
   int path_load = loads[blockIdx.y];
   for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
     int route_index = i * path_num + blockIdx.y;
-    int local_dst_index = route_indices[route_index];
+    int local_seat_index = route_indices[route_index];
 
-    if (local_dst_index == 0 || local_dst_index > path_load) {
+    if (local_seat_index == 0 || local_seat_index > path_load) {
       continue;
     }
 
-    int global_dst_index = local_dst_index - 1 + load_start;
+    int global_seat_index = local_seat_index - 1 + load_start;
     for (int j = threadIdx.x; j < cell_size; j += 1024) {
       if (weighted) {
-        out_data[global_dst_index * cell_size + j] =
+        out_data[global_seat_index * cell_size + j] =
             in_data[i * cell_size + j] * gates[route_index];
       } else {
-        out_data[global_dst_index * cell_size + j] = in_data[i * cell_size + j];
+        out_data[global_seat_index * cell_size + j] = in_data[i * cell_size + j];
       }
     }
     if (threadIdx.x == 0 && tag_generating) {
-      new_tags[global_dst_index] = old_tags[i];
+      new_tags[global_seat_index] = old_tags[i];
     }
   }
   if (threadIdx.x == 0 && max_path_padding) {
@@ -60,16 +60,16 @@ __global__ void __launch_bounds__(1024)
 
 template <typename dtype, bool max_path_padding, bool tag_generating>
 __global__ void __launch_bounds__(1024)
-    dispatch_with_dst_indices_2d(dtype* __restrict__ in_data /*[path_num x cell_num x cell_size]*/,
-                                 dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
-                                 int* __restrict__ route_indices /*[cell_num x path_num]*/,
-                                 int* __restrict__ loads /*[path_num]*/,
-                                 int* __restrict__ old_tags,
-                                 int* __restrict__ new_tags,
-                                 int cell_num,
-                                 int cell_size,
-                                 int path_num,
-                                 int max_path_load) {
+    dispatch_with_seat_indices_2d(dtype* __restrict__ in_data /*[path_num x cell_num x cell_size]*/,
+                                  dtype* __restrict__ out_data /*[?load*path_num x cell_size]*/,
+                                  int* __restrict__ route_indices /*[cell_num x path_num]*/,
+                                  int* __restrict__ loads /*[path_num]*/,
+                                  int* __restrict__ old_tags,
+                                  int* __restrict__ new_tags,
+                                  int cell_num,
+                                  int cell_size,
+                                  int path_num,
+                                  int max_path_load) {
   in_data += cell_num * cell_size * blockIdx.y;
   int load_start = 0;
   if (max_path_padding) {
@@ -102,30 +102,77 @@ __global__ void __launch_bounds__(1024)
   }
 }
 
-template <typename dtype, bool weighted, bool max_path_padding, bool is_residual>
+template <typename dtype, bool weighted, bool max_path_padding>
 __global__ void __launch_bounds__(1024)
-    combine_with_src_indices(dtype* __restrict__ in_data /*[?load*path_num x cell_size]*/,
-                             dtype* __restrict__ out_data /*[cell_num x cell_size]*/,
-                             int* __restrict__ route_indices /*[cell_num x path_num]*/,
-                             int* __restrict__ loads /*[path_num]*/,
-                             int cell_num,
-                             int cell_size,
-                             int path_num) {
+    combine_with_seat_indices(dtype* __restrict__ in_data /*[?load*path_num x cell_size]*/,
+                              dtype* __restrict__ out_data /*[cell_num x cell_size]*/,
+                              dtype* __restrict__ gates /*[cell_num x path_num]*/,
+                              int* __restrict__ route_indices /*[cell_num x path_num]*/,
+                              int* __restrict__ loads /*[path_num]*/,
+                              int cell_num,
+                              int cell_size,
+                              int path_num,
+                              int max_path_load) {
   for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
     for (int j = 0; j < path_num; j++) {
       int route_index = i * path_num + j;
-      int local_dst = route_indices[route_index];
+      int local_seat = route_indices[route_index];
 
-      if (local_dst == 0 || local_dst > loads[j]) {
+      if (local_seat == 0 || local_seat > loads[j]) {
         continue;
       }
 
-      int global_dst = local_dst - 1;
-      for (int k = 0; k < j; k++) {
-        global_dst += loads[k];
+      int global_seat = local_seat - 1;
+      if (max_path_padding) {
+        global_seat += max_path_load * j;
+      } else {
+        for (int k = 0; k < j; k++) {
+          global_seat += loads[k];
+        }
       }
       for (int k = threadIdx.x; k < cell_size; k += 1024) {
-        out_data[i * cell_size + k] += in_data[global_dst * cell_size + k];
+        dtype* write_addr = out_data + i * cell_size + k;
+        dtype write_back;
+        if (weighted) {
+          write_back = in_data[global_seat * cell_size + k] * gates[route_index];
+        } else {
+          write_back = in_data[global_seat * cell_size + k];
+        }
+        atomicAdd(write_addr, write_back);
+      }
+    }
+  }
+}
+
+template <typename dtype, bool max_path_padding>
+__global__ void __launch_bounds__(1024)
+    init_with_seat_indices(dtype init_scalar /*[?load*path_num x cell_size]*/,
+                           dtype* __restrict__ out_data /*[cell_num x cell_size]*/,
+                           int* __restrict__ route_indices /*[cell_num x path_num]*/,
+                           int* __restrict__ loads /*[path_num]*/,
+                           int cell_num,
+                           int cell_size,
+                           int path_num,
+                           int max_path_load) {
+  for (int i = blockIdx.x; i < cell_num; i += gridDim.x) {
+    for (int j = 0; j < path_num; j++) {
+      int route_index = i * path_num + j;
+      int local_seat = route_indices[route_index];
+
+      if (local_seat == 0 || local_seat > loads[j]) {
+        continue;
+      }
+
+      int global_seat = local_seat - 1;
+      if (max_path_padding) {
+        global_seat += max_path_load * j;
+      } else {
+        for (int k = 0; k < j; k++) {
+          global_seat += loads[k];
+        }
+      }
+      for (int k = threadIdx.x; k < cell_size; k += 1024) {
+        out_data[i * cell_size + k] = init_scalar;
       }
     }
   }
@@ -454,24 +501,24 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
       if (gates != nullptr) {
         if (max_path_load != 0) {
           if (old_tags != nullptr) {
-            dispatch_with_dst_indices_1d<dtype, true, true, true>
+            dispatch_with_seat_indices_1d<dtype, true, true, true>
                 <<<grid_size, block_size, 0, stream>>>(
                     src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, old_tags, new_tags,
                     cell_num, cell_size, path_num, max_path_load);
           } else {
-            dispatch_with_dst_indices_1d<dtype, true, true, false>
+            dispatch_with_seat_indices_1d<dtype, true, true, false>
                 <<<grid_size, block_size, 0, stream>>>(
                     src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, old_tags, new_tags,
                     cell_num, cell_size, path_num, max_path_load);
           }
         } else {
           if (old_tags != nullptr) {
-            dispatch_with_dst_indices_1d<dtype, true, false, true>
+            dispatch_with_seat_indices_1d<dtype, true, false, true>
                 <<<grid_size, block_size, 0, stream>>>(
                     src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, old_tags, new_tags,
                     cell_num, cell_size, path_num, max_path_load);
           } else {
-            dispatch_with_dst_indices_1d<dtype, true, false, false>
+            dispatch_with_seat_indices_1d<dtype, true, false, false>
                 <<<grid_size, block_size, 0, stream>>>(
                     src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, old_tags, new_tags,
                     cell_num, cell_size, path_num, max_path_load);
@@ -480,24 +527,24 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
       } else {
         if (max_path_load != 0) {
           if (old_tags != nullptr) {
-            dispatch_with_dst_indices_1d<dtype, false, true, true>
+            dispatch_with_seat_indices_1d<dtype, false, true, true>
                 <<<grid_size, block_size, 0, stream>>>(
                     src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, old_tags, new_tags,
                     cell_num, cell_size, path_num, max_path_load);
           } else {
-            dispatch_with_dst_indices_1d<dtype, false, true, false>
+            dispatch_with_seat_indices_1d<dtype, false, true, false>
                 <<<grid_size, block_size, 0, stream>>>(
                     src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, old_tags, new_tags,
                     cell_num, cell_size, path_num, max_path_load);
           }
         } else {
           if (old_tags != nullptr) {
-            dispatch_with_dst_indices_1d<dtype, false, false, true>
+            dispatch_with_seat_indices_1d<dtype, false, false, true>
                 <<<grid_size, block_size, 0, stream>>>(
                     src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, old_tags, new_tags,
                     cell_num, cell_size, path_num, max_path_load);
           } else {
-            dispatch_with_dst_indices_1d<dtype, false, false, false>
+            dispatch_with_seat_indices_1d<dtype, false, false, false>
                 <<<grid_size, block_size, 0, stream>>>(
                     src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, old_tags, new_tags,
                     cell_num, cell_size, path_num, max_path_load);
@@ -508,21 +555,21 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
       CHECK(gates_ptr == nullptr);
       if (max_path_load != 0) {
         if (old_tags != nullptr) {
-          dispatch_with_dst_indices_2d<dtype, true, true><<<grid_size, block_size, 0, stream>>>(
+          dispatch_with_seat_indices_2d<dtype, true, true><<<grid_size, block_size, 0, stream>>>(
               src_data_ptr, dst_data_ptr, route_indices, loads, old_tags, new_tags, cell_num,
               cell_size, path_num, max_path_load);
         } else {
-          dispatch_with_dst_indices_2d<dtype, true, false><<<grid_size, block_size, 0, stream>>>(
+          dispatch_with_seat_indices_2d<dtype, true, false><<<grid_size, block_size, 0, stream>>>(
               src_data_ptr, dst_data_ptr, route_indices, loads, old_tags, new_tags, cell_num,
               cell_size, path_num, max_path_load);
         }
       } else {
         if (old_tags != nullptr) {
-          dispatch_with_dst_indices_2d<dtype, false, true><<<grid_size, block_size, 0, stream>>>(
+          dispatch_with_seat_indices_2d<dtype, false, true><<<grid_size, block_size, 0, stream>>>(
               src_data_ptr, dst_data_ptr, route_indices, loads, old_tags, new_tags, cell_num,
               cell_size, path_num, max_path_load);
         } else {
-          dispatch_with_dst_indices_2d<dtype, false, false><<<grid_size, block_size, 0, stream>>>(
+          dispatch_with_seat_indices_2d<dtype, false, false><<<grid_size, block_size, 0, stream>>>(
               src_data_ptr, dst_data_ptr, route_indices, loads, old_tags, new_tags, cell_num,
               cell_size, path_num, max_path_load);
         }
@@ -556,51 +603,37 @@ void CombineWithIndicesAndLoads(void* src_data /*[total_loads, cell_size]*/,
   dim3 grid_size(512);
 
   if (!is_tag_index) {
-    if (is_residual) {
-      if (max_path_load == 0) {
-        if (gates == nullptr) {
-          residual_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, route_indices, loads, cell_num, cell_size, path_num);
-        } else {
-          residual_weighted_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, cell_num, cell_size,
-              path_num);
-        }
+    if (max_path_load == 0) {
+      if (is_residual) {
+        init_with_seat_indices<dtype, false><<<grid_size, block_size, 0, stream>>>(
+            0, dst_data_ptr, route_indices, loads, cell_num, cell_size, path_num, max_path_load);
+      }
+      if (gates_ptr == nullptr) {
+        combine_with_seat_indices<dtype, false, false><<<grid_size, block_size, 0, stream>>>(
+            src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, cell_num, cell_size,
+            path_num, max_path_load);
       } else {
-        if (gates == nullptr) {
-          residual_padded_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, route_indices, loads, max_path_load, cell_num, cell_size,
-              path_num);
-        } else {
-          residual_padded_weighted_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, max_path_load, cell_num,
-              cell_size, path_num);
-        }
+        combine_with_seat_indices<dtype, true, false><<<grid_size, block_size, 0, stream>>>(
+            src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, cell_num, cell_size,
+            path_num, max_path_load);
       }
     } else {
-      if (max_path_load == 0) {
-        if (gates == nullptr) {
-          combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, route_indices, loads, cell_num, cell_size, path_num);
-        } else {
-          weighted_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, cell_num, cell_size,
-              path_num);
-        }
+      if (is_residual) {
+        init_with_seat_indices<dtype, true><<<grid_size, block_size, 0, stream>>>(
+            0, dst_data_ptr, route_indices, loads, cell_num, cell_size, path_num, max_path_load);
+      }
+      if (gates_ptr == nullptr) {
+        combine_with_seat_indices<dtype, false, true><<<grid_size, block_size, 0, stream>>>(
+            src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, cell_num, cell_size,
+            path_num, max_path_load);
       } else {
-        if (gates == nullptr) {
-          padded_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, route_indices, loads, max_path_load, cell_num, cell_size,
-              path_num);
-        } else {
-          padded_weighted_combine_with_src_indices<<<grid_size, block_size, 0, stream>>>(
-              src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, max_path_load, cell_num,
-              cell_size, path_num);
-        }
+        combine_with_seat_indices<dtype, true, true><<<grid_size, block_size, 0, stream>>>(
+            src_data_ptr, dst_data_ptr, gates_ptr, route_indices, loads, cell_num, cell_size,
+            path_num, max_path_load);
       }
     }
   } else {
-    LOG(FATAL) << "Combine with src indices is not supported yet.";
+    LOG(FATAL) << "Combine with tag indices is not supported yet.";
   }
 }
 
