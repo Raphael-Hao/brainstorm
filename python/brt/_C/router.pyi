@@ -17,6 +17,17 @@ def generate_indices_and_loads(
     is_tag_index=False,
     load_on_cpu: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
+def dispatch_with_indices(
+    in_data: torch.Tensor,
+    route_indices: torch.Tensor,
+    gates: torch.Tensor = None,
+    tag_generating: Literal = True,
+    tags: torch.Tensor = None,
+    max_path_padding: bool = False,
+    max_path_load: int = None,
+    is_1d_routing: bool = True,
+    is_tag_index: bool = False,
+) -> Tuple[torch.Tensor,torch.Tensor]: ...
 def dispatch_with_indices_and_loads(
     in_data: torch.Tensor,
     route_indices: torch.Tensor,
