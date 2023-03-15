@@ -576,7 +576,7 @@ void DispatchWithIndicesAndLoads(void* src_data /*[cell_num, cell_size]*/,
       }
     }
   } else {
-    LOG(FATAL) << "Dispatch with tag indices is not supported yet.";
+    LOG(FATAL) << "Dispatch with tag indices is not supported.";
   }
 }
 

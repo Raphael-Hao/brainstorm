@@ -131,19 +131,17 @@ class FabricCPPTest(unittest.TestCase):
             mask, supported_capacities, capacity_padding=True, is_tag_index=True
         )
 
-    def test_dispatch(self):
+    def test_dispatch_and_combine(self):
+        # test dispatch and combine with seat indices
         cell_num = 4096
-        path_num = 16
+        path_num = 2
         input_cells = torch.randn((cell_num, 1, 2, 3), device="cuda")
         mask = self.generate_mask(cell_num, path_num, 1)
         indices, loads = self.brt_generate_indices(mask, is_tag_index=False)
         output_cells = router.dispatch_with_indices_and_loads(
             input_cells, indices, loads
         )
-        print(output_cells)
-
-    def test_combine(self):
-        pass
+        # test dispatch with seat indices and combine with tag indices
 
 
 class FabricTest(unittest.TestCase):

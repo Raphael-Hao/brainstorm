@@ -11,7 +11,22 @@
 namespace brt {
 namespace backend {
 namespace torch {
-
+/*!
+ * \brief generate indices and loads according to hot_mask
+ *
+ * \param hot_mask shape: [cell_num, path_num]
+ * \param supported_capacities (optional) shape: [supported_capacity_num]
+ *                            if not empty, we will check if each path's load is below any
+ *                            of the supported capacities. if not, we will drop the cells
+ *                            out of the supported capacities.
+ * \param capacity_padding (optional, default false) if true, we will pad the cells of the
+ *                         path with load below the mapped capacity to the capacity.
+ * \param is_tag_index (optional, default false) if true, generate indices which contains
+ *                     tag of each cell for each path, otherwise generate indices which
+ *                     contains new seat of each cell in each path.
+ * \param load_on_cpu (optional,default false) if true, move loads to cpu
+ *
+ */
 std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
     const ::torch::Tensor& hot_mask /*[cell_num, path_num]*/,
     const ::c10::optional<::torch::Tensor>& supported_capacities = {},
@@ -45,6 +60,14 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
   return {indices, loads};
 }
 
+/*!
+ * \brief convert index format from tag to seat or from seat to tag
+ *
+ * \param origin_indices shape: [cell_num, path_num]
+ * \param loads shape: [path_num]
+ * \param is_to_tag if true, convert from seat to tag, otherwise convert from tag to seat
+ */
+
 ::torch::Tensor convert_index_format(
     const ::torch::Tensor& origin_indices /*[cell_num x path_num]*/,
     const ::torch::Tensor& loads /*[path_num]*/,
@@ -70,15 +93,22 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
 /*!
  * \brief dispatch data to different pathes according to the indices and loads
  *
- * \param in_data shape: [cell_num, cell_size]
+ * \param in_data shape: [cell_num, *cell_shape]
  * \param route_indices shape: [cell_num, path_num]
  * \param loads shape: [path_num]
  * \param gates (optional) shape: [cell_num, path_num]
- * \param routing_dim available dimensions: [1, 2]
- * \param auto_pad if true, pad each path to load limit (if load_limit is not set, use max of loads)
- * \param load_limit load limit
+ * \param tag_generating (optional, default false) if true, we will generate tags for each path's
+ *                       cells.
+ * \param tags (optional) shape: [cell_num, path_num] original tags of each cell for in_data
+ * \param max_path_padding (optional, default false) if true, we will pad each path equally to the
+ *                         max path length.
+ * \param max_path_load (optional) will be used as the max load of all paths if max_path_padding is
+ *                      true.
+ * \param is_1d_routing (optional, default true) if true, we will use 1d routing, otherwise use 2d
+ *                     routing.
+ * \param is_tag_index (optional, default false) if true, we will use tag index, otherwise use seat
+ *                    index.
  */
-
 std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
     const ::torch::Tensor& in_data,
     const ::torch::Tensor& route_indices,
@@ -198,6 +228,16 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
   return {out_data};
 }
 
+/*!
+ * \brief Split fused cells to paths.
+ *
+ * \param in_data The input data for all paths.
+ * \param loads The loads of all paths.
+ * \param max_path_padding Whether the input data is padded to max path load.
+ * \param is_load_split Whether the load should be split to each path.
+ * \param is_tag_split Whether the tag should be split to each path.
+ * \param tags The tags of all paths.
+ */
 std::vector<std::vector<::torch::Tensor>> split_fused_cells_to_paths(
     const ::torch::Tensor& in_data,
     const ::torch::Tensor& loads,
@@ -249,6 +289,17 @@ std::vector<std::vector<::torch::Tensor>> split_fused_cells_to_paths(
   }
 }
 
+/*!
+ * \brief fuse split cells from paths into a single tensor.
+ *
+ * \param in_data The input data for all paths.
+ * \param is_load_fuse (optional, default false) Whether the load should be fused to a single
+ *                     tensor.
+ * \param is_tag_fuse (optional, default false) Whether the tag should be fused to a single
+ *                   tensor.
+ * \param loads (optional) The loads of all paths.
+ * \param tags (optional) The tags of all paths.
+ */
 std::vector<::torch::Tensor> fuse_split_cells_from_paths(
     const std::vector<::torch::Tensor>& in_data,
     bool is_load_fuse = false,
@@ -266,8 +317,8 @@ std::vector<::torch::Tensor> fuse_split_cells_from_paths(
     auto out_tags = ::torch::cat(tags.value(), 0);
     auto result = ::torch::_unique(out_tags, true, true);
     auto new_tags = std::get<0>(result);
-    auto global_dst_indices = std::get<1>(result);
-    return {out_data, new_tags, global_dst_indices};
+    auto global_seat_indices = std::get<1>(result);
+    return {out_data, new_tags, global_seat_indices};
   }
   return {out_data};
 }
