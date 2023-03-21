@@ -3,11 +3,9 @@
 
 from typing import List, Union
 
-import numpy as np
 import torch
 import brt._C.router as c_router
 from brt.runtime import log
-from brt.router.utils import pad_to_max
 from brt.router.fabric.base import FabricBase, register_fabric
 from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, deinit_grid_tensor
 
@@ -77,14 +75,14 @@ class DispatchFabric(FabricBase):
             hot_mask,
             supported_capacities=self.supported_capacities,
             capacity_padding=self.capacity_padding,
-            is_tag_index=False,
+            is_tag_index=self.is_tag_index,
             load_on_cpu=self.load_on_cpu,
         )
         if self.flow_num == 1:
             in_flows = [in_flow]
         else:
             in_flows = in_flow
-
+        self.capture_flow_stats(in_flows, route_indices, loads)
         all_out_flows = self.dispatch(in_flows, route_indices, loads, score)
         if self.flow_num == 1:
             all_out_flows = all_out_flows[0]
@@ -198,7 +196,7 @@ class CombineFabric(FabricBase):
         if self.flow_num == 1:
             in_flows = [in_flows]
             residual_flow = [residual_flow]
-
+        self.capture_flow_stats(in_flows)
         out_flows = self.combine(in_flows, residual_flow, score)
 
         if self.flow_num == 1:
@@ -244,12 +242,13 @@ class CombineFabric(FabricBase):
                 in_flows_data = c_router.fuse_split_cells_from_paths(in_flows_data)
                 in_flows_load = in_flows_load[0]
                 route_indices = in_flows_tag[0]
+                in_flows_tag = None
 
             in_flows_tag_stack = flow_tags[:-1]
             in_flows_load_stack = flow_loads[:-1]
             extra_attr_dict = extra_attr_dict
 
-            out_flow_data = c_router.combine_with_indices_and_loads(
+            routed_results = c_router.combine_with_indices_and_loads(
                 in_flows_data,
                 route_indices,
                 in_flows_load,
@@ -260,11 +259,17 @@ class CombineFabric(FabricBase):
                 is_tag_index=self.is_tag_index,
                 tags=in_flows_tag,
             )
+            if self.is_tag_index:
+                out_flow_data, out_flow_tag, out_flow_load = routed_results
+            else:
+                out_flow_data = routed_results
+                out_flow_tag = None
+                out_flow_load = None
 
             out_flow = init_grid_tensor(
                 out_flow_data, in_flows_tag_stack, in_flows_load_stack, extra_attr_dict,
             )
-            out_flow = out_flow.pack(out_flow_tag, in_flows_load)
+            out_flow = out_flow.pack(out_flow_tag, out_flow_load)
             out_flows.append(out_flow)
 
         return out_flows

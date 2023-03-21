@@ -1,14 +1,14 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Tuple, overload, Literal, List, Union
+from typing import Tuple, List, Union
 
 import torch
 
 def convert_index_format(
     origin_indices: torch.Tensor,
     loads: torch.Tensor,
-    new_index_fmt_id: int,  # 0 for src_index or 1 for dst_index
+    is_to_tag: bool,  # 0 for src_index or 1 for dst_index
 ) -> torch.Tensor: ...
 def generate_indices_and_loads(
     hot_mask: torch.Tensor,
@@ -70,5 +70,5 @@ def combine_with_indices_and_loads(
     ever_padded=True,
     is_tag_index: bool = False,
     tags: torch.Tensor = None,
-) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: ...
+) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]: ...
 
