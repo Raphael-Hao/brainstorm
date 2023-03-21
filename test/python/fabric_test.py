@@ -134,8 +134,8 @@ class FabricCPPTest(unittest.TestCase):
     def test_dispatch_and_combine(self):
         # test dispatch and combine with seat indices
         cell_num = 4096
-        path_num = 2
-        input_cells = torch.randn((cell_num, 1, 2, 3), device="cuda")
+        path_num = 8
+        input_cells = torch.randn((cell_num, 8, 8, 8), device="cuda")
         mask = self.generate_mask(cell_num, path_num, 1)
         indices, loads = self.brt_generate_indices(mask, is_tag_index=False)
         output_cells = router.dispatch_with_indices_and_loads(
@@ -208,7 +208,7 @@ class FabricTest(unittest.TestCase):
         self.assertIsNone(out_flows)
 
         path_num = 4
-        fabric = ZeroSkipFabric(flow_num=1)
+        fabric = ZeroSkipFabric(path_num=1)
         in_flows = [torch.zeros((0, 1, 2, 3), device="cuda") for _ in range(path_num)]
         in_flows[1] = torch.zeros((1, 1, 2, 3), device="cuda")
         empty_flow, out_flows = fabric(in_flows)
@@ -216,7 +216,7 @@ class FabricTest(unittest.TestCase):
         self.assertFalse(empty_flow)
         self.assertIsNone(out_flows)
 
-        fabric = ZeroSkipFabric(flow_num=2)
+        fabric = ZeroSkipFabric(path_num=2)
         in_flows = [
             [torch.zeros((0, 1, 2, 3), device="cuda") for _ in range(path_num)]
             for _ in range(2)

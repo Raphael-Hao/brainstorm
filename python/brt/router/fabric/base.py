@@ -15,14 +15,14 @@ class FabricBase(nn.Module):
     def __init__(self, flow_num: int, index_format: str = None, **kwargs) -> None:
         super().__init__()
         self.flow_num = flow_num
-        self.index_format = index_format
+        assert index_format in [
+            "tag_index",
+            "seat_index",
+        ], f"index_format should be dst_index, src_index, but got {index_format}"
+
+        self.is_tag_index = index_format == "tag_index"
         self.start_event = torch.cuda.Event(enable_timing=True)
         self.end_event = torch.cuda.Event(enable_timing=True)
-        assert self.index_format in [
-            "dst_index",
-            "src_index",
-            None,
-        ], f"index_format should be dst_index, src_index or None, but got {index_format}"
 
     def start_timer(self):
         self.start_event.record(torch.cuda.current_stream())
@@ -45,7 +45,6 @@ class FabricBase(nn.Module):
         score: torch.Tensor,
     ):
         raise NotImplementedError("FabricBase is an abstract class for Fabric")
-
 
     def __getstate__(self):
         state = self.__dict__.copy()
