@@ -118,35 +118,6 @@ class ConstantPropagationPass(PassBase):
                     gather_node.replace_all_uses_with(gather_node.args[0][path_index])
                     graph.erase_node(gather_node)
 
-            # elif self.is_gather_node(node):
-            #     permanent_paths = []
-            #     load_histroy = node_m.load_history
-            #     for path_id, path_load in enumerate(load_histroy):
-            #         if path_load >= self.upper_perm_load:
-            #             permanent_paths.append(path_id)
-            #     if (
-            #         len(permanent_paths) == len(load_histroy)
-            #         and len(permanent_paths) > 0
-            #     ):
-            #         i = 0
-            #         new_args_tuple = []
-            #         for key in node.users.copy().keys():
-            #             for keyarg in key.args:
-            #                 if isinstance(keyarg, int):
-            #                     i = keyarg
-            #             if not isinstance(key.args[0], list):
-            #                 new_args = (node.args[0][i],)
-            #             else:
-            #                 construct_new_args = []
-            #                 for tmp_node in key.args[0]:
-            #                     if not tmp_node == new_key:
-            #                         construct_new_args.append(tmp_node)
-            #                     else:
-            #                         construct_new_args.append(node.args[0][i])
-            #                 new_args = (construct_new_args,)
-            #             key.args = new_args
-            #             i += 1
-            #         self.graph_mod.graph.erase_node(node)
 
     def finalize(self):
         self.graph_mod.graph.lint()
