@@ -386,13 +386,7 @@ class SingleNetwork(nn.Module):
 
     def forward(self, x, idx=None):
         idx = self.num_block
-        # choose a random index for training
-        # if idx is None:
-        #     idx = random.choice(self.outputList)
-        # else:
-        #     assert idx <= self.num_block and idx >= 0
 
-        # feed-forward part
         x = self.head(x)
         res = x
 

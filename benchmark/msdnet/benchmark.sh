@@ -4,7 +4,8 @@ export BRT_CAPTURE_STATS=True
 export BRT_CAPTURED_FABRIC_TYPE=dispatch,combine
 export BRT_CACHE_PATH="${HOME}/brainstorm_project/brainstorm/.cache"
 
-msdnet_path="${HOME}/brainstorm_project/brainstorm/benchmark/msdnet"
+# msdnet_path="${HOME}/brainstorm_project/brainstorm/benchmark/msdnet"
+msdnet_path=${PWD}
 pth_path="${msdnet_path}/MSDNet.pth"
 
 function run_benchmark() {

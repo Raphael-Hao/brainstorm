@@ -13,6 +13,7 @@ from torch import nn, fx
 from torchvision.models import resnet18, ResNet18_Weights
 from torch.utils import dlpack
 
+from brt.runtime import BRT_CACHE_PATH
 from brt.router import ScatterRouter, GatherRouter
 from brt.trace.leaf_node import register_leaf_node
 
@@ -63,7 +64,7 @@ class Classifier(nn.Module):
         super().__init__()
         self.resnet = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).eval()
         with open(
-            f"/home/v-louyang/brt/benchmark/livesr/kmeans_{n_subnets}.pkl", "rb"
+            BRT_CACHE_PATH.parent / f"benchmark/livesr/kmeans_{n_subnets}.pkl", "rb"
         ) as pkl:
             self.kmeans: MiniBatchKMeans = pickle.load(pkl)["kmeans"]
 
@@ -102,7 +103,7 @@ class TunedClassifier(nn.Module):
             input_infos=[("input0", input_shape)],
         )
         with auto_scheduler.ApplyHistoryBest(
-            f"/home/v-louyang/brt/benchmark/livesr/resnet-18-NCHW-B88-cuda.json"
+            BRT_CACHE_PATH.parent / f"benchmark/livesr/resnet-18-NCHW-B88-cuda.json"
         ):
             with tvm.transform.PassContext(
                 opt_level=3, config={"relay.backend.use_auto_scheduler": True}
@@ -128,7 +129,7 @@ class kMeans(nn.Module):
     def __init__(self, k: int):
         super().__init__()
         self.k = k
-        with open(f"/home/v-louyang/brt/benchmark/livesr/kmeans_{k}.pkl", "rb") as pkl:
+        with open(BRT_CACHE_PATH.parent / f"benchmark/livesr/kmeans_{k}.pkl", "rb") as pkl:
             kmeans: MiniBatchKMeans = pickle.load(pkl)["kmeans"]
         self.kmeans_centers = torch.nn.Parameter(
             torch.from_numpy(kmeans.cluster_centers_).to(torch.float32),
