@@ -34,7 +34,7 @@ class GatherRouter(RouterBase):
                 sparse (bool, optional): whether restore with zero paddings. Defaults to False.
                 auto_padding (bool, optional): whether to pad the tensor to the max shape. Defaults to False.
         """
-        super().__init__(capturing=capturing, capture_mode=capture_mode)
+        super().__init__()
         self.fabric_type = fabric_type
         self.fabric_kwargs = {}
 
@@ -53,7 +53,6 @@ class GatherRouter(RouterBase):
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flows):
-        self.capture_flow_stats(self.fabric_type, in_flows)
         out_flow = self.fabric(in_flows)
         return out_flow
 
@@ -76,7 +75,7 @@ class SwitchGatherRouter(RouterBase):
                 sparse (bool, optional): whether restore with zero paddings. Defaults to False.
                 auto_padding (bool, optional): whether to pad the tensor to the max shape. Defaults to False.
         """
-        super().__init__(capturing=capturing, capture_mode=capture_mode)
+        super().__init__()
         assert fabric_type == "residual_homo_fused_combine"
         self.fabric_type = fabric_type
         self.fabric_kwargs = {}
@@ -97,6 +96,5 @@ class SwitchGatherRouter(RouterBase):
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
 
     def forward(self, residual_flows, in_flows):
-        self.capture_flow_stats(self.fabric_type, in_flows)
         out_flow = self.fabric(residual_flows, in_flows)
         return out_flow

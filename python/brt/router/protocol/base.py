@@ -16,7 +16,7 @@ __all__ = ["ProtocolBase"]
 
 class ProtocolBase(nn.Module):
     def __init__(
-        self, index_format: str = None, index_gen_opt: bool = True, **kwargs,
+        self, **kwargs,
     ):
         """Base class for all protocols.
 
@@ -27,15 +27,7 @@ class ProtocolBase(nn.Module):
                            zero is reserved for representing the corresponding data in the input tensor is dropped.
         """
         super().__init__()
-
-        self.index_format = index_format
-        self.index_gen_opt = index_gen_opt
         self.debug = os.environ.get("BRT_DEBUG", "False").lower() in ["true", "1"]
-        assert self.index_format in [
-            "dst_index",
-            "src_index",
-            None,
-        ], f"index_format should be dst_index or src_index, but got {index_format}"
 
     def forward(self, score: torch.Tensor, *args, **kwargs):
         decisions = self.make_route_decision(score, *args, **kwargs)

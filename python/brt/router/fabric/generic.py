@@ -11,6 +11,7 @@ from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, deinit_grid_te
 
 logger = log.get_logger(__file__)
 
+# TOD: add optimization for single cell dispatch and combine
 
 @register_fabric("dispatch")
 class DispatchFabric(FabricBase):

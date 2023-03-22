@@ -51,12 +51,12 @@ class ScatterRouter(RouterBase):
                     transform (bool, optional): whether to transform the route result to the original shape. Defaults to False.
             Capturing (bool, optional): whether to capture the flow stats. Defaults to True.
         """
-        super().__init__(capturing=capturing, capture_mode=capture_mode)
+        super().__init__()
         self.dispatch_score = dispatch_score
 
         self.protocol_type = protocol_type
 
-        self.protocol_kwargs = {"index_format": "src_index", "index_gen_opt": True}
+        self.protocol_kwargs = {}
 
         if self.protocol_type == "topk":
             built_in_protocol_kwargs = {
@@ -103,25 +103,14 @@ class ScatterRouter(RouterBase):
         self.throttling = throttling
 
     def forward(self, in_flows, score: torch.Tensor):
-        route_indices, loads, capacities = self.protocol(score)
+        hot_mask = self.protocol(score)
         if self.dispatch_score:
             if isinstance(in_flows, List):
                 in_flows = in_flows.append(score)
             else:
                 in_flows = [in_flows, score]
 
-        route_indices = self.coordinate_index_format(
-            route_indices, loads, self.protocol.index_format, self.fabric.index_format
-        )
-
-        if self.throttling:
-            real_loads = torch.minimum(loads, capacities)
-        else:
-            real_loads = loads
-
-        self.capture_flow_stats(self.fabric_type, in_flows, route_indices, real_loads)
-
-        out_flows = self.fabric(in_flows, route_indices, real_loads, score)
+        out_flows = self.fabric(in_flows, hot_mask, score)
         return out_flows
 
     def update_protocol(self, **kwargs):
@@ -142,12 +131,12 @@ class SwinMoEScatterRouter(RouterBase):
         capturing=False,
         capture_mode: str = "cum",
     ):
-        super().__init__(capturing=capturing, capture_mode=capture_mode)
+        super().__init__()
         assert (
             protocol_type in self.ALLOWED_PROTOCOL_TYPES
         ), f"protocol_type {protocol_type} is not supported by SwinMoEScatterRouter"
         self.protocol_type = protocol_type
-        self.protocol_kwargs = {"index_format": "dst_index", "index_gen_opt": True}
+        self.protocol_kwargs = {}
         built_in_protocol_kwargs = {
             "top_k": 1,
             "capacity_factor": 0,
@@ -180,24 +169,8 @@ class SwinMoEScatterRouter(RouterBase):
         self.throttling = throttling
 
     def forward(self, in_flows, score, logits_wo_noise, logits):
-        route_indices, loads, capacities, new_score, loss = self.protocol(
+        hot_mask, new_score, loss = self.protocol(
             score, logits_wo_noise, logits
         )
-
-        # if isinstance(in_flows, List):
-        #     in_flows = in_flows.append(new_score)
-        # else:
-        #     in_flows = [in_flows, new_score]
-        route_indices = self.coordinate_index_format(
-            route_indices, loads, self.protocol.index_format, self.fabric.index_format
-        )
-        capacity = loads.capacity
-
-        if self.throttling:
-            real_loads = torch.minimum(loads, capacities)
-        else:
-            real_loads = loads
-        real_loads.capacity = capacity
-        self.capture_flow_stats(self.fabric_type, in_flows, route_indices, real_loads)
-        out_flows = self.fabric(in_flows, route_indices, real_loads, new_score)
+        out_flows = self.fabric(in_flows, hot_mask, new_score)
         return out_flows, loss

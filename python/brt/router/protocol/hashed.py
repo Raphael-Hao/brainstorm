@@ -20,8 +20,7 @@ class HashProtocol(ProtocolBase):
         placement_aware: bool = False,
         seed: int = 0,
         supported_capacities: torch.Tensor = None,
-        index_format="dst_index",
-        index_gen_opt=True,
+        **kwargs,
     ):
         """Top-K protocol
 
@@ -31,7 +30,7 @@ class HashProtocol(ProtocolBase):
             index_format (str, optional): index tensors according to destination or source. Defaults to "src_index".
             index_gen_opt (bool, optional): whether use optimized GPU kernel. Defaults to True.
         """
-        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
+        super().__init__()
         self.supported_capacities = supported_capacities
         self.num_tasks = num_tasks
         self.placement_aware = placement_aware
@@ -55,11 +54,17 @@ class HashProtocol(ProtocolBase):
             dtype=torch.int64,
             device=task_ids.device,
         ).scatter_(1, hash_dest, 1)
+        return hot_mask
+
+    def make_route_decision_legacy(self, task_ids: torch.Tensor):
+        hash_dest = self.hash_indices[task_ids]
+        hot_mask = torch.zeros(
+            (task_ids.size(0), self.num_tasks),
+            dtype=torch.int64,
+            device=task_ids.device,
+        ).scatter_(1, hash_dest, 1)
         route_indices, loads = generate_dst_indices(
-            hot_mask,
-            self.supported_capacities,
-            self.index_gen_opt,
-            load_on_cpu=False,
+            hot_mask, self.supported_capacities, self.index_gen_opt, load_on_cpu=False,
         )
         if self.placement_aware:
             loads.capacity = 0
@@ -78,11 +83,7 @@ class HashProtocol(ProtocolBase):
 @register_protocol("task")
 class TaskProtocol(ProtocolBase):
     def __init__(
-        self,
-        num_tasks: int,
-        supported_capacities: torch.Tensor = None,
-        index_format="dst_index",
-        index_gen_opt=True,
+        self, num_tasks: int, supported_capacities: torch.Tensor = None, **kwargs,
     ):
         """Top-K protocol
 
@@ -92,7 +93,7 @@ class TaskProtocol(ProtocolBase):
             index_format (str, optional): index tensors according to destination or source. Defaults to "src_index".
             index_gen_opt (bool, optional): whether use optimized GPU kernel. Defaults to True.
         """
-        super().__init__(index_format=index_format, index_gen_opt=index_gen_opt)
+        super().__init__(**kwargs)
         self.supported_capacities = supported_capacities
         self.num_tasks = num_tasks
         task_indices = torch.arange(num_tasks, dtype=torch.int64).view(-1, 1)

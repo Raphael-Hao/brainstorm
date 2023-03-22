@@ -29,14 +29,6 @@ def dispatch_with_indices_and_loads(
     is_1d_routing: bool = True,
     is_tag_index: bool = False,
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: ...
-def combine_with_src_indices(
-    in_data: torch.Tensor,
-    route_indices: torch.Tensor,
-    loads: torch.Tensor,
-    auto_pad: bool = False,
-    gates: torch.Tensor = None,
-    out_data: torch.Tensor = None,
-) -> torch.Tensor: ...
 def split_fused_cells_to_paths(
     in_data: torch.Tensor,
     loads: torch.Tensor,
