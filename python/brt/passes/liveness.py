@@ -6,7 +6,6 @@ import torch
 from torch.fx import GraphModule
 import numpy as np
 from brt.passes.base import PassBase, register_pass
-from brt.router import ScatterRouter
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
 

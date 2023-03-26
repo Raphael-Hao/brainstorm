@@ -70,11 +70,13 @@ class DispatchFabric(FabricBase):
         self,
         in_flow: Union[GridTensor, List[GridTensor]],
         hot_mask: torch.Tensor,
+        runtime_capacities: torch.Tensor = None,
         score: torch.Tensor = None,
     ) -> Union[List[GridTensor], List[List[GridTensor]]]:
+        supported_capacities = runtime_capacities or self.supported_capacities
         route_indices, loads = c_router.generate_indices_and_loads(
             hot_mask,
-            supported_capacities=self.supported_capacities,
+            supported_capacities=supported_capacities,
             capacity_padding=self.capacity_padding,
             is_tag_index=self.is_tag_index,
             load_on_cpu=self.load_on_cpu,
@@ -83,7 +85,9 @@ class DispatchFabric(FabricBase):
             in_flows = [in_flow]
         else:
             in_flows = in_flow
+
         self.capture_flow_stats(in_flows, route_indices, loads)
+
         all_out_flows = self.dispatch(in_flows, route_indices, loads, score)
         if self.flow_num == 1:
             all_out_flows = all_out_flows[0]

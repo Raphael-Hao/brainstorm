@@ -9,7 +9,7 @@ from brt.router.fabric.base import register_fabric
 from brt.runtime.proto_tensor import ProtoTensor, init_proto_tensor
 
 
-@register_fabric("single_ptu_dispatch")
+@register_fabric("single_cell_dispatch")
 class SinglePTUDispatchFabric(DispatchFabric):
     def __init__(
         self,
@@ -111,22 +111,13 @@ class SinglePTUDispatchFabric(DispatchFabric):
         return all_out_flows
 
 
-@register_fabric("single_ptu_combine")
+@register_fabric("single_cell_combine")
 class SinglePTUCombineFabric(CombineFabric):
-    def __init__(
-        self, flow_num: int, reduction="add", granularity_padding=False, **kwargs
-    ):
+    def __init__(self, flow_num: int, reduction="add", **kwargs):
         self.check_compatibility(kwargs)
         super().__init__(
-            flow_num=flow_num,
-            reduction=reduction,
-            sparse=True,
-            granularity_padding=granularity_padding,
+            flow_num=flow_num, reduction=reduction,
         )
-
-    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
-        sparse = kwargs.pop("sparse", True)
-        assert_compatibility(self, "sparse", True, sparse)
 
     def forward(
         self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]]

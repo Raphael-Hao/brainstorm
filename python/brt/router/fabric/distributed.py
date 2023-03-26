@@ -7,7 +7,10 @@ import brt.runtime.distributed as brt_dist
 import torch
 
 # pylint: disable=no-name-in-module
-from brt._C.router import combine_with_src_indices, dispatch_with_indices_and_loads
+from brt._C.router import (
+    dispatch_with_indices_and_loads,
+    combine_with_indices_and_loads,
+)
 
 # pylint: enable=no-name-in-module
 from brt.router.fabric.base import register_fabric
@@ -155,11 +158,11 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
         in_flow = brt_dist.size_known_group_asymmetry_a2a(in_flow, out_loads, in_loads)
         # print(f"gather out flow: {in_flow.sum(1)}")
         if self.transform:
-            out_flow = combine_with_src_indices(
+            out_flow = combine_with_indices_and_loads(
                 in_flow, route_indices, in_loads, auto_pad=True, gates=score
             )
         else:
-            out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
+            out_flow = combine_with_indices_and_loads(in_flow, route_indices, in_loads, None)
         out_flow.score = score
         return out_flow
 
@@ -238,6 +241,6 @@ class DistributedPlacementCombineFabric(FusedCombineFabric):
         out_loads = in_flow.out_loads
         score = in_flow.score
         in_flow = brt_dist.size_known_group_sparse_a2a(in_flow, out_loads, in_loads)
-        out_flow = combine_with_src_indices(in_flow, route_indices, in_loads, None)
+        out_flow = combine_with_indices_and_loads(in_flow, route_indices, in_loads, None)
         out_flow.score = score
         return out_flow

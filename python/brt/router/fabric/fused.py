@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Union
 
 import torch
 
@@ -106,26 +106,6 @@ class FusedDispatchFabric(DispatchFabric):
 
         return all_out_flows
 
-    def pack_invalid_flow(self, in_flow):
-
-        from ...runtime.proto_tensor import (
-            ProtoTensor,
-        )  # we need to keep ProtoTensor updated
-
-        if isinstance(in_flow, ProtoTensor):
-            pass
-
-        elif isinstance(in_flow, torch.Tensor):
-            in_flow = init_proto_tensor(in_flow)
-
-        elif isinstance(in_flow, (List, Tuple)):
-            in_flow = type(in_flow)([self.pack_invalid_flow(f) for f in in_flow])
-
-        return in_flow
-
-    def remove_needless_pack(self, out_flow):
-        return out_flow
-
 
 @register_fabric("fused_combine")
 class FusedCombineFabric(CombineFabric):
@@ -174,10 +154,6 @@ class FusedCombineFabric(CombineFabric):
 
         return out_flows
 
-    def pack_invalid_flow(self, in_flow):
-
-        return in_flow
-
 
 @register_fabric("homo_fused_dispatch")
 class HomoFusedDispatchFabric(DispatchFabric):
@@ -218,7 +194,6 @@ class HomoFusedDispatchFabric(DispatchFabric):
                 out_flow.loads = loads
                 out_flow.score = score
             elif self.route_logics[flow_idx] == "2d":
-                in_flow = in_flow.transpose(0, 1).contiguous()
                 out_flow = dispatch_with_indices_and_loads(
                     in_flow, route_indices, loads, self.capacity_padding
                 )
@@ -229,12 +204,6 @@ class HomoFusedDispatchFabric(DispatchFabric):
             all_out_flows.append(out_flow)
 
         return all_out_flows
-
-    def pack_invalid_flow(self, in_flow):
-        return in_flow
-
-    def remove_needless_pack(self, out_flow):
-        return out_flow
 
 
 @register_fabric("homo_fused_combine")
@@ -268,12 +237,6 @@ class HomoFusedCombineFabric(CombineFabric):
             out_flows.append(out_flow)
 
         return out_flows
-
-    def pack_invalid_flow(self, in_flow):
-        return in_flow
-
-    def remove_needless_pack(self, out_flow):
-        return out_flow
 
 
 @register_fabric("residual_homo_fused_combine")

@@ -18,20 +18,20 @@ class BranchRoute(nn.Module):
         gate,
         dispatch_score=False,
         sparse=False,
-        single_ptu_dispatch=False,
+        single_cell_dispatch=False,
     ):
         super().__init__()
         self.gate = gate
         self.scatter_router = ScatterRouter(
             dispatch_score=dispatch_score,
             protocol_type="threshold",
-            fabric_type="single_ptu_dispatch" if single_ptu_dispatch else "dispatch",
+            fabric_type="single_cell_dispatch" if single_cell_dispatch else "dispatch",
             protocol_kwargs={"threshold": 0.5},
         )
         self.expert1 = nn.Identity()
         self.expert2 = nn.Identity()
         self.gather_router = GatherRouter(
-            fabric_type="single_ptu_combine" if single_ptu_dispatch else "combine",
+            fabric_type="single_cell_combine" if single_cell_dispatch else "combine",
             fabric_kwargs={"sparse": sparse},
         )
 
@@ -49,13 +49,13 @@ class WeightedBranchRoute(BranchRoute):
         self,
         gate,
         sparse=False,
-        single_ptu_dispatch=False,
+        single_cell_dispatch=False,
     ):
         super().__init__(
             gate,
             dispatch_score=True,
             sparse=sparse,
-            single_ptu_dispatch=single_ptu_dispatch,
+            single_cell_dispatch=single_cell_dispatch,
         )
 
     def forward(self, x):
@@ -227,7 +227,7 @@ class RouterTest(unittest.TestCase):
                 gates[:, dst] = 1
             return gates
 
-        model = Model(gate=gate, sparse=True, single_ptu_dispatch=True).eval()
+        model = Model(gate=gate, sparse=True, single_cell_dispatch=True).eval()
         for i in range(2):
             if i == 1:
                 inputs = inputs.cuda()
@@ -258,7 +258,7 @@ class RouterTest(unittest.TestCase):
                 gates[:, dst] = 1
             return gates
 
-        model = Model(gate=gate, sparse=True, single_ptu_dispatch=True).eval()
+        model = Model(gate=gate, sparse=True, single_cell_dispatch=True).eval()
         for i in range(2):
             if i == 1:
                 inputs = inputs.cuda()

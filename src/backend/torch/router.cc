@@ -38,6 +38,10 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
 
   auto cell_num = hot_mask.size(0);
   auto path_num = hot_mask.size(1);
+  if (hot_mask.numel() == 0) {
+    return {::torch::zeros({0, path_num}, hot_mask.options()),
+            ::torch::zeros({path_num}, hot_mask.options())};
+  }
 
   int* supported_capacities_data_ptr = nullptr;
   int supported_capacity_num = 0;
@@ -136,6 +140,23 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
   if (data_type == ::torch::kFloat16) {
     TORCH_INTERNAL_ASSERT(cell_size % 2 == 0, "cell_size must be even when data type is float16");
     cell_size = cell_size / 2;
+  }
+
+  if (in_data.numel() == 0) {
+    auto out_shape = in_data.sizes().vec();
+    at::IntArrayRef out_shape_ref;
+    if (is_1d_routing) {
+      out_shape[0] = 0;
+      out_shape_ref = at::IntArrayRef(out_shape.data(), out_shape.data() + out_shape.size());
+    } else {
+      out_shape[1] = 0;
+      out_shape_ref = at::IntArrayRef(out_shape.data() + 1, out_shape.data() + out_shape.size());
+    }
+    if (tag_generating) {
+      return {::torch::zeros(out_shape_ref, in_data.options()),
+              ::torch::zeros({0}, route_indices.options())};
+    }
+    return {::torch::zeros(out_shape_ref, in_data.options())};
   }
 
   ::torch::Tensor cuda_loads;
@@ -324,6 +345,7 @@ std::vector<::torch::Tensor> fuse_split_cells_from_paths(
   return {out_data};
 }
 
+// TODO add support for predefined output size
 std::vector<::torch::Tensor> combine_with_indices_and_loads(
     const ::torch::Tensor& in_data /*[load*path_num x cell_size]*/,
     const ::torch::Tensor& route_indices /*[cell_num x path_num]*/,
@@ -339,6 +361,31 @@ std::vector<::torch::Tensor> combine_with_indices_and_loads(
 
   int cell_num = route_indices.size(0);
   int cell_size = in_data.numel() / in_data.size(0);
+  if (cell_num == 0) {
+    if (!is_tag_index) {
+      if (out_data.has_value()) {
+        return {out_data.value()};
+      } else {
+        return {::torch::empty_like(in_data)};
+      }
+    } else {
+      return {::torch::empty_like(in_data), ::torch::empty_like(route_indices),
+              ::torch::empty_like(tags.value())};
+    }
+  }
+  // TODO need to check if cell_num==1 is equivalent to only one cell to be combined when we use tag
+  // index
+  if (cell_num == 1) {
+    if (!is_tag_index) {
+      if (out_data.has_value()) {
+        return {out_data.value() + in_data};
+      } else {
+        return {in_data};
+      }
+    } else {
+      return {in_data, route_indices, tags.value()};
+    }
+  }
   ::torch::Tensor out_data_t;
   if (!is_tag_index) {
     CHECK(loads.has_value());

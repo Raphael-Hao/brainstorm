@@ -43,7 +43,6 @@ class GatherRouter(RouterBase):
                 "flow_num": 1,
                 "reduction": "add",
                 "sparse": False,
-                "granularity_padding": False,
             }
         self.fabric_kwargs.update(bult_in_fabric_kwargs)
 

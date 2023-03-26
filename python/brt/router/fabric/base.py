@@ -54,12 +54,7 @@ class FabricBase(nn.Module):
         self.ptu_device_history: List[torch.device] = None
 
     def forward(
-        self,
-        in_flow,
-        route_indices: torch.Tensor,
-        loads: torch.Tensor,
-        capacities: torch.Tensor,
-        score: torch.Tensor,
+        self, *inputs: Any,
     ):
         raise NotImplementedError("FabricBase is an abstract class for Fabric")
 

@@ -531,7 +531,7 @@ class MSDNet(nn.Module):
             self.scatters.append(
                 ScatterRouter(
                     protocol_type="binary_threshold",
-                    # fabric_type="single_ptu_dispatch",
+                    # fabric_type="single_cell_dispatch",
                     protocol_kwargs={"threshold": thresholds[i]},
                     fabric_kwargs={
                         "flow_num": 5,
@@ -543,7 +543,7 @@ class MSDNet(nn.Module):
             )
         self.final_gather = GatherRouter(
             capturing=True
-            # fabric_type="single_ptu_combine",
+            # fabric_type="single_cell_combine",
             # fabric_kwargs={"sparse": True}
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
