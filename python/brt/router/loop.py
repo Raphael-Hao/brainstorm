@@ -60,6 +60,3 @@ class LoopRouter(RouterBase):
             pending_combine_flows.append(completed_flow)
         out_flows = self.combine_fabric(pending_combine_flows)
         return out_flows
-
-    def update_protocol(self, **kwargs):
-        self.protocol.update(**kwargs)

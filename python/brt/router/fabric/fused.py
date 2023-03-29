@@ -2,22 +2,12 @@ from typing import List, Union
 
 import torch
 
-# pylint: disable=no-name-in-module
-from brt._C.router import (
-    dispatch_with_indices_and_loads,
-    combine_with_src_indices,
-)
+import brt._C.router as c_router
 
-# pylint: enable=no-name-in-module
 from brt.runtime import log
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import CombineFabric, DispatchFabric
-from brt.runtime.proto_tensor import (
-    ProtoTensor,
-    init_proto_tensor,
-    to_torch_tensor,
-    make_proto_tensor_cls,
-)
+from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
 
@@ -26,82 +16,62 @@ __all__ = [
     "FusedCombineFabric",
 ]
 
-make_proto_tensor_cls(["score"], [0])
-
 
 @register_fabric("fused_dispatch")
 class FusedDispatchFabric(DispatchFabric):
     def __init__(
         self,
         flow_num: int,
-        capacity_padding=False,
         route_logic: Union[str, List[str]] = "1d",
         transform: Union[bool, List[bool]] = False,
+        **kwargs
     ):
-        self.capacity_padding = capacity_padding
+        kwargs["index_format"] = "seat_index"
         super().__init__(
-            flow_num,
-            route_logic=route_logic,
-            transform=transform,
-            index_format="dst_index",
+            flow_num, route_logic=route_logic, transform=transform, **kwargs
         )
 
     def dispatch(
         self,
-        in_flows: List[ProtoTensor],
+        in_flows: List[GridTensor],
         route_indices: torch.Tensor,
         loads: torch.Tensor,
         score: torch.Tensor,
-    ) -> List[ProtoTensor]:
+    ) -> List[GridTensor]:
         all_out_flows = []
         for flow_idx, flow in enumerate(in_flows):
             (
-                in_flow_data,
-                in_flow_tag_stack,
-                in_flow_load_stack,
-                extra_attr_stack_dict,
-            ) = to_torch_tensor(flow, return_stack=True)
+                flow_data,
+                flow_tag_stack,
+                flow_load_stack,
+                extra_attr_dict,
+            ) = to_torch_tensor(flow, retrieve_attr=True)
 
-            if self.route_logics[flow_idx] == "1d":
-                if self.transforms[flow_idx]:
-                    out_flow_data = dispatch_with_indices_and_loads(
-                        in_flow_data,
-                        route_indices,
-                        loads,
-                        score,
-                        max_path_padding=self.capacity_padding,
-                    )[0]
-                else:
-                    out_flow_data = dispatch_with_indices_and_loads(
-                        in_flow_data,
-                        route_indices,
-                        loads,
-                        max_path_padding=self.capacity_padding,
-                    )[0]
-                out_flow = init_proto_tensor(
-                    out_flow_data,
-                    in_flow_tag_stack,
-                    in_flow_load_stack,
-                    extra_attr_stack_dict,
-                )
-                out_flow.pack(route_indices, loads, score=score)
-            elif self.route_logics[flow_idx] == "2d":
-                out_flow_data = dispatch_with_indices_and_loads(
-                    in_flow_data,
-                    route_indices,
-                    loads,
-                    max_path_padding=self.capacity_padding,
-                    is_1d_routing=False,
-                )
-                out_flow = init_proto_tensor(
-                    out_flow_data,
-                    in_flow_tag_stack,
-                    in_flow_load_stack,
-                    extra_attr_stack_dict,
-                )
-                out_flow.pack(route_indices, loads)
-            else:
-                raise ValueError("route_logic must be 1d or 2d")
+            flow_tag = flow_tag_stack[-1]
+            _flow_load = flow_load_stack[-1]
+            assert flow_tag == None
+
+            flow_tag_stack = flow_tag_stack[:-1]
+            flow_load_stack = flow_load_stack[:-1]
+            flow_extra_attr_dict = extra_attr_dict
+
+            routed_data = c_router.dispatch_with_indices_and_loads(
+                flow_data,
+                route_indices,
+                loads,
+                score,
+                self.is_tag_index,
+                flow_tag,
+                self.max_path_padding,
+                self.max_path_load,
+                self.route_logics[flow_idx] == "1d",
+            )
+            out_flow = init_grid_tensor(
+                routed_data,
+                flow_tag_stack + [route_indices],
+                flow_load_stack + [loads],
+                flow_extra_attr_dict,
+            )
             all_out_flows.append(out_flow)
 
         return all_out_flows
@@ -109,164 +79,42 @@ class FusedDispatchFabric(DispatchFabric):
 
 @register_fabric("fused_combine")
 class FusedCombineFabric(CombineFabric):
-    def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
-        assert granularity_padding == False
-        super().__init__(
-            flow_num=flow_num,
-            reduction=reduction,
-            sparse=sparse,
-            granularity_padding=False,
-        )
-        self.transform = True
+    def __init__(self, flow_num, reduction, **kwargs) -> None:
+        kwargs["index_format"] = "seat_index"
+        super().__init__(flow_num=flow_num, reduction=reduction, **kwargs)
 
-    def combine(self, in_flows: List[ProtoTensor]) -> List[ProtoTensor]:
+    def combine(
+        self,
+        in_flows: List[GridTensor],
+        residual_flows: List[GridTensor],
+        score: torch.Tensor,
+    ) -> List[GridTensor]:
         out_flows = []
-        for _flow_idx, in_flow in enumerate(in_flows):
+        for flow_idx, in_flow in enumerate(in_flows):
             (
                 in_flow_data,
                 in_flow_tag_stack,
                 in_flow_load_stack,
                 extra_attr_stack,
-            ) = to_torch_tensor(in_flow, return_stack=True)
+            ) = to_torch_tensor(in_flow, retrieve_attr=True)
+            residual_flow = residual_flows[flow_idx]
 
-            local_indices = in_flow_tag_stack.pop()
-            loads = in_flow_load_stack.pop()
-            for extra_attr_key in extra_attr_stack.keys():
-                if extra_attr_key == "score_stack":
-                    score = extra_attr_stack["score_stack"].pop()
-                else:
-                    extra_attr_stack[extra_attr_key].pop()
+            route_indices = in_flow_tag_stack.pop()
+            in_flows_load = in_flow_load_stack.pop()
 
-            # self.start_timer()
-            if self.transform:
-                out_flow_data = combine_with_src_indices(
-                    in_flow_data, local_indices, loads, auto_pad=True, gates=score
-                )
-            else:
-                out_flow_data = combine_with_src_indices(
-                    in_flow_data, local_indices, loads, None
-                )
+            out_flow_data = c_router.combine_with_indices_and_loads(
+                in_flow_data,
+                route_indices,
+                in_flows_load,
+                score,
+                residual_flow,
+                max_path_padding=self.max_path_padding,
+                ever_padded=self.ever_padded,
+            )
 
-            out_flow = init_proto_tensor(
+            out_flow = init_grid_tensor(
                 out_flow_data, in_flow_tag_stack, in_flow_load_stack, extra_attr_stack
             )
             out_flows.append(out_flow)
 
         return out_flows
-
-
-@register_fabric("homo_fused_dispatch")
-class HomoFusedDispatchFabric(DispatchFabric):
-    def __init__(
-        self,
-        flow_num: int,
-        capacity_padding=False,
-        route_logic: Union[str, List[str]] = "1d",
-        transform: Union[bool, List[bool]] = False,
-    ):
-        self.capacity_padding = capacity_padding
-        super().__init__(
-            flow_num,
-            route_logic=route_logic,
-            transform=transform,
-            index_format="dst_index",
-        )
-
-    def dispatch(
-        self,
-        in_flows: List[torch.Tensor],
-        route_indices: torch.Tensor,
-        loads: torch.Tensor,
-        score: torch.Tensor,
-    ) -> List[torch.Tensor]:
-        all_out_flows = []
-        for flow_idx, in_flow in enumerate(in_flows):
-            if self.route_logics[flow_idx] == "1d":
-                if self.transforms[flow_idx]:
-                    out_flow = dispatch_with_indices_and_loads(
-                        in_flow, route_indices, loads, self.capacity_padding, score
-                    )
-                else:
-                    out_flow = dispatch_with_indices_and_loads(
-                        in_flow, route_indices, loads, self.capacity_padding
-                    )
-                out_flow.route_indices = route_indices
-                out_flow.loads = loads
-                out_flow.score = score
-            elif self.route_logics[flow_idx] == "2d":
-                out_flow = dispatch_with_indices_and_loads(
-                    in_flow, route_indices, loads, self.capacity_padding
-                )
-                out_flow.route_indices = route_indices
-                out_flow.loads = loads
-            else:
-                raise ValueError("route_logic must be 1d or 2d")
-            all_out_flows.append(out_flow)
-
-        return all_out_flows
-
-
-@register_fabric("homo_fused_combine")
-class HomoFusedCombineFabric(CombineFabric):
-    def __init__(self, flow_num, sparse, reduction, granularity_padding) -> None:
-        assert granularity_padding == False
-        super().__init__(
-            flow_num=flow_num,
-            reduction=reduction,
-            sparse=sparse,
-            granularity_padding=False,
-        )
-        self.transform = True
-
-    def combine(self, in_flows: List[torch.Tensor]) -> List[torch.Tensor]:
-        out_flows = []
-        for _flow_idx, in_flow in enumerate(in_flows):
-
-            local_indices = in_flow.route_indices
-            loads = in_flow.loads
-            score = in_flow.score
-
-            # self.start_timer()
-            if self.transform:
-                out_flow = combine_with_src_indices(
-                    in_flow, local_indices, loads, auto_pad=True, gates=score
-                )
-            else:
-                out_flow = combine_with_src_indices(in_flow, local_indices, loads, None)
-
-            out_flows.append(out_flow)
-
-        return out_flows
-
-
-@register_fabric("residual_homo_fused_combine")
-class ResidualHomoFusedCombineFabric(CombineFabric):
-    def __init__(
-        self, auto_pad, flow_num, sparse, reduction, granularity_padding
-    ) -> None:
-        assert granularity_padding == False
-        super().__init__(
-            flow_num=flow_num,
-            reduction=reduction,
-            sparse=sparse,
-            granularity_padding=False,
-        )
-        self.auto_pad = auto_pad
-
-    def forward(
-        self, residual_flow: torch.Tensor, in_flow: torch.Tensor
-    ) -> torch.Tensor:
-
-        local_indices = in_flow.route_indices
-        loads = in_flow.loads
-
-        out_flow = combine_with_src_indices(
-            in_flow,
-            local_indices,
-            loads,
-            auto_pad=self.auto_pad,
-            out_data=residual_flow,
-        )
-
-        return out_flow
-

@@ -7,11 +7,12 @@ import torch
 import brt._C.router as c_router
 from brt.runtime import log
 from brt.router.fabric.base import FabricBase, register_fabric
-from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, deinit_grid_tensor
+from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
 
 # TOD: add optimization for single cell dispatch and combine
+
 
 @register_fabric("dispatch")
 class DispatchFabric(FabricBase):
@@ -34,13 +35,13 @@ class DispatchFabric(FabricBase):
         route_logics = route_logic
         if isinstance(route_logics, str):
             assert route_logics in ["1d", "2d"]
-            route_logics = [route_logics]
+            route_logics = [route_logics] * self.flow_num
         assert isinstance(route_logics, list) and all(
             isinstance(x, str) and x in ["1d", "2d"] for x in route_logics
         )
         transforms = transform
         if isinstance(transforms, bool):
-            transforms = [transforms]
+            transforms = [transforms] * self.flow_num
         assert isinstance(transforms, list) and all(
             isinstance(x, bool) for x in transforms
         )
@@ -109,7 +110,7 @@ class DispatchFabric(FabricBase):
                 flow_tag_stack,
                 flow_load_stack,
                 extra_attr_dict,
-            ) = deinit_grid_tensor(flow, retrieve_attr=True)
+            ) = to_torch_tensor(flow, retrieve_attr=True)
 
             flow_tag = flow_tag_stack[-1]
             _flow_load = flow_load_stack[-1]
@@ -194,15 +195,15 @@ class CombineFabric(FabricBase):
     def forward(
         self,
         in_flows: Union[List[GridTensor], List[List[GridTensor]]],
-        residual_flow: Union[GridTensor, List[GridTensor]] = None,
+        residual_flows: Union[GridTensor, List[GridTensor]] = None,
         score: torch.Tensor = None,
     ) -> Union[GridTensor, List[GridTensor]]:
 
         if self.flow_num == 1:
             in_flows = [in_flows]
-            residual_flow = [residual_flow]
+            residual_flows = [residual_flows] if residual_flows is not None else None
         self.capture_flow_stats(in_flows)
-        out_flows = self.combine(in_flows, residual_flow, score)
+        out_flows = self.combine(in_flows, residual_flows, score)
 
         if self.flow_num == 1:
             return out_flows[0]
@@ -212,7 +213,7 @@ class CombineFabric(FabricBase):
     def combine(
         self,
         in_flows: List[List[GridTensor]],
-        residual_flow: List[GridTensor],
+        residual_flows: List[GridTensor],
         score: torch.Tensor,
     ) -> List[GridTensor]:
 
@@ -220,13 +221,15 @@ class CombineFabric(FabricBase):
 
         for flow_idx in range(self.flow_num):
             in_flow = in_flows[flow_idx]
-
+            residual_flow = (
+                residual_flows[flow_idx] if residual_flows is not None else None
+            )
             in_flows_data = []
             in_flows_tag = []
             in_flows_load = []
             route_indices = None
             for flow in in_flow:
-                (data, flow_tags, flow_loads, extra_attr_dict,) = deinit_grid_tensor(
+                (data, flow_tags, flow_loads, extra_attr_dict,) = to_torch_tensor(
                     flow, retrieve_attr=True
                 )
                 in_flows_data.append(data)
