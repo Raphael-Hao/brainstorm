@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import torch
 import brt._C.router as c_router
@@ -73,7 +73,7 @@ class DispatchFabric(FabricBase):
         hot_mask: torch.Tensor,
         runtime_capacities: torch.Tensor = None,
         score: torch.Tensor = None,
-    ) -> Union[List[GridTensor], List[List[GridTensor]]]:
+    ) -> Tuple[Union[List[GridTensor], List[List[GridTensor]]], torch.Tensor]:
         supported_capacities = runtime_capacities or self.supported_capacities
         route_indices, loads = c_router.generate_indices_and_loads(
             hot_mask,
@@ -89,10 +89,10 @@ class DispatchFabric(FabricBase):
 
         self.capture_flow_stats(in_flows, route_indices, loads)
 
-        all_out_flows = self.dispatch(in_flows, route_indices, loads, score)
+        all_out_flows, score = self.dispatch(in_flows, route_indices, loads, score)
         if self.flow_num == 1:
             all_out_flows = all_out_flows[0]
-        return all_out_flows
+        return all_out_flows, score
 
     def dispatch(
         self,
@@ -100,7 +100,7 @@ class DispatchFabric(FabricBase):
         route_indices: torch.Tensor,
         loads: torch.Tensor,
         score: torch.Tensor,
-    ) -> List[List[GridTensor]]:
+    ) -> Tuple[List[List[GridTensor]],torch.Tensor]:
         all_out_flows = []
         path_num = route_indices.size(1)
         for flow_idx in range(self.flow_num):
@@ -123,7 +123,7 @@ class DispatchFabric(FabricBase):
                 flow_data,
                 route_indices,
                 loads,
-                score,
+                score if self.transforms[flow_idx] else None,
                 self.is_tag_index,
                 flow_tag,
                 self.max_path_padding,
@@ -175,13 +175,13 @@ class DispatchFabric(FabricBase):
                             flow_extra_attr_dict,
                         )
                     )
-        return all_out_flows
+        return all_out_flows, score
 
 
 @register_fabric("combine")
 class CombineFabric(FabricBase):
     def __init__(
-        self, flow_num: int, reduction="add", **kwargs,
+        self, flow_num: int, reduction="add", transform=False, **kwargs,
     ):
         index_format = kwargs.pop("index_format", "tag_index")
         super().__init__(flow_num=flow_num, index_format=index_format, **kwargs)
@@ -191,6 +191,7 @@ class CombineFabric(FabricBase):
             self.ever_padded = True
 
         self.reduction = reduction
+        self.transform = transform
 
     def forward(
         self,
@@ -260,7 +261,7 @@ class CombineFabric(FabricBase):
                 in_flows_data,
                 route_indices,
                 in_flows_load,
-                score,
+                score if self.transform else None,
                 residual_flow,
                 max_path_padding=self.max_path_padding,
                 ever_padded=self.ever_padded,

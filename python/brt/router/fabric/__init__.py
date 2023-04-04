@@ -2,12 +2,12 @@
 # Licensed under the MIT license.
 
 from brt.router.fabric import (
-    distributed,
+    distributed_legacy,
     fused,
     generic,
     identity,
     placeholder,
-    single_ptu,
+    single_cell,
     zero_skip,
 )
 from brt.router.fabric.base import FabricBase, make_fabric, register_fabric

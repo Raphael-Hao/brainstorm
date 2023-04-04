@@ -3,7 +3,6 @@
 from typing import Union, List, Dict, Any
 
 import torch
-from brt.router.utils import assert_compatibility
 from brt.router.fabric.generic import DispatchFabric, CombineFabric
 from brt.router.fabric.base import register_fabric
 from brt.runtime.grid_tensor import GridTensor
@@ -23,12 +22,10 @@ class IndentityDispatchFabric(DispatchFabric):
         path_num: number of paths
         flow_num: number of input flows
         """
-        self.check_compatibility(kwargs)
         super().__init__(
             flow_num=flow_num,
             route_logic=route_logic,
             transform=transform,
-            index_format=None,
             **kwargs
         )
         self.path_num = path_num
@@ -93,7 +90,6 @@ class IndentityDispatchFabric(DispatchFabric):
 @register_fabric("identity_combine")
 class IdentityCombineFabric(CombineFabric):
     def __init__(self, flow_num: int, **kwargs):
-        self.check_compatibility(kwargs)
         super().__init__(flow_num=flow_num, reduction="add", **kwargs)
 
     def forward(
@@ -122,9 +118,3 @@ class IdentityCombineFabric(CombineFabric):
             out_flows.append(out_flow)
 
         return out_flows
-
-    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
-        sparse = kwargs.pop("sparse", True)
-        assert_compatibility(self, "sparse", True, sparse)
-        reduction = kwargs.pop("reduction", "add")
-        assert_compatibility(self, "reduction", "add", reduction)

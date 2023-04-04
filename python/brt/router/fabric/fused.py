@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import torch
 
@@ -37,7 +37,7 @@ class FusedDispatchFabric(DispatchFabric):
         route_indices: torch.Tensor,
         loads: torch.Tensor,
         score: torch.Tensor,
-    ) -> List[GridTensor]:
+    ) -> Tuple[List[GridTensor], torch.Tensor]:
         all_out_flows = []
         for flow_idx, flow in enumerate(in_flows):
             (
@@ -74,14 +74,16 @@ class FusedDispatchFabric(DispatchFabric):
             )
             all_out_flows.append(out_flow)
 
-        return all_out_flows
+        return all_out_flows, score
 
 
 @register_fabric("fused_combine")
 class FusedCombineFabric(CombineFabric):
-    def __init__(self, flow_num, reduction, **kwargs) -> None:
+    def __init__(self, flow_num, reduction, transform, **kwargs) -> None:
         kwargs["index_format"] = "seat_index"
-        super().__init__(flow_num=flow_num, reduction=reduction, **kwargs)
+        super().__init__(
+            flow_num=flow_num, reduction=reduction, transform=transform, **kwargs
+        )
 
     def combine(
         self,

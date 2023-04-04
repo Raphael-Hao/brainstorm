@@ -1,16 +1,15 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Union, List, Dict, Any
+from typing import Union, List, overload
 
 import torch
-from brt.router.utils import assert_compatibility
 from brt.router.fabric.generic import DispatchFabric, CombineFabric
 from brt.router.fabric.base import register_fabric
-from brt.runtime.proto_tensor import ProtoTensor, init_proto_tensor
+from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, to_torch_tensor
 
 
 @register_fabric("single_cell_dispatch")
-class SinglePTUDispatchFabric(DispatchFabric):
+class SingleCellDispatchFabric(DispatchFabric):
     def __init__(
         self,
         flow_num: int,
@@ -18,21 +17,17 @@ class SinglePTUDispatchFabric(DispatchFabric):
         transform: Union[bool, List[bool]] = False,
         **kwargs
     ):
-        self.check_compatibility(kwargs)
         super().__init__(
             flow_num=flow_num, route_logic=route_logic, transform=transform, **kwargs
         )
 
-    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
-        pass
-
     def forward(
         self,
-        in_flow: Union[torch.Tensor, List[torch.Tensor]],
+        in_flow: Union[GridTensor, List[GridTensor]],
         route_indices: torch.Tensor,
         real_loads: torch.Tensor,
         score: torch.Tensor = None,
-    ) -> Union[List[torch.Tensor], List[List[torch.Tensor]]]:
+    ) -> Union[List[GridTensor], List[List[GridTensor]]]:
         if self.flow_num == 1:
             in_flows = [in_flow]
         else:
@@ -44,16 +39,16 @@ class SinglePTUDispatchFabric(DispatchFabric):
 
     def dispatch(
         self,
-        in_flows: List[torch.Tensor],
+        in_flows: List[GridTensor],
         route_indices: torch.Tensor,
         real_loads: torch.Tensor,
         score: torch.Tensor,
-    ) -> List[List[torch.Tensor]]:
+    ) -> List[List[GridTensor]]:
         all_out_flows = []
         for flow_idx in range(self.flow_num):
             flow = in_flows[flow_idx]
             is_proto_tensor = False
-            if isinstance(flow, ProtoTensor):
+            if isinstance(flow, GridTensor):
                 (
                     flow_data,
                     tag_stack,
@@ -74,7 +69,7 @@ class SinglePTUDispatchFabric(DispatchFabric):
             for path_id, load in enumerate(real_loads):
                 if load == 0:
                     if is_proto_tensor:
-                        out_flow = init_proto_tensor(
+                        out_flow = init_grid_tensor(
                             torch.zeros(
                                 0,
                                 *route_shape,
@@ -112,7 +107,7 @@ class SinglePTUDispatchFabric(DispatchFabric):
 
 
 @register_fabric("single_cell_combine")
-class SinglePTUCombineFabric(CombineFabric):
+class SingleCellCombineFabric(CombineFabric):
     def __init__(self, flow_num: int, reduction="add", **kwargs):
         self.check_compatibility(kwargs)
         super().__init__(
@@ -120,8 +115,8 @@ class SinglePTUCombineFabric(CombineFabric):
         )
 
     def forward(
-        self, in_flows: Union[List[ProtoTensor], List[List[ProtoTensor]]]
-    ) -> Union[ProtoTensor, List[ProtoTensor]]:
+        self, in_flows: Union[List[GridTensor], List[List[GridTensor]]]
+    ) -> Union[GridTensor, List[GridTensor]]:
         if self.flow_num == 1:
             in_flows = [in_flows]
 
@@ -132,7 +127,7 @@ class SinglePTUCombineFabric(CombineFabric):
 
         return out_flows
 
-    def combine(self, in_flows: List[List[ProtoTensor]]) -> List[ProtoTensor]:
+    def combine(self, in_flows: List[List[GridTensor]]) -> List[GridTensor]:
         out_flows = []
 
         for flow_idx in range(self.flow_num):
