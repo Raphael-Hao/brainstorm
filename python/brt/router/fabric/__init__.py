@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 from brt.router.fabric import (
-    distributed_legacy,
+    distributed,
     fused,
     generic,
     identity,
