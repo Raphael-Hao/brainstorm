@@ -23,10 +23,7 @@ class IndentityDispatchFabric(DispatchFabric):
         flow_num: number of input flows
         """
         super().__init__(
-            flow_num=flow_num,
-            route_logic=route_logic,
-            transform=transform,
-            **kwargs
+            flow_num=flow_num, route_logic=route_logic, transform=transform, **kwargs
         )
         self.path_num = path_num
 
@@ -52,8 +49,8 @@ class IndentityDispatchFabric(DispatchFabric):
     def dispatch(
         self,
         in_flows: List[GridTensor],
-        hot_mask: torch.Tensor,
-        runtime_capacities: torch.Tensor,
+        route_indices: torch.Tensor,
+        loads: torch.Tensor,
         score: torch.Tensor,
     ) -> List[List[GridTensor]]:
         all_out_flows = []
@@ -84,7 +81,7 @@ class IndentityDispatchFabric(DispatchFabric):
                 out_flow = dispatched_flow
                 out_flows.append(out_flow)
             all_out_flows.append(out_flows)
-        return all_out_flows
+        return all_out_flows, score
 
 
 @register_fabric("identity_combine")
@@ -92,26 +89,20 @@ class IdentityCombineFabric(CombineFabric):
     def __init__(self, flow_num: int, **kwargs):
         super().__init__(flow_num=flow_num, reduction="add", **kwargs)
 
-    def forward(
-        self, in_flows: Union[List[GridTensor], List[List[GridTensor]]]
-    ) -> Union[GridTensor, List[GridTensor]]:
-        if self.flow_num == 1:
-            in_flows = [in_flows]
-
-        out_flows = self.combine(in_flows)
-
-        if self.flow_num == 1:
-            return out_flows[0]
-
-        return out_flows
-
-    def combine(self, in_flows: List[List[GridTensor]]) -> List[GridTensor]:
+    def combine(
+        self,
+        in_flows: List[List[GridTensor]],
+        residual_flows: List[GridTensor],
+        scores: torch.Tensor,
+    ) -> List[GridTensor]:
+        #TODO check if score is None
         out_flows = []
-
-        for flow_idx in range(self.flow_num):
-            original_shape = in_flows[flow_idx][0].shape
+        for flow_idx, flows in enumerate(in_flows):
+            original_shape = flows[0].shape
+            if residual_flows is not None:
+                flows.append(residual_flows[flow_idx])
             out_flow = (
-                torch.cat(in_flows[flow_idx], dim=0)
+                torch.cat(flows, dim=0)
                 .reshape(-1, 1, *original_shape[1:])
                 .sum(dim=0)
             )

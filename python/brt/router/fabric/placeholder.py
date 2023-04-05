@@ -2,7 +2,6 @@
 # Licensed under the MIT license.
 from typing import List, Any, Dict
 import torch
-from brt.router.utils import assert_compatibility
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import CombineFabric
 from brt.runtime.proto_tensor import init_proto_tensor
@@ -33,10 +32,6 @@ class PlaceholderCombineFabric(CombineFabric):
             and len(self.ptu_dtypes) == self.flow_num
             and len(self.ptu_devices) == self.flow_num
         ), "ptu_grains/dtypes/devices must have the same elements as flow_num"
-
-    def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
-        sparse = kwargs.pop("sparse", True)
-        assert_compatibility(self, "sparse", True, sparse)
 
     def forward(self, in_flows: List[torch.Tensor]) -> torch.Tensor:
         if self.runtime_load == 1:

@@ -92,6 +92,7 @@ class DispatchFabric(FabricBase):
         all_out_flows, score = self.dispatch(in_flows, route_indices, loads, score)
         if self.flow_num == 1:
             all_out_flows = all_out_flows[0]
+
         return all_out_flows, score
 
     def dispatch(
@@ -100,7 +101,7 @@ class DispatchFabric(FabricBase):
         route_indices: torch.Tensor,
         loads: torch.Tensor,
         score: torch.Tensor,
-    ) -> Tuple[List[List[GridTensor]],torch.Tensor]:
+    ) -> Tuple[List[List[GridTensor]], torch.Tensor]:
         all_out_flows = []
         path_num = route_indices.size(1)
         for flow_idx in range(self.flow_num):

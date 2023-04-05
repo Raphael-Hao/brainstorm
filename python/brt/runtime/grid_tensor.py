@@ -189,7 +189,7 @@ class GridTensor(torch.Tensor):
         assert attr in self.__dict__["cell_extra_attr_dict"]
         return self.__dict__["cell_extra_attr_dict"].pop(attr)
 
-    def pack(self, tag: torch.Tensor, load: int, **kwargs):
+    def pack(self, tag: torch.Tensor, load: torch.Tensor, **kwargs):
         self.init_cell()
         self._push_stacked_attr("tag", tag)
         self._push_stacked_attr("load", load)
