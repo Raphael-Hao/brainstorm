@@ -26,7 +26,7 @@ class FabricBase(nn.Module):
 
         env_capturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in ("true")
         if env_capturing:
-            self.capturing = True
+
             capture_mode = os.environ.get("BRT_CAPTURE_MODE", "avg")
             assert capture_mode in (
                 "avg",
@@ -36,14 +36,14 @@ class FabricBase(nn.Module):
             "avg for average"
             "max for maximum"
             "cum for cumulative"
-            self.capture_mode = capture_mode
+
             captured_fabric_type = os.environ.get("BRT_CAPTURED_FABRIC_TYPE")
-            if captured_fabric_type is not None:
-                self.captured_fabric_type = captured_fabric_type.split(",")
-            else:
-                self.captured_fabric_type = ["dispatch"]
+            if captured_fabric_type is None:
+                captured_fabric_type = "dispatch"
+
+            self.enable_capture(mode=capture_mode, fabric_type=captured_fabric_type)
         else:
-            self.capturing = False
+            self.disable_capture()
 
         self.history_len = 0
         self.load_history: np.ndarray = None
@@ -83,12 +83,12 @@ class FabricBase(nn.Module):
         self.ptu_device_history = None
         self.ptu_dtype_history = None
 
-    def capature(self, mode: str = "cum", fabric_type: str = "dispatch"):
+    def enable_capture(self, mode: str = "cum", fabric_type: str = "dispatch"):
         self.capturing = True
         self.capture_mode = mode
         self.capatured_fabric_type = fabric_type.split(",")
 
-    def stop_capture(self):
+    def disable_capture(self):
         self.capturing = False
         self.capture_mode = None
         self.capatured_fabric_type = []
@@ -249,9 +249,9 @@ def switch_capture(m: nn.Module, capture=True, mode="cum", fabric_type="fabric")
         switch_capture(child_m, capture=capture, mode=mode, fabric_type=fabric_type)
     if isinstance(m, FabricBase):
         if capture:
-            m.capature(mode=mode, fabric_type=fabric_type)
+            m.enable_capture(mode=mode, fabric_type=fabric_type)
         else:
-            m.stop_capture()
+            m.disable_capture()
     return m
 
 

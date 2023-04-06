@@ -2,3 +2,4 @@
 # Licensed under the MIT license.
 from brt.runtime.initialize import initialize
 from brt.trace.graph import symbolic_trace
+from brt.runtime.grid_tensor import annotate

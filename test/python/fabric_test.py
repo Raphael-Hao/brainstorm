@@ -4,7 +4,6 @@
 import unittest
 
 import torch
-from brt.router.fabric.zero_skip import ZeroSkipFabric
 from brt._C import router
 
 

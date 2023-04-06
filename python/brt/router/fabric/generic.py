@@ -75,6 +75,7 @@ class DispatchFabric(FabricBase):
         score: torch.Tensor = None,
     ) -> Tuple[Union[List[GridTensor], List[List[GridTensor]]], torch.Tensor]:
         supported_capacities = runtime_capacities or self.supported_capacities
+        print(hot_mask, supported_capacities, self.capacity_padding, self.is_tag_index, self.load_on_cpu)
         route_indices, loads = c_router.generate_indices_and_loads(
             hot_mask,
             supported_capacities=supported_capacities,

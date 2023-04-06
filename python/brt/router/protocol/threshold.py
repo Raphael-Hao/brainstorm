@@ -3,7 +3,6 @@
 
 import torch
 from brt.runtime import log
-from brt.router.utils import generate_indices
 from brt.router.protocol.base import ProtocolBase, register_protocol
 import torch.nn as nn
 
@@ -34,7 +33,7 @@ class ThresholdProtocol(ProtocolBase):
 
     def make_route_decision(self, score: torch.Tensor):
 
-        hot_mask = (score > self.threshold).to(score.device)
+        hot_mask = (score > self.threshold).to(score.device, torch.int32)
 
         if self.residual_path >= 0:
             residual_indices = (hot_mask.sum(dim=1, keepdim=True) == 0).to(
@@ -90,7 +89,7 @@ class BinaryThresholdProtocol(ProtocolBase):
     def make_route_decision(self, score: torch.Tensor):
         logit_score = self.softmax(score)
         max_preds, _argmax_preds = logit_score.max(dim=1, keepdim=False)
-        hot_mask = (max_preds >= self.threshold)
+        hot_mask = max_preds >= self.threshold
         hot_mask = hot_mask.unsqueeze(-1)
         if self.selected_path == 0:
             hot_mask = torch.ones(

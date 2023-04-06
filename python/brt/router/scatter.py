@@ -1,4 +1,4 @@
-  # Copyright (c) 2022 by Microsoft Corporation.
+# Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
 from typing import List, Dict, Any
@@ -26,9 +26,6 @@ class ScatterRouter(RouterBase):
         fabric_type: str = "dispatch",
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
-        throttling=False,
-        capturing=False,
-        capture_mode: str = "cum",
     ):
         """base scatter router
 
@@ -61,7 +58,6 @@ class ScatterRouter(RouterBase):
         if self.protocol_type == "topk":
             built_in_protocol_kwargs = {
                 "top_k": 1,
-                "supported_capacities": None,
             }
         elif self.protocol_type == "threshold":
             built_in_protocol_kwargs = {
@@ -89,9 +85,9 @@ class ScatterRouter(RouterBase):
                 "transform": False,
             }
             if self.dispatch_score:
+                built_in_fabric_kwargs["flow_num"] = 2
                 built_in_fabric_kwargs["route_logic"] = ["1d", "2d"]
                 built_in_fabric_kwargs["transform"] = [False, False]
-                built_in_fabric_kwargs["flow_num"] = 2
 
         self.fabric_kwargs.update(built_in_fabric_kwargs)
 
@@ -99,8 +95,6 @@ class ScatterRouter(RouterBase):
             self.fabric_kwargs.update(fabric_kwargs)
 
         self.fabric = make_fabric(fabric_type, self.fabric_kwargs)
-
-        self.throttling = throttling
 
     def forward(self, in_flows, score: torch.Tensor):
         hot_mask = self.protocol(score)
@@ -110,11 +104,8 @@ class ScatterRouter(RouterBase):
             else:
                 in_flows = [in_flows, score]
 
-        out_flows = self.fabric(in_flows, hot_mask, score)
+        out_flows, _ = self.fabric(in_flows, hot_mask, None, score)
         return out_flows
-
-    def update_protocol(self, **kwargs):
-        self.protocol.update(**kwargs)
 
 
 @register_router("swin_moe_scatter")
@@ -127,9 +118,6 @@ class SwinMoEScatterRouter(RouterBase):
         fabric_type: str = "dispatch",
         protocol_kwargs: Dict[str, Any] = None,
         fabric_kwargs: Dict[str, Any] = None,
-        throttling=False,
-        capturing=False,
-        capture_mode: str = "cum",
     ):
         super().__init__()
         assert (
@@ -166,11 +154,7 @@ class SwinMoEScatterRouter(RouterBase):
             self.fabric_kwargs.update(fabric_kwargs)
         self.fabric = make_fabric(self.fabric_type, self.fabric_kwargs)
 
-        self.throttling = throttling
-
     def forward(self, in_flows, score, logits_wo_noise, logits):
-        hot_mask, new_score, loss = self.protocol(
-            score, logits_wo_noise, logits
-        )
-        out_flows = self.fabric(in_flows, hot_mask, new_score)
+        hot_mask, new_score, loss = self.protocol(score, logits_wo_noise, logits)
+        out_flows, _ = self.fabric(in_flows, hot_mask, new_score)
         return out_flows, loss
