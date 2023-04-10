@@ -1,11 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+#%%
 import torch
 from brt._C.router import (
     generate_indices_and_loads,
     dispatch_with_indices_and_loads,
-    dispatch_with_dst_indices_1d,
 )
 
 path_num = 4
@@ -22,8 +22,9 @@ supported_capacities = torch.Tensor([1, 2, 4, 8, 16]).int().cuda()
 # supported_capacities = None
 
 seat_indices, loads = generate_indices_and_loads(
-    hot_mask, supported_capacities, capacity_padding=True, is_tag_index=False
+    hot_mask, is_tag_index=False
 )
+print(seat_indices, loads)
 
 in_data = torch.randn((8, path_num)).cuda()
 print(in_data)
@@ -36,6 +37,6 @@ out_data_2 = dispatch_with_indices_and_loads(
     in_data, seat_indices, loads, max_path_padding=True
 )
 print(out_data_2)
-out_data_2 = dispatch_with_dst_indices_1d(in_data, seat_indices, loads)
-print(out_data_2)
+
 # torch.allclose(out_data_1[0], out_data_2)
+# %%

@@ -80,9 +80,10 @@ class DispatchFabric(FabricBase):
             hot_mask,
             supported_capacities=supported_capacities,
             capacity_padding=self.capacity_padding,
-            is_tag_index=self.is_tag_index,
+            is_tag_index=False,
             load_on_cpu=self.load_on_cpu,
         )
+        print(route_indices, loads)
         if self.flow_num == 1:
             in_flows = [in_flow]
         else:
@@ -120,7 +121,6 @@ class DispatchFabric(FabricBase):
             flow_tag_stack = flow_tag_stack[:-1]
             flow_load_stack = flow_load_stack[:-1]
             flow_extra_attr_dict = extra_attr_dict
-
             routed_results = c_router.dispatch_with_indices_and_loads(
                 flow_data,
                 route_indices,
@@ -249,6 +249,7 @@ class CombineFabric(FabricBase):
                     loads=in_flows_load,
                     tags=in_flows_tag,
                 )
+                in_flows_load = None
             else:
                 in_flows_data = c_router.fuse_split_cells_from_paths(in_flows_data)
                 in_flows_load = in_flows_load[0]
@@ -276,7 +277,7 @@ class CombineFabric(FabricBase):
                 out_flow_data = routed_results
                 out_flow_tag = None
                 out_flow_load = None
-
+            print(out_flow_tag, out_flow_load)
             out_flow = init_grid_tensor(
                 out_flow_data, in_flows_tag_stack, in_flows_load_stack, extra_attr_dict,
             )

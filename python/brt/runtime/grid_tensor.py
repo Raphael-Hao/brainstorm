@@ -2,7 +2,8 @@ import copy
 from typing import Any, Dict, List, Tuple, Union, Callable
 
 import torch
-import torch.fx as fx
+import torch.nn as nn
+from brt.trace.leaf_node import register_leaf_node
 from brt.runtime import log
 
 __all__ = [
@@ -328,9 +329,34 @@ def to_torch_tensor(grid_t: GridTensor, retrieve_attr=False):
         return torch_tensor
 
 
-@fx.wrap
+
+@register_leaf_node
+class Annotator(nn.Module):
+    def __init__(self, dims: List[int], cell_shape: List[int]=None):
+        super().__init__()
+        assert isinstance(dims, list)
+        dims = sorted(dims)
+        self.dims = dims
+        if cell_shape is not None:
+            assert isinstance(cell_shape, list)
+        self.cell_shape = cell_shape
+
+    def forward(self, t: torch.Tensor):
+        assert self.dims[-1] < len(t.shape)
+        if self.cell_shape is None:
+            self.cell_shape = [t.shape[i] for i in range(len(t.shape)) if i not in self.dims]
+        transposed_dims = self.dims + [i for i in range(len(t.shape)) if i not in self.dims]
+        transposed_tensor = t.permute(*transposed_dims).contiguous()
+        reshaped_tensor = transposed_tensor.reshape(-1, *self.cell_shape)
+        if isinstance(reshaped_tensor, GridTensor):
+            initialized_tensor = reshaped_tensor.pack(None, None)
+        else:
+            initialized_tensor = init_grid_tensor(reshaped_tensor, [None], [None])
+
+        return initialized_tensor
+
 def annotate(
-    t: torch.Tensor, dims: List[int], cell_shape: List[int] = None
+    t: torch.Tensor, dims: List[int]=None, cell_shape: List[int] = None
 ) -> GridTensor:
     """Annotate a tensor with cell granularity
 

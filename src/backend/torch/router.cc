@@ -442,7 +442,8 @@ std::vector<::torch::Tensor> combine_with_indices_and_loads(
         tags_value = tags_value.narrow(0, 1, tmp_cell_num - 1);
       }
     }
-    ::torch::Tensor out_loads = ::torch::tensor({tags_value.numel()}, in_data.options());
+    ::torch::Tensor out_loads =
+        ::torch::tensor({tags_value.numel()}, in_data.options().dtype(::torch::kInt32));
     return {out_data_t, tags_value, out_loads};
   }
 }
