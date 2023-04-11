@@ -378,6 +378,7 @@ def annotate(
     transposed_dims = dims + [i for i in range(len(t.shape)) if i not in dims]
     transposed_tensor = t.permute(*transposed_dims).contiguous()
     reshaped_tensor = transposed_tensor.reshape(-1, *cell_shape)
+
     if isinstance(reshaped_tensor, GridTensor):
         initialized_tensor = reshaped_tensor.pack(None, None)
     else:

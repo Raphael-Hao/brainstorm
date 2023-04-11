@@ -77,7 +77,7 @@ class SemSegEvaluator(DatasetEvaluator):
                 self._real_flops.append(flops["real_flops"])
                 self._expt_flops.append(flops["expt_flops"])
             output = output["sem_seg"].argmax(dim=0).to(self._cpu_device)
-            pred = np.array(output, dtype=np.int)
+            pred = np.array(output, dtype=int)
             # Cityscapes test output
             if 'cityscapes' in self._dataset_name and 'test' in self._dataset_name:
                 pred_converg = pred.copy()
@@ -96,7 +96,7 @@ class SemSegEvaluator(DatasetEvaluator):
             with PathManager.open(
                 self.input_file_to_gt_file[input["file_name"]], "rb"
             ) as f:
-                gt = np.array(Image.open(f), dtype=np.int)
+                gt = np.array(Image.open(f), dtype=int)
 
             gt[gt == self._ignore_label] = self._num_classes
 

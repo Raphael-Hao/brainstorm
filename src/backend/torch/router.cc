@@ -131,16 +131,6 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
 
   int cell_num = in_data.size(0);
   int path_num = route_indices.size(1);
-  int cell_size = in_data.numel() / cell_num;
-
-  if (!is_1d_routing) {
-    cell_size = cell_size / path_num;
-  }
-
-  if (data_type == ::torch::kFloat16) {
-    TORCH_INTERNAL_ASSERT(cell_size % 2 == 0, "cell_size must be even when data type is float16");
-    cell_size = cell_size / 2;
-  }
 
   if (in_data.numel() == 0) {
     auto out_shape = in_data.sizes().vec();
@@ -161,6 +151,19 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
     }
     return {::torch::zeros(out_shape_ref, in_data.options())};
   }
+
+  int cell_size = in_data.numel() / cell_num;
+
+  if (!is_1d_routing) {
+    cell_size = cell_size / path_num;
+  }
+
+  if (data_type == ::torch::kFloat16) {
+    TORCH_INTERNAL_ASSERT(cell_size % 2 == 0, "cell_size must be even when data type is float16");
+    cell_size = cell_size / 2;
+  }
+
+
 
   ::torch::Tensor cuda_loads;
 
