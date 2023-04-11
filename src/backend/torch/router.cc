@@ -149,6 +149,9 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
       out_shape[0] = 0;
       out_shape_ref = at::IntArrayRef(out_shape.data(), out_shape.data() + out_shape.size());
     } else {
+      if (out_shape.size() == 2) {
+        out_shape.push_back(1);
+      }
       out_shape[1] = 0;
       out_shape_ref = at::IntArrayRef(out_shape.data() + 1, out_shape.data() + out_shape.size());
     }
@@ -191,6 +194,9 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
     out_shape_ref = at::IntArrayRef(out_shape.data(), out_shape.data() + out_shape.size());
   } else {
     in_data_to_be_route = in_data.transpose(0, 1).contiguous();
+    if (out_shape.size() == 2) {
+      out_shape.push_back(1);
+    }
     out_shape[1] = total_load;
     out_shape_ref = at::IntArrayRef(out_shape.data() + 1, out_shape.data() + out_shape.size());
   }
@@ -217,7 +223,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
   int* new_tags_ptr = nullptr;
   if (tag_generating) {
     if (!tags.has_value()) {
-      old_tags = ::torch::arange(1, total_load + 1, route_indices.options());
+      old_tags = ::torch::arange(1, cell_num + 1, route_indices.options());
     } else {
       CHECK_ON_CUDA(tags.value());
       CHECK_EQ(tags.value().dtype(), route_indices.dtype());
@@ -360,7 +366,6 @@ std::vector<::torch::Tensor> combine_with_indices_and_loads(
   CHECK_ON_CUDA(route_indices);
 
   int cell_num = route_indices.size(0);
-  int cell_size = in_data.numel() / in_data.size(0);
   if (cell_num == 0) {
     if (!is_tag_index) {
       if (out_data.has_value()) {
@@ -369,10 +374,11 @@ std::vector<::torch::Tensor> combine_with_indices_and_loads(
         return {::torch::empty_like(in_data)};
       }
     } else {
-      return {::torch::empty_like(in_data), ::torch::empty_like(route_indices),
-              ::torch::empty_like(tags.value())};
+      return {::torch::empty_like(in_data), ::torch::empty_like(tags.value()),
+              ::torch::zeros_like(tags.value())};
     }
   }
+  int cell_size = in_data.numel() / in_data.size(0);
   // TODO need to check if cell_num==1 is equivalent to only one cell to be combined when we use tag
   // index
   if (cell_num == 1) {
@@ -383,7 +389,7 @@ std::vector<::torch::Tensor> combine_with_indices_and_loads(
         return {in_data};
       }
     } else {
-      return {in_data, route_indices, tags.value()};
+      return {in_data, tags.value(), ::torch::ones_like(tags.value())};
     }
   }
   ::torch::Tensor out_data_t;

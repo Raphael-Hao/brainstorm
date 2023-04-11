@@ -14,31 +14,19 @@ logger = log.get_logger(__file__)
 @register_protocol("threshold")
 class ThresholdProtocol(ProtocolBase):
     def __init__(
-        self,
-        threshold=0.0,
-        residual_path=-1,
-        single_ptu=False,
-        supported_capacities=None,
-        index_format="src_index",
-        index_gen_opt=True,
-        **kwargs,
+        self, threshold=0.0, residual_path=-1, **kwargs,
     ):
-        super().__init__(
-            index_format=index_format, index_gen_opt=index_gen_opt, *kwargs
-        )
+        super().__init__(**kwargs)
         self.threshold = threshold
         self.residual_path = residual_path
-        self.single_ptu = single_ptu
-        self.supported_capacities = supported_capacities
 
     def make_route_decision(self, score: torch.Tensor):
 
-        hot_mask = (score > self.threshold).to(score.device, torch.int32)
-
+        hot_mask = (score > self.threshold).to(torch.int32, non_blocking=True)
+        # print(f"===========prev residual===========\n{hot_mask}")
         if self.residual_path >= 0:
-            residual_indices = (hot_mask.sum(dim=1, keepdim=True) == 0).to(
-                score.device
-            )  # [bs x 1]
+            residual_indices = (hot_mask.sum(dim=1, keepdim=True) == 0).to(torch.int32, non_blocking=True)
+            # print(f"===========residual_indices===========\n{residual_indices}")
             residual_index = torch.full(
                 (residual_indices.shape),
                 self.residual_path,
@@ -46,8 +34,8 @@ class ThresholdProtocol(ProtocolBase):
                 device=score.device,
             )
             hot_mask = torch.scatter_add(hot_mask, 1, residual_index, residual_indices)
-
-        return hot_mask
+        # print(f"===========post residual===========\n{hot_mask}")
+        return hot_mask.to(torch.int32, non_blocking=True)
 
 
 @register_protocol("residual_threshold")
@@ -61,7 +49,7 @@ class ResidualThresholdProtocol(ProtocolBase):
 
     def make_route_decision(self, score: torch.Tensor):
 
-        indices = score.sum(dim=1, keepdim=True) < self.threshold
+        indices = (score.sum(dim=1, keepdim=True) < self.threshold).to(torch.int64, non_blocking=True)
         if self.residual_path == 0:
             hot_mask = torch.ones(
                 score.size(0), 2, dtype=torch.int32, device=score.device
@@ -71,7 +59,7 @@ class ResidualThresholdProtocol(ProtocolBase):
                 score.size(0), 2, dtype=torch.int32, device=score.device
             ).scatter_(1, indices, 1)
         else:
-            raise ValueError("drop_path should be 0 or 1")
+            raise ValueError("residual_path should be 0 or 1")
 
         return hot_mask
 

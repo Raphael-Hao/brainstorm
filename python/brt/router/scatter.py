@@ -63,7 +63,6 @@ class ScatterRouter(RouterBase):
             built_in_protocol_kwargs = {
                 "threshold": 0.0,
                 "residual_path": -1,
-                "supported_capacities": None,
             }
         else:
             built_in_protocol_kwargs = {}

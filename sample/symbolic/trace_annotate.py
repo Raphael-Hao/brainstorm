@@ -14,6 +14,7 @@ class AnnotateModule(nn.Module):
         return self.annotator(x)
 
 annotate_module = AnnotateModule()
-symbolic_trace(annotate_module)
+traced_m = symbolic_trace(annotate_module)
+print(traced_m.code)
 
 # %%

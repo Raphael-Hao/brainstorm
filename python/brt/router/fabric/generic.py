@@ -75,7 +75,6 @@ class DispatchFabric(FabricBase):
         score: torch.Tensor = None,
     ) -> Tuple[Union[List[GridTensor], List[List[GridTensor]]], torch.Tensor]:
         supported_capacities = runtime_capacities or self.supported_capacities
-        print(hot_mask, supported_capacities, self.capacity_padding, self.is_tag_index, self.load_on_cpu)
         route_indices, loads = c_router.generate_indices_and_loads(
             hot_mask,
             supported_capacities=supported_capacities,
@@ -83,7 +82,8 @@ class DispatchFabric(FabricBase):
             is_tag_index=False,
             load_on_cpu=self.load_on_cpu,
         )
-        print(route_indices, loads)
+        # print(f"==============route_indices==============\n{route_indices}")
+        # print(f"==============loads==============\n{loads}")
         if self.flow_num == 1:
             in_flows = [in_flow]
         else:
@@ -132,7 +132,6 @@ class DispatchFabric(FabricBase):
                 self.max_path_load,
                 self.route_logics[flow_idx] == "1d",
             )
-
             if self.is_tag_index:
                 routed_data, routed_tags = routed_results
                 (
@@ -255,11 +254,9 @@ class CombineFabric(FabricBase):
                 in_flows_load = in_flows_load[0]
                 route_indices = in_flows_tag[0]
                 in_flows_tag = None
-
             in_flows_tag_stack = flow_tags[:-1]
             in_flows_load_stack = flow_loads[:-1]
             extra_attr_dict = extra_attr_dict
-
             routed_results = c_router.combine_with_indices_and_loads(
                 in_flows_data,
                 route_indices,
@@ -277,7 +274,6 @@ class CombineFabric(FabricBase):
                 out_flow_data = routed_results
                 out_flow_tag = None
                 out_flow_load = None
-            print(out_flow_tag, out_flow_load)
             out_flow = init_grid_tensor(
                 out_flow_data, in_flows_tag_stack, in_flows_load_stack, extra_attr_dict,
             )

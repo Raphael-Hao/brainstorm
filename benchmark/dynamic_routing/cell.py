@@ -133,17 +133,16 @@ class Cell(nn.Module):
             self.gate_num = 1
 
         self.cell_gather = GatherRouter(
-            fabric_type="single_cell_combine",
-            fabric_kwargs={"sparse": True}
+            fabric_type="combine",
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
 
         self.residual_scatter = ScatterRouter(
             protocol_type="residual_threshold",
             # fabric_type="dispatch",
-            fabric_type="single_cell_dispatch",
+            fabric_type="dispatch",
             # protocol_kwargs={"threshold": 0.0001},
-            protocol_kwargs={"threshold": 0.0001, "single_ptu": True},
+            protocol_kwargs={"threshold": 0.0001},
             fabric_kwargs={
                 "flow_num": 2,
                 "route_logic": ["1d", "1d"],
@@ -154,12 +153,11 @@ class Cell(nn.Module):
             self.threeway_scatter = ScatterRouter(
                 dispatch_score=True,
                 protocol_type="threshold",
-                fabric_type="single_cell_dispatch",
+                fabric_type="dispatch",
                 # fabric_type="dispatch",
                 protocol_kwargs={
                     "threshold": 0.0001,
                     "residual_path": -1,
-                    "single_ptu": True,
                 },
             )
 
@@ -241,10 +239,7 @@ class Cell(nn.Module):
         h_l1 = self.cell_gather(h_l1)
         if self.small_gate:
             h_l1_gate = F.interpolate(
-                input=h_l1,
-                scale_factor=0.25,
-                mode="bilinear",
-                align_corners=False,
+                input=h_l1, scale_factor=0.25, mode="bilinear", align_corners=False,
             )
         else:
             h_l1_gate = h_l1
