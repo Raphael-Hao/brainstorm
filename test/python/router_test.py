@@ -179,7 +179,7 @@ class RouterTest(unittest.TestCase):
                     WeightedBranchRoute, x, dst=i, which_half="lower"
                 )
 
-    def single_ptu_route(
+    def single_cell_route(
         self,
         Model: Type[BranchRoute],
         inputs: torch.Tensor,
@@ -210,7 +210,7 @@ class RouterTest(unittest.TestCase):
                 self.assertTrue(results[1 - dst].numel() == 0)
                 self.assertTrue(torch.allclose(results[2], inputs))
 
-    def weighted_single_ptu_route(
+    def weighted_single_cell_route(
         self,
         Model: Type[WeightedBranchRoute],
         inputs: torch.Tensor,
@@ -231,18 +231,18 @@ class RouterTest(unittest.TestCase):
             results = model(inputs)
             self.assertTrue(torch.allclose(results[0], results[1]))
 
-    def test_single_ptu_route(self):
+    def test_single_cell_route(self):
         multi_dims_sample = [
             torch.arange(0, 10, dtype=torch.float32).view(1, 10).cuda(),
             torch.arange(0, 20, dtype=torch.float32).view(1, 2, 10).cuda(),
             torch.arange(0, 40, dtype=torch.float32).view(1, 2, 10, 2).cuda(),
         ]
         for x in multi_dims_sample:
-            self.single_ptu_route(BranchRoute, x, dst=0)
-            self.single_ptu_route(BranchRoute, x, dst=1)
-            self.single_ptu_route(BranchRoute, x, dst=[0, 1])
-            self.weighted_single_ptu_route(WeightedBranchRoute, x, dst=0)
-            self.weighted_single_ptu_route(WeightedBranchRoute, x, dst=1)
+            self.single_cell_route(BranchRoute, x, dst=0)
+            self.single_cell_route(BranchRoute, x, dst=1)
+            self.single_cell_route(BranchRoute, x, dst=[0, 1])
+            self.weighted_single_cell_route(WeightedBranchRoute, x, dst=0)
+            self.weighted_single_cell_route(WeightedBranchRoute, x, dst=1)
 
     def padded_route(
         self,

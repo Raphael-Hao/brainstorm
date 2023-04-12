@@ -47,11 +47,11 @@ class FabricBase(nn.Module):
 
         self.history_len = 0
         self.load_history: np.ndarray = None
-        self.ptu_decision_history: List[np.ndarray] = None
-        self.ptu_tag_base = 0
-        self.ptu_grain_history: List[torch.Size] = None
-        self.ptu_dtype_history: List[torch.dtype] = None
-        self.ptu_device_history: List[torch.device] = None
+        self.cell_decision_history: List[np.ndarray] = None
+        self.cell_tag_base = 0
+        self.cell_grain_history: List[torch.Size] = None
+        self.cell_dtype_history: List[torch.dtype] = None
+        self.cell_device_history: List[torch.device] = None
 
     def forward(
         self, *inputs: Any,
@@ -70,42 +70,50 @@ class FabricBase(nn.Module):
         elif "combine" in self.brt_abs_type and "combine" in self.captured_fabric_type:
             self._capture_combine_flows(in_flows)
         else:
-            raise ValueError(f"Invalid fabric type: {self.brt_abs_type}")
+            return
 
         self.history_len += 1
 
     def reset_flow_stats(self):
         self.history_len = 0
-        self.ptu_tag_base = 0
+        self.cell_tag_base = 0
         self.load_history = None
-        self.ptu_decision_history = None
-        self.ptu_grain_history = None
-        self.ptu_device_history = None
-        self.ptu_dtype_history = None
+        self.cell_decision_history = None
+        self.cell_grain_history = None
+        self.cell_device_history = None
+        self.cell_dtype_history = None
+
+    def copy_flow_stats_from(self, other):
+        self.history_len = other.history_len
+        self.cell_tag_base = other.cell_tag_base
+        self.load_history = other.load_history
+        self.cell_decision_history = other.cell_decision_history
+        self.cell_grain_history = other.cell_grain_history
+        self.cell_device_history = other.cell_device_history
 
     def enable_capture(self, mode: str = "cum", fabric_type: str = "dispatch"):
         self.capturing = True
         self.capture_mode = mode
-        self.capatured_fabric_type = fabric_type.split(",")
+        self.captured_fabric_type = fabric_type.split(",")
 
     def disable_capture(self):
         self.capturing = False
         self.capture_mode = None
-        self.capatured_fabric_type = []
+        self.captured_fabric_type = []
 
     def _capture_combine_flows(self, in_flows):
 
         if len(in_flows) == 0 and isinstance(in_flows, List):
             return
 
-        self._capture_ptu_grains_and_options(in_flows, is_dispatch=False)
+        self._capture_cell_grains_and_options(in_flows, is_dispatch=False)
 
         if all(isinstance(flow, List) for flow in in_flows):
             if all(len(flow) > 0 for flow in in_flows):
                 in_flows = in_flows[0]
-                logger.warning(
-                    "Only the first group of in_flows is captured, please make sure the loads are the same for all groups."
-                )
+                # logger.warning(
+                #     "Only the first group of in_flows is captured, please make sure the loads are the same for all groups."
+                # )
             else:
                 return
 
@@ -113,7 +121,7 @@ class FabricBase(nn.Module):
 
     def _capture_dispatch_flows(self, in_flows, route_indices, loads):
         self._capture_correlations(route_indices, loads)
-        self._capture_ptu_grains_and_options(in_flows, is_dispatch=True)
+        self._capture_cell_grains_and_options(in_flows, is_dispatch=True)
         self._capture_laod_from_loads(loads)
 
     def _capture_load_from_flows(self, in_flows: List[torch.Tensor]) -> None:
@@ -150,52 +158,49 @@ class FabricBase(nn.Module):
         elif self.capture_mode == "cum":
             self.load_history = self.load_history + loads_np
 
-    def _capture_ptu_grains_and_options(self, flows, is_dispatch=True) -> None:
+    def _capture_cell_grains_and_options(self, flows, is_dispatch=True) -> None:
         """
         Capture the flow shape.
         """
         flows = self._listing_flows(flows, is_dispatch)
 
-        if self.ptu_grain_history is None:
+        if self.cell_grain_history is None:
             if is_dispatch:
-                self.ptu_grain_history = [flow.shape for flow in flows]
-                self.ptu_dtype_history = [flow.dtype for flow in flows]
-                self.ptu_device_history = [flow.device for flow in flows]
+                self.cell_grain_history = [flow.shape for flow in flows]
+                self.cell_dtype_history = [flow.dtype for flow in flows]
+                self.cell_device_history = [flow.device for flow in flows]
             else:
-                self.ptu_grain_history = [flow[0].shape for flow in flows]
-                self.ptu_dtype_history = [flow[0].dtype for flow in flows]
-                self.ptu_device_history = [flow[0].device for flow in flows]
+                self.cell_grain_history = [flow[0].shape for flow in flows]
+                self.cell_dtype_history = [flow[0].dtype for flow in flows]
+                self.cell_device_history = [flow[0].device for flow in flows]
 
     def _capture_correlations(self, indices: torch.Tensor, loads: torch.Tensor):
-        assert hasattr(
-            self, "protocol"
-        ), "Correlation capturing is only supported for Router with protocol!"
         path_num = len(loads)
         tag_indices = indices
         if not self.is_tag_index:
             tag_indices = c_router.convert_index_format(indices, loads, True)
 
-        current_ptu_path = [
-            tag_indices[: loads[i], i].cpu().numpy() + self.ptu_tag_base
+        current_cell_path = [
+            tag_indices[: loads[i], i].cpu().numpy() + self.cell_tag_base
             for i in range(path_num)
         ]
-        current_ptu_path = [
-            current_ptu_path[i][current_ptu_path[i] != 0] + self.ptu_tag_base
+        current_cell_path = [
+            current_cell_path[i][current_cell_path[i] != 0] + self.cell_tag_base
             for i in range(path_num)
         ]
 
         if self.history_len == 0:
-            self.ptu_decision_history = current_ptu_path
+            self.cell_decision_history = current_cell_path
         else:
-            self.ptu_decision_history = [
+            self.cell_decision_history = [
                 np.concatenate(
-                    (self.ptu_decision_history[i], current_ptu_path[i]), axis=None
+                    (self.cell_decision_history[i], current_cell_path[i]), axis=None
                 )
                 for i in range(path_num)
             ]
-
-        for history in self.ptu_decision_history:
-            self.ptu_tag_base = history.max()
+        for history in self.cell_decision_history:
+            if history.size > 0:
+                self.cell_tag_base = history.max()
 
     def _listing_flows(self, flows, is_dispatch=True):
         if is_dispatch:
@@ -208,8 +213,8 @@ class FabricBase(nn.Module):
                 return [flows]
             return flows
 
-    def check_ptu_consistency(self, flows, is_dispatch=True) -> bool:
-        if self.ptu_grain_history is None:
+    def check_cell_consistency(self, flows, is_dispatch=True) -> bool:
+        if self.cell_grain_history is None:
             if self.history_len == 0:
                 return True
             else:
@@ -217,17 +222,17 @@ class FabricBase(nn.Module):
         if is_dispatch:
             for flow_id, flow in enumerate(flows):
                 if (
-                    flow.shape[1:] != self.ptu_grain_history[flow_id][1:]
-                    or flow.dtype != self.ptu_dtype_history[flow_id]
-                    or flow.device != self.ptu_device_history[flow_id]
+                    flow.shape[1:] != self.cell_grain_history[flow_id][1:]
+                    or flow.dtype != self.cell_dtype_history[flow_id]
+                    or flow.device != self.cell_device_history[flow_id]
                 ):
                     return False
         else:
             for flow_id, flow in enumerate(flows):
                 if (
-                    flow[0].shape[1:] != self.ptu_grain_history[flow_id][1:]
-                    or flow[0].dtype != self.ptu_dtype_history[flow_id]
-                    or flow[0].device != self.ptu_device_history[flow_id]
+                    flow[0].shape[1:] != self.cell_grain_history[flow_id][1:]
+                    or flow[0].dtype != self.cell_dtype_history[flow_id]
+                    or flow[0].device != self.cell_device_history[flow_id]
                 ):
                     return False
 
@@ -244,7 +249,7 @@ def make_fabric(fabric_type: str, kwargs: Dict[str, Any]) -> FabricBase:
     return fabric_cls(**formulated_kwargs)
 
 
-def switch_capture(m: nn.Module, capture=True, mode="cum", fabric_type="fabric"):
+def switch_capture(m: nn.Module, capture=True, mode="cum", fabric_type="dispatch"):
     for child_m in m.children():
         switch_capture(child_m, capture=capture, mode=mode, fabric_type=fabric_type)
     if isinstance(m, FabricBase):

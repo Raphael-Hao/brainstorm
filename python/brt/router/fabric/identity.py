@@ -87,7 +87,7 @@ class IndentityDispatchFabric(DispatchFabric):
 @register_fabric("identity_combine")
 class IdentityCombineFabric(CombineFabric):
     def __init__(self, flow_num: int, **kwargs):
-        super().__init__(flow_num=flow_num, reduction="add", **kwargs)
+        super().__init__(flow_num=flow_num, **kwargs)
 
     def combine(
         self,
