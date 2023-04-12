@@ -70,7 +70,7 @@ class FabricBase(nn.Module):
         elif "combine" in self.brt_abs_type and "combine" in self.captured_fabric_type:
             self._capture_combine_flows(in_flows)
         else:
-            raise ValueError(f"Invalid fabric type: {self.brt_abs_type}")
+            return
 
         self.history_len += 1
 
@@ -94,12 +94,12 @@ class FabricBase(nn.Module):
     def enable_capture(self, mode: str = "cum", fabric_type: str = "dispatch"):
         self.capturing = True
         self.capture_mode = mode
-        self.capatured_fabric_type = fabric_type.split(",")
+        self.captured_fabric_type = fabric_type.split(",")
 
     def disable_capture(self):
         self.capturing = False
         self.capture_mode = None
-        self.capatured_fabric_type = []
+        self.captured_fabric_type = []
 
     def _capture_combine_flows(self, in_flows):
 
@@ -111,9 +111,9 @@ class FabricBase(nn.Module):
         if all(isinstance(flow, List) for flow in in_flows):
             if all(len(flow) > 0 for flow in in_flows):
                 in_flows = in_flows[0]
-                logger.warning(
-                    "Only the first group of in_flows is captured, please make sure the loads are the same for all groups."
-                )
+                # logger.warning(
+                #     "Only the first group of in_flows is captured, please make sure the loads are the same for all groups."
+                # )
             else:
                 return
 
@@ -175,9 +175,6 @@ class FabricBase(nn.Module):
                 self.cell_device_history = [flow[0].device for flow in flows]
 
     def _capture_correlations(self, indices: torch.Tensor, loads: torch.Tensor):
-        assert hasattr(
-            self, "protocol"
-        ), "Correlation capturing is only supported for Router with protocol!"
         path_num = len(loads)
         tag_indices = indices
         if not self.is_tag_index:
@@ -201,9 +198,9 @@ class FabricBase(nn.Module):
                 )
                 for i in range(path_num)
             ]
-
         for history in self.cell_decision_history:
-            self.cell_tag_base = history.max()
+            if history.size > 0:
+                self.cell_tag_base = history.max()
 
     def _listing_flows(self, flows, is_dispatch=True):
         if is_dispatch:
@@ -252,7 +249,7 @@ def make_fabric(fabric_type: str, kwargs: Dict[str, Any]) -> FabricBase:
     return fabric_cls(**formulated_kwargs)
 
 
-def switch_capture(m: nn.Module, capture=True, mode="cum", fabric_type="fabric"):
+def switch_capture(m: nn.Module, capture=True, mode="cum", fabric_type="dispatch"):
     for child_m in m.children():
         switch_capture(child_m, capture=capture, mode=mode, fabric_type=fabric_type)
     if isinstance(m, FabricBase):

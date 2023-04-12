@@ -191,14 +191,7 @@ def main(args):
     config.merge_from_list(args.opts)
     cfg, _logger = default_setup(config, args)
 
-    if args.test_origin:
-        origin_model = origin_build_model(cfg)
-        DetectionCheckpointer(origin_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            cfg.MODEL.WEIGHTS, resume=args.resume
-        )
-        origin_model.eval()
-        origin_model.cuda()
-        _res = Trainer.test(cfg, origin_model)
+
 
     model = build_model(cfg)
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
@@ -207,11 +200,25 @@ def main(args):
 
     model = model.cuda().eval()
     torch.cuda.synchronize()
-
+    model = switch_capture(model, True, fabric_type="dispatch,combine")
     _res = Trainer.test(cfg, model)
     torch.cuda.empty_cache()
 
     benchmarker = Benchmarker()
+
+    if args.test_origin:
+        origin_model = origin_build_model(cfg)
+        DetectionCheckpointer(origin_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+            cfg.MODEL.WEIGHTS, resume=args.resume
+        )
+        origin_model.eval()
+        origin_model.cuda()
+        origin_backbone = origin_model.backbone
+        backbone_input = model.backbone_input
+        timer = CUDATimer(repeat=5)
+        timer.execute(lambda: origin_backbone(backbone_input), "pytorch")
+
+        # _res = Trainer.test(cfg, origin_model)
 
     def liveness_benchmark():
         timer = CUDATimer(repeat=5)
@@ -222,9 +229,9 @@ def main(args):
 
         naive_backbone = switch_capture(naive_backbone, False).eval()
 
-        trace_pass = TracePass(naive_backbone)
-        trace_pass.run_on_graph()
-        naive_backbone = trace_pass.finalize()
+        # trace_pass = TracePass(naive_backbone)
+        # trace_pass.run_on_graph()
+        # naive_backbone = trace_pass.finalize()
         # MemoryStats.reset_cuda_stats()
         timer.execute(lambda: naive_backbone(backbone_input), "naive")
         # MemoryStats.print_cuda_stats()
@@ -240,7 +247,7 @@ def main(args):
         # eliminate_pass_output=new_backbone(backbone_input)
 
         permanent_pass = PermanentPathFoldPass(
-            new_backbone, upper_perm_load=cfg.DATASETS.TEST_SAMPLER_SIZE
+            new_backbone, upper_permanent_load=cfg.DATASETS.TEST_SAMPLER_SIZE
         )
         permanent_pass.run_on_graph()
         new_backbone = permanent_pass.finalize()
@@ -282,7 +289,9 @@ def main(args):
         eliminate_pass.run_on_graph()
         new_backbone = eliminate_pass.finalize()
         timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
-        permanent_pass = PermanentPathFoldPass(new_backbone, upper_perm_load=12)
+        permanent_pass = PermanentPathFoldPass(
+            new_backbone, upper_permanent_load=cfg.DATASETS.TEST_SAMPLER_SIZE
+        )
         permanent_pass.run_on_graph()
         backbone = permanent_pass.finalize()
         timer.execute(lambda: backbone(backbone_input), "all_liveness_pass")

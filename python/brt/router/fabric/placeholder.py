@@ -19,7 +19,7 @@ class PlaceholderCombineFabric(CombineFabric):
         cell_devices: List[torch.device],
         **kwargs,
     ):
-        super().__init__(flow_num=flow_num, sparse=True, **kwargs)
+        super().__init__(flow_num=flow_num,**kwargs)
         self.runtime_load = runtime_load
         for i in range(self.flow_num):
             cell_grains[i] = list(cell_grains[i])

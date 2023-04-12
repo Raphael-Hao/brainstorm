@@ -95,7 +95,7 @@ class PassBase:
             "for clustering the start nodes of specific path."
         )
         flow_num = scatter_m.fabric.flow_num
-        path_num = scatter_m.load_history.size
+        path_num = scatter_m.fabric.load_history.size
         start_nodes: List[Dict[Node, None]] = [{} for _ in range(path_num)]
 
         if flow_num == 1:
