@@ -54,7 +54,9 @@ static std::pair<::torch::Tensor, ::torch::Tensor> locality_reorder(const ::torc
 }
 
 static std::pair<::torch::Tensor, ::torch::Tensor> group_locality_reorder(
-    const ::torch::Tensor& loads, const int& world_size, const int& group_size = 1) {
+    const ::torch::Tensor& loads,
+    const int& world_size,
+    const int& group_size = 1) {
   CHECK_ON_CUDA(loads);
   ::torch::Tensor reordered_loads =
       ::torch::empty_like(loads, loads.options(), ::torch::MemoryFormat::Contiguous);
@@ -175,7 +177,8 @@ static ::torch::Tensor reverse_exchange(const ::torch::Tensor& in_data,
 }
 
 static std::vector<::torch::Tensor> batched_reverse_exchange(
-    const std::vector<::torch::Tensor>& in_datas, const ::torch::Tensor& reorder_indices) {
+    const std::vector<::torch::Tensor>& in_datas,
+    const ::torch::Tensor& reorder_indices) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
@@ -333,8 +336,9 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   }
 }
 
-static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
-    const ::torch::Tensor& in_data, const ::torch::Tensor& send_sizes,
+static std::vector<::torch::Tensor> group_asymmetry_all_to_all(
+    const ::torch::Tensor& in_data,
+    const ::torch::Tensor& send_sizes,
     bool locality_aware = false) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
@@ -352,7 +356,6 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
 
   at::cuda::CUDACachingAllocator::recordStream(recv_sizes.storage().data_ptr(),
                                                at::cuda::getCurrentCUDAStream());
-
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -373,7 +376,6 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
                                       send_sizes.options(), ::torch::MemoryFormat::Contiguous);
       at::cuda::CUDACachingAllocator::recordStream(all_recv_sizes.storage().data_ptr(),
                                                    at::cuda::getCurrentCUDAStream());
-
     }
     manager.StartContext();
     manager.WaitEvent(1);
@@ -408,16 +410,6 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
       ::torch::empty_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
   at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
                                                at::cuda::getCurrentCUDAStream());
-  // if (world_rank == 0) {
-  //   std::cout << "in total_size_in_byte: " << total_size_in_byte << std::endl;
-  //   std::cout << "out total_size_in_byte: " << out_data.numel() * out_data.element_size()
-  //             << std::endl;
-  //   std::cout << recv_sizes_vec << std::endl;
-  //   std::cout << send_sizes_vec << std::endl;
-  //   std::cout << "granularity: " << grain_size_in_byte << std::endl;
-  //   std::cout << "slice: " << slice_size_in_byte << std::endl;
-  // }
-
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -453,7 +445,6 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
           ::torch::empty(world_size, send_sizes.options(), ::torch::MemoryFormat::Contiguous);
       at::cuda::CUDACachingAllocator::recordStream(reorder_indices.storage().data_ptr(),
                                                    at::cuda::getCurrentCUDAStream());
-
     }
     manager.ExternalRecordEvent(1, at::cuda::getCurrentCUDAStream());
     manager.StartContext();
@@ -484,7 +475,7 @@ static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
   }
 }
 
-static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
+static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
                                                                const ::torch::Tensor& send_sizes,
                                                                bool locality_aware = false) {
   auto& manager = NcclManager::GetManager();
@@ -532,15 +523,6 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
       ::torch::zeros_like(in_data, in_data.options(), ::torch::MemoryFormat::Contiguous);
   at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
                                                at::cuda::getCurrentCUDAStream());
-  // if (world_rank == 0) {
-  //   std::cout << "in total_size_in_byte: " << total_size_in_byte << std::endl;
-  //   std::cout << "out total_size_in_byte: " << out_data.numel() * out_data.element_size()
-  //             << std::endl;
-  //   std::cout << recv_sizes_vec << std::endl;
-  //   std::cout << send_sizes_vec << std::endl;
-  //   std::cout << "granularity: " << grain_size_in_byte << std::endl;
-  //   std::cout << "slice: " << slice_size_in_byte << std::endl;
-  // }
 
   manager.StartContext();
   manager.WaitEvent(0);
@@ -558,7 +540,8 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Te
 
 static std::tuple<std::vector<::torch::Tensor>, ::torch::Tensor, ::torch::Tensor>
 batched_group_asymmetry_all_to_all(const std::vector<::torch::Tensor>& in_datas,
-                                   const ::torch::Tensor& send_sizes, bool locality_aware = false) {
+                                   const ::torch::Tensor& send_sizes,
+                                   bool locality_aware = false) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
@@ -709,7 +692,6 @@ static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tens
   at::cuda::CUDACachingAllocator::recordStream(out_data.storage().data_ptr(),
                                                at::cuda::getCurrentCUDAStream());
 
-
   manager.StartContext();
   manager.WaitEvent(0);
   manager.RecordStorage(in_data);
@@ -725,7 +707,8 @@ static ::torch::Tensor size_known_group_asymmetry_all_to_all(const ::torch::Tens
 }
 
 static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_all(
-    const std::vector<::torch::Tensor>& in_datas, const ::torch::Tensor& send_sizes,
+    const std::vector<::torch::Tensor>& in_datas,
+    const ::torch::Tensor& send_sizes,
     const ::torch::Tensor& recv_sizes) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();

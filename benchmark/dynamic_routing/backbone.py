@@ -4,6 +4,7 @@ import csv
 import torch.nn as nn
 import numpy as np
 from brt.router import GatherRouter
+from brt import Annotator
 
 __all__ = ["Backbone"]
 
@@ -255,6 +256,7 @@ class DynamicNetwork(Backbone):
         # using the initial layer
         input_res = input_res // self.stem.stride
         in_channel = out_channel = init_channel
+        self.annotator = Annotator([0],gridding=False)
         self.init_layer = Cell(
             C_in=in_channel,
             C_out=out_channel,
@@ -336,10 +338,7 @@ class DynamicNetwork(Backbone):
             self.all_cell_list.append(layer_cell_list)
             self.all_cell_type_list.append(layer_cell_type)
         self.final_gathers = nn.ModuleList(
-            GatherRouter(
-                fabric_type="single_ptu_combine", fabric_kwargs={"sparse": True}
-                # fabric_type="combine", fabric_kwargs={"sparse": True}
-            )
+            GatherRouter(fabric_type="single_cell_combine")
             for _ in range(self.cell_num_list[-1])
         )
 
@@ -349,6 +348,7 @@ class DynamicNetwork(Backbone):
 
     def forward(self, x):
         h_l1 = self.stem(x)
+        h_l1 = self.annotator(h_l1)
 
         # the initial layer
         h_l1_list = self.init_layer([h_l1])

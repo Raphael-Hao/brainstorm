@@ -21,7 +21,7 @@ from brt.passes import (
     PredictMemoryPlanPass,
     TracePass,
 )
-from brt.router import switch_router_mode
+from brt.router import switch_capture
 from brt.runtime.benchmark import (
     BenchmarkArgumentManager,
     Benchmarker,
@@ -192,28 +192,27 @@ def main(args):
     config.merge_from_list(args.opts)
     cfg, _logger = default_setup(config, args)
 
-    model = build_model(cfg)
-    DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-        cfg.MODEL.WEIGHTS, resume=args.resume
-    )
-
-    model.cuda()
-    torch.cuda.synchronize()
-
-    _res = Trainer.test(cfg, model)
-    torch.cuda.empty_cache()
-
     if args.test_origin:
-        timer = CUDATimer(repeat=5)
         origin_model = origin_build_model(cfg)
         DetectionCheckpointer(origin_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
         origin_model.eval()
         origin_model.cuda()
-        origin_backbone = origin_model.backbone
-        backbone_input = model.backbone_input
-        timer.deprecated_execute(lambda: origin_backbone(backbone_input), "torch")
+        _res = Trainer.test(cfg, origin_model)
+
+    model = build_model(cfg)
+    DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+        cfg.MODEL.WEIGHTS, resume=args.resume
+    )
+
+    model = model.cuda().eval()
+    torch.cuda.synchronize()
+
+    _res = Trainer.test(cfg, model)
+    torch.cuda.empty_cache()
+
+
 
     benchmarker = Benchmarker()
 
@@ -224,7 +223,7 @@ def main(args):
 
         naive_backbone = model.backbone
 
-        naive_backbone = switch_router_mode(naive_backbone, False).eval()
+        naive_backbone = switch_capture(naive_backbone, False).eval()
 
         trace_pass = TracePass(naive_backbone)
         trace_pass.run_on_graph()
@@ -268,7 +267,7 @@ def main(args):
         backbone_input = model.backbone_input.detach().cuda()
         # for i in range(12):
         #     input_list.append(backbone_input)
-        backbone = switch_router_mode(model.backbone, False).eval()
+        backbone = switch_capture(model.backbone, False).eval()
         MemoryStats.reset_cuda_stats()
         timer.execute(lambda: backbone(backbone_input), "naive0")
         MemoryStats.print_cuda_stats()
@@ -319,7 +318,7 @@ def main(args):
         timer = CUDATimer(repeat=5)
         backbone_input = model.backbone_input.detach().cuda()
 
-        backbone = switch_router_mode(model.backbone, False).eval()
+        backbone = switch_capture(model.backbone, False).eval()
 
         MemoryStats.reset_cuda_stats()
 

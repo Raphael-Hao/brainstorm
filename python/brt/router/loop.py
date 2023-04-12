@@ -27,10 +27,8 @@ class LoopRouter(RouterBase):
         protocol_kwargs: Dict[str, Any] = None,
         dispatch_fabric_kwargs: Dict[str, Any] = None,
         combine_fabric_kwargs: Dict[str, Any] = None,
-        capturing: bool = False,
-        capture_mode: str = "cum",
     ):
-        super().__init__(capturing=capturing, capture_mode=capture_mode)
+        super().__init__()
         self.protocol_type = protocol_type
         self.dispatch_fabric_type = dispatch_fabric_type
         self.combine_fabric_type = combine_fabric_type
@@ -62,6 +60,3 @@ class LoopRouter(RouterBase):
             pending_combine_flows.append(completed_flow)
         out_flows = self.combine_fabric(pending_combine_flows)
         return out_flows
-
-    def update_protocol(self, **kwargs):
-        self.protocol.update(**kwargs)

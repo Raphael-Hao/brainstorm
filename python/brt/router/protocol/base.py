@@ -16,10 +16,7 @@ __all__ = ["ProtocolBase"]
 
 class ProtocolBase(nn.Module):
     def __init__(
-        self,
-        index_format: str = None,
-        index_gen_opt: bool = True,
-        **kwargs,
+        self, **kwargs,
     ):
         """Base class for all protocols.
 
@@ -30,15 +27,7 @@ class ProtocolBase(nn.Module):
                            zero is reserved for representing the corresponding data in the input tensor is dropped.
         """
         super().__init__()
-
-        self.index_format = index_format
-        self.index_gen_opt = index_gen_opt
         self.debug = os.environ.get("BRT_DEBUG", "False").lower() in ["true", "1"]
-        assert self.index_format in [
-            "dst_index",
-            "src_index",
-            None,
-        ], f"index_format should be dst_index or src_index, but got {index_format}"
 
     def forward(self, score: torch.Tensor, *args, **kwargs):
         decisions = self.make_route_decision(score, *args, **kwargs)
@@ -50,32 +39,10 @@ class ProtocolBase(nn.Module):
         raise NotImplementedError("make_route_decision has to be implemented by user")
 
     def check_decision(self, decisions, scores: torch.Tensor) -> bool:
-        route_indices = decisions[0]
-        loads = decisions[1]
-        capacities = decisions[2]
-        assert isinstance(route_indices, torch.Tensor) and isinstance(
-            loads, torch.Tensor
-        ), "indices and loads should be torch.Tensor"
-        assert route_indices.size(0) == scores.size(
+        hot_mask = decisions[0]
+        assert hot_mask.size(0) == scores.size(
             0
         ), "indices and scores should have the same size in the first dimension"
-        assert loads.numel() == route_indices.size(
-            0
-        ), "loads should have the same elements as indices in the first dimension"
-        if isinstance(capacities, int):
-            assert capacities >= 0, "capacities should be non-negative"
-        elif isinstance(capacities, torch.Tensor):
-            assert (
-                capacities.size() == loads.size()
-            ), "capacities should have the same elements as loads"
-        else:
-            raise ValueError("capacities should be int or torch.Tensor")
-
-    def update(self, **kwargs):
-        """Update the protocol.
-        Some protocols may need to update their internal states.
-        """
-        raise NotImplementedError("Update has to be implemented by user")
 
     def check_compatibility(self, kwargs: Dict[str, Any]) -> None:
         pass

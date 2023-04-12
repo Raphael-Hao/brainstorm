@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 import torch
-from brt.router.utils import generate_src_indices
+import brt._C.router as c_router
 from brt.router.protocol.base import ProtocolBase, register_protocol
 
 
@@ -62,7 +62,7 @@ class DecoderGreedySearchProtocol(DecoderProtocol):
         unfinished_mask = (score != self.eos_token_id).long()
         finished_mask = (score == self.eos_token_id).long()
         hot_mask = torch.cat([unfinished_mask, finished_mask], dim=1)
-        route_indices, loads = generate_src_indices(hot_mask)
+        route_indices, loads = c_router.generate_indices_and_loads(hot_mask)
 
         return hot_mask, loads, loads
 

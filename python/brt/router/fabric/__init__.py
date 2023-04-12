@@ -7,8 +7,7 @@ from brt.router.fabric import (
     generic,
     identity,
     placeholder,
-    single_ptu,
-    zero_skip,
+    single_cell,
 )
 from brt.router.fabric.base import FabricBase, make_fabric, register_fabric
 

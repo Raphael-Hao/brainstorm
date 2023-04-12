@@ -25,7 +25,7 @@ class Registry:
 
             if not issubclass(sub_cls, base_cls):
                 raise ValueError(f"{sub_cls} is not a subclass of {base_cls}.")
-
+            sub_cls.brt_abs_type = sub_cls_type
             cls.sub_cls_registries[base_cls][sub_cls_type] = sub_cls
             return sub_cls
 

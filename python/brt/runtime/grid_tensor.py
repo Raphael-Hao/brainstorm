@@ -2,7 +2,8 @@ import copy
 from typing import Any, Dict, List, Tuple, Union, Callable
 
 import torch
-import torch.fx as fx
+import torch.nn as nn
+from brt.trace.leaf_node import register_leaf_node
 from brt.runtime import log
 
 __all__ = [
@@ -47,11 +48,7 @@ def collect_cell_attr(
 
     if isinstance(args, (Tuple, List)):
         for a in args:
-            (
-                _all_tags,
-                _all_loads,
-                _all_extra_attr_dict,
-            ) = collect_cell_attr(a)
+            (_all_tags, _all_loads, _all_extra_attr_dict,) = collect_cell_attr(a)
             if _all_tags is not None and _all_loads is not None:
                 return (
                     _all_tags,
@@ -145,7 +142,7 @@ class GridTensor(torch.Tensor):
         self._set_cell_attr("tag_stack", value)
 
     @property
-    def load_stack(self) -> List[int]:
+    def load_stack(self) -> List[torch.Tensor]:
         return self._get_cell_attr("load_stack")
 
     @load_stack.setter
@@ -186,8 +183,6 @@ class GridTensor(torch.Tensor):
         return self.__dict__["cell_" + attr + "_stack"].pop()
 
     def _push_dicted_extra_attr(self, attr, value):
-        print(self.__dict__["cell_extra_attr_dict"])
-        print(attr in self.__dict__["cell_extra_attr_dict"])
         assert attr not in self.__dict__["cell_extra_attr_dict"]
         self.__dict__["cell_extra_attr_dict"][attr] = value
 
@@ -195,7 +190,7 @@ class GridTensor(torch.Tensor):
         assert attr in self.__dict__["cell_extra_attr_dict"]
         return self.__dict__["cell_extra_attr_dict"].pop(attr)
 
-    def pack(self, tag: torch.Tensor, load: int, **kwargs):
+    def pack(self, tag: torch.Tensor, load: torch.Tensor, **kwargs):
         self.init_cell()
         self._push_stacked_attr("tag", tag)
         self._push_stacked_attr("load", load)
@@ -276,7 +271,7 @@ def init_grid_tensor(
     load_stack: List[torch.Tensor] = None,
     extra_attr_dict: Dict[str, List[Any]] = None,
 ) -> GridTensor:
-    cell = tensor.as_subclass(GridTensor)
+    cell: GridTensor = tensor.as_subclass(GridTensor)
     extra_attr_dict = extra_attr_dict or {}
     if tag_stack and load_stack:
         cell.deep_pack(tag_stack, load_stack, **extra_attr_dict)
@@ -286,28 +281,87 @@ def init_grid_tensor(
 
 
 def deinit_grid_tensor(
-    grid_t: GridTensor,
-    retrieve_attr=True,
+    grid_t: GridTensor, retrieve_attr=True,
 ) -> Union[
     Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor], Dict[str, Any]],
     torch.Tensor,
 ]:
     if retrieve_attr:
-        (
-            grid_t,
-            tag_stack,
-            load_stack,
-            extra_attrs_stack_dict,
-        ) = grid_t.deep_unpack()
+        (grid_t, tag_stack, load_stack, extra_attrs_stack_dict,) = grid_t.deep_unpack()
         t = grid_t.as_subclass(torch.Tensor)
         return t, tag_stack, load_stack, extra_attrs_stack_dict
     else:
         return grid_t.as_subclass(torch.Tensor)
 
 
-@fx.wrap
+def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
+    _t, tag_stack, load_stack, extra_attr_dict = deinit_grid_tensor(
+        from_gird_tensor, True
+    )
+    return init_grid_tensor(tensor, tag_stack, load_stack, extra_attr_dict)
+
+
+def to_grid_tensor(torch_t: torch.Tensor):
+    """
+    restore a torch.Tensor to a Mono without any pack operation
+    """
+    proto_tensor: GridTensor = torch_t.as_subclass(GridTensor)
+    assert proto_tensor.cell_initilized
+    return proto_tensor
+
+
+def to_torch_tensor(grid_t: GridTensor, retrieve_attr=False):
+    """
+    we avoid broadcasting stack information by restore a GridTensor to
+    torch.Tensor when we do not need it, e.g., inside the routers
+    """
+    if retrieve_attr:
+        (
+            grid_t,
+            tag_stack,
+            load_stack,
+            extra_attrs_stack_dict,
+        ) = grid_t.copy_cell_attr()
+    torch_tensor = grid_t.as_subclass(torch.Tensor)
+    if retrieve_attr:
+        return torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
+    else:
+        return torch_tensor
+
+
+
+@register_leaf_node
+class Annotator(nn.Module):
+    def __init__(self, dims: List[int], cell_shape: List[int]=None, gridding: bool=True):
+        super().__init__()
+        assert isinstance(dims, list)
+        dims = sorted(dims)
+        self.dims = dims
+        if cell_shape is not None:
+            assert isinstance(cell_shape, list)
+        self.cell_shape = cell_shape
+        self.gridding = gridding
+
+    def forward(self, t: torch.Tensor):
+        assert self.dims[-1] < len(t.shape)
+        if self.cell_shape is None:
+            cell_shape = [t.shape[i] for i in range(len(t.shape)) if i not in self.dims]
+        else:
+            cell_shape = self.cell_shape
+        transposed_dims = self.dims + [i for i in range(len(t.shape)) if i not in self.dims]
+        transposed_tensor = t.permute(*transposed_dims).contiguous()
+        reshaped_tensor = transposed_tensor.reshape(-1, *cell_shape)
+        if self.gridding:
+            if isinstance(reshaped_tensor, GridTensor):
+                initialized_tensor = reshaped_tensor.pack(None, None)
+            else:
+                initialized_tensor = init_grid_tensor(reshaped_tensor, [None], [None])
+        else:
+            initialized_tensor = reshaped_tensor
+        return initialized_tensor
+
 def annotate(
-    t: torch.Tensor, dims: List[int], cell_shape: List[int] = None
+    t: torch.Tensor, dims: List[int]=None, cell_shape: List[int] = None
 ) -> GridTensor:
     """Annotate a tensor with cell granularity
 
@@ -329,45 +383,17 @@ def annotate(
     transposed_dims = dims + [i for i in range(len(t.shape)) if i not in dims]
     transposed_tensor = t.permute(*transposed_dims).contiguous()
     reshaped_tensor = transposed_tensor.reshape(-1, *cell_shape)
-    tag = torch.arange(reshaped_tensor.shape[0], device=reshaped_tensor.device)
-    load = torch.tensor([reshaped_tensor.shape[0]], device=reshaped_tensor.device)
-    initialized_tensor = init_grid_tensor(reshaped_tensor, [tag], [load])
+
+    if isinstance(reshaped_tensor, GridTensor):
+        initialized_tensor = reshaped_tensor.pack(None, None)
+    else:
+        initialized_tensor = init_grid_tensor(reshaped_tensor, [None], [None])
 
     return initialized_tensor
 
 
-def to_grid_tensor(torch_t: torch.Tensor):
-    """
-    restore a torch.Tensor to a Mono without any pack operation
-    """
-    proto_tensor: GridTensor = torch_t.as_subclass(GridTensor)
-    assert proto_tensor.cell_initilized
-    return proto_tensor
-
-
-def to_torch_tensor(grid_t: GridTensor, return_stack=False):
-    """
-    we avoid broadcasting stack information by restore a Mono to
-    torch.Tensor when we do not need it, e.g., inside the routers
-    """
-    if return_stack:
-        (
-            grid_t,
-            tag_stack,
-            load_stack,
-            extra_attrs_stack_dict,
-        ) = grid_t.copy_cell_attr()
-    torch_tensor = grid_t.as_subclass(torch.Tensor)
-    if return_stack:
-        return torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
-    else:
-        return torch_tensor
-
-
 def grid_tensor_tunnel(
-    _func: Callable,
-    *args,
-    **kwargs,
+    _func: Callable, *args, **kwargs,
 ) -> Union[Tuple[torch.Tensor, List[torch.Tensor], List[int]], torch.Tensor]:
     """
     A tunnel to convert the torch.Tensor to Mono and back to torch.Tensor
