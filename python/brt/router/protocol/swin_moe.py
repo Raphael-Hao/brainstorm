@@ -6,7 +6,7 @@ import torch.distributed as dist
 
 from brt.runtime import log
 from brt.router.protocol.base import ProtocolBase, register_protocol
-from brt.router.utils import generate_dst_indices
+import brt._C.router as c_router
 
 logger = log.get_logger(__file__)
 
@@ -33,13 +33,13 @@ def get_compute_location_func(score_sorted=False, score=None):
 
         def compute_location(one_hot_mask):
             sorted_mask = one_hot_mask[importance_score.argsort(dim=0)]
-            dst_indices, loads = generate_dst_indices(sorted_mask, load_on_cpu=False)
+            dst_indices, loads = c_router.generate_indices_and_loads(sorted_mask)
             return dst_indices[importance_score.argsort(dim=0).argsort(dim=0)], loads
 
     else:
 
         def compute_location(one_hot_mask):
-            dst_indices, loads = generate_dst_indices(one_hot_mask, load_on_cpu=False)
+            dst_indices, loads =c_router.generate_indices_and_loads(one_hot_mask)
             return dst_indices, loads
 
     return compute_location

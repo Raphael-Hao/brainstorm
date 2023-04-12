@@ -84,7 +84,7 @@ __device__ __forceinline__ void blockwise_generate_indices(int* mask,
  *
  * TODO: support padding different paths to different capacities
  */
-template <bool capacity_padding, bool is_tag_index>
+template <bool capacity_padding, bool path_wise_padding, bool is_tag_index>
 __global__ void generate_indices_and_loads(int* __restrict__ hot_mask /* [cell_num, path_num] */,
                                            int* __restrict__ indices /* [cell_num, path_num] */,
                                            int* __restrict__ loads /* [path_num] */,
@@ -102,13 +102,17 @@ __global__ void generate_indices_and_loads(int* __restrict__ hot_mask /* [cell_n
       return;
     }
     if (capacity_padding) {
-      for (int i = 0; i < supported_capacity_num; i++) {
-        if (real_load <= supported_capacities[i]) {
-          loads[blockIdx.x] = supported_capacities[i];
-          return;
+      if (path_wise_padding) {
+        loads[blockIdx.x] = supported_capacities[blockIdx.x];
+      } else {
+        for (int i = 0; i < supported_capacity_num; i++) {
+          if (real_load <= supported_capacities[i]) {
+            loads[blockIdx.x] = supported_capacities[i];
+            return;
+          }
         }
+        loads[blockIdx.x] = supported_capacities[supported_capacity_num - 1];
       }
-      loads[blockIdx.x] = supported_capacities[supported_capacity_num - 1];
     } else {
       if (supported_capacity_num == 0) {
         loads[blockIdx.x] = prefix;
@@ -248,6 +252,7 @@ void GenerateIndicesAndLoads(int* hot_mask /*[cell_num x path_num]*/,
                              int* supported_capacities /*[supported_capacity_num]*/,
                              const int& supported_capacity_num,
                              const bool& capacity_padding,
+                             const bool& path_wise_padding,
                              const bool& is_tag_index,
                              cudaStream_t stream) {
   const dim3 block_size = 1024;
@@ -255,19 +260,31 @@ void GenerateIndicesAndLoads(int* hot_mask /*[cell_num x path_num]*/,
   if (is_tag_index) {
     if (capacity_padding) {
       CHECK_GE(supported_capacity_num, 1);
-      generate_indices_and_loads<true, true><<<grid_size, block_size, 0, stream>>>(
-          hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
+      if (path_wise_padding) {
+        generate_indices_and_loads<true, true, true><<<grid_size, block_size, 0, stream>>>(
+            hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
+
+      } else {
+        generate_indices_and_loads<true, false, true><<<grid_size, block_size, 0, stream>>>(
+            hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
+      }
     } else {
-      generate_indices_and_loads<false, true><<<grid_size, block_size, 0, stream>>>(
+      generate_indices_and_loads<false, false, true><<<grid_size, block_size, 0, stream>>>(
           hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
     }
   } else {
     if (capacity_padding) {
       CHECK_GE(supported_capacity_num, 1);
-      generate_indices_and_loads<true, false><<<grid_size, block_size, 0, stream>>>(
-          hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
+      if (path_wise_padding) {
+        generate_indices_and_loads<true, true, false><<<grid_size, block_size, 0, stream>>>(
+            hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
+
+      } else {
+        generate_indices_and_loads<true, false, false><<<grid_size, block_size, 0, stream>>>(
+            hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
+      }
     } else {
-      generate_indices_and_loads<false, false><<<grid_size, block_size, 0, stream>>>(
+      generate_indices_and_loads<false, false, false><<<grid_size, block_size, 0, stream>>>(
           hot_mask, indices, loads, cell_num, supported_capacities, supported_capacity_num);
     }
   }

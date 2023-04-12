@@ -133,14 +133,14 @@ class Cell(nn.Module):
             self.gate_num = 1
 
         self.cell_gather = GatherRouter(
-            fabric_type="combine",
+            fabric_type="single_cell_combine",
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
 
         self.residual_scatter = ScatterRouter(
             protocol_type="residual_threshold",
             # fabric_type="dispatch",
-            fabric_type="dispatch",
+            fabric_type="single_cell_dispatch",
             # protocol_kwargs={"threshold": 0.0001},
             protocol_kwargs={"threshold": 0.0001},
             fabric_kwargs={
@@ -153,7 +153,7 @@ class Cell(nn.Module):
             self.threeway_scatter = ScatterRouter(
                 dispatch_score=True,
                 protocol_type="threshold",
-                fabric_type="dispatch",
+                fabric_type="single_cell_dispatch",
                 # fabric_type="dispatch",
                 protocol_kwargs={
                     "threshold": 0.0001,
@@ -248,9 +248,7 @@ class Cell(nn.Module):
         gate_weights_beta = gate_weights_beta.view(
             gate_weights_beta.shape[0], self.gate_num
         )
-
         residuals = self.residual_scatter([h_l1, gate_weights_beta], gate_weights_beta)
-
         h_l = self.cell_ops(residuals[0][1])
         if self.allow_up or self.allow_down:
             route_h_l, route_weight = self.threeway_scatter(

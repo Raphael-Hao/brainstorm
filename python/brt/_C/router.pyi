@@ -14,8 +14,8 @@ def generate_indices_and_loads(
     hot_mask: torch.Tensor,
     supported_capacities: torch.Tensor = None,
     capacity_padding: bool = False,
-    is_tag_index=False,
-    load_on_cpu: bool = False,
+    path_wise_padding: bool = False,
+    is_tag_index=False
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
 def dispatch_with_indices_and_loads(
     in_data: torch.Tensor,

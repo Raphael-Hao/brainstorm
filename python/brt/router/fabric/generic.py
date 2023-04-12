@@ -52,6 +52,8 @@ class DispatchFabric(FabricBase):
         self.transforms = transforms
         supported_capacities = kwargs.pop("supported_capacities", None)
         if supported_capacities is not None:
+            if isinstance(supported_capacities, int):
+                supported_capacities = [supported_capacities]
             assert isinstance(supported_capacities, list) and all(
                 isinstance(x, int) for x in supported_capacities
             )
@@ -60,10 +62,11 @@ class DispatchFabric(FabricBase):
                 torch.tensor(supported_capacities, dtype=torch.int32),
             )
             self.capacity_padding = kwargs.pop("capacity_padding", False)
+            self.path_wise_padding = kwargs.pop("path_wise_padding", False)
         else:
             self.register_buffer("supported_capacities", None)
             self.capacity_padding = False
-        self.load_on_cpu = kwargs.pop("load_on_cpu", False)
+            self.path_wise_padding = False
         self.max_path_padding = kwargs.pop("max_path_padding", False)
         self.max_path_load = kwargs.pop("max_path_load", None)
 
@@ -79,8 +82,8 @@ class DispatchFabric(FabricBase):
             hot_mask,
             supported_capacities=supported_capacities,
             capacity_padding=self.capacity_padding,
+            path_wise_padding=self.path_wise_padding,
             is_tag_index=False,
-            load_on_cpu=self.load_on_cpu,
         )
         if self.flow_num == 1:
             in_flows = [in_flow]
@@ -180,7 +183,11 @@ class DispatchFabric(FabricBase):
 @register_fabric("combine")
 class CombineFabric(FabricBase):
     def __init__(
-        self, flow_num: int, reduction="add", transform=False, **kwargs,
+        self,
+        flow_num: int,
+        reduction="add",
+        transform=False,
+        **kwargs,
     ):
         index_format = kwargs.pop("index_format", "tag_index")
         super().__init__(flow_num=flow_num, index_format=index_format, **kwargs)
@@ -229,17 +236,31 @@ class CombineFabric(FabricBase):
             in_flows_load = []
             route_indices = None
             for flow in in_flow:
-                (data, flow_tags, flow_loads, extra_attr_dict,) = to_torch_tensor(
-                    flow, retrieve_attr=True
-                )
+                (
+                    data,
+                    flow_tags,
+                    flow_loads,
+                    extra_attr_dict,
+                ) = to_torch_tensor(flow, retrieve_attr=True)
                 in_flows_data.append(data)
                 in_flows_tag.append(flow_tags[-1])
                 in_flows_load.append(flow_loads[-1])
             if len(in_flows_data) == 1 and in_flows_tag[0] is None:
                 in_flows_data = in_flows_data[0]
-                flow_tags[-1] = torch.arange(1, in_flows_data.shape[0] + 1, dtype=torch.int32, device=in_flows_data.device)
-                flow_loads[-1] = torch.tensor([in_flows_data.shape[0]], dtype=torch.int32, device=in_flows_data.device)
-                out_flow = init_grid_tensor(in_flows_data, flow_tags, flow_loads, extra_attr_dict)
+                flow_tags[-1] = torch.arange(
+                    1,
+                    in_flows_data.shape[0] + 1,
+                    dtype=torch.int32,
+                    device=in_flows_data.device,
+                )
+                flow_loads[-1] = torch.tensor(
+                    [in_flows_data.shape[0]],
+                    dtype=torch.int32,
+                    device=in_flows_data.device,
+                )
+                out_flow = init_grid_tensor(
+                    in_flows_data, flow_tags, flow_loads, extra_attr_dict
+                )
                 out_flows.append(out_flow)
             else:
                 if self.is_tag_index:
@@ -280,7 +301,10 @@ class CombineFabric(FabricBase):
                     out_flow_tag = None
                     out_flow_load = None
                 out_flow = init_grid_tensor(
-                    out_flow_data, in_flows_tag_stack, in_flows_load_stack, extra_attr_dict,
+                    out_flow_data,
+                    in_flows_tag_stack,
+                    in_flows_load_stack,
+                    extra_attr_dict,
                 )
                 out_flow = out_flow.pack(out_flow_tag, out_flow_load)
                 out_flows.append(out_flow)

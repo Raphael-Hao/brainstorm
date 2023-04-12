@@ -21,11 +21,15 @@ class FabricCPPTest(unittest.TestCase):
         mask,
         supported_capacities=None,
         capacity_padding=False,
+        path_wise_padding=False,
         is_tag_index=False,
-        load_on_cpu=False,
     ):
         return router.generate_indices_and_loads(
-            mask, supported_capacities, capacity_padding, is_tag_index, load_on_cpu
+            mask,
+            supported_capacities,
+            capacity_padding,
+            path_wise_padding,
+            is_tag_index,
         )
 
     def pt_generate_indices(
@@ -33,8 +37,8 @@ class FabricCPPTest(unittest.TestCase):
         mask,
         supported_capacities=None,
         capacity_padding=False,
+        path_wise_padding=False,
         is_tag_index=False,
-        load_on_cpu=False,
     ):
         if not is_tag_index:
             indices = torch.cumsum(mask, dim=0) * mask
@@ -45,15 +49,19 @@ class FabricCPPTest(unittest.TestCase):
                     if real_load == 0:
                         continue
                     mapped = False
-                    for capacity in supported_capacities:
-                        if real_load <= capacity:
-                            if capacity_padding:
-                                real_load = capacity
-                            loads[i] = real_load
-                            mapped = True
-                            break
-                    if not mapped:
-                        loads[i] = supported_capacities[-1]
+                    if path_wise_padding:
+                        assert capacity_padding is True
+                        loads[i] = supported_capacities[i]
+                    else:
+                        for capacity in supported_capacities:
+                            if real_load <= capacity:
+                                if capacity_padding:
+                                    real_load = capacity
+                                loads[i] = real_load
+                                mapped = True
+                                break
+                        if not mapped:
+                            loads[i] = supported_capacities[-1]
         else:
             indices = torch.zeros_like(mask)
             loads = torch.zeros(mask.size(1), dtype=torch.int32, device=indices.device)
@@ -62,23 +70,26 @@ class FabricCPPTest(unittest.TestCase):
                 indices_per_path = mask_t[i].view(-1).nonzero() + 1
                 loads[i] = indices_per_path.numel()
                 indices[: indices_per_path.numel(), i : i + 1] = indices_per_path
-                if supported_capacities is not None:
-                    real_load = loads[i]
-                    if real_load == 0:
-                        continue
-                    mapped = False
-                    for capacity in supported_capacities:
-                        if real_load <= capacity:
-                            if capacity_padding:
-                                real_load = capacity
-                            loads[i] = real_load
-                            mapped = True
-                            break
-                    if not mapped:
-                        loads[i] = supported_capacities[-1]
+                if path_wise_padding:
 
-        if load_on_cpu:
-            loads = loads.cpu()
+                    assert capacity_padding is True
+                    loads[i] = supported_capacities[i]
+                else:
+                    if supported_capacities is not None:
+                        real_load = loads[i]
+                        if real_load == 0:
+                            continue
+                        mapped = False
+                        for capacity in supported_capacities:
+                            if real_load <= capacity:
+                                if capacity_padding:
+                                    real_load = capacity
+                                loads[i] = real_load
+                                mapped = True
+                                break
+                        if not mapped:
+                            loads[i] = supported_capacities[-1]
+
         return indices.to(torch.int32), loads.to(torch.int32)
 
     def check_indices(
@@ -86,13 +97,22 @@ class FabricCPPTest(unittest.TestCase):
         mask,
         supported_capacities=None,
         capacity_padding=False,
+        path_wise_padding=False,
         is_tag_index=False,
     ):
         brt_indice, brt_load = self.brt_generate_indices(
-            mask, supported_capacities, capacity_padding, is_tag_index
+            mask,
+            supported_capacities,
+            capacity_padding,
+            path_wise_padding,
+            is_tag_index,
         )
         pt_indice, pt_load = self.pt_generate_indices(
-            mask, supported_capacities, capacity_padding, is_tag_index
+            mask,
+            supported_capacities,
+            capacity_padding,
+            path_wise_padding,
+            is_tag_index,
         )
         self.assertTrue(torch.allclose(brt_indice, pt_indice))
         self.assertTrue(torch.allclose(brt_load, pt_load))
@@ -128,6 +148,29 @@ class FabricCPPTest(unittest.TestCase):
         )
         self.check_indices(
             mask, supported_capacities, capacity_padding=True, is_tag_index=True
+        )
+        # test with supported_capacities=[1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+        cell_num = 256
+        path_num = 8
+        mask = self.generate_mask(cell_num, path_num, 4)
+        supported_capacities = torch.tensor(
+            [2, 4, 8, 16, 32, 64, 128, 256],
+            dtype=torch.int32,
+            device=mask.device,
+        )
+        self.check_indices(
+            mask,
+            supported_capacities,
+            capacity_padding=True,
+            path_wise_padding=True,
+            is_tag_index=False,
+        )
+        self.check_indices(
+            mask,
+            supported_capacities,
+            capacity_padding=True,
+            path_wise_padding=True,
+            is_tag_index=True,
         )
 
     def test_dispatch_and_combine(self):

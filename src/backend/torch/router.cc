@@ -24,15 +24,14 @@ namespace torch {
  * \param is_tag_index (optional, default false) if true, generate indices which contains
  *                     tag of each cell for each path, otherwise generate indices which
  *                     contains new seat of each cell in each path.
- * \param load_on_cpu (optional,default false) if true, move loads to cpu
  *
  */
 std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
     const ::torch::Tensor& hot_mask /*[cell_num, path_num]*/,
     const ::c10::optional<::torch::Tensor>& supported_capacities = {},
     const bool& capacity_padding = false,
-    const bool& is_tag_index = false,
-    const bool& load_on_cpu = false) {
+    const bool& path_wise_padding = false,
+    const bool& is_tag_index = false) {
   CHECK_ON_CUDA(hot_mask);
   const at::cuda::OptionalCUDAGuard device_guard(at::device_of(hot_mask));
 
@@ -56,11 +55,8 @@ std::pair<::torch::Tensor, ::torch::Tensor> generate_indices_and_loads(
   ::torch::Tensor loads = ::torch::zeros({path_num}, hot_mask.options());
   router::GenerateIndicesAndLoads(
       hot_mask.data_ptr<int>(), indices.data_ptr<int>(), loads.data_ptr<int>(), cell_num, path_num,
-      supported_capacities_data_ptr, supported_capacity_num, capacity_padding, is_tag_index,
-      at::cuda::getDefaultCUDAStream().stream());
-  if (load_on_cpu) {
-    loads = loads.cpu();
-  }
+      supported_capacities_data_ptr, supported_capacity_num, capacity_padding, path_wise_padding,
+      is_tag_index, at::cuda::getDefaultCUDAStream().stream());
   return {indices, loads};
 }
 
@@ -132,7 +128,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
   int cell_num = in_data.size(0);
   int path_num = route_indices.size(1);
 
-  if (in_data.numel() == 0) {
+  if (cell_num == 0) {
     auto out_shape = in_data.sizes().vec();
     at::IntArrayRef out_shape_ref;
     if (is_1d_routing) {
@@ -162,8 +158,6 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
     TORCH_INTERNAL_ASSERT(cell_size % 2 == 0, "cell_size must be even when data type is float16");
     cell_size = cell_size / 2;
   }
-
-
 
   ::torch::Tensor cuda_loads;
 
@@ -276,6 +270,7 @@ std::vector<std::vector<::torch::Tensor>> split_fused_cells_to_paths(
     bool is_load_split = false,
     const bool& is_tag_split = false,
     const c10::optional<::torch::Tensor>& tags = {}) {
+  const at::cuda::OptionalCUDAGuard device_guard(at::device_of(in_data));
   int path_num = loads.numel();
   if (is_tag_split) {
     is_load_split = true;
@@ -367,6 +362,7 @@ std::vector<::torch::Tensor> combine_with_indices_and_loads(
     const ::c10::optional<::torch::Tensor>& tags = {}) {
   CHECK_ON_CUDA(in_data);
   CHECK_ON_CUDA(route_indices);
+  const at::cuda::OptionalCUDAGuard device_guard(at::device_of(in_data));
 
   int cell_num = route_indices.size(0);
   if (cell_num == 0) {
@@ -466,8 +462,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Generate indices and loads for all paths, loads can be padded or throttled by supported "
         "capacities",
         pybind11::arg("hot_mask"), pybind11::arg("supported_capacities") = pybind11::none(),
-        pybind11 ::arg("capacity_padding") = false, pybind11::arg("is_tag_index") = false,
-        pybind11::arg("load_on_cpu") = false);
+        pybind11 ::arg("capacity_padding") = false, pybind11::arg("path_wise_padding") = false,
+        pybind11::arg("is_tag_index") = false);
   m.def("convert_index_format", &brt::backend::torch::convert_index_format,
         "convert indices to the new index format", pybind11::arg("origin_indices"),
         pybind11::arg("loads"), pybind11::arg("is_to_tag"));

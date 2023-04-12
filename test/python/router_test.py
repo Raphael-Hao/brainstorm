@@ -8,6 +8,7 @@ import unittest
 import torch
 import torch.nn as nn
 
+from brt import Annotator
 from brt.router import GatherRouter, ScatterRouter
 from brt.trace.graph import GraphTracer
 
@@ -17,25 +18,36 @@ class BranchRoute(nn.Module):
         self,
         gate,
         dispatch_score=False,
-        sparse=False,
         single_cell_dispatch=False,
+        supported_capacities: Union[List[int], int] = None,
+        capacity_padding: bool = False,
+        path_wise_padding: bool = False,
     ):
         super().__init__()
+        if path_wise_padding and not capacity_padding:
+            raise ValueError("path_wise_padding requires capacity_padding")
         self.gate = gate
+        self.annotator = Annotator([0])
         self.scatter_router = ScatterRouter(
             dispatch_score=dispatch_score,
             protocol_type="threshold",
             fabric_type="single_cell_dispatch" if single_cell_dispatch else "dispatch",
             protocol_kwargs={"threshold": 0.5},
+            fabric_kwargs={
+                "supported_capacities": supported_capacities,
+                "capacity_padding": capacity_padding,
+                "path_wise_padding": path_wise_padding,
+            },
         )
         self.expert1 = nn.Identity()
         self.expert2 = nn.Identity()
         self.gather_router = GatherRouter(
             fabric_type="single_cell_combine" if single_cell_dispatch else "combine",
-            fabric_kwargs={"sparse": sparse},
+            fabric_kwargs={"ever_padded": capacity_padding},
         )
 
     def forward(self, x):
+        x = self.annotator(x)
         score = self.gate(x)
         routed_results = self.scatter_router(x, score)
         x_0 = self.expert1(routed_results[0])
@@ -48,19 +60,20 @@ class WeightedBranchRoute(BranchRoute):
     def __init__(
         self,
         gate,
-        sparse=False,
         single_cell_dispatch=False,
     ):
         super().__init__(
             gate,
             dispatch_score=True,
-            sparse=sparse,
             single_cell_dispatch=single_cell_dispatch,
         )
 
     def forward(self, x):
+        x = self.annotator(x)
         score = self.gate(x)
+        score = self.annotator(score)
         x_dim = x.dim()
+
         routed_results, routed_score = self.scatter_router(x, score)
         x_0 = self.expert1(routed_results[0])
         x_1 = self.expert2(routed_results[1])
@@ -83,7 +96,6 @@ class RouterTest(unittest.TestCase):
         inputs: torch.Tensor,
         dst: int,
         which_half: str = None,
-        sparse=False,
     ):
         def gate(inputs):
             gates = torch.zeros(
@@ -95,13 +107,11 @@ class RouterTest(unittest.TestCase):
                 gates[: inputs.shape[0] // 2, dst] = 1
             else:
                 gates[:, dst] = 1
+
             return gates
 
-        model = Model(gate=gate, sparse=sparse).eval()
-        for i in range(2):
-            if i == 1:
-                inputs = inputs.cuda()
-                model.cuda()
+        model = Model(gate=gate).eval().cuda()
+        for _ in range(5):
             results = model(inputs)
 
             if which_half is None:
@@ -114,36 +124,16 @@ class RouterTest(unittest.TestCase):
                     self.assertTrue(
                         torch.allclose(results[dst].data, inputs[inputs.size(0) // 2 :])
                     )
-                    if sparse:
-                        self.assertTrue(
-                            torch.allclose(
-                                results[2].data, inputs[inputs.size(0) // 2 :]
-                            )
-                        )
-                    else:
-                        self.assertTrue(
-                            torch.allclose(
-                                results[2].data[inputs.size(0) // 2 :],
-                                inputs[inputs.size(0) // 2 :],
-                            )
-                        )
+                    self.assertTrue(
+                        torch.allclose(results[2].data, inputs[inputs.size(0) // 2 :])
+                    )
                 elif which_half == "lower":
                     self.assertTrue(
-                        torch.allclose(results[dst], inputs[: inputs.size(0) // 2])
+                        torch.allclose(results[dst].data, inputs[: inputs.size(0) // 2])
                     )
-                    if sparse:
-                        self.assertTrue(
-                            torch.allclose(
-                                results[2].data, inputs[: inputs.size(0) // 2]
-                            )
-                        )
-                    else:
-                        self.assertTrue(
-                            torch.allclose(
-                                results[2].data[: inputs.size(0) // 2],
-                                inputs[: inputs.size(0) // 2],
-                            )
-                        )
+                    self.assertTrue(
+                        torch.allclose(results[2].data, inputs[: inputs.size(0) // 2])
+                    )
 
     def weighted_simple_route(
         self,
@@ -151,7 +141,6 @@ class RouterTest(unittest.TestCase):
         inputs: torch.Tensor,
         dst: int,
         which_half: str = None,
-        sparse=False,
     ):
         def gate(inputs):
             gates = torch.zeros(
@@ -165,50 +154,29 @@ class RouterTest(unittest.TestCase):
                 gates[:, dst] = 1
             return gates
 
-        model = Model(gate=gate, sparse=sparse).eval()
-        for i in range(2):
-            if i == 1:
-                inputs = inputs.cuda()
-                model.cuda()
+        model = Model(gate=gate).eval()
+        for _ in range(5):
 
             results = model(inputs)
             self.assertTrue(torch.allclose(results[0].data, results[1].data))
 
     def test_generic_route(self):
         multi_dims_sample = [
-            torch.arange(0, 80, dtype=torch.float32).view(8, 10),
-            torch.arange(0, 160, dtype=torch.float32).view(8, 2, 10),
-            torch.arange(0, 320, dtype=torch.float32).view(8, 2, 10, 2),
+            torch.arange(0, 80, dtype=torch.float32).view(8, 10).cuda(),
+            torch.arange(0, 160, dtype=torch.float32).view(8, 2, 10).cuda(),
+            torch.arange(0, 320, dtype=torch.float32).view(8, 2, 10, 2).cuda(),
         ]
         for x in multi_dims_sample:
             for i in range(2):
-                self.simple_route(BranchRoute, x, dst=i, sparse=False)
-                self.simple_route(
-                    BranchRoute, x, dst=i, which_half="upper", sparse=False
-                )
-                self.simple_route(
-                    BranchRoute, x, dst=i, which_half="lower", sparse=False
-                )
-                self.simple_route(BranchRoute, x, dst=i, sparse=True)
-                self.simple_route(
-                    BranchRoute, x, dst=i, which_half="upper", sparse=True
-                )
-                self.simple_route(
-                    BranchRoute, x, dst=i, which_half="lower", sparse=True
-                )
-                self.weighted_simple_route(WeightedBranchRoute, x, dst=i, sparse=False)
+                self.simple_route(BranchRoute, x, dst=i)
+                self.simple_route(BranchRoute, x, dst=i, which_half="upper")
+                self.simple_route(BranchRoute, x, dst=i, which_half="lower")
+                self.weighted_simple_route(WeightedBranchRoute, x, dst=i)
                 self.weighted_simple_route(
-                    WeightedBranchRoute, x, dst=i, which_half="upper", sparse=False
+                    WeightedBranchRoute, x, dst=i, which_half="upper"
                 )
                 self.weighted_simple_route(
-                    WeightedBranchRoute, x, dst=i, which_half="lower", sparse=False
-                )
-                self.weighted_simple_route(WeightedBranchRoute, x, dst=i, sparse=True)
-                self.weighted_simple_route(
-                    WeightedBranchRoute, x, dst=i, which_half="upper", sparse=True
-                )
-                self.weighted_simple_route(
-                    WeightedBranchRoute, x, dst=i, which_half="lower", sparse=True
+                    WeightedBranchRoute, x, dst=i, which_half="lower"
                 )
 
     def single_ptu_route(
@@ -227,7 +195,7 @@ class RouterTest(unittest.TestCase):
                 gates[:, dst] = 1
             return gates
 
-        model = Model(gate=gate, sparse=True, single_cell_dispatch=True).eval()
+        model = Model(gate=gate, single_cell_dispatch=True).eval()
         for i in range(2):
             if i == 1:
                 inputs = inputs.cuda()
@@ -258,20 +226,16 @@ class RouterTest(unittest.TestCase):
                 gates[:, dst] = 1
             return gates
 
-        model = Model(gate=gate, sparse=True, single_cell_dispatch=True).eval()
-        for i in range(2):
-            if i == 1:
-                inputs = inputs.cuda()
-                model.cuda()
+        model = Model(gate=gate, single_cell_dispatch=True).eval().cuda()
+        for _ in range(2):
             results = model(inputs)
-            print(results)
             self.assertTrue(torch.allclose(results[0], results[1]))
 
     def test_single_ptu_route(self):
         multi_dims_sample = [
-            torch.arange(0, 10, dtype=torch.float32).view(1, 10),
-            torch.arange(0, 20, dtype=torch.float32).view(1, 2, 10),
-            torch.arange(0, 40, dtype=torch.float32).view(1, 2, 10, 2),
+            torch.arange(0, 10, dtype=torch.float32).view(1, 10).cuda(),
+            torch.arange(0, 20, dtype=torch.float32).view(1, 2, 10).cuda(),
+            torch.arange(0, 40, dtype=torch.float32).view(1, 2, 10, 2).cuda(),
         ]
         for x in multi_dims_sample:
             self.single_ptu_route(BranchRoute, x, dst=0)
@@ -279,6 +243,168 @@ class RouterTest(unittest.TestCase):
             self.single_ptu_route(BranchRoute, x, dst=[0, 1])
             self.weighted_single_ptu_route(WeightedBranchRoute, x, dst=0)
             self.weighted_single_ptu_route(WeightedBranchRoute, x, dst=1)
+
+    def padded_route(
+        self,
+        Model: Type[BranchRoute],
+        inputs: torch.Tensor,
+        dst: int,
+        which_half: str = None,
+        supported_capacities: Union[List[int], int] = None,
+        capacity_padding: bool = False,
+        path_wise_padding: bool = False,
+    ):
+        def gate(inputs):
+            gates = torch.zeros(
+                inputs.shape[0], 2, dtype=torch.float, device=inputs.device
+            )
+            if which_half == "upper":
+                gates[inputs.shape[0] // 2 :, dst] = 1
+            elif which_half == "lower":
+                gates[: inputs.shape[0] // 2, dst] = 1
+            else:
+                gates[:, dst] = 1
+
+            return gates
+
+        model = (
+            Model(
+                gate=gate,
+                supported_capacities=supported_capacities,
+                capacity_padding=capacity_padding,
+                path_wise_padding=path_wise_padding,
+            )
+            .eval()
+            .cuda()
+        )
+        for _ in range(5):
+            results = model(inputs)
+            # print(results)
+            if which_half is None:
+                real_load = inputs.size(0)
+                if capacity_padding:
+                    if path_wise_padding:
+                        real_load = supported_capacities[dst]
+                    else:
+                        for c in supported_capacities:
+                            if real_load < c:
+                                real_load = c
+                                break
+                self.assertTrue(results[dst].data.size(0) == real_load)
+                self.assertTrue(
+                    torch.allclose(results[dst].data[: inputs.size(0)], inputs)
+                )
+                self.assertTrue(results[1 - dst].data.numel() == 0)
+                self.assertTrue(torch.allclose(results[2].data, inputs))
+            else:
+                self.assertTrue(results[1 - dst].data.numel() == 0)
+                real_load = inputs.size(0) // 2
+                if capacity_padding:
+                    if path_wise_padding:
+                        real_load = supported_capacities[dst]
+                    else:
+                        for c in supported_capacities:
+                            if real_load < c:
+                                real_load = c
+                                break
+                if which_half == "upper":
+                    self.assertTrue(results[dst].data.size(0) == real_load)
+                    self.assertTrue(
+                        torch.allclose(
+                            results[dst].data[: inputs.size(0) // 2],
+                            inputs[inputs.size(0) // 2 :],
+                        )
+                    )
+                    self.assertTrue(
+                        torch.allclose(results[2].data, inputs[inputs.size(0) // 2 :])
+                    )
+                elif which_half == "lower":
+                    self.assertTrue(results[dst].data.size(0) == real_load)
+                    self.assertTrue(
+                        torch.allclose(
+                            results[dst].data[: inputs.size(0) // 2],
+                            inputs[: inputs.size(0) // 2],
+                        )
+                    )
+                    self.assertTrue(
+                        torch.allclose(results[2].data, inputs[: inputs.size(0) // 2])
+                    )
+
+    def test_padded_route(self):
+        multi_dims_sample = [
+            torch.arange(0, 80, dtype=torch.float32).view(8, 10).cuda(),
+            torch.arange(0, 160, dtype=torch.float32).view(8, 2, 10).cuda(),
+            torch.arange(0, 320, dtype=torch.float32).view(8, 2, 10, 2).cuda(),
+        ]
+        for x in multi_dims_sample:
+            for i in range(2):
+                supported_capacities = [10, 12]
+                self.padded_route(
+                    BranchRoute, x, dst=i, supported_capacities=supported_capacities
+                )
+                self.padded_route(
+                    BranchRoute,
+                    x,
+                    dst=i,
+                    supported_capacities=supported_capacities,
+                    capacity_padding=True,
+                )
+                self.padded_route(
+                    BranchRoute,
+                    x,
+                    dst=i,
+                    supported_capacities=supported_capacities,
+                    capacity_padding=True,
+                    path_wise_padding=True,
+                )
+                self.padded_route(
+                    BranchRoute,
+                    x,
+                    dst=i,
+                    which_half="upper",
+                    supported_capacities=supported_capacities,
+                )
+                self.padded_route(
+                    BranchRoute,
+                    x,
+                    dst=i,
+                    which_half="upper",
+                    supported_capacities=supported_capacities,
+                    capacity_padding=True,
+                )
+                self.padded_route(
+                    BranchRoute,
+                    x,
+                    dst=i,
+                    which_half="upper",
+                    supported_capacities=supported_capacities,
+                    capacity_padding=True,
+                    path_wise_padding=True,
+                )
+                self.padded_route(
+                    BranchRoute,
+                    x,
+                    dst=i,
+                    which_half="lower",
+                    supported_capacities=supported_capacities,
+                )
+                self.padded_route(
+                    BranchRoute,
+                    x,
+                    dst=i,
+                    which_half="lower",
+                    supported_capacities=supported_capacities,
+                    capacity_padding=True,
+                )
+                self.padded_route(
+                    BranchRoute,
+                    x,
+                    dst=i,
+                    which_half="lower",
+                    supported_capacities=supported_capacities,
+                    capacity_padding=True,
+                    path_wise_padding=True,
+                )
 
     def test_trace(self):
         gate = nn.Sequential(nn.Linear(10, 2), nn.Softmax(dim=1))

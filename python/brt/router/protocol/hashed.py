@@ -4,7 +4,7 @@
 import torch
 import torch.distributed as dist
 from brt.runtime import log
-from brt.router.utils import generate_dst_indices
+import brt._C.router as c_router
 from brt.router.protocol.base import ProtocolBase, register_protocol
 
 __all__ = ["HashProtocol"]
@@ -63,7 +63,7 @@ class HashProtocol(ProtocolBase):
             dtype=torch.int64,
             device=task_ids.device,
         ).scatter_(1, hash_dest, 1)
-        route_indices, loads = generate_dst_indices(
+        route_indices, loads = c_router.generate_indices_and_loads(
             hot_mask, self.supported_capacities, self.index_gen_opt, load_on_cpu=False,
         )
         if self.placement_aware:

@@ -3,7 +3,6 @@
 
 import torch
 from brt.runtime import log
-from brt.router.utils import generate_indices
 from brt.router.protocol.base import ProtocolBase, register_protocol
 
 __all__ = ["LabelProtocol"]

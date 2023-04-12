@@ -256,7 +256,7 @@ class DynamicNetwork(Backbone):
         # using the initial layer
         input_res = input_res // self.stem.stride
         in_channel = out_channel = init_channel
-        self.annotator =  Annotator([0])
+        self.annotator = Annotator([0],gridding=False)
         self.init_layer = Cell(
             C_in=in_channel,
             C_out=out_channel,
@@ -338,7 +338,8 @@ class DynamicNetwork(Backbone):
             self.all_cell_list.append(layer_cell_list)
             self.all_cell_type_list.append(layer_cell_type)
         self.final_gathers = nn.ModuleList(
-            GatherRouter(fabric_type="combine") for _ in range(self.cell_num_list[-1])
+            GatherRouter(fabric_type="single_cell_combine")
+            for _ in range(self.cell_num_list[-1])
         )
 
     @property

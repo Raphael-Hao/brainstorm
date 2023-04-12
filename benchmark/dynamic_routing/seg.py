@@ -151,7 +151,7 @@ class SemSegDecoderHead(nn.Module):
         )
         self.decoder_gathers = nn.ModuleList(
             [
-                GatherRouter(fabric_kwargs={"sparse": True})
+                GatherRouter(fabric_type="single_cell_combine")
                 for _ in range(len(self.in_features) - 1)
             ]
         )

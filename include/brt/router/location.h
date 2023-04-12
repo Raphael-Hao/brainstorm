@@ -26,6 +26,7 @@ void GenerateIndicesAndLoads(int* hot_mask /*[cell_num x path_num]*/,
                              int* supported_capacities /*[supported_capacity_num]*/,
                              const int& supported_capacity_num,
                              const bool& capacity_padding,
+                             const bool& path_wise_padding,
                              const bool& is_tag_index,
                              cudaStream_t stream);
 
