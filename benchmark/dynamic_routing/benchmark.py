@@ -173,7 +173,6 @@ def test_argument_parser():
     )
     parser.add_argument("--test-origin", action="store_true", help="test origin model")
 
-
     return parser
 
 
@@ -212,8 +211,6 @@ def main(args):
     _res = Trainer.test(cfg, model)
     torch.cuda.empty_cache()
 
-
-
     benchmarker = Benchmarker()
 
     def liveness_benchmark():
@@ -242,7 +239,9 @@ def main(args):
         timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
         # eliminate_pass_output=new_backbone(backbone_input)
 
-        permanent_pass = PermanentPathFoldPass(new_backbone, upper_perm_load=500)
+        permanent_pass = PermanentPathFoldPass(
+            new_backbone, upper_perm_load=cfg.DATASETS.TEST_SAMPLER_SIZE
+        )
         permanent_pass.run_on_graph()
         new_backbone = permanent_pass.finalize()
 
