@@ -301,13 +301,12 @@ def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
     return init_grid_tensor(tensor, tag_stack, load_stack, extra_attr_dict)
 
 
-def to_grid_tensor(torch_t: torch.Tensor):
+def to_grid_tensor(torch_t: torch.Tensor, tag_stack=None, load_stack=None, extra_attr_dict=None):
     """
     restore a torch.Tensor to a Mono without any pack operation
     """
-    proto_tensor: GridTensor = torch_t.as_subclass(GridTensor)
-    assert proto_tensor.cell_initilized
-    return proto_tensor
+    grid_t = init_grid_tensor(torch_t, tag_stack, load_stack, extra_attr_dict)
+    return grid_t
 
 
 def to_torch_tensor(grid_t: GridTensor, retrieve_attr=False):
@@ -320,11 +319,11 @@ def to_torch_tensor(grid_t: GridTensor, retrieve_attr=False):
             grid_t,
             tag_stack,
             load_stack,
-            extra_attrs_stack_dict,
+            extra_attrs_dict,
         ) = grid_t.copy_cell_attr()
     torch_tensor = grid_t.as_subclass(torch.Tensor)
     if retrieve_attr:
-        return torch_tensor, tag_stack, load_stack, extra_attrs_stack_dict
+        return torch_tensor, tag_stack, load_stack, extra_attrs_dict
     else:
         return torch_tensor
 
@@ -390,27 +389,3 @@ def annotate(
         initialized_tensor = init_grid_tensor(reshaped_tensor, [None], [None])
 
     return initialized_tensor
-
-
-def grid_tensor_tunnel(
-    _func: Callable, *args, **kwargs,
-) -> Union[Tuple[torch.Tensor, List[torch.Tensor], List[int]], torch.Tensor]:
-    """
-    A tunnel to convert the torch.Tensor to Mono and back to torch.Tensor
-    """
-    args = list(args)
-    for i, arg in enumerate(args):
-        if isinstance(arg, torch.Tensor):
-            args[i] = to_grid_tensor(arg)
-    for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor):
-            kwargs[key] = to_grid_tensor(value)
-    ret = _func(*args, **kwargs)
-    if isinstance(ret, torch.Tensor):
-        return to_torch_tensor(ret)
-    elif isinstance(ret, tuple):
-        ret = list(ret)
-        for i, arg in enumerate(ret):
-            if isinstance(arg, torch.Tensor):
-                ret[i] = to_torch_tensor(arg)
-        return tuple(ret)
