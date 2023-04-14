@@ -167,7 +167,6 @@ class TopKGate(torch.nn.Module):
                 "batch_prioritized_routing": self.batch_prioritized_routing,
             },
             fabric_kwargs={"capacity_padding": True},
-            throttling=True,
         )
 
         self.gather = GatherRouter(fabric_type="fused_combine")
