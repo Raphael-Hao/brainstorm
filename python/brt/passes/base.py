@@ -162,7 +162,7 @@ class PassBase:
         return sorted_nodes
 
 
-def register_pass(pass_class: type) -> None:
+def register_pass(pass_class: type) -> PassBase:
     return Registry.register_sub_cls(pass_class, PassBase)
 
 

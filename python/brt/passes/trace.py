@@ -2,10 +2,9 @@
 # Licensed under the MIT license.
 from typing import Union
 
-import torch
 import torch.nn as nn
-from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
+from torch.fx import GraphModule
 
 
 @register_pass("trace")

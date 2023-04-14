@@ -1,14 +1,14 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+import argparse
+import time
 from typing import Iterator, List
 
-import time
-import argparse
-import torch
-import torch.nn as nn
-import torch.distributed as dist
 import numpy as np
-from brt.runtime import BRT_LOG_PATH, BRT_CACHE_PATH
+import torch
+import torch.distributed as dist
+import torch.nn as nn
+from brt.runtime import BRT_CACHE_PATH, BRT_LOG_PATH
 
 __all__ = [
     "profile",
@@ -20,7 +20,6 @@ __all__ = [
 ]
 
 
-
 def profile_v2(model: nn.Module, data_collection, vendor: str):
     with torch.profiler.profile(
         activities=[
@@ -30,7 +29,6 @@ def profile_v2(model: nn.Module, data_collection, vendor: str):
         profile_memory=True,
         schedule=torch.profiler.schedule(wait=2, warmup=2, active=5),
         with_stack=False,
-
         on_trace_ready=torch.profiler.tensorboard_trace_handler(
             (BRT_LOG_PATH / f"./profile_results/{vendor}").as_posix()
         ),
@@ -108,10 +106,17 @@ class Timer:
     def export(self, msg, export_path: str):
         if self.root != 0:
             return
-        result_path = BRT_CACHE_PATH / "results" / export_path
+        result_path = BRT_CACHE_PATH / "results" / (export_path + ".csv")
         result_path.parent.mkdir(parents=True, exist_ok=True)
         result = result_path.open("a")
         result.write(f"{msg},{self.avg:.3f},{self.max:.3f},{self.min:.3f}\n")
+
+    def clean_export(self, export_path: str):
+        if self.root != 0:
+            return
+        result_path = BRT_CACHE_PATH / "results" / (export_path + ".csv")
+        if result_path.exists():
+            result_path.unlink()
 
     def execute(self, func, msg, export=False, export_path=None):
         with torch.inference_mode():

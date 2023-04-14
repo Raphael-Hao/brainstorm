@@ -3,17 +3,11 @@
 import logging
 import os
 import sys
-from typing import Iterator, List
+from collections import OrderedDict
+from typing import List
 
-import time
-import argparse
 import torch
 import torch.nn as nn
-import torch.distributed as dist
-import numpy as np
-from brt.runtime import BRT_LOG_PATH
-from collections import OrderedDict
-
 from brt.passes import (
     DeadPathEliminatePass,
     OnDemandMemoryPlanPass,
@@ -28,12 +22,12 @@ from brt.runtime.benchmark import (
     CUDATimer,
     MemoryStats,
 )
-
 from brt.runtime.memory_planner import pin_memory
 from dynamic_A_config import config as A_config
 from dynamic_B_config import config as B_config
 from dynamic_C_config import config as C_config
 from dynamic_raw_config import config as raw_config
+from torch.fx.passes.graph_drawer import FxGraphDrawer
 
 sys.path.insert(0, ".")  # noqa: E402
 
@@ -42,7 +36,6 @@ import dl_lib.utils.comm as comm
 import torch
 from dl_lib.checkpoint import DetectionCheckpointer
 from dl_lib.data import MetadataCatalog
-
 from dl_lib.engine import CustomizedTrainer, default_argument_parser, default_setup
 from dl_lib.evaluation import (
     CityscapesEvaluator,
@@ -50,9 +43,7 @@ from dl_lib.evaluation import (
     PascalVOCDetectionEvaluator,
     SemSegEvaluator,
 )
-
 from dl_lib.modeling import SemanticSegmentorWithTTA
-
 from net import build_model
 from origin_net import build_model as origin_build_model
 
@@ -191,8 +182,6 @@ def main(args):
     config.merge_from_list(args.opts)
     cfg, _logger = default_setup(config, args)
 
-
-
     model = build_model(cfg)
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
         cfg.MODEL.WEIGHTS, resume=args.resume
@@ -216,9 +205,9 @@ def main(args):
         origin_backbone = origin_model.backbone
         backbone_input = model.backbone_input
         timer = CUDATimer(repeat=5)
-        timer.execute(lambda: origin_backbone(backbone_input), "pytorch")
+        timer.execute(lambda: origin_backbone(backbone_input), "Torch")
 
-        # _res = Trainer.test(cfg, origin_model)
+        _res = Trainer.test(cfg, origin_model)
 
     def liveness_benchmark():
         timer = CUDATimer(repeat=5)
@@ -229,13 +218,17 @@ def main(args):
 
         naive_backbone = switch_capture(naive_backbone, False).eval()
 
-        # trace_pass = TracePass(naive_backbone)
-        # trace_pass.run_on_graph()
-        # naive_backbone = trace_pass.finalize()
-        # MemoryStats.reset_cuda_stats()
-        timer.execute(lambda: naive_backbone(backbone_input), "naive")
-        # MemoryStats.print_cuda_stats()
-        # naive_out= naive_backbone(backbone_input)
+        trace_pass = TracePass(naive_backbone)
+
+        naive_backbone = trace_pass()
+
+        if args.debug:
+            graph_drawer = FxGraphDrawer(naive_backbone, "naive_backbone")
+            with open("naive_backbone.svg", "wb") as f:
+                f.write(graph_drawer.get_dot_graph().create_svg())
+
+        # NOTE: here is the benchmark of naive backbone
+        # timer.execute(lambda: naive_backbone(backbone_input), "naive")
 
         eliminate_pass = DeadPathEliminatePass(
             naive_backbone, dead_load=0.0, runtime_load=1
@@ -243,8 +236,8 @@ def main(args):
         eliminate_pass.run_on_graph()
         new_backbone = eliminate_pass.finalize()
 
-        timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
-        # eliminate_pass_output=new_backbone(backbone_input)
+        # NOTE: here is the benchmark of dead path eliminated backbone
+        # timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
 
         permanent_pass = PermanentPathFoldPass(
             new_backbone, upper_permanent_load=cfg.DATASETS.TEST_SAMPLER_SIZE
@@ -252,12 +245,16 @@ def main(args):
         permanent_pass.run_on_graph()
         new_backbone = permanent_pass.finalize()
 
-        timer.execute(lambda: new_backbone(backbone_input), "all_liveness_pass")
+        # NOTE: here is the benchmark with all liveness-related passes applied: dead path elimination and permanent path folding
+        timer.execute(
+            lambda: new_backbone(backbone_input),
+            "BRT+SP",
+            True,
+            "dynamic_routing/speculation",
+        )
         # all_liveness_output=new_backbone(backbone_input)
 
         if args.debug:
-            from torch.fx.passes.graph_drawer import FxGraphDrawer
-
             graph_drawer = FxGraphDrawer(new_backbone, "new_backbone")
             with open("new_backbone.svg", "wb") as f:
                 f.write(graph_drawer.get_dot_graph().create_svg())
