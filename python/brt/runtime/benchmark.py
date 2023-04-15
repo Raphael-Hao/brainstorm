@@ -63,18 +63,59 @@ def profile(func):
         profiler.stop()
 
 
+class ResultWriter:
+    def __init__(self, fname, clean=False):
+        self.root = True
+        if dist.is_initialized():
+            self.root = dist.get_rank() == 0
+        if not fname.endswith(".csv"):
+            fname += ".csv"
+        self.fpath = BRT_CACHE_PATH / "results" / fname
+        self.fpath.parent.mkdir(parents=True, exist_ok=True)
+        if clean:
+            self.clean()
+
+    def clean(self):
+        if self.root:
+            if self.fpath.exists():
+                self.fpath.unlink()
+
+    def write(self, result: str):
+        if self.root:
+            binary_io = self.fpath.open("a")
+            binary_io.write(result + "\n")
+            binary_io.close()
+
+
 class Timer:
     def __init__(
-        self, warm_up: int = 5, loop=10, repeat=1, root=0, detail=False
+        self,
+        warm_up: int = 5,
+        loop=10,
+        repeat=1,
+        detail=False,
+        export_fname: str = None,
+        clean_export=False,
     ) -> None:
-        self.set_configure(warm_up, loop, repeat, root, detail)
+        self.root = True
+        if dist.is_initialized():
+            self.root = dist.get_rank() == 0
+        self.set_configure(warm_up, loop, repeat, detail, export_fname, clean_export)
 
-    def set_configure(self, warm_up: int = 5, loop=10, repeat=1, root=0, detail=False):
+    def set_configure(
+        self,
+        warm_up: int = 5,
+        loop=10,
+        repeat=1,
+        detail=False,
+        export_fname: str = None,
+        clean_export=False,
+    ):
         self.warm_up = warm_up
         self.loop = loop
         self.repeat = repeat
-        self.root = root
         self.detail = detail
+        self.result_writer = ResultWriter(export_fname, clean_export)
 
     def start(self):
         self.elapsed = []
@@ -91,34 +132,24 @@ class Timer:
         self.elapsed.append(self.step_elapsed)
 
     def print(self, msg):
-        if self.root != 0:
-            return
-        if self.detail == False:
-            print(
-                f"{msg} test results in ms: avg: {self.avg:.3f} max: {self.max:.3f} min: {self.min:.3f}"
+        if self.root:
+            if self.detail == False:
+                print(
+                    f"{msg} test results in ms: avg: {self.avg:.3f} max: {self.max:.3f} min: {self.min:.3f}"
+                )
+            else:
+                print(
+                    f"Configuration: warm_up: {self.warm_up} loop: {self.loop} repeat: {self.repeat}",
+                    f"{msg} test results in ms: avg: {self.avg:.3f} max: {self.max:.3f} min: {self.min:.3f}",
+                )
+
+    def export(self, msg):
+        if self.root:
+            self.result_writer.write(
+                f"{msg},{self.avg:.3f},{self.max:.3f},{self.min:.3f}"
             )
-        else:
-            print(
-                f"{msg} test results in ms: avg: {self.avg:.3f} max: {self.max:.3f} min: {self.min:.3f}",
-                f"Configuration: warm_up: {self.warm_up} loop: {self.loop} repeat: {self.repeat}",
-            )
 
-    def export(self, msg, export_path: str):
-        if self.root != 0:
-            return
-        result_path = BRT_CACHE_PATH / "results" / (export_path + ".csv")
-        result_path.parent.mkdir(parents=True, exist_ok=True)
-        result = result_path.open("a")
-        result.write(f"{msg},{self.avg:.3f},{self.max:.3f},{self.min:.3f}\n")
-
-    def clean_export(self, export_path: str):
-        if self.root != 0:
-            return
-        result_path = BRT_CACHE_PATH / "results" / (export_path + ".csv")
-        if result_path.exists():
-            result_path.unlink()
-
-    def execute(self, func, msg, export=False, export_path=None):
+    def execute(self, func, msg, export=False):
         with torch.inference_mode():
             for _i in range(self.warm_up):
                 func()
@@ -131,12 +162,11 @@ class Timer:
                     func()
                 self.step_stop()
             self.stop()
+            self.print(msg)
             if export:
-                self.export(msg, export_path)
-            else:
-                self.print(msg)
+                self.export(msg)
 
-    def memory_execute(self, model, x, msg, export=False, export_path=None):
+    def memory_execute(self, model, x, msg, export=False):
         assert self.loop == 1
         with torch.inference_mode():
             for _i in range(self.warm_up):
@@ -152,32 +182,22 @@ class Timer:
                 self.step_stop()
                 model.cpu()
             self.stop()
-            if export:
-                self.export(msg, export_path)
-            else:
-                self.print(msg)
-
-    def deprecated_execute(self, func, msg):
-        with torch.no_grad():
-            for _i in range(self.warm_up):
-                func()
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
-            self.start()
-            for _i in range(self.repeat):
-                self.step_start()
-                for _ in range(self.loop):
-                    func()
-                self.step_stop()
-            self.stop()
             self.print(msg)
+            if export:
+                self.export(msg)
 
 
 class CPUTimer(Timer):
     def __init__(
-        self, warm_up: int = 5, loop=10, repeat=1, root=0, detail=False
+        self,
+        warm_up: int = 5,
+        loop=10,
+        repeat=1,
+        detail=False,
+        export_fname: str = None,
+        clean_export=False,
     ) -> None:
-        super().__init__(warm_up, loop, repeat, root, detail)
+        super().__init__(warm_up, loop, repeat, detail, export_fname, clean_export)
         self.start_time = None
         self.end_time = None
 
@@ -191,9 +211,15 @@ class CPUTimer(Timer):
 
 class CUDATimer(Timer):
     def __init__(
-        self, warm_up: int = 5, loop=10, repeat=1, root=0, detail=False
+        self,
+        warm_up: int = 5,
+        loop=10,
+        repeat=1,
+        detail=False,
+        export_fname: str = None,
+        clean_export=False,
     ) -> None:
-        super().__init__(warm_up, loop, repeat, root, detail)
+        super().__init__(warm_up, loop, repeat, detail, export_fname, clean_export)
         self.start_event = torch.cuda.Event(enable_timing=True)
         self.end_event = torch.cuda.Event(enable_timing=True)
 

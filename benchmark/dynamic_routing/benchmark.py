@@ -21,6 +21,7 @@ from brt.runtime.benchmark import (
     Benchmarker,
     CUDATimer,
     MemoryStats,
+    ResultWriter,
 )
 from brt.runtime.memory_planner import pin_memory
 from dynamic_A_config import config as A_config
@@ -150,10 +151,11 @@ def test_argument_parser():
     parser = default_argument_parser()
     parser.add_argument(
         "--arch",
-        choices=["raw", "A", "B", "C"],
+        choices=["Raw", "A", "B", "C"],
         default="raw",
         help="choose model architecture",
     )
+    parser.add_argument("--test-sampler-size", type=int, default=10)
     parser.add_argument("--debug", action="store_true", help="use debug mode or not")
     bench_arg_manager = BenchmarkArgumentManager(parser)
     bench_arg_manager.add_item("liveness")
@@ -168,7 +170,7 @@ def test_argument_parser():
 
 
 def main(args):
-    if args.arch == "raw":
+    if args.arch == "Raw":
         config = raw_config
     elif args.arch == "A":
         config = A_config
@@ -181,6 +183,7 @@ def main(args):
 
     config.merge_from_list(args.opts)
     cfg, _logger = default_setup(config, args)
+    cfg.DATASETS.TEST_SAMPLER_SIZE = args.test_sampler_size
 
     model = build_model(cfg)
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
@@ -195,7 +198,15 @@ def main(args):
 
     benchmarker = Benchmarker()
 
-    if args.test_origin:
+    def liveness_benchmark():
+        timer = CUDATimer(
+            repeat=5,
+            export_fname="dynamic_routing/speculative_routing",
+        )
+        # get the input
+        backbone_input = model.backbone_input
+
+        # test origin model
         origin_model = origin_build_model(cfg)
         DetectionCheckpointer(origin_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
@@ -203,23 +214,15 @@ def main(args):
         origin_model.eval()
         origin_model.cuda()
         origin_backbone = origin_model.backbone
-        backbone_input = model.backbone_input
-        timer = CUDATimer(repeat=5)
-        timer.execute(lambda: origin_backbone(backbone_input), "Torch")
+        timer.execute(
+            lambda: origin_backbone(backbone_input), f"Torch,{args.arch}", True
+        )
 
-        _res = Trainer.test(cfg, origin_model)
-
-    def liveness_benchmark():
-        timer = CUDATimer(repeat=5)
-
-        backbone_input = model.backbone_input
-
+        # get the naive backbone
         naive_backbone = model.backbone
-
         naive_backbone = switch_capture(naive_backbone, False).eval()
 
         trace_pass = TracePass(naive_backbone)
-
         naive_backbone = trace_pass()
 
         if args.debug:
@@ -230,27 +233,26 @@ def main(args):
         # NOTE: here is the benchmark of naive backbone
         # timer.execute(lambda: naive_backbone(backbone_input), "naive")
 
+        # perform dead path elimination pass
         eliminate_pass = DeadPathEliminatePass(
             naive_backbone, dead_load=0.0, runtime_load=1
         )
-        eliminate_pass.run_on_graph()
-        new_backbone = eliminate_pass.finalize()
+        new_backbone = eliminate_pass()
 
         # NOTE: here is the benchmark of dead path eliminated backbone
         # timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
 
+        # perform permanent path folding pass
         permanent_pass = PermanentPathFoldPass(
             new_backbone, upper_permanent_load=cfg.DATASETS.TEST_SAMPLER_SIZE
         )
-        permanent_pass.run_on_graph()
-        new_backbone = permanent_pass.finalize()
+        new_backbone = permanent_pass()
 
         # NOTE: here is the benchmark with all liveness-related passes applied: dead path elimination and permanent path folding
         timer.execute(
             lambda: new_backbone(backbone_input),
-            "BRT+SP",
+            f"BRT+SP,{args.arch}",
             True,
-            "dynamic_routing/speculation",
         )
         # all_liveness_output=new_backbone(backbone_input)
 
@@ -266,61 +268,77 @@ def main(args):
 
     def dce_memroy_plan_benchmark():
         # input_list=[]
-        timer = CUDATimer(repeat=5)
+        timer = CUDATimer(
+            repeat=5,
+            export_fname="dynamic_routing/speculative_load_time",
+        )
+        memory_result_writer = ResultWriter("dynamic_routing/speculative_load_memory")
         backbone_input = model.backbone_input.detach().cuda()
         # for i in range(12):
         #     input_list.append(backbone_input)
         backbone = switch_capture(model.backbone, False).eval()
-        MemoryStats.reset_cuda_stats()
-        timer.execute(lambda: backbone(backbone_input), "naive0")
-        MemoryStats.print_cuda_stats()
 
-        trace_pass = TracePass(backbone)
-        trace_pass.run_on_graph()
-        backbone = trace_pass.finalize()
+        # test origin model
         MemoryStats.reset_cuda_stats()
         timer.execute(lambda: backbone(backbone_input), "naive")
-        MemoryStats.print_cuda_stats()
-        # naive_output= backbone(backbone_input)
-        eliminate_pass = DeadPathEliminatePass(backbone, runtime_load=1)
-        eliminate_pass.run_on_graph()
-        new_backbone = eliminate_pass.finalize()
-        timer.execute(lambda: new_backbone(backbone_input), "dead_path_eliminated")
-        permanent_pass = PermanentPathFoldPass(
-            new_backbone, upper_permanent_load=cfg.DATASETS.TEST_SAMPLER_SIZE
-        )
-        permanent_pass.run_on_graph()
-        backbone = permanent_pass.finalize()
-        timer.execute(lambda: backbone(backbone_input), "all_liveness_pass")
-        backbone = pin_memory(backbone.cpu())
-        pass_name = None
-        memory_plan_pass = None
-        if args.memory_mode == "predict":
-            pass_name = "PredictorMemoryPlanPass"
-            memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
-        elif args.memory_mode == "on_demand":
-            pass_name = "OnDemandMemoryPlanPass"
+        memory_usage_in_MB = torch.cuda.max_memory_allocated() / 1024 / 1024
+
+        if args.memory_mode == "on_demand":
+            memory_result_writer.write(f"Original,{args.arch},{memory_usage_in_MB:.3f}")
+
+            # perform on demand memory plan pass
+            trace_pass = TracePass(backbone)
+            backbone = trace_pass()
             memory_plan_pass = OnDemandMemoryPlanPass(backbone, is_grouping=True)
-        memory_plan_pass.run_on_graph()
-        initial_loaders, new_backbone = memory_plan_pass.finalize()
-        # print(new_backbone.code)
-        torch.cuda.empty_cache()
-        torch.cuda.reset_accumulated_memory_stats()
-        torch.cuda.reset_peak_memory_stats()
-        for loader in initial_loaders:
-            loader()
-        torch.cuda.synchronize()
-        MemoryStats.reset_cuda_stats()
-        # profile(lambda: new_backbone(backbone_input))
-        # mem_output1 = new_backbone(backbone_input)
-        MemoryStats.reset_cuda_stats()
-        timer.execute(lambda: new_backbone(backbone_input), pass_name)
-        MemoryStats.print_cuda_stats()
-        # profile_v2(new_backbone,[backbone_input], "new_dcr_mem_backbone")
-        mem_output = new_backbone(backbone_input)
+            export_msg = f"On-demand,{args.arch}"
+            initial_loaders, new_backbone = memory_plan_pass()
+
+            torch.cuda.empty_cache()
+            MemoryStats.reset_cuda_stats()
+            for loader in initial_loaders:
+                loader()
+            torch.cuda.synchronize()
+
+            timer.execute(lambda: new_backbone(backbone_input), export_msg, True)
+            memory_usage_in_MB = torch.cuda.max_memory_allocated() / 1024 / 1024
+            memory_result_writer.write(
+                f"On-demand,{args.arch},{memory_usage_in_MB:.3f}"
+            )
+
+        elif args.memory_mode == "predict":
+            # perform predictor memory plan pass
+            trace_pass = TracePass(backbone)
+            backbone = trace_pass()
+            eliminate_pass = DeadPathEliminatePass(backbone, runtime_load=1)
+            new_backbone = eliminate_pass()
+            permanent_pass = PermanentPathFoldPass(
+                new_backbone, upper_permanent_load=cfg.DATASETS.TEST_SAMPLER_SIZE
+            )
+            backbone = permanent_pass()
+            # timer.execute(lambda: backbone(backbone_input), "all_liveness_pass")
+            backbone = pin_memory(backbone.cpu())
+            memory_plan_pass = PredictMemoryPlanPass(backbone, 500, is_grouping=True)
+            export_msg = f"Speculative,{args.arch}"
+            initial_loaders, new_backbone = memory_plan_pass()
+
+            torch.cuda.empty_cache()
+            MemoryStats.reset_cuda_stats()
+            for loader in initial_loaders:
+                loader()
+            torch.cuda.synchronize()
+
+            timer.execute(lambda: new_backbone(backbone_input), export_msg, True)
+            memory_usage_in_MB = torch.cuda.max_memory_allocated() / 1024 / 1024
+            memory_result_writer.write(
+                f"Speculative,{args.arch},{memory_usage_in_MB:.3f}"
+            )
 
     def memroy_plan_benchmark():
-        timer = CUDATimer(repeat=5)
+        timer = CUDATimer(
+            repeat=5,
+            export_fname="dynamic_routing/speculative_load_memory",
+            clean_export=True,
+        )
         backbone_input = model.backbone_input.detach().cuda()
 
         backbone = switch_capture(model.backbone, False).eval()

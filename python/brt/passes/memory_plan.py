@@ -1,35 +1,34 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-import typing
-from typing import Union, Dict, List, Callable, Set, Tuple
-
-from collections import OrderedDict
 import re
+import typing
+from collections import OrderedDict
+from typing import Callable, Dict, List, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
-from torch.fx import GraphModule, Node
 from brt.passes.base import PassBase, register_pass
 from brt.passes.utils import debug_node  # pylint: disable=unused-import
 from brt.runtime import log
-from brt.runtime.tensor_group import TensorGroupManager, TensorGroup
 from brt.runtime.memory_planner import (
-    GroupedOnDemandLoader,
+    GroupedInitialLoader,
     GroupedOnDemandGuarder,
+    GroupedOnDemandLoader,
     GroupedOnDemandUnloader,
     GroupedPredictGuarder,
     GroupedPredictLoader,
     GroupedPredictUnloader,
+    InitialLoader,
+    MemoryPlanContext,
     OnDemandGuarder,
     OnDemandLoader,
     OnDemandUnloader,
     PredictGuarder,
     PredictLoader,
     PredictUnloader,
-    InitialLoader,
-    GroupedInitialLoader,
-    MemoryPlanContext,
 )
+from brt.runtime.tensor_group import TensorGroup, TensorGroupManager
+from torch.fx import GraphModule, Node
 
 PLGT = Tuple[
     List[Node],
@@ -581,9 +580,9 @@ class PredictMemoryPlanPass(OnDemandMemoryPlanPass):
                 if self.is_router_node(head_node):
                     head_node_m = self.sub_modules[head_node.target]
                     if self.is_scatter_node(head_node):
-                        path_load_history = head_node_m.load_history[path_id]
+                        path_load_history = head_node_m.fabric.load_history[path_id]
                     elif self.is_gather_node(head_node):
-                        path_load_history = head_node_m.load_history.max()
+                        path_load_history = head_node_m.fabric.load_history.max()
                     else:
                         raise RuntimeError(
                             f"Unknown router kind: {head_node_m.__class__}"
