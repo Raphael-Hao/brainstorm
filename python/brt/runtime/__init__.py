@@ -3,4 +3,3 @@
 
 from brt.runtime.pkg_info import *
 from brt.runtime.registry import Registry
-from brt.runtime.proto_tensor import ProtoTensor

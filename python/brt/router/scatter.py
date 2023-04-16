@@ -154,6 +154,8 @@ class SwinMoEScatterRouter(RouterBase):
         self.fabric = make_fabric(self.fabric_type, self.fabric_kwargs)
 
     def forward(self, in_flows, score, logits_wo_noise, logits):
-        hot_mask, new_score, loss = self.protocol(score, logits_wo_noise, logits)
-        out_flows, _ = self.fabric(in_flows, hot_mask, new_score)
+        hot_mask, runtime_capacities, new_score, loss = self.protocol(
+            score, logits_wo_noise, logits
+        )
+        out_flows, _ = self.fabric(in_flows, hot_mask, runtime_capacities, new_score)
         return out_flows, loss

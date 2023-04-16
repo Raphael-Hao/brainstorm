@@ -10,6 +10,7 @@ from typing import Any, Optional, cast
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
+import brt
 from brt.router import GatherRouter, SwinMoEScatterRouter
 from brt.runtime.distributed import global_info
 from torch import Tensor
@@ -157,6 +158,7 @@ class TopKGate(torch.nn.Module):
         )
 
         self.a2a_ffn_overlap_degree = a2a_ffn_overlap_degree
+        self.annotator = brt.Annotator([0])
         self.scatter = SwinMoEScatterRouter(
             fabric_type="distributed_fused_dispatch",
             protocol_kwargs={
@@ -168,7 +170,6 @@ class TopKGate(torch.nn.Module):
                 "batch_prioritized_routing": self.batch_prioritized_routing,
             },
             fabric_kwargs={"capacity_padding": True},
-            throttling=True,
         )
 
         self.gather = GatherRouter(fabric_type="distributed_fused_combine")
@@ -190,7 +191,9 @@ class TopKGate(torch.nn.Module):
             logits = logits + torch.randn_like(logits) / self.num_global_experts
 
         gates = F.softmax(logits, dim=1)
+        in_data = self.annotator(in_data)
         dispatched_input, _loss = self.scatter(in_data, gates, logits_wo_noise, logits)
+        dispatched_input = brt.to_torch_tensor(dispatched_input)
         route_indices = dispatched_input.route_indices
         in_loads = dispatched_input.in_loads
         out_loads = dispatched_input.out_loads

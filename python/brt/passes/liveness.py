@@ -2,12 +2,12 @@
 # Licensed under the MIT license.
 from typing import Union
 
-import torch
-from torch.fx import GraphModule
 import numpy as np
+import torch
 from brt.passes.base import PassBase, register_pass
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
+from torch.fx import GraphModule
 
 
 @register_pass("dead_path_eliminate")
@@ -70,7 +70,6 @@ class DeadPathEliminatePass(PassBase):
                         "placeholder_combine", node_m.fabric_kwargs
                     )
                     node_m.fabric.copy_flow_stats_from(old_fabric)
-
 
         return super().finalize()
 

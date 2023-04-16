@@ -10,6 +10,14 @@
 namespace brt {
 namespace router {
 
+void ThrottleHotmask(int* hotmask,
+                  int* throttled_mask,
+                  int* prefix,
+                  int* threshold,
+                  const int& cell_num,
+                  const int& path_num,
+                  cudaStream_t stream);
+
 void ConvertIndexFormat(int* origin_indices,
                         int* new_indices,
                         int* loads,

@@ -4,6 +4,131 @@
 namespace brt {
 namespace router {
 
+__device__ __forceinline__ void blockwise_cum_sum(int* input,
+                                                  int* output_sum,
+                                                  const int& cumsum_num,
+                                                  int& prefix) {
+  constexpr int thread_num = 1024;
+  int parallel_num = gridDim.x;
+  __shared__ int partial_src_mask[thread_num + 1];
+
+  for (int S = 0; S < cumsum_num; S += thread_num) {
+    partial_src_mask[threadIdx.x] = 0;
+    int offset = 1;
+    if (S + threadIdx.x < cumsum_num) {
+      partial_src_mask[threadIdx.x] = input[threadIdx.x * parallel_num + blockIdx.x];
+    }
+    // sum all partial_mask_per_branch[0:threadIdx.x] to partial_mask_per_branch[thread_num - 1]
+    for (int d = thread_num >> 1; d > 0; d >>= 1) {
+      __syncthreads();
+      if (threadIdx.x < d) {
+        partial_src_mask[offset * (2 * threadIdx.x + 2) - 1] +=
+            partial_src_mask[offset * (2 * threadIdx.x + 1) - 1];
+      }
+      offset *= 2;
+    }
+    // store the sum of temp[0:threadIdx.x] to temp[thread_num] and put temp[thread_num - 1] to 0
+    if (threadIdx.x == 0) {
+      partial_src_mask[thread_num] = partial_src_mask[thread_num - 1];
+      partial_src_mask[thread_num - 1] = 0;
+    }
+    // reverse dispatch the sum of temp[0:threadIdx.x] to temp[threadIdx.x+1]
+    for (int d = 1; d < thread_num; d *= 2) {
+      offset >>= 1;
+      __syncthreads();
+      if (threadIdx.x < d) {
+        int ai = offset * (2 * threadIdx.x + 1) - 1;
+        int bi = offset * (2 * threadIdx.x + 2) - 1;
+        int t = partial_src_mask[ai];
+        partial_src_mask[ai] = partial_src_mask[bi];
+        partial_src_mask[bi] += t;
+      }
+    }
+    __syncthreads();
+    if (S + threadIdx.x < cumsum_num) {
+      int location = partial_src_mask[threadIdx.x + 1] + prefix;
+      output_sum[threadIdx.x * parallel_num + blockIdx.x] = location;
+    }
+    __syncthreads();
+    prefix += partial_src_mask[thread_num];
+    output_sum += thread_num * parallel_num;
+    input += thread_num * parallel_num;
+  }
+}
+
+__device__ __forceinline__ void blockwise_throttle_hotmask(int* hotmask,
+                                                           int* throttled_mask,
+                                                           int* prefix,
+                                                           int* threshold,
+                                                           const int& cell_num) {
+  constexpr int thread_num = 1024;
+  int parallel_num = gridDim.x;
+  int path_id = blockIdx.x;
+  __shared__ int partial_src_mask[thread_num + 1];
+  int thread_prefix = prefix[path_id];
+  int thread_threshold = threshold[path_id];
+  for (int S = 0; S < cell_num; S += thread_num) {
+    partial_src_mask[threadIdx.x] = 0;
+    int offset = 1;
+    int src_mask = 0;
+    if (S + threadIdx.x < cell_num) {
+      partial_src_mask[threadIdx.x] = hotmask[threadIdx.x * parallel_num + path_id];
+      src_mask = partial_src_mask[threadIdx.x];
+    }
+    // sum all partial_mask_per_branch[0:threadIdx.x] to partial_mask_per_branch[thread_num - 1]
+    for (int d = thread_num >> 1; d > 0; d >>= 1) {
+      __syncthreads();
+      if (threadIdx.x < d) {
+        partial_src_mask[offset * (2 * threadIdx.x + 2) - 1] +=
+            partial_src_mask[offset * (2 * threadIdx.x + 1) - 1];
+      }
+      offset *= 2;
+    }
+    // store the sum of temp[0:threadIdx.x] to temp[thread_num] and put temp[thread_num - 1] to 0
+    if (threadIdx.x == 0) {
+      partial_src_mask[thread_num] = partial_src_mask[thread_num - 1];
+      partial_src_mask[thread_num - 1] = 0;
+    }
+    // reverse dispatch the sum of temp[0:threadIdx.x] to temp[threadIdx.x+1]
+    for (int d = 1; d < thread_num; d *= 2) {
+      offset >>= 1;
+      __syncthreads();
+      if (threadIdx.x < d) {
+        int ai = offset * (2 * threadIdx.x + 1) - 1;
+        int bi = offset * (2 * threadIdx.x + 2) - 1;
+        int t = partial_src_mask[ai];
+        partial_src_mask[ai] = partial_src_mask[bi];
+        partial_src_mask[bi] += t;
+      }
+    }
+    __syncthreads();
+    if (S + threadIdx.x < cell_num) {
+      int location = partial_src_mask[threadIdx.x + 1] + thread_prefix;
+      if (src_mask == 1 && location <= thread_threshold)
+        throttled_mask[threadIdx.x * parallel_num + path_id] = 1;
+    }
+    __syncthreads();
+    thread_prefix += partial_src_mask[thread_num];
+    throttled_mask += thread_num * parallel_num;
+    hotmask += thread_num * parallel_num;
+    if (thread_prefix >= thread_threshold) {
+      thread_prefix = thread_threshold;
+      break;
+    }
+  }
+  if (threadIdx.x == 0) {
+    prefix[path_id] = thread_prefix;
+  }
+}
+
+__global__ void throttle_hotmask(int* hotmask,
+                                 int* throttled_mask,
+                                 int* prefix,
+                                 int* threshold,
+                                 int cell_num) {
+  blockwise_throttle_hotmask(hotmask, throttled_mask, prefix, threshold, cell_num);
+}
+
 template <bool is_tag_index>
 __device__ __forceinline__ void blockwise_generate_indices(int* mask,
                                                            int* indices,
@@ -129,58 +254,6 @@ __global__ void generate_indices_and_loads(int* __restrict__ hot_mask /* [cell_n
   }
 }
 
-__device__ __forceinline__ void blockwise_cum_sum(int* input,
-                                                  int* output_sum,
-                                                  const int& cumsum_num,
-                                                  int& prefix) {
-  constexpr int thread_num = 1024;
-  int parallel_num = gridDim.x;
-  __shared__ int partial_src_mask[thread_num + 1];
-
-  for (int S = 0; S < cumsum_num; S += thread_num) {
-    partial_src_mask[threadIdx.x] = 0;
-    int offset = 1;
-    if (S + threadIdx.x < cumsum_num) {
-      partial_src_mask[threadIdx.x] = input[threadIdx.x * parallel_num + blockIdx.x];
-    }
-    // sum all partial_mask_per_branch[0:threadIdx.x] to partial_mask_per_branch[thread_num - 1]
-    for (int d = thread_num >> 1; d > 0; d >>= 1) {
-      __syncthreads();
-      if (threadIdx.x < d) {
-        partial_src_mask[offset * (2 * threadIdx.x + 2) - 1] +=
-            partial_src_mask[offset * (2 * threadIdx.x + 1) - 1];
-      }
-      offset *= 2;
-    }
-    // store the sum of temp[0:threadIdx.x] to temp[thread_num] and put temp[thread_num - 1] to 0
-    if (threadIdx.x == 0) {
-      partial_src_mask[thread_num] = partial_src_mask[thread_num - 1];
-      partial_src_mask[thread_num - 1] = 0;
-    }
-    // reverse dispatch the sum of temp[0:threadIdx.x] to temp[threadIdx.x+1]
-    for (int d = 1; d < thread_num; d *= 2) {
-      offset >>= 1;
-      __syncthreads();
-      if (threadIdx.x < d) {
-        int ai = offset * (2 * threadIdx.x + 1) - 1;
-        int bi = offset * (2 * threadIdx.x + 2) - 1;
-        int t = partial_src_mask[ai];
-        partial_src_mask[ai] = partial_src_mask[bi];
-        partial_src_mask[bi] += t;
-      }
-    }
-    __syncthreads();
-    if (S + threadIdx.x < cumsum_num) {
-      int location = partial_src_mask[threadIdx.x + 1] + prefix;
-      output_sum[threadIdx.x * parallel_num + blockIdx.x] = location;
-    }
-    __syncthreads();
-    prefix += partial_src_mask[thread_num];
-    output_sum += thread_num * parallel_num;
-    input += thread_num * parallel_num;
-  }
-}
-
 __global__ void convert_seat_to_tag_indices(
     int* __restrict__ seat_indices /* [cell_num, path_num] */,
     int* __restrict__ tag_indices /* [cell_num, path_num] */,
@@ -226,6 +299,19 @@ __global__ void convert_tag_to_seat_indices(
   }
 }
 
+void ThrottleHotmask(int* hotmask,
+                     int* throttled_mask,
+                     int* prefix,
+                     int* threshold,
+                     const int& cell_num,
+                     const int& path_num,
+                     cudaStream_t stream) {
+  const dim3 block_size = 1024;
+  const dim3 grid_size = path_num;
+  throttle_hotmask<<<grid_size, block_size, 0, stream>>>(hotmask, throttled_mask, prefix, threshold,
+                                                         cell_num);
+}
+
 void ConvertIndexFormat(int* origin_indices,
                         int* new_indices,
                         int* loads,
@@ -255,7 +341,7 @@ void GenerateIndicesAndLoads(int* hot_mask /*[cell_num x path_num]*/,
                              const bool& path_wise_padding,
                              const bool& is_tag_index,
                              cudaStream_t stream) {
-  const dim3 block_size = 1024;
+  constexpr dim3 block_size = 1024;
   const dim3 grid_size = path_num;
   if (is_tag_index) {
     if (capacity_padding) {

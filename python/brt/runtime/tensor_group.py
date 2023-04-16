@@ -1,11 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 from __future__ import annotations
-from typing import Dict, Tuple, List
+
+from typing import Dict, List, Tuple
 
 import torch
 import torch.nn as nn
-
 
 __all__ = ["group_params_buffers"]
 
@@ -47,9 +47,9 @@ class TensorGroup:
         self.pin_tensor = torch.empty(
             self.size_in_byte, dtype=torch.uint8, device="cpu", pin_memory=True
         )
-        self.pin_storage = self.pin_tensor.storage()._untyped()
+        self.pin_storage = self.pin_tensor.storage().untyped()
         self.target_tensor = torch.empty_like(self.pin_tensor, device=self.target)
-        self.target_storage = self.target_tensor.storage()._untyped()
+        self.target_storage = self.target_tensor.storage().untyped()
         self.used_in_byte = 0
         self.use_count = 0
 

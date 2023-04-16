@@ -11,6 +11,25 @@
 namespace brt {
 namespace backend {
 namespace torch {
+
+std::pair<::torch::Tensor, ::torch::Tensor> throttle_hotmask(
+    const ::torch::Tensor& hotmask /*[cell_num, path_num]*/,
+    const ::torch::Tensor& prefix /*[path_num]*/,
+    const ::torch::Tensor& threshold /*[path_num]*/) {
+  CHECK_ON_CUDA(hotmask);
+  CHECK_ON_CUDA(prefix);
+  CHECK_ON_CUDA(threshold);
+  CHECK_EQ(hotmask.size(1), prefix.size(0));
+  CHECK_EQ(hotmask.size(1), threshold.size(0));
+  const at::cuda::OptionalCUDAGuard device_guard(at::device_of(hotmask));
+
+  ::torch::Tensor throttled_mask = ::torch::zeros_like(hotmask, hotmask.options());
+  router::ThrottleHotmask(hotmask.data_ptr<int>(), throttled_mask.data_ptr<int>(),
+                          prefix.data_ptr<int>(), threshold.data_ptr<int>(), hotmask.size(0),
+                          hotmask.size(1), at::cuda::getDefaultCUDAStream().stream());
+  return {throttled_mask, prefix};
+}
+
 /*!
  * \brief generate indices and loads according to hot_mask
  *
@@ -458,6 +477,9 @@ std::vector<::torch::Tensor> combine_with_indices_and_loads(
 }  // namespace brt
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+  m.def("throttle_hotmask", &brt::backend::torch::throttle_hotmask,
+        "Throttle hotmask by supported capacities", pybind11::arg("hot_mask"),
+        pybind11::arg("prefix"), pybind11::arg("threshold"));
   m.def("generate_indices_and_loads", &brt::backend::torch::generate_indices_and_loads,
         "Generate indices and loads for all paths, loads can be padded or throttled by supported "
         "capacities",

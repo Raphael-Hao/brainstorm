@@ -5,6 +5,11 @@ from typing import Tuple, List, Union
 
 import torch
 
+def throttle_hotmask(
+    hotmask: torch.Tensor,
+    prefix: torch.Tensor,
+    threshold: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]: ...
 def convert_index_format(
     origin_indices: torch.Tensor,
     loads: torch.Tensor,
@@ -15,7 +20,7 @@ def generate_indices_and_loads(
     supported_capacities: torch.Tensor = None,
     capacity_padding: bool = False,
     path_wise_padding: bool = False,
-    is_tag_index=False
+    is_tag_index=False,
 ) -> Tuple[torch.Tensor, torch.Tensor]: ...
 def dispatch_with_indices_and_loads(
     in_data: torch.Tensor,
@@ -63,4 +68,3 @@ def combine_with_indices_and_loads(
     is_tag_index: bool = False,
     tags: torch.Tensor = None,
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]: ...
-

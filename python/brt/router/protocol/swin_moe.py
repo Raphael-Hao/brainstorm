@@ -39,35 +39,26 @@ def get_compute_location_func(score_sorted=False, score=None):
     else:
 
         def compute_location(one_hot_mask):
-            dst_indices, loads =c_router.generate_indices_and_loads(one_hot_mask)
+            dst_indices, loads = c_router.generate_indices_and_loads(one_hot_mask)
             return dst_indices, loads
 
     return compute_location
 
 
-def process_mask(hot_mask, capacity, score_sorted=False, score=None):
-    if isinstance(capacity, int):
-        path_num = hot_mask.size(1)
-        capacity = torch.tensor([capacity] * path_num, device=hot_mask.device)
+def process_mask(hot_mask, prefix_base, capacity, score_sorted=False, score=None):
     if score_sorted:
         importance_score = -1 * score.max(dim=1)[0]
         importance_indices = importance_score.argsort(dim=0)
         sorted_mask = hot_mask[importance_indices]
-        cum_mask = torch.cumsum(sorted_mask, dim=0)
-        path_loads = cum_mask[-1]
-        new_capacity = capacity - path_loads
-        new_capacity[new_capacity < 0] = 0
-        valid_mask = cum_mask <= capacity
-        sorted_mask = sorted_mask * valid_mask
-        return sorted_mask[importance_indices.argsort(dim=0)], new_capacity
+        throttled_mask, prefix_base = c_router.throttle_hotmask(
+            sorted_mask, prefix_base, capacity
+        )
+        return throttled_mask[importance_indices.argsort(dim=0)], prefix_base
     else:
-        cum_mask = torch.cumsum(hot_mask, dim=0)
-        path_loads = cum_mask[-1]
-        new_capacity = capacity - path_loads
-        new_capacity[new_capacity < 0] = 0
-        valid_mask = cum_mask <= capacity
-        hot_mask = hot_mask * valid_mask
-        return hot_mask, new_capacity
+        throttled_mask, prefix_base = c_router.throttle_hotmask(
+            hot_mask, prefix_base, capacity
+        )
+        return throttled_mask, prefix_base
 
 
 def _one_hot_with_dtype(data, num_classes, dtype):
@@ -112,7 +103,7 @@ class SwinMoEProtocol(ProtocolBase):
         indices_s = [x.view(-1) for x in topk_indices.chunk(self.top_k, dim=1)]
 
         masks_se = [
-            _one_hot_with_dtype(x, num_classes=num_global_experts, dtype=x.dtype)
+            _one_hot_with_dtype(x, num_classes=num_global_experts, dtype=torch.int32)
             for x in indices_s
         ]
         # gates_s = [(score * x).sum(dim=1) for x in masks_se]
@@ -124,15 +115,23 @@ class SwinMoEProtocol(ProtocolBase):
         ) // num_global_experts
 
         if self.capacity_factor > 0:
-            capacity = self.top_k * int(self.capacity_factor * samples_per_expert)
+            runtime_capacities = self.top_k * int(
+                self.capacity_factor * samples_per_expert
+            )
+        else:
+            raise NotImplementedError("capacity_factor must be greater than 0")
+        path_num = masks_se[0].size(1)
+        runtime_capacities = torch.tensor(
+            [runtime_capacities] * path_num, dtype=torch.int32, device=masks_se[0].device
+        )
 
-        hot_mask, capacity = process_mask(
-            masks_se[0], capacity, self.batch_prioritized_routing, score
+        hot_mask, _remain_capacities = process_mask(
+            masks_se[0], runtime_capacities, self.batch_prioritized_routing, score
         )
 
         new_score = score
 
-        return hot_mask, new_score, loss
+        return hot_mask, runtime_capacities, new_score, loss
 
     def make_route_decision_legacy(
         self, score: torch.Tensor, logits_wo_noise: torch.Tensor, logits: torch.Tensor

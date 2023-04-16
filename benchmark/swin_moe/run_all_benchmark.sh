@@ -3,9 +3,9 @@
 # Licensed under the MIT license.
 
 CAPACITIES=(
-    # 1.25
-    # 2
-    # 3
+    1.25
+    2
+    3
     4
 )
 VENDORS=(

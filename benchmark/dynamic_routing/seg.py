@@ -3,18 +3,15 @@
 # @author: yanwei.li
 from typing import Dict
 
-import torch.nn as nn
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-
-from torch.nn import BatchNorm2d
-
+from brt.router import GatherRouter
 from image_list import ImageList
 from ops import Conv2dNormAct, ShapeSpec, kaiming_init_module
 from postprocessing import sem_seg_postprocess
-
-from brt.router import GatherRouter
+from torch.nn import BatchNorm2d
 
 
 class DynamicNet4Seg(nn.Module):
