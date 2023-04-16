@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Literal, Callable
+from typing import List, Tuple, Union, Literal, Callable, Type, Dict
 
 import torch
 from torch import nn
@@ -11,6 +11,7 @@ from torch import autograd
 from brt.runtime import log, BRT_KERNEL_TEMPLATE_PATH
 from brt.jit.codegen.cuda import GlobalKernel
 from brt.jit.compiler import CUDACompiler
+from brt.trace.leaf_node import register_leaf_node
 
 logger = log.get_logger(__file__)
 
@@ -20,7 +21,7 @@ ModuleInputType = Union[AtomModuleInputType, FuseModuleInputType]
 
 
 class ModuleBase(ABC):
-    def __init__(self, module: Union[nn.Module, nn.ModuleList]):
+    def __init__(self, module: nn.Module):
         self.module = module
 
     def make_kernel(
@@ -30,6 +31,12 @@ class ModuleBase(ABC):
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> Callable[..., None]:
+        if all(
+            input.numel() == 0
+            for input in sample_inputs
+            if isinstance(input, torch.Tensor)
+        ):
+            return lambda *args, **kwargs: None
         global_kernel = self._make_global_kernel(
             sample_inputs=sample_inputs,
             method=method,
@@ -37,6 +44,7 @@ class ModuleBase(ABC):
             rank=rank,
         )
         kernel_code, _, _, _ = global_kernel.get_code()
+        self.kernel_code = kernel_code
         processed_template_fname = str(
             BRT_KERNEL_TEMPLATE_PATH
             / ("processed_" + global_kernel.func_name[:10] + ".cu")
@@ -103,3 +111,31 @@ class ModuleBase(ABC):
     @abstractmethod
     def module_name(self) -> str:
         raise NotImplementedError()
+
+
+@register_leaf_node
+class JitModuleBase(nn.Module):
+    def __init__(
+        self,
+        function: Type[autograd.Function],
+        module_name: str = "BRT.Module",
+        extra_repr: str = "",
+        parameters: Dict[str, torch.Tensor] = {},
+    ):
+        super().__init__()
+        self.function = function
+        self._factory_cls = ModuleBase
+        self._module_name = module_name
+        self._extra_repr = extra_repr
+        for param_name, param in parameters.items():
+            self.register_parameter(param_name, param)
+
+    @abstractmethod
+    def forward(self):
+        pass
+
+    def _get_name(self):
+        return self._module_name
+
+    def extra_repr(self):
+        return self._extra_repr

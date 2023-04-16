@@ -51,7 +51,6 @@ torch.manual_seed(args.seed)
 
 
 def main():
-
     global args
     best_prec1, best_epoch = 0.0, 0
 
@@ -63,19 +62,21 @@ def main():
     else:
         IM_SIZE = 224
 
+    # model = MSDNet(args, True)
+    # n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
+    # torch.save(n_flops, os.path.join(args.save, "flops.pth"))
+    # del model
     model = MSDNet(args, True)
-    n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
-    torch.save(n_flops, os.path.join(args.save, "flops.pth"))
-    del model
-    model = MSDNet(args, False)
     file = "recordingtest9.txt"
     with open(file, "a") as f:
         f.write(str(args.thresholds) + "\n")
-    if args.arch.startswith("alexnet") or args.arch.startswith("vgg"):
-        model.features = torch.nn.DataParallel(model.features)
-        model.cuda()
-    else:
-        model = torch.nn.DataParallel(model).cuda()
+
+    if not args.parallel:
+        if args.arch.startswith("alexnet") or args.arch.startswith("vgg"):
+            model.features = torch.nn.DataParallel(model.features)
+            model.cuda()
+        else:
+            model = torch.nn.DataParallel(model).cuda()
 
     criterion = nn.CrossEntropyLoss().cuda()
 
@@ -99,16 +100,16 @@ def main():
     train_loader, val_loader, test_loader = get_dataloaders(args)
 
     if args.evalmode is not None:
-        state_dict = torch.load(args.evaluate_from)["state_dict"]
+        state_dict = torch.load(args.evaluate_from)
         model.load_state_dict(state_dict)
-        if args.parallel:
+        if args.re_gen_pth:
             torch.save(
                 model.module.state_dict(),
                 "MSDNet.pth",
             )
             del model
             model = MSDNet(args, True)
-            n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
+            # n_flops, n_params = measure_model(model, IM_SIZE, IM_SIZE)
             model.train(False)
             pretrained_dict = torch.load("MSDNet.pth")
             model.load_state_dict(pretrained_dict, strict=False)
@@ -126,7 +127,6 @@ def main():
     ]
 
     for epoch in range(args.start_epoch, args.epochs):
-
         train_loss, train_prec1, train_prec5, lr = train(
             train_loader, model, criterion, optimizer, epoch
         )

@@ -29,7 +29,6 @@ def trace_init(cls, traced_type="router"):
     if check_wrapped(cls, "netlet") or check_wrapped(cls, "router"):
         return cls
 
-    
     cls = trace(cls)
 
     tag = "_brt_" + traced_type

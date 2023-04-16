@@ -17,7 +17,6 @@ def register_leaf_node(leaf_node_cls):
 
 
 def is_leaf_node(cls_or_instance) -> bool:
-
     if not inspect.isclass(cls_or_instance):
         leaf_node_cls = cls_or_instance.__class__
     else:

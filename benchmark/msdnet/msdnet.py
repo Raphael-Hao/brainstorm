@@ -21,7 +21,6 @@ def write_json(nn: nn.Module, shape_in, shape_out):
     ):
         bias = "true"
     if isinstance(conv_node, torch.nn.modules.pooling.MaxPool2d):
-
         file_json.write(
             f'"module_name": "MaxPool2d", "kernel_size": {conv_node.kernel_size}, "stride": {conv_node.stride}, "padding": {conv_node.padding}, "input_shape": {list(shape_in)}, "output_shape": {list(shape_out)}'
         )
@@ -85,6 +84,8 @@ class identity(nn.Module):
         return x
 
 
+# from brt.trace.leaf_node import register_leaf_node
+# @register_leaf_node
 class ConvBN(nn.Module):
     def __init__(self, nIn, nOut, type: str, bottleneck, bnWidth):
         """
@@ -124,7 +125,6 @@ class ConvBN(nn.Module):
 
     def forward(self, x):
         if self.training == False:
-
             return self.net(x)
         else:
             if len(self.net) == 3:
@@ -539,6 +539,7 @@ class MSDNet(nn.Module):
                         "transform": [False, False, False, False, False],
                     },
                     capturing=True,
+                    capture_mode="max",
                 )
             )
         self.final_gather = GatherRouter(
@@ -547,9 +548,10 @@ class MSDNet(nn.Module):
             # fabric_kwargs={"sparse": True}
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
+        if "combine" not in self.final_gather.captured_fabric_type:
+            self.final_gather.captured_fabric_type.append("combine")
 
     def forward(self, x, _is_measure=False):
-
         res = []
         if not self.training and self.routers_initilized:
             ##the actual dynamic routing

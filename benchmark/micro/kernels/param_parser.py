@@ -67,7 +67,7 @@ def parse_params(params: Dict[str, Any]):
         if bias is True:
             module_name += "Bias"
             if module_name == "Conv2dMulAddBias":
-                module_name = "Conv2dBiasMulAdd"
+                module_name = "Conv2dBiasAdd"
         norm = params.pop("norm")
         if norm == "SyncBatchNorm":
             modules.append(nn.BatchNorm2d(params["out_channels"]))

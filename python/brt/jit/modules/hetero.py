@@ -3,6 +3,11 @@ from typing import List, Tuple, Union, Literal, Callable, Any
 
 import torch
 from torch import autograd
+from torch.overrides import (
+    handle_torch_function,
+    wrap_torch_function,
+    has_torch_function,
+)
 
 from brt.jit.codegen.hetero_fused import HeteroFusedKernel
 from brt.jit.modules.base import FuseModuleInputType
@@ -55,6 +60,7 @@ class HeteroFusedModule(FusedModule):
 
         class JitFunction(autograd.Function):
             @staticmethod
+            @wrap_torch_function(lambda *x: x)
             def forward(ctx: Any, *inputs, active_blocks):
                 inputs = list(inputs)
                 for i, out_index in enumerate(output_arg_indices):
@@ -66,7 +72,7 @@ class HeteroFusedModule(FusedModule):
             @staticmethod
             def backward(ctx: Any, *grad_outputs: Any) -> Any:
                 raise NotImplementedError
-                
+
         return JitFunction
 
     def _extract_shared_arg_infos(
