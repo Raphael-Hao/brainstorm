@@ -1,9 +1,10 @@
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+
 import copy
-from typing import Any, Dict, List, Tuple, Union, Callable
+from typing import Any, Dict, List, Tuple, Union
 
 import torch
-import torch.nn as nn
-from brt.trace.leaf_node import register_leaf_node
 from brt.runtime import log
 
 __all__ = [
@@ -48,7 +49,11 @@ def collect_cell_attr(
 
     if isinstance(args, (Tuple, List)):
         for a in args:
-            (_all_tags, _all_loads, _all_extra_attr_dict,) = collect_cell_attr(a)
+            (
+                _all_tags,
+                _all_loads,
+                _all_extra_attr_dict,
+            ) = collect_cell_attr(a)
             if _all_tags is not None and _all_loads is not None:
                 return (
                     _all_tags,
@@ -69,7 +74,6 @@ def attach_cell_attr(
     load_stack: List[int],
     extra_attrs_stack_dict: Dict[str, List[Any]] = None,
 ):
-
     if isinstance(ret, GridTensor):
         extra_attrs_stack_dict = extra_attrs_stack_dict or {}
         ret = ret.deep_pack(tag_stack, load_stack, **extra_attrs_stack_dict)
@@ -281,13 +285,19 @@ def init_grid_tensor(
 
 
 def deinit_grid_tensor(
-    grid_t: GridTensor, retrieve_attr=True,
+    grid_t: GridTensor,
+    retrieve_attr=True,
 ) -> Union[
     Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor], Dict[str, Any]],
     torch.Tensor,
 ]:
     if retrieve_attr:
-        (grid_t, tag_stack, load_stack, extra_attrs_stack_dict,) = grid_t.deep_unpack()
+        (
+            grid_t,
+            tag_stack,
+            load_stack,
+            extra_attrs_stack_dict,
+        ) = grid_t.deep_unpack()
         t = grid_t.as_subclass(torch.Tensor)
         return t, tag_stack, load_stack, extra_attrs_stack_dict
     else:
@@ -301,7 +311,9 @@ def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
     return init_grid_tensor(tensor, tag_stack, load_stack, extra_attr_dict)
 
 
-def to_grid_tensor(torch_t: torch.Tensor, tag_stack=None, load_stack=None, extra_attr_dict=None):
+def to_grid_tensor(
+    torch_t: torch.Tensor, tag_stack=None, load_stack=None, extra_attr_dict=None
+):
     """
     restore a torch.Tensor to a Mono without any pack operation
     """
@@ -326,66 +338,3 @@ def to_torch_tensor(grid_t: GridTensor, retrieve_attr=False):
         return torch_tensor, tag_stack, load_stack, extra_attrs_dict
     else:
         return torch_tensor
-
-
-
-@register_leaf_node
-class Annotator(nn.Module):
-    def __init__(self, dims: List[int], cell_shape: List[int]=None, gridding: bool=True):
-        super().__init__()
-        assert isinstance(dims, list)
-        dims = sorted(dims)
-        self.dims = dims
-        if cell_shape is not None:
-            assert isinstance(cell_shape, list)
-        self.cell_shape = cell_shape
-        self.gridding = gridding
-
-    def forward(self, t: torch.Tensor):
-        assert self.dims[-1] < len(t.shape)
-        if self.cell_shape is None:
-            cell_shape = [t.shape[i] for i in range(len(t.shape)) if i not in self.dims]
-        else:
-            cell_shape = self.cell_shape
-        transposed_dims = self.dims + [i for i in range(len(t.shape)) if i not in self.dims]
-        transposed_tensor = t.permute(*transposed_dims).contiguous()
-        reshaped_tensor = transposed_tensor.reshape(-1, *cell_shape)
-        if self.gridding:
-            if isinstance(reshaped_tensor, GridTensor):
-                initialized_tensor = reshaped_tensor.pack(None, None)
-            else:
-                initialized_tensor = init_grid_tensor(reshaped_tensor, [None], [None])
-        else:
-            initialized_tensor = reshaped_tensor
-        return initialized_tensor
-
-def annotate(
-    t: torch.Tensor, dims: List[int]=None, cell_shape: List[int] = None
-) -> GridTensor:
-    """Annotate a tensor with cell granularity
-
-    Args:
-        t (torch.Tensor): _description_
-        dims (List[int]): _description_
-        cell_shape (List[int], optional): _description_. Defaults to None.
-
-    Returns:
-        GridTensor: _description_
-    """
-    assert isinstance(dims, list)
-    dims = sorted(dims)
-    assert dims[-1] < len(t.shape)
-    if cell_shape is not None:
-        assert isinstance(cell_shape, list)
-    else:
-        cell_shape = [t.shape[i] for i in range(len(t.shape)) if i not in dims]
-    transposed_dims = dims + [i for i in range(len(t.shape)) if i not in dims]
-    transposed_tensor = t.permute(*transposed_dims).contiguous()
-    reshaped_tensor = transposed_tensor.reshape(-1, *cell_shape)
-
-    if isinstance(reshaped_tensor, GridTensor):
-        initialized_tensor = reshaped_tensor.pack(None, None)
-    else:
-        initialized_tensor = init_grid_tensor(reshaped_tensor, [None], [None])
-
-    return initialized_tensor
