@@ -13,7 +13,9 @@ from torch import nn, fx
 from torchvision.models import resnet18, ResNet18_Weights
 from torch.utils import dlpack
 
+from brt.runtime import BRT_CACHE_PATH
 from brt.router import ScatterRouter, GatherRouter
+from brt.trace.leaf_node import register_leaf_node
 
 from archs.nas_mdsr import SingleNetwork as NAS_MDSR
 
@@ -28,7 +30,7 @@ class LiveSR(nn.Module):
         self.num_feature = num_feature
         # self.classifier = Classifier(n_subnets).eval()
         self.classifier = TunedClassifier(n_subnets, 88).eval()
-        self.scatter = ScatterRouter()
+        self.scatter = ScatterRouter(capturing=True, capture_mode="max")
         self.subnets = nn.ModuleList(
             NAS_MDSR(
                 num_block=self.subnet_num_block,
@@ -46,16 +48,24 @@ class LiveSR(nn.Module):
         scores = self.classifier(inputs)
         # print(scores)
         scattered = self.scatter(inputs, scores)
-        subnet_outputs = [m(x, m.num_block) for m, x in zip(self.subnets, scattered)]
+        subnet_outputs = []
+        for i in range(self.n_subnets):
+            m = self.subnets[i]
+            x = scattered[i]
+            subnet_outputs.append(m(x))
+        # subnet_outputs = [m(x, m.num_block) for m, x in zip(self.subnets, scattered)]
         gathered = self.gather(subnet_outputs)
         return gathered
 
 
+@register_leaf_node
 class Classifier(nn.Module):
     def __init__(self, n_subnets: int):
         super().__init__()
         self.resnet = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).eval()
-        with open(f"/home/v-louyang/brt/benchmark/livesr/kmeans_{n_subnets}.pkl", "rb") as pkl:
+        with open(
+            BRT_CACHE_PATH.parent / f"benchmark/livesr/kmeans_{n_subnets}.pkl", "rb"
+        ) as pkl:
             self.kmeans: MiniBatchKMeans = pickle.load(pkl)["kmeans"]
 
     def forward(self, x: torch.Tensor):
@@ -65,11 +75,12 @@ class Classifier(nn.Module):
         hook = self.resnet._modules.get("avgpool").register_forward_hook(copy_output)
         self.resnet(x)
         hook.remove()
-        labels = self.kmeans.predict(output.cpu())
-        labels = torch.from_numpy(labels).to(dtype=torch.long, device=x.device)
-        return labels
+        distacne = self.kmeans.transform(output.cpu())
+        t_distacne = 1.0 / torch.from_numpy(distacne).to(device=x.device)
+        return t_distacne
 
 
+@register_leaf_node
 class TunedClassifier(nn.Module):
     def __init__(self, n_subnets: int = 10, bs: int = 88):
         super().__init__()
@@ -92,7 +103,7 @@ class TunedClassifier(nn.Module):
             input_infos=[("input0", input_shape)],
         )
         with auto_scheduler.ApplyHistoryBest(
-            f"/home/v-louyang/brt/benchmark/livesr/resnet-18-NCHW-B88-cuda.json"
+            BRT_CACHE_PATH.parent / f"benchmark/livesr/resnet-18-NCHW-B88-cuda.json"
         ):
             with tvm.transform.PassContext(
                 opt_level=3, config={"relay.backend.use_auto_scheduler": True}
@@ -113,11 +124,12 @@ class TunedClassifier(nn.Module):
         return dis
 
 
+@register_leaf_node
 class kMeans(nn.Module):
     def __init__(self, k: int):
         super().__init__()
         self.k = k
-        with open(f"/home/v-louyang/brt/benchmark/livesr/kmeans_{k}.pkl", "rb") as pkl:
+        with open(BRT_CACHE_PATH.parent / f"benchmark/livesr/kmeans_{k}.pkl", "rb") as pkl:
             kmeans: MiniBatchKMeans = pickle.load(pkl)["kmeans"]
         self.kmeans_centers = torch.nn.Parameter(
             torch.from_numpy(kmeans.cluster_centers_).to(torch.float32),
@@ -130,4 +142,6 @@ class kMeans(nn.Module):
             .square()
             .sum(dim=2)
         )
-        return distance
+        weight = 1.0 / distance
+        weight = weight.cuda()
+        return weight

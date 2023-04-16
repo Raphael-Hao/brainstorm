@@ -1,60 +1,182 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Tuple, Union, Literal, Optional
+import builtins
+from typing import List, Tuple, Union, Literal, Optional, Type, Dict
+import operator
 
 import torch
-from torch import nn
+from torch import nn, fx, autograd
 
 from brt.runtime import log
-from brt.jit.modules.atom import AtomModule
+from brt.jit.modules.atom import AtomModule, JitAtomModule, AtomModuleInputType
 from brt.jit.codegen.module import ModuleKernel, ModuleDTypeSizeInByte
 
 logger = log.get_logger(__file__)
 
 
 class Conv2dElementWiseModule(AtomModule):
-
-    _input_arg_indices = {"forward": [0]}
-    _output_arg_indices = {"forward": [2]}
+    _supported_methods = ["forward"]
+    # _input_arg_indices = {"forward": [0]}
+    # _output_arg_indices = {"forward": [2]}
     _shared_arg_indices = {"forward": [0, 2]}
 
-    _required_module_cls = torch.nn.Conv2d
     _optional_succeed_module_cls = (
         torch.nn.BatchNorm2d,
         torch.nn.ReLU,
         torch.nn.Sigmoid,
     )
+    _optional_succeed_function = (
+        operator.add,
+        operator.mul,
+        torch.add,
+        torch.mul,
+        torch.Tensor.add,
+        torch.Tensor.mul,
+    )
 
     def __init__(self, module: nn.Module):
         super().__init__(module)
-        if not isinstance(self.module, torch.nn.Sequential):
-            self.module = torch.nn.Sequential(self.module)
+        if isinstance(self.module, nn.Conv2d):
+            self.module = nn.Sequential(self.module)
+        if not isinstance(self.module, fx.GraphModule):
+            self.module = fx.symbolic_trace(self.module)
+        self._module_inputs = []
+        self._conv2d: nn.Conv2d = None
+        self._succeed = []
+        self._bn: nn.BatchNorm2d = None
+        node: fx.Node
+        for node in self.module.graph.nodes:
+            if node.op == "placeholder":
+                self._module_inputs.append(node.name)
+            elif node.op == "get_attr":
+                pass
+            elif node.op == "call_module":
+                submodule = self.module.get_submodule(node.target)
+                if (
+                    isinstance(submodule, nn.Conv2d)
+                    and node.args[0].name in self._module_inputs
+                ):
+                    self._conv2d = submodule
+                    self._conv2d_inputs = node.args[0].name
+                    conv2d_output = node.name
+                elif isinstance(
+                    submodule,
+                    type(self)._optional_succeed_module_cls,
+                ):
+                    if isinstance(submodule, nn.BatchNorm2d):
+                        self._bn = submodule
+                    self._succeed.append(submodule)
+                    conv2d_output = node.name
+                else:
+                    raise RuntimeError
+            elif node.op == "call_function":
+                if node.target is torch.conv2d:
+                    self._conv2d = self
+                    self._conv2d_inputs = node.args[0].name
+                    conv2d_output = node.name
+                elif node.target in type(self)._optional_succeed_function:
+                    for farg in node.args:
+                        if isinstance(farg, fx.Node) and farg.name == conv2d_output:
+                            conv2d_output = node.name
+                            self._succeed.append(node)
+                else:
+                    return False
+            elif node.op == "call_method":
+                raise RuntimeError
+            elif node.op == "output":
+                if node.args[0].name != conv2d_output:
+                    raise RuntimeError
+            else:
+                raise RuntimeError
 
     @classmethod
-    def ismodule(cls, module: torch.nn.Module):
-        if not isinstance(module, torch.nn.Sequential):
-            module = torch.nn.Sequential(module)
-        for i, sub_module in enumerate(module):
-            if i == 0:
-                if not isinstance(sub_module, cls._required_module_cls):
+    def ismodule(cls, module: nn.Module):
+        # WARNING: Can't check symbolic traced nn.Conv2d itself
+        if isinstance(module, nn.Conv2d):
+            return True
+        if not isinstance(module, fx.GraphModule):
+            try:
+                module = fx.symbolic_trace(module)
+            except:
+                return False
+        node: fx.Node
+        conv2d_checked = False
+        known_vars = set()
+        for node in module.graph.nodes:
+            if node.op == "placeholder":
+                known_vars.add(node.name)
+            elif node.op == "get_attr":
+                known_vars.add(node.name)
+            elif node.op == "call_module":
+                if not conv2d_checked:
+                    if (
+                        isinstance(module.get_submodule(node.target), nn.Conv2d)
+                        and node.args[0].name in known_vars
+                    ):
+                        conv2d_checked = True
+                        conv2d_output = node.name
+                    else:
+                        return False
+                else:
+                    if (
+                        isinstance(
+                            module.get_submodule(node.target),
+                            cls._optional_succeed_module_cls,
+                        )
+                        and node.args[0].name == conv2d_output
+                    ):
+                        conv2d_output = node.name
+                    else:
+                        return False
+            elif node.op == "call_function":
+                if not conv2d_checked:
+                    if node.target is torch.conv2d and node.args[0].name in known_vars:
+                        conv2d_checked = True
+                        conv2d_output = node.name
+                    else:
+                        return False
+                else:
+                    if node.target in cls._optional_succeed_function:
+                        is_following_conv2d = False
+                        for farg in node.args:
+                            if (
+                                isinstance(farg, (int, float))
+                                or farg.name in known_vars
+                            ):
+                                pass
+                            elif farg.name == conv2d_output:
+                                is_following_conv2d = True
+                            else:
+                                return False
+                        if is_following_conv2d:
+                            conv2d_output = node.name
+                        else:
+                            known_vars.add(node.name)
+                    else:
+                        return False
+            elif node.op == "call_method":
+                return False
+            elif node.op == "output":
+                if node.args[0].name != conv2d_output:
                     return False
-            elif not isinstance(sub_module, cls._optional_succeed_module_cls):
+            else:
                 return False
         return True
 
     def _make_global_kernel(
         self,
-        sample_inputs: torch.Tensor,
+        sample_inputs: AtomModuleInputType,
         method: str,
         objective_func: str = "fastest",
         rank: int = 1,
     ) -> ModuleKernel:
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
-        if not isinstance(self.module, torch.nn.Sequential):
-            self.module = torch.nn.Sequential(self.module)
-        conv2d = self.module[0]
+        if isinstance(sample_inputs, torch.Tensor):
+            sample_inputs = [sample_inputs]
+
+        conv2d = self._conv2d
         parameters = {}
         parameters["in_channels"] = conv2d.in_channels
         parameters["out_channels"] = conv2d.out_channels
@@ -64,8 +186,10 @@ class Conv2dElementWiseModule(AtomModule):
         parameters["dilation"] = conv2d.dilation
         parameters["groups"] = conv2d.groups
 
-        sample_output = self.module(sample_inputs)
-        input_infos = {"input_0": list(sample_inputs.shape)}
+        sample_output = self.module(*sample_inputs)
+        input_infos = {}
+        for i, input in enumerate(sample_inputs):
+            input_infos[f"input_{i}"] = list(input.shape)
         output_infos = {"output_0": list(sample_output.shape)}
         logger.debug(
             f"""
@@ -86,7 +210,7 @@ parameters: {parameters}
 
     def make_module(
         self,
-        sample_inputs: torch.Tensor,
+        sample_inputs: AtomModuleInputType,
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> nn.Module:
@@ -96,31 +220,35 @@ parameters: {parameters}
             objective_func=objective_func,
             rank=rank,
         )
+
         module_name = "BRT." + self.module_name
-        extra_repr = self.module[0].extra_repr()
+        extra_repr = self._conv2d.extra_repr()
 
-        class JitConv2dElemwiseModule(nn.Module):
-            def __init__(self, weight: torch.Tensor, bias: torch.Tensor = None) -> None:
-                super().__init__()
-                self._extra_repr = extra_repr
-                self.function = jit_function
-                self.register_parameter("weight", weight)
-                self.register_parameter("bias", bias)
-                self.forward(sample_inputs)
+        conv = self._conv2d
+        if self._bn is None:
+            weight = conv.weight
+            bias = conv.bias
+            bn_bias = None
+        else:
+            bn = self._bn
+            var_sqrt = torch.sqrt(bn.running_var + bn.eps)
+            weight = nn.Parameter(
+                conv.weight
+                * (bn.weight / var_sqrt).reshape([conv.out_channels, 1, 1, 1])
+            )
+            if conv.bias is not None:
+                bias = conv.bias
+                bn_bias = bn.bias
+            else:
+                bias = nn.Parameter(bn.bias - bn.running_mean / var_sqrt * bn.weight)
+                bn_bias = None
 
-            def forward(self, input: torch.Tensor):
-                if self.bias is not None:
-                    return self.function.apply(input, self.weight, self.bias)[0]
-                else:
-                    return self.function.apply(input, self.weight)[0]
-
-            def _get_name(self):
-                return module_name
-
-            def extra_repr(self):
-                return self._extra_repr
-
-        return JitConv2dElemwiseModule(*self._extract_parameters_and_buffers())
+        return JitConv2dElemwiseModule(
+            function=jit_function,
+            module_name=module_name,
+            extra_repr=extra_repr,
+            parameters={"weight": weight, "bias": bias, "bn_bias": bn_bias},
+        )
 
     def _extract_shared_arg_infos(self, method: str, sample_input: torch.Tensor):
         # Only support method == 'forward' actually
@@ -137,36 +265,99 @@ parameters: {parameters}
         return type(self)._shared_arg_indices[method], shared_arg_grans
 
     def _extract_arg_infos(self, method: str) -> Tuple[int, int, List[int], List[int]]:
-        if method not in type(self)._shared_arg_indices:
+        if method not in type(self)._supported_methods:
             raise NotImplementedError(f"{method} is not supported")
-        if "Bias" not in self.module_name:
-            input_arg_num = 2
+        module_name = self.module_name
+
+        module_input_arg_num = len(self._module_inputs)
+        if "Bias" in module_name:
+            module_input_arg_indices = [0] + list(range(4, 3 + module_input_arg_num))
         else:
-            input_arg_num = 3
-        total_arg_num = input_arg_num + 1
+            module_input_arg_indices = [0] + list(range(3, 2 + module_input_arg_num))
+        module_output_arg_indices = [2]
+
+        function_input_arg_num = module_input_arg_num
+        if "BatchNorm" in module_name:
+            if "Bias" in module_name:
+                function_input_arg_num += 3  # fused_weight & conv_bias & bn_bias
+            else:
+                function_input_arg_num += 2  # fused_weight & fused_bias
+        else:
+            if "Bias" in module_name:
+                function_input_arg_num += 2  # weight & bias
+            else:
+                function_input_arg_num += 1  # weight
+        kernel_input_arg_num = function_input_arg_num + 1
+
         return (
-            input_arg_num,
-            total_arg_num,
-            type(self)._input_arg_indices[method],
-            type(self)._output_arg_indices[method],
+            function_input_arg_num,
+            kernel_input_arg_num,
+            module_input_arg_indices,
+            module_output_arg_indices,
         )
 
     def _extract_parameters_and_buffers(self) -> List[Optional[torch.Tensor]]:
-        ret = [self.module[0].weight]
-        if self.module[0].bias is not None:
-            ret.append(self.module[0].bias)
+        conv = self._conv2d
+        if self._bn is None:
+            ret = [conv.weight]
+            if conv.bias is not None:
+                ret.append(conv.bias)
+        else:
+            bn = self._bn
+            var_sqrt = torch.sqrt(bn.running_var + bn.eps)
+            fused_weight = nn.Parameter(
+                conv.weight
+                * (bn.weight / var_sqrt).reshape([conv.out_channels, 1, 1, 1])
+            )
+            if conv.bias is not None:
+                ret = [fused_weight, conv.bias, bn.bias]
+            else:
+                # conv_bias = torch.zeros_like(bn.running_mean)
+                fused_bias = nn.Parameter(
+                    bn.bias - bn.running_mean / var_sqrt * bn.weight
+                )
+                ret = [fused_weight, fused_bias]
         return ret
 
     @property
     def module_name(self) -> str:
-        for i, sub_module in enumerate(self.module):
-            if i == 0:
-                module_name = "Conv2d"
-                if sub_module.bias is not None:
-                    module_name += "Bias"
-            elif isinstance(sub_module, type(self)._optional_succeed_module_cls):
-                if isinstance(sub_module, torch.nn.BatchNorm2d):
+        module_name = "Conv2d"
+        if self._conv2d.bias is not None:
+            module_name += "Bias"
+        for succ in self._succeed:
+            if isinstance(succ, fx.Node):
+                if succ.target in (operator.add, torch.add, torch.Tensor.add):
+                    module_name += "Add"
+                elif succ.target in (operator.mul, torch.mul, torch.Tensor.mul):
+                    module_name += "Mul"
+            elif isinstance(succ, type(self)._optional_succeed_module_cls):
+                if isinstance(succ, torch.nn.BatchNorm2d):
                     module_name += "BatchNorm"
                 else:
-                    module_name += type(sub_module).__name__
+                    module_name += type(succ).__name__
+            else:
+                raise RuntimeError
         return module_name
+
+
+class JitConv2dElemwiseModule(JitAtomModule):
+    def __init__(
+        self,
+        function: Type[autograd.Function],
+        module_name: str = "BRT.Conv2dElemwiseModule",
+        extra_repr: str = "",
+        parameters: Dict[str, torch.Tensor] = ...,
+    ):
+        super().__init__(function, module_name, extra_repr, parameters)
+        self._factory_cls = Conv2dElementWiseModule
+
+    def forward(self, *inputs: torch.Tensor):
+        if self.bn_bias is not None:
+            out = self.function.apply(
+                inputs[0], self.weight, self.bias, self.bn_bias, *inputs[1:]
+            )[0]
+        elif self.bias is not None:
+            out = self.function.apply(inputs[0], self.weight, self.bias, *inputs[1:])[0]
+        else:
+            out = self.function.apply(inputs[0], self.weight, *inputs[1:])[0]
+        return out

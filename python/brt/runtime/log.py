@@ -101,3 +101,5 @@ def get_logger(file_path: str = None) -> logging.Logger:
         raise ValueError(
             f"{module} is not a valid module for getting brainstorm logger"
         )
+
+set_level_to_warn()

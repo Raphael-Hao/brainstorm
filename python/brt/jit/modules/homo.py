@@ -4,6 +4,11 @@ from typing import List, Tuple, Union, Literal, Callable
 import torch
 from torch import autograd
 from torch import nn
+from torch.overrides import (
+    handle_torch_function,
+    wrap_torch_function,
+    has_torch_function,
+)
 
 from brt.jit.codegen.homo_fused import HomoFusedKernel
 from brt.jit.modules.base import FuseModuleInputType
@@ -30,7 +35,10 @@ class HomoFusedModule(FusedModule):
         ]
         shared_arg_indices = None
         shared_arg_grans = None
-        (shared_arg_indices, shared_arg_grans,) = self.jit_submodules[
+        (
+            shared_arg_indices,
+            shared_arg_grans,
+        ) = self.jit_submodules[
             0
         ]._extract_shared_arg_infos(method, sample_inputs[0])
         assert shared_arg_indices is not None, "shared_arg_indices is None"
@@ -96,6 +104,7 @@ class HomoFusedModule(FusedModule):
 
         class JitFunction:
             @staticmethod
+            @wrap_torch_function(lambda *x: x)
             def forward(*inputs, capacities):
                 inputs = list(inputs)
                 in_data = inputs[:in_data_num]

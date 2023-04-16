@@ -274,7 +274,9 @@ class ProtoTensor(torch.Tensor):
         if kwargs is None:
             kwargs = {}
         tag_stack, load_stack, extra_attrs_stack_dict = collect_proto_attr_stack(args)
-        assert tag_stack is not None and load_stack is not None
+        # assert tag_stack is not None and load_stack is not None
+        if tag_stack is None or load_stack is None:
+            assert False
         ret = super().__torch_function__(func, types, args, kwargs)
         pack_proto_attr_stack(ret, tag_stack, load_stack, extra_attrs_stack_dict)
         return ret
