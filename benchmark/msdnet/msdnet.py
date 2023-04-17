@@ -538,18 +538,18 @@ class MSDNet(nn.Module):
                         "route_logic": ["1d", "1d", "1d", "1d", "1d"],
                         "transform": [False, False, False, False, False],
                     },
-                    capturing=True,
-                    capture_mode="max",
+                    # capturing=True,
+                    # capture_mode="max",
                 )
             )
         self.final_gather = GatherRouter(
-            capturing=True
+            # capturing=True,
             # fabric_type="single_cell_combine",
             # fabric_kwargs={"sparse": True}
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
-        if "combine" not in self.final_gather.captured_fabric_type:
-            self.final_gather.captured_fabric_type.append("combine")
+        # if "combine" not in self.final_gather.captured_fabric_type:
+        #     self.final_gather.captured_fabric_type.append("combine")
 
     def forward(self, x, _is_measure=False):
         res = []

@@ -192,7 +192,7 @@ def main(args):
 
     model = model.cuda().eval()
     torch.cuda.synchronize()
-    model = switch_capture(model, True, fabric_type="dispatch,combine")
+    model = switch_capture(model, True, mode="cum", fabric_type="dispatch,combine")
     _res = Trainer.test(cfg, model)
     torch.cuda.empty_cache()
 
@@ -341,7 +341,7 @@ def main(args):
         )
         backbone_input = model.backbone_input.detach().cuda()
 
-        backbone = switch_capture(model.backbone, False).eval()
+        backbone = switch_capture(model.backbone, False, "cum", "dispatch").eval()
 
         MemoryStats.reset_cuda_stats()
 

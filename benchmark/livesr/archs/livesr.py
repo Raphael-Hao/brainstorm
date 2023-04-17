@@ -13,6 +13,7 @@ from torch import nn, fx
 from torchvision.models import resnet18, ResNet18_Weights
 from torch.utils import dlpack
 
+from brt import Annotator
 from brt.runtime import BRT_CACHE_PATH
 from brt.router import ScatterRouter, GatherRouter
 from brt.trace.leaf_node import register_leaf_node
@@ -30,7 +31,8 @@ class LiveSR(nn.Module):
         self.num_feature = num_feature
         # self.classifier = Classifier(n_subnets).eval()
         self.classifier = TunedClassifier(n_subnets, 88).eval()
-        self.scatter = ScatterRouter(capturing=True, capture_mode="max")
+        self.annotator = Annotator([0])
+        self.scatter = ScatterRouter()
         self.subnets = nn.ModuleList(
             NAS_MDSR(
                 num_block=self.subnet_num_block,
@@ -47,7 +49,8 @@ class LiveSR(nn.Module):
         """@param x: Tensor with shape [N, 3, 32, 32]"""
         scores = self.classifier(inputs)
         # print(scores)
-        scattered = self.scatter(inputs, scores)
+        input_grids = self.annotator(inputs)
+        scattered = self.scatter(input_grids, scores)
         subnet_outputs = []
         for i in range(self.n_subnets):
             m = self.subnets[i]
