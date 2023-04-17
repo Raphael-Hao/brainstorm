@@ -40,7 +40,7 @@ class ScatterRouter(RouterBase):
 
             fabric_type (str, optional): fabric type. Defaults to "dispatch".
                 dispatch: dispatch source flows to destinations
-                homo_dispatch: dispatch source flows to destinations in the form of a fused ProtoTensor.
+                homo_dispatch: dispatch source flows to destinations in the form of a fused GridTensor.
                 supported keyword args for fabric:
                     route_logic (str, optional): route logic. Defaults to "1d" only for dispatch.
                         1d: route along the 1st dimension, selecting data from a tensor with shape (batch_size, ...)

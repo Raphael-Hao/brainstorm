@@ -62,7 +62,6 @@ class ResBlock(nn.Module):
             res = self.body(x)
         # res = torch.mul(self.body(x), (self.res_scale))
         res += x
-
         return res
 
 

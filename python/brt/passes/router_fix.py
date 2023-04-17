@@ -28,31 +28,37 @@ class RouterFixPass(PassBase):
             if isinstance(subm, ScatterRouter):
                 scatter: ScatterRouter = subm
                 if (
-                    scatter.capturing is True
-                    and "dispatch" in scatter.captured_fabric_type
-                    and scatter.capture_mode == "max"
-                    and all(rl == "1d" for rl in scatter.fabric.route_logics)
+                    # scatter.fabric.capture_mode == "max"
+                    # and all(rl == "1d" for rl in scatter.fabric.route_logics)
+                    scatter.fabric_type == "dispatch"
+                    and scatter.fabric.load_history is not None
                 ):
-                    if (
-                        scatter.fabric_type == "dispatch"
-                        and scatter.load_history is not None
-                    ):
-                        scatter.fabric_type = "_fused_dispatch"
-                        scatter.fabric_kwargs.update(
-                            {
-                                "fixed_capacity": torch.from_numpy(scatter.load_history)
-                                .to(torch.int32)
-                                .cuda()
-                            }
-                        )
-                        scatter.fabric = make_fabric(
-                            "_fused_dispatch", scatter.fabric_kwargs
-                        )
+                    scatter.fabric.supported_capacities = torch.from_numpy(
+                        scatter.fabric.load_history
+                    ).to(dtype=torch.int32)
+                    # scatter.fabric_type = "_fused_dispatch"
+                    scatter.fabric_kwargs.update(
+                        {
+                            "supported_capacities": list(scatter.fabric.load_history),
+                            "capacity_padding": True,
+                            "path_wise_padding": True,
+                        }
+                    )
+                    scatter.fabric.register_buffer(
+                        "supported_capacities",
+                        torch.tensor(
+                            scatter.fabric.load_history,
+                            dtype=torch.int32,
+                            device="cuda",
+                        ),
+                    )
+                    scatter.fabric.capacity_padding = True
+                    scatter.fabric.path_wise_padding = True
             elif isinstance(subm, GatherRouter):
                 gather: GatherRouter = subm
                 if gather.fabric_type == "combine":
-                    gather.fabric_type = "fused_combine"
-                    gather.fabirc = make_fabric("fused_combine", gather.fabric_kwargs)
+                    gather.fabric_kwargs.update({"ever_padded": True})
+                    gather.fabric.ever_padded = True
 
     def finalize(self) -> GraphModule:
         return super().finalize()

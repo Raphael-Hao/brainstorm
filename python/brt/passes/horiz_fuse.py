@@ -245,7 +245,7 @@ class HorizFusePass(VerticalFusePass):
         topological_sort(self.graph_mod.graph)
 
     def add_annotation_dfs(self, start: Node, source: Node, skiped: Set[Node]):
-        # TODO: handle index-changing node not following a scatter, e.g. getitem, index_select
+        # TODO: handle index-changing nodes that are not following a scatter, e.g. getitem, index_select
         if start in skiped:
             return
         skiped.add(start)
@@ -265,20 +265,29 @@ class HorizFusePass(VerticalFusePass):
             else:
                 other_users.add(user)
 
+        # Find the real user after the hfused nodes
         for hfused_node in hfused_users:
             arg_index = hfused_node.args.index(start)
+            output_indices = self.sub_modules[hfused_node.target].computing_dependency_map[arg_index]
+            is_branch_used = False
             for hf_user in hfused_node.users:
-                assert self.is_function_node(hf_user) and hf_user.target is operator.getitem
-                if hf_user.args[1] == arg_index:
+                assert (
+                    self.is_function_node(hf_user)
+                    and hf_user.target is operator.getitem
+                )
+                if hf_user.args[1] in output_indices:
                     other_users.add(hf_user)
-                    break
-            else:
+                    is_branch_used = True
+            if not is_branch_used:
                 logger.info(f"Branch {arg_index} of `{hfused_node.name}` is not used")
 
-        if start is source:  # only if is a index-changing node (e.g. getitem, router)
+        # DFS the succeeding nodes and add `deinit_grid_tensor` and `init_grid_tensor_from` nodes
+        if (
+            start is source
+        ):  # only if they are index-changing nodes (e.g. `getitem`, `router`)
             for indexing_node in indexing_users:
                 self.add_annotation_dfs(indexing_node, indexing_node, skiped)
-            if other_users:
+            if other_users:  # typically only if `start` is a `getitem` node
                 with self.origin_graph.inserting_after(start):
                     depacking_node = self.origin_graph.create_node(
                         op="call_function",
@@ -291,7 +300,7 @@ class HorizFusePass(VerticalFusePass):
                     depacking_node, lambda user: user in other_users
                 )
                 self.add_annotation_dfs(depacking_node, start, skiped)
-        else:
+        else:  # only if `start` is a depacking node's successor and `source` is its unpacked ancestor
             for other_node in other_users:
                 self.add_annotation_dfs(other_node, source, skiped)
             if indexing_users:
@@ -321,7 +330,6 @@ class HorizFusePass(VerticalFusePass):
             else:
                 skiped.add(node)
 
-
     def run_on_graph(self):
         visited = set()  # visited nodes in the origin graph
 
@@ -349,6 +357,3 @@ class HorizFusePass(VerticalFusePass):
         self.finalize()
 
         self.add_annotation()
-
-
-

@@ -249,11 +249,15 @@ def make_fabric(fabric_type: str, kwargs: Dict[str, Any]) -> FabricBase:
     return fabric_cls(**formulated_kwargs)
 
 
-def switch_capture(m: nn.Module, capture=True, mode="cum", fabric_type="dispatch"):
+def switch_capture(m: nn.Module, capture=True, mode=None, fabric_type=None):
     for child_m in m.children():
         switch_capture(child_m, capture=capture, mode=mode, fabric_type=fabric_type)
     if isinstance(m, FabricBase):
         if capture:
+            if mode is None:
+                mode = m.capture_mode
+            if fabric_type is None:
+                fabric_type = m.captured_fabric_type
             m.enable_capture(mode=mode, fabric_type=fabric_type)
         else:
             m.disable_capture()

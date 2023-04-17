@@ -282,8 +282,6 @@ def init_grid_tensor(
 
 def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
     t, tag_stack, load_stack, extra_attrs_stack_dict = deinit_grid_tensor(from_gird_tensor, True)
-    print([t.shape if isinstance(t, torch.Tensor) else t for t in tag_stack])
-    print(tensor.shape, from_gird_tensor.shape)
     return init_grid_tensor(tensor, tag_stack, load_stack, extra_attrs_stack_dict)
 
 
@@ -299,13 +297,6 @@ def deinit_grid_tensor(
         return t, tag_stack, load_stack, extra_attrs_stack_dict
     else:
         return grid_t.as_subclass(torch.Tensor)
-
-
-def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
-    _t, tag_stack, load_stack, extra_attr_dict = deinit_grid_tensor(
-        from_gird_tensor, True
-    )
-    return init_grid_tensor(tensor, tag_stack, load_stack, extra_attr_dict)
 
 
 def to_grid_tensor(torch_t: torch.Tensor, tag_stack=None, load_stack=None, extra_attr_dict=None):

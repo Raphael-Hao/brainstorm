@@ -16,7 +16,7 @@ from torch.overrides import (
 from brt.runtime import log
 from brt.jit.modules.base import ModuleBase, JitModuleBase, AtomModuleInputType
 from brt.jit.codegen.module import ModuleKernel
-from brt.runtime import ProtoTensor
+from brt.runtime.grid_tensor import GridTensor
 
 logger = log.get_logger(__file__)
 
@@ -100,6 +100,21 @@ class AtomModule(ModuleBase):
         if not isinstance(outputs, tuple):
             outputs = (outputs,)
         return [o.shape for o in outputs]
+
+    @abstractmethod
+    def _extract_arg_infos(self, method: str) -> Tuple[int, int, List[int], List[int]]:
+        """extract the input and output args infomations of `self.method`
+
+        Returns:
+            (List):
+                [0] (int): the number of input args of jit-function
+                [1] (int): the number of input args of jit-kernel
+                [2] (List[int]): the index of input args of jit-module in jit-kernel
+                [3] (List[int]): the index of output args of jit-module (also jit-fucntion)
+                    in jit-kernel
+
+        """
+        raise NotImplementedError()
 
     # @abstractmethod
     def _extract_parameters_and_buffers(self) -> List[Optional[torch.Tensor]]:
