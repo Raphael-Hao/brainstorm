@@ -50,11 +50,6 @@ wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux -O azcopy.tar.gz
 mkdir -p azcopy && tar -xzvf azcopy.tar.gz -C "azcopy" --strip-components=1
 $sudo_cmd mv azcopy/azcopy /usr/bin/azcopy && rm -rf azcopy.tar.gz azcopy
 
-UBUNTU_DIST=$(lsb_release -sr)
-wget https://packages.microsoft.com/config/ubuntu/"${UBUNTU_DIST}"/packages-microsoft-prod.deb
-$sudo_cmd dpkg -i packages-microsoft-prod.deb && rm -f packages-microsoft-prod.deb
-$sudo_cmd apt-get update && $sudo_cmd apt-get install -y dotnet-sdk-6.0
-
 mkdir -p ../.vscode
 cp ./vscode/c_cpp_properties.json ../.vscode/c_cpp_properties.json
 cp ./vscode/settings_workspace.json ../.vscode/settings.json
