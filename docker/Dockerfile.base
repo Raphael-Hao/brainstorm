@@ -1,7 +1,7 @@
 ARG BASE_IMAGE
 FROM $BASE_IMAGE AS base
-
 FROM base
+LABEL org.opencontainers.image.source https://github.com/Raphael-Hao/Brainstorm
 
 # ARG SSH_KEY_FILE=./id_ed25519
 ARG BRT_BRANCH=main
@@ -40,7 +40,6 @@ COPY install.sh /tmp/install.sh
 
 RUN bash /tmp/install.sh --branch $BRT_BRANCH
 
-LABEL org.opencontainers.image.source https://github.com/Raphael-Hao/Brainstorm
 
 EXPOSE 22
 CMD ["/usr/sbin/sshd","-D"]
