@@ -228,7 +228,7 @@ class GraphTracer(fx.Tracer):
         fixed_router_info = {}
         all_hooks = []
         # Get outshape of routers
-        # TODO: using RouterBase.ptu_grain_history
+        # TODO: using Fabric.cell_grain_history
         for node in graph.nodes:
             assert isinstance(node, Node), type(node)
             if node.op == "call_module" and isinstance(

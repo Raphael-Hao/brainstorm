@@ -5,6 +5,8 @@ from typing import List
 import torch.nn as nn
 import torch
 import math
+
+from brt import Annotator
 from brt.router import ScatterRouter, GatherRouter
 
 is_measure = False
@@ -343,6 +345,9 @@ class MSDNet(nn.Module):
             self.train(True)
         else:
             self.train(False)
+        
+        self.annotator = Annotator([0])
+
         self.blocks = nn.ModuleList()
         self.classifier = nn.ModuleList()
         self.scatters = nn.ModuleList()
@@ -555,6 +560,7 @@ class MSDNet(nn.Module):
         res = []
         if not self.training and self.routers_initilized:
             ##the actual dynamic routing
+            x = self.annotator(x)
             for i in range(self.nBlocks):
                 ## scatter all of the image
                 x = self.blocks[i](x)

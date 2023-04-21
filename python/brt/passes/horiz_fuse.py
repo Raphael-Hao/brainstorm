@@ -12,8 +12,13 @@ from torch import fx
 from torch import nn
 
 import brt
+from brt import Annotator
 from brt.runtime import log
-from brt.runtime.grid_tensor import init_grid_tensor_from, deinit_grid_tensor
+from brt.runtime.grid_tensor import (
+    init_grid_tensor_from,
+    deinit_grid_tensor,
+    to_torch_tensor,
+)
 from brt.router import ScatterRouter, GatherRouter
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
@@ -268,7 +273,9 @@ class HorizFusePass(VerticalFusePass):
         # Find the real user after the hfused nodes
         for hfused_node in hfused_users:
             arg_index = hfused_node.args.index(start)
-            output_indices = self.sub_modules[hfused_node.target].computing_dependency_map[arg_index]
+            output_indices = self.sub_modules[
+                hfused_node.target
+            ].computing_dependency_map[arg_index]
             is_branch_used = False
             for hf_user in hfused_node.users:
                 assert (
@@ -281,17 +288,17 @@ class HorizFusePass(VerticalFusePass):
             if not is_branch_used:
                 logger.info(f"Branch {arg_index} of `{hfused_node.name}` is not used")
 
-        # DFS the succeeding nodes and add `deinit_grid_tensor` and `init_grid_tensor_from` nodes
+        # DFS the succeeding nodes and add `to_torch_tensor` and `init_grid_tensor_from` nodes
         if (
             start is source
-        ):  # only if they are index-changing nodes (e.g. `getitem`, `router`)
+        ):  # only if they are index-changing nodes (e.g. `getitem`, `router`, `brt.Annotator`)
             for indexing_node in indexing_users:
                 self.add_annotation_dfs(indexing_node, indexing_node, skiped)
             if other_users:  # typically only if `start` is a `getitem` node
                 with self.origin_graph.inserting_after(start):
                     depacking_node = self.origin_graph.create_node(
                         op="call_function",
-                        target=deinit_grid_tensor,
+                        target=to_torch_tensor,
                         args=(start, False),
                     )
                 if start.is_fixed_inout:
@@ -325,7 +332,10 @@ class HorizFusePass(VerticalFusePass):
         for node in self.origin_graph.nodes:
             if node in skiped:
                 continue
-            if self.is_scatter_node(node):
+            if self.is_scatter_node(node) or (
+                self.is_module_node(node)
+                and isinstance(self.sub_modules[node.target], Annotator)
+            ):
                 self.add_annotation_dfs(node, node, skiped)
             else:
                 skiped.add(node)

@@ -56,7 +56,7 @@ def threshold_dynamic_evaluate(
     model1 = switch_capture(model1, False).eval()
     tester = Tester(model1, args)
     # target_predict, val_target, n_batch = tester.calc(val_loader)
-    model1 = switch_capture(model1, True).eval()
+    model1 = switch_capture(model1, True, "max", "dispatch,combine").eval()
     if os.path.exists(os.path.join(args.save, "logits_single.pth")):
         val_pred, val_target, test_pred, test_target = torch.load(
             os.path.join(args.save, "logits_single.pth")
@@ -334,7 +334,7 @@ def threshold_dynamic_evaluate(
 
             num_trials = 100
 
-            timer = CUDATimer(repeat=2)
+            timer = CUDATimer(repeat=2, export_fname="msdnet_all_opt")
             naive_backbone = model1
             naive_backbone = switch_capture(naive_backbone, False).eval()
             raw_time = []
