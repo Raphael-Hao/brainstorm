@@ -26,7 +26,6 @@ class FabricBase(nn.Module):
 
         env_capturing = os.environ.get("BRT_CAPTURE_STATS", "False").lower() in ("true")
         if env_capturing:
-
             capture_mode = os.environ.get("BRT_CAPTURE_MODE", "avg")
             assert capture_mode in (
                 "avg",
@@ -54,7 +53,8 @@ class FabricBase(nn.Module):
         self.cell_device_history: List[torch.device] = None
 
     def forward(
-        self, *inputs: Any,
+        self,
+        *inputs: Any,
     ):
         raise NotImplementedError("FabricBase is an abstract class for Fabric")
 
@@ -102,7 +102,6 @@ class FabricBase(nn.Module):
         self.captured_fabric_type = []
 
     def _capture_combine_flows(self, in_flows):
-
         if len(in_flows) == 0 and isinstance(in_flows, List):
             return
 
@@ -181,8 +180,7 @@ class FabricBase(nn.Module):
             tag_indices = c_router.convert_index_format(indices, loads, True)
 
         current_cell_path = [
-            tag_indices[: loads[i], i].cpu().numpy() + self.cell_tag_base
-            for i in range(path_num)
+            tag_indices[: loads[i], i].cpu().numpy() for i in range(path_num)
         ]
         current_cell_path = [
             current_cell_path[i][current_cell_path[i] != 0] + self.cell_tag_base

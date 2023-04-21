@@ -281,7 +281,7 @@ def init_grid_tensor(
 
 
 def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
-    t, tag_stack, load_stack, extra_attrs_stack_dict = deinit_grid_tensor(from_gird_tensor, True)
+    t, tag_stack, load_stack, extra_attrs_stack_dict = to_torch_tensor(from_gird_tensor, True)
     return init_grid_tensor(tensor, tag_stack, load_stack, extra_attrs_stack_dict)
 
 
