@@ -36,9 +36,9 @@ ENV BRT_CACHE_PATH=/brainstorm_project/brainstorm/.cache
 ENV TORCH_CUDA_ARCH_LIST="7.0;7.2;7.5;8.0;8.6+PTX"
 
 
-COPY install.sh /tmp/install.sh
+COPY setup_docker.sh /tmp/setup_docker.sh
 
-RUN bash /tmp/install.sh --branch $BRT_BRANCH
+RUN bash /tmp/setup_docker.sh --branch $BRT_BRANCH
 
 
 EXPOSE 22

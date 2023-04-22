@@ -16,7 +16,7 @@ def get_build_args():
     parser.add_argument(
         "--config",
         type=str,
-        default="config.yaml",
+        default="gh_config.yaml",
         help="Config file for docker build",
     )
     args = parser.parse_args()
@@ -34,10 +34,12 @@ def get_build_args():
     args.upload = config["upload"]
     args.updata_brt = config["update_brt"]
     args.no_cache = config["no_cache"]
-    args.context = config["context"]
-    context_dir = script_dir if args.context is None else pathlib.Path(args.context)
+    args.context: str = config["context"]
+    context_dir = (
+        script_dir if args.context is None else script_dir / pathlib.Path(args.context)
+    )
     args.context_path = context_dir.as_posix()
-    args.dockerfile = (context_dir / f"Dockerfile.{args.type}").as_posix()
+    args.dockerfile = (script_dir / f"../docker/Dockerfile.{args.type}").as_posix()
     args.image_spec = f"brt:{args.branch}" if args.tag is None else f"brt:{args.tag}"
 
     return args
