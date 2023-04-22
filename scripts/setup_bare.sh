@@ -9,7 +9,7 @@ if [[ "$1" == "--branch" ]]; then
     shift 2
 fi
 
-cd /root
+cd "$HOME" || exit
 
 apt-get -y update && apt-get install -y \
     ssh openssh-server gcc libtinfo-dev zlib1g-dev build-essential \
@@ -20,30 +20,28 @@ sed '/exec zsh -l/d' ./install.sh >./install_wo_exec.sh
 sh install_wo_exec.sh
 rm install.sh install_wo_exec.sh
 
-git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-git clone https://github.com/zsh-users/zsh-history-substring-search ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
+git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
+git clone https://github.com/zsh-users/zsh-autosuggestions "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
+git clone https://github.com/zsh-users/zsh-history-substring-search "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search"
 sed "s/plugins=(git)/plugins=(git extract zsh-autosuggestions zsh-history-substring-search zsh-syntax-highlighting)/g" "${HOME}/.zshrc" >"${HOME}/.tmp_zshrc" && mv "${HOME}/.tmp_zshrc" "${HOME}/.zshrc"
-
-
 
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
     bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/miniconda3 &&
     rm -f Miniconda3-py38_4.10.3-Linux-x86_64.sh
 
-cd /root
+# shellcheck disable=SC2016
+echo 'export PATH=/opt/miniconda3/bin:$PATH' >>"$HOME/.zshrc"
+# shellcheck disable=SC2016
+echo 'export PATH=/opt/miniconda3/bin:$PATH' >>"$HOME/.bashrc"
 
-echo 'export PATH=/opt/miniconda3/bin:$PATH' >>/root/.zshrc
-echo 'export PATH=/opt/miniconda3/bin:$PATH' >>/root/.bashrc
-
-source /root/.bashrc
+# shellcheck disable=SC1090,SC1091
+source "$HOME/.bashrc"
 
 pip install --upgrade pip
 pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 --extra-index-url https://download.pytorch.org/whl/cu113
 
-
-BRT_DIR=/root/brainstorm_project/brainstorm
-mkdir -p /root/brainstorm_project && cd /root/brainstorm_project
+BRT_DIR="$HOME/brainstorm_project/brainstorm"
+mkdir -p "$HOME/brainstorm_project" && cd "$HOME/brainstorm_project" || exit
 
 git clone https://Raphael-Hao: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@github.com/Raphael-Hao/brainstorm.git \
     -b "${BRT_BRANCH:-main}" \

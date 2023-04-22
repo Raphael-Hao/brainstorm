@@ -71,7 +71,6 @@ def docker_upload(image_spec, username):
 
 def build_docker():
     args = get_build_args()
-    login_github_registry(args.username, args.token)
     cmd = [
         "docker",
         "build",
@@ -98,6 +97,7 @@ def build_docker():
     subprocess.call(cmd)
 
     if args.upload:
+        login_github_registry(args.username, args.token)
         docker_upload(args.image_spec, args.username)
 
 
