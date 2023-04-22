@@ -14,18 +14,18 @@ import yaml
 def get_build_args():
     parser = argparse.ArgumentParser(description="Build docker image")
     parser.add_argument(
-        "--config",
+        "--type",
         type=str,
-        default="gh_config.yaml",
-        help="Config file for docker build",
+        choices=["base", "update"],
+        default="update",
+        help="Type of docker image to build. Can be 'base' or 'update'",
     )
     args = parser.parse_args()
 
     script_dir = pathlib.Path(__file__).parent.absolute()
-    config_file = script_dir / str(args.config)
+    config_file = script_dir / str("gh_config.yaml")
     config = yaml.safe_load(config_file.open())
 
-    args.type = config["type"]
     args.username = config["username"]
     args.token = config["token"]
     if args.type == "base":

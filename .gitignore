@@ -23,8 +23,6 @@ docker/id_*
 
 .vscode
 
-scripts/gh_config.yaml
-
 # Local History for Visual Studio Code
 .history/
 
