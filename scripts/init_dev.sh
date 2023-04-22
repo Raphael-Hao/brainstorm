@@ -23,28 +23,20 @@ has_sudo() {
 }
 
 if is_root; then
-    use_sudo=1
     sudo_cmd=""
 else
     HAS_SUDO=$(has_sudo)
     sudo_cmd="sudo"
     if [ "$HAS_SUDO" == "has_sudo__needs_pass" ]; then
-        use_sudo=1
         echo "You need to supply the password to use sudo."
         sudo -v
     elif [ "$HAS_SUDO" == "has_sudo__pass_set" ]; then
-        use_sudo=1
+        echo "You already have sudo privileges."
     else
         echo "You need to have sudo privileges to run this script for some packages."
-        use_sudo=0
         exit 1
     fi
 fi
-
-git config --global user.name raphael
-git config --global user.email raphaelhao@outlook.com
-
-curl -sL https://aka.ms/InstallAzureCLIDeb | $sudo_cmd bash
 
 wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux -O azcopy.tar.gz
 mkdir -p azcopy && tar -xzvf azcopy.tar.gz -C "azcopy" --strip-components=1

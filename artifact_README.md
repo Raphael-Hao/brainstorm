@@ -2,6 +2,9 @@
 
 This is the artifact for the paper "Optimizing Dynamic Neural Networks with Brainstorm", We are going to reproduce the main results of the paper in this artifact.
 
+Due to the large size of the dataset and inaccessibility of the server for multi-GPU experiments, We provide a screencast to demonstrate the whole artifact. The screencast can be found [here](https://youtu.be/1ZQ9Z2Z2Z2Z).
+For single-GPU experiments, we provide a docker image to reproduce the results.
+
 # Hardware and Software Requirements
 
 - Hardware Requirements
@@ -30,11 +33,71 @@ We provide an one-click script to setup the environment on bare metal server. Th
 bash scripts/setup_bare.sh
 ```
 
-## Building the Docker Image
+### Preparing the Dataset, Checkpoints, and Kernel Database with the following command:
+
+```bash
+bash scripts/init.sh
+```
+
+## Installation with Docker Container
+
+### Building the Docker Image
 
 We also provide a docker image to setup the environment. The docker image can be built by the following command:
 
 ```bash
 python scripts/docker_gh_build.py --type latest
 ```
+
+### Starting the Docker Container
+
+The docker image can be run by the following command:
+
+```bash
+bash scripts/docker_run.sh
+```
+
+# Preparing the Dataset, Checkpoints, and Kernel Database:
+
+```bash
+bash scripts/init_dev.sh
+```
+
+# Reproducing the Results
+
+## Reproducing the Results in Figure 12
+
+
+## Reproducing the Results in Figure 13
+
+
+## Reproducing the Results in Figure 14
+
+
+## Reproducing the Results in Figure 15
+
+
+## Reproducing the Results in Figure 16
+
+
+## Reproducing the Results in Figure 17
+
+
+## Reproducing the Results in Figure 18
+
+
+## Reproducing the Results in Figure 19
+
+
+## Reproducing the Results in Figure 20
+
+
+## Reproducing the Results in Figure 21
+
+
+## Reproducing the Results in Figure 22
+
+
+## Reproducing the Results in Figure 23
+
 
