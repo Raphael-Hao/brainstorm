@@ -16,9 +16,9 @@ def get_build_args():
     parser.add_argument(
         "--type",
         type=str,
-        choices=["base", "update"],
+        choices=["base", "latest"],
         default="update",
-        help="Type of docker image to build. Can be 'base' or 'update'",
+        help="Type of docker image to build. Can be 'base' or 'latest'",
     )
     args = parser.parse_args()
 
@@ -31,8 +31,8 @@ def get_build_args():
     if args.type == "base":
         args.base_image = config["base_base"]
         args.tag = "base"
-    elif args.type == "update":
-        args.base_image = config["update_base"]
+    elif args.type == "latest":
+        args.base_image = config["latest_base"]
         args.tag = "latest"
     args.branch = config["branch"]
     args.upload = config["upload"]
@@ -43,7 +43,10 @@ def get_build_args():
         script_dir if args.context is None else script_dir / pathlib.Path(args.context)
     )
     args.context_path = context_dir.as_posix()
-    args.dockerfile = (script_dir / f"../docker/Dockerfile.{args.type}").as_posix()
+    dockerfile_suffix = "base" if args.type == "base" else "update"
+    args.dockerfile = (
+        script_dir / f"../docker/Dockerfile.{dockerfile_suffix}"
+    ).as_posix()
     args.image_spec = f"brt:{args.branch}" if args.tag is None else f"brt:{args.tag}"
 
     return args
@@ -86,7 +89,7 @@ def build_docker():
 
     cmd.extend(["--build-arg", f"BASE_IMAGE={args.base_image}"])
     cmd.extend(["--build-arg", f"BRT_BRANCH={args.branch}"])
-    if args.type == "update":
+    if args.type == "latest":
         cmd.extend(["--build-arg", f"UPDATE_BRT_ONLY={args.update_brt}"])
         cmd.append("--no-cache")
     if args.no_cache and "--no-cache" not in cmd:

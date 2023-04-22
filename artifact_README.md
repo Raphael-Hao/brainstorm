@@ -35,6 +35,6 @@ bash scripts/setup_bare.sh
 We also provide a docker image to setup the environment. The docker image can be built by the following command:
 
 ```bash
-python scripts/docker_gh_build.py
+python scripts/docker_gh_build.py --type latest
 ```
 

@@ -1,5 +1,5 @@
 base_base: "nvidia/cuda:11.3.1-cudnn8-devel-ubuntu20.04" # or ghcr.io/raphael-hao/brt:latest
-update_base: "ghcr.io/raphael-hao/brt:latest"
+latest_base: "ghcr.io/raphael-hao/brt:latest"
 branch: "swin_ae"
 update_brt: false
 no_cache: false
