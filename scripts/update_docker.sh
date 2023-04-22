@@ -17,7 +17,7 @@ if [[ "$1" == "--brt_only" ]]; then
     shift 2
 fi
 
-cd /brainstorm_project/brainstorm
+cd "$$HOME"/brainstorm_project/brainstorm
 git fetch
 git checkout -b "${BRT_BRANCH:-main}"
 git pull
@@ -35,5 +35,5 @@ if [[ "$BRT_ONLY" != "True" ]]; then
     cd ../python && pip install .
 fi
 
-cd /brainstorm_project/brainstorm || exit
+cd "$HOME"/brainstorm_project/brainstorm || exit
 pip install -v --editable .

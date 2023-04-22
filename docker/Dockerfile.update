@@ -7,6 +7,6 @@ ENV BRT_BRANCH=${BRANCH}
 ENV BRT_UPDATE_BRT_ONLY=${UPDATE_BRT_ONLY}
 ENV DEBIAN_FRONTEND=noninteractive
 
-COPY update.sh /tmp/update.sh
+COPY update_docker.sh /tmp/update_docker.sh
 
-RUN bash /tmp/update.sh --branch $BRT_BRANCH --brt_only ${BRT_UPDATE_BRT_ONLY}
+RUN bash /tmp/update_docker.sh --branch ${BRT_BRANCH} --brt_only ${BRT_UPDATE_BRT_ONLY}

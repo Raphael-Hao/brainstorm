@@ -43,9 +43,9 @@ ENV TORCH_CUDA_ARCH_LIST="7.0;7.2;7.5;8.0;8.6+PTX"
 ENV SINGULARITY_PYTHON_PATH=/opt/miniconda3/bin/python
 
 
-COPY install.sh /tmp/install.sh
+COPY setup_docker.sh /tmp/setup_docker.sh
 
-RUN bash /tmp/install.sh --branch $BRT_BRANCH
+RUN bash /tmp/setup_docker.sh --branch $BRT_BRANCH
 
 COPY --from=installer /installer /opt/microsoft/_singularity/installations/
 RUN /opt/microsoft/_singularity/installations/singularity/installer.sh

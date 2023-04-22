@@ -96,7 +96,7 @@ def build_docker():
     print(f"Using Branch: {args.branch} of BRT")
     print(f"Using Dockerfile: {args.dockerfile}")
     print(f"Using context: {args.context_path}")
-    subprocess.call(cmd)
+    # subprocess.call(cmd)
 
     if args.upload:
         login_github_registry(args.username, args.token)
