@@ -114,14 +114,14 @@ class SwinMoEProtocol(ProtocolBase):
         ) // num_global_experts
 
         if self.capacity_factor > 0:
-            runtime_capacities = self.top_k * int(
+            runtime_capacities_int = self.top_k * int(
                 self.capacity_factor * samples_per_expert
             )
         else:
             raise NotImplementedError("capacity_factor must be greater than 0")
         path_num = masks_se[0].size(1)
         runtime_capacities = torch.tensor(
-            [runtime_capacities] * path_num,
+            [runtime_capacities_int] * path_num,
             dtype=torch.int32,
             device=masks_se[0].device,
         )

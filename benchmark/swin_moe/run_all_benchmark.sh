@@ -23,7 +23,7 @@ for vendor in "${VENDORS[@]}"; do
     for capacity in "${CAPACITIES[@]}"; do
         for gpus in "${GPUS[@]}"; do
             echo "Running benchmark for vendor: $vendor, capacity: $capacity, gpus: $gpus"
-            bash run_benchmark.sh --vendor "$vendor" --capacity "$capacity" --gpus "$gpus" --mode correctness
+            bash run_benchmark.sh --vendor "$vendor" --capacity "$capacity" --gpus "$gpus" --mode throughput
         done
     done
 done
