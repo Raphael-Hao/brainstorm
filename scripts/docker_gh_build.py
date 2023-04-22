@@ -28,11 +28,15 @@ def get_build_args():
     args.type = config["type"]
     args.username = config["username"]
     args.token = config["token"]
-    args.base_image = config["base_image"]
-    args.tag = config["tag"]
+    if args.type == "base":
+        args.base_image = config["base_base"]
+        args.tag = "base"
+    elif args.type == "update":
+        args.base_image = config["update_base"]
+        args.tag = "latest"
     args.branch = config["branch"]
     args.upload = config["upload"]
-    args.updata_brt = config["update_brt"]
+    args.update_brt = config["update_brt"]
     args.no_cache = config["no_cache"]
     args.context: str = config["context"]
     context_dir = (
@@ -96,7 +100,8 @@ def build_docker():
     print(f"Using Branch: {args.branch} of BRT")
     print(f"Using Dockerfile: {args.dockerfile}")
     print(f"Using context: {args.context_path}")
-    # subprocess.call(cmd)
+    print(cmd)
+    subprocess.call(cmd)
 
     if args.upload:
         login_github_registry(args.username, args.token)

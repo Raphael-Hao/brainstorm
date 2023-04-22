@@ -17,9 +17,9 @@ if [[ "$1" == "--brt_only" ]]; then
     shift 2
 fi
 
-cd "$$HOME"/brainstorm_project/brainstorm
+cd "$HOME"/brainstorm_project/brainstorm
 git fetch
-git checkout -b "${BRT_BRANCH:-main}"
+git checkout "${BRT_BRANCH:-main}"
 git pull
 git submodule update --init --recursive
 
