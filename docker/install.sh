@@ -58,7 +58,7 @@ cp ../../../cmake/config/tvm.cmake config.cmake
 cmake ..
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH &&
     ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 &&
-    make install -j &&
+    make install -j 24 &&
     rm -f /usr/local/cuda/lib64/stubs/libcuda.so.1
 cd ../python && pip install .
 cd "$BRT_DIR" || exit
