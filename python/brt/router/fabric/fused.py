@@ -1,12 +1,10 @@
-from typing import List, Union, Tuple
-
-import torch
+from typing import List, Tuple, Union
 
 import brt._C.router as c_router
-
-from brt.runtime import log
+import torch
 from brt.router.fabric.base import register_fabric
 from brt.router.fabric.generic import CombineFabric, DispatchFabric
+from brt.runtime import log
 from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
@@ -99,7 +97,10 @@ class FusedCombineFabric(CombineFabric):
                 in_flow_load_stack,
                 extra_attr_stack,
             ) = to_torch_tensor(in_flow, retrieve_attr=True)
-            residual_flow = residual_flows[flow_idx]
+
+            residual_flow = (
+                residual_flows[flow_idx] if residual_flows is not None else None
+            )
 
             route_indices = in_flow_tag_stack.pop()
             in_flows_load = in_flow_load_stack.pop()

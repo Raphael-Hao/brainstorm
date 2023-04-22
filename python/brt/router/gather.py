@@ -1,11 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Dict, Any
+from typing import Any, Dict
 
-from brt.runtime import log
 from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
+from brt.runtime import log
 
 # from brt.router.utils import empty_flows
 

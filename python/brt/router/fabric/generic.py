@@ -1,12 +1,12 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Union, Tuple
+from typing import List, Tuple, Union
 
-import torch
 import brt._C.router as c_router
-from brt.runtime import log
+import torch
 from brt.router.fabric.base import FabricBase, register_fabric
+from brt.runtime import log
 from brt.runtime.grid_tensor import GridTensor, init_grid_tensor, to_torch_tensor
 
 logger = log.get_logger(__file__)
@@ -51,6 +51,7 @@ class DispatchFabric(FabricBase):
         self.route_logics = route_logics
         self.transforms = transforms
         supported_capacities = kwargs.pop("supported_capacities", None)
+        self.capacity_padding = kwargs.pop("capacity_padding", False)
         if supported_capacities is not None:
             if isinstance(supported_capacities, int):
                 supported_capacities = [supported_capacities]
@@ -61,11 +62,9 @@ class DispatchFabric(FabricBase):
                 "supported_capacities",
                 torch.tensor(supported_capacities, dtype=torch.int32),
             )
-            self.capacity_padding = kwargs.pop("capacity_padding", False)
             self.path_wise_padding = kwargs.pop("path_wise_padding", False)
         else:
             self.register_buffer("supported_capacities", None)
-            self.capacity_padding = False
             self.path_wise_padding = False
         self.max_path_padding = kwargs.pop("max_path_padding", False)
         self.max_path_load = kwargs.pop("max_path_load", None)
@@ -77,7 +76,10 @@ class DispatchFabric(FabricBase):
         runtime_capacities: torch.Tensor = None,
         score: torch.Tensor = None,
     ) -> Tuple[Union[List[GridTensor], List[List[GridTensor]]], torch.Tensor]:
-        supported_capacities = runtime_capacities or self.supported_capacities
+        if runtime_capacities is not None:
+            supported_capacities = runtime_capacities
+        else:
+            supported_capacities = self.supported_capacities
         route_indices, loads = c_router.generate_indices_and_loads(
             hot_mask,
             supported_capacities=supported_capacities,
@@ -205,11 +207,11 @@ class CombineFabric(FabricBase):
         residual_flows: Union[GridTensor, List[GridTensor]] = None,
         score: torch.Tensor = None,
     ) -> Union[GridTensor, List[GridTensor]]:
-
         if self.flow_num == 1:
             in_flows = [in_flows]
             residual_flows = [residual_flows] if residual_flows is not None else None
         self.capture_flow_stats(in_flows)
+
         out_flows = self.combine(in_flows, residual_flows, score)
 
         if self.flow_num == 1:
@@ -223,7 +225,6 @@ class CombineFabric(FabricBase):
         residual_flows: List[GridTensor],
         score: torch.Tensor,
     ) -> List[GridTensor]:
-
         out_flows = []
 
         for flow_idx in range(self.flow_num):

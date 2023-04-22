@@ -7,11 +7,11 @@
 import argparse
 import json
 import os
+import pathlib
 import random
 import time
 import warnings
 from functools import partial
-import pathlib
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
 from tutel_ea import system_init
@@ -23,27 +23,25 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+from brt.runtime import BRT_CACHE_PATH
 from brt.runtime.benchmark import deterministic_random_generator, profile_v2
-
 from brt.runtime.placement import (
-    dump_trace,
     adaptive_load,
     adaptive_micro_bench_load,
+    dump_trace,
     load_searched_placement,
 )
-from brt.runtime import BRT_CACHE_PATH
-
 from config import get_config
 from data import build_loader
 from logger import create_logger
 from models import build_model
 from timm.utils import AverageMeter, accuracy
 from utils import (
+    adaptive_load_checkpoint,
     create_ds_config,
+    gather_all_ckpts_into_one,
     hook_scale_grad,
     reduce_tensor,
-    gather_all_ckpts_into_one,
-    adaptive_load_checkpoint,
 )
 
 warnings.filterwarnings(
@@ -198,7 +196,7 @@ def main(args, config, ds_init):
             adaptive_load(
                 model_without_ddp,
                 checkpoint_file,
-                enable_locality=args.locality,
+                False,
                 global_expert_num=16,
             )
         torch.cuda.synchronize()
@@ -328,7 +326,6 @@ def throughput(data_loader, model, logger):
     logger.info(
         f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
-
 
 
 @torch.inference_mode()

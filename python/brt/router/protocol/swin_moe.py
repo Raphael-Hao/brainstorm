@@ -1,12 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+import brt._C.router as c_router
 import torch
 import torch.distributed as dist
-
-from brt.runtime import log
 from brt.router.protocol.base import ProtocolBase, register_protocol
-import brt._C.router as c_router
+from brt.runtime import log
 
 logger = log.get_logger(__file__)
 
@@ -122,11 +121,22 @@ class SwinMoEProtocol(ProtocolBase):
             raise NotImplementedError("capacity_factor must be greater than 0")
         path_num = masks_se[0].size(1)
         runtime_capacities = torch.tensor(
-            [runtime_capacities] * path_num, dtype=torch.int32, device=masks_se[0].device
+            [runtime_capacities] * path_num,
+            dtype=torch.int32,
+            device=masks_se[0].device,
+        )
+        prefix_capacities = torch.tensor(
+            [0] * path_num,
+            dtype=torch.int32,
+            device=masks_se[0].device,
         )
 
         hot_mask, _remain_capacities = process_mask(
-            masks_se[0], runtime_capacities, self.batch_prioritized_routing, score
+            masks_se[0],
+            prefix_capacities,
+            runtime_capacities,
+            self.batch_prioritized_routing,
+            score,
         )
 
         new_score = score
