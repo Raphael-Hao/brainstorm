@@ -57,7 +57,7 @@ class FusedDispatchFabric(DispatchFabric):
                 flow_data,
                 route_indices,
                 loads,
-                score,
+                score if self.transforms[flow_idx] else None,
                 self.is_tag_index,
                 flow_tag,
                 self.max_path_padding,
