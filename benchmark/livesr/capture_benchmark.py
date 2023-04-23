@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 from torch.utils.benchmark import Timer
 
-from brt.router import switch_router_mode
+from brt.router import switch_capture
 from brt.runtime.benchmark import profile
 
 from archs.livesr import LiveSR
@@ -91,7 +91,7 @@ for n in [10, 100]:
     logger.info(f"* Start timeit: Run {n} times")
     for (module_type, num_feature, num_subnets), model in module_dict.items():
         x = input_tensor
-        switch_router_mode(model, True)
+        switch_capture(model, True)
         time = (
             Timer(
                 f"model(x)",
@@ -105,7 +105,7 @@ for n in [10, 100]:
             * 10e6
         )
         logger.info(f"{module_type}, {num_feature}, {num_subnets}:\t\t {time} us/run")
-        switch_router_mode(model, False)
+        switch_capture(model, False)
         time = (
             Timer(
                 f"model(x)",
@@ -128,7 +128,7 @@ for (module_type, num_feature, num_subnets), model in module_dict.items():
     logger.info(f"Profiling {module_type}")
     model = module_dict[(module_type, num_feature, num_subnets)]
     x = input_tensor
-    switch_router_mode(model, True)
+    switch_capture(model, True)
     profile(lambda: model(x))
-    switch_router_mode(model, False)
+    switch_capture(model, False)
     profile(lambda: model(x))

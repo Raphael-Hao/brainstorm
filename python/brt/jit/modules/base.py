@@ -31,12 +31,12 @@ class ModuleBase(ABC):
         objective_func: str = "fastest",
         rank: Union[int, List[int]] = 1,
     ) -> Callable[..., None]:
-        if all(
-            input.numel() == 0
-            for input in sample_inputs
-            if isinstance(input, torch.Tensor)
-        ):
-            return lambda *args, **kwargs: None
+        # if all(
+        #     input.numel() == 0
+        #     for input in sample_inputs
+        #     if isinstance(input, torch.Tensor)
+        # ):
+        #     return lambda *args, **kwargs: None
         global_kernel = self._make_global_kernel(
             sample_inputs=sample_inputs,
             method=method,

@@ -10,7 +10,7 @@ from torch.utils.benchmark import Timer
 from brt.runtime.benchmark import profile, CUDATimer
 from brt.runtime.log import get_logger, set_level_to_debug
 from brt.passes import RouterFixPass, VerticalFusePass, HorizFusePass
-from brt.router import switch_router_mode, RouterBase
+from brt.router import switch_capture, RouterBase
 
 from archs.livesr import LiveSR
 from archs.vfused_livesr import vFusedLiveSR
@@ -46,14 +46,14 @@ for hdlr in logger.handlers:
 # set_level_to_debug()
 
 
-timer = CUDATimer(loop=100, repeat=2)
+timer = CUDATimer(loop=100, repeat=2, export_fname="benchmark_livesr")
 
 
 def print_load_history(module: nn.Module):
     for subn, subm in module.named_modules():
         if isinstance(subm, RouterBase) and subm.fabric_type == "dispatch":
-            load_history = getattr(subm, "load_history", "no load_history found")
-            logger.debug(f"{subn}, {subm.capturing}, {load_history}")
+            load_history = getattr(subm.fabric, "load_history", "no load_history found")
+            logger.debug(f"{subn}, {subm.fabric.capturing}, {load_history}")
 
 
 def time_it(func, func_args, msg):
@@ -82,10 +82,10 @@ def benchmark(num_subnets: int, num_feature: int) -> None:
     livesr = LiveSR(num_subnets, SUBNET_NUM_BLOCK, num_feature).cuda()
     logger.info(f"LiveSR {num_feature} {num_subnets} builded")
 
-    switch_router_mode(livesr, True)
+    switch_capture(livesr, True, "max", "dispatch,combine")
     for input_tensor in dataloader:
         livesr(input_tensor)
-    switch_router_mode(livesr, False)
+    switch_capture(livesr, False)
     print_load_history(livesr)
 
     raw_time = time_it(livesr, input_tensor, "raw livesr")

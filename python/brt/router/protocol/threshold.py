@@ -77,7 +77,7 @@ class BinaryThresholdProtocol(ProtocolBase):
     def make_route_decision(self, score: torch.Tensor):
         logit_score = self.softmax(score)
         max_preds, _argmax_preds = logit_score.max(dim=1, keepdim=False)
-        hot_mask = max_preds >= self.threshold
+        hot_mask = (max_preds >= self.threshold).long()
         hot_mask = hot_mask.unsqueeze(-1)
         if self.selected_path == 0:
             hot_mask = torch.ones(

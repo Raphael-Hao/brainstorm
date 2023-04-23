@@ -281,6 +281,11 @@ def init_grid_tensor(
     return cell
 
 
+def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
+    t, tag_stack, load_stack, extra_attrs_stack_dict = to_torch_tensor(from_gird_tensor, True)
+    return init_grid_tensor(tensor, tag_stack, load_stack, extra_attrs_stack_dict)
+
+
 def deinit_grid_tensor(
     grid_t: GridTensor,
     retrieve_attr=True,
@@ -301,16 +306,8 @@ def deinit_grid_tensor(
         return grid_t.as_subclass(torch.Tensor)
 
 
-def init_grid_tensor_from(tensor: torch.Tensor, from_gird_tensor: GridTensor):
-    _t, tag_stack, load_stack, extra_attr_dict = deinit_grid_tensor(
-        from_gird_tensor, True
-    )
-    return init_grid_tensor(tensor, tag_stack, load_stack, extra_attr_dict)
 
-
-def to_grid_tensor(
-    torch_t: torch.Tensor, tag_stack=None, load_stack=None, extra_attr_dict=None
-):
+def to_grid_tensor(torch_t: torch.Tensor, tag_stack=None, load_stack=None, extra_attr_dict=None):
     """
     restore a torch.Tensor to a Mono without any pack operation
     """

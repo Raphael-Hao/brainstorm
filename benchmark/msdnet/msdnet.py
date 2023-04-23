@@ -5,6 +5,8 @@ from typing import List
 import torch.nn as nn
 import torch
 import math
+
+from brt import Annotator
 from brt.router import ScatterRouter, GatherRouter
 
 is_measure = False
@@ -343,6 +345,9 @@ class MSDNet(nn.Module):
             self.train(True)
         else:
             self.train(False)
+        
+        self.annotator = Annotator([0])
+
         self.blocks = nn.ModuleList()
         self.classifier = nn.ModuleList()
         self.scatters = nn.ModuleList()
@@ -538,23 +543,24 @@ class MSDNet(nn.Module):
                         "route_logic": ["1d", "1d", "1d", "1d", "1d"],
                         "transform": [False, False, False, False, False],
                     },
-                    capturing=True,
-                    capture_mode="max",
+                    # capturing=True,
+                    # capture_mode="max",
                 )
             )
         self.final_gather = GatherRouter(
-            capturing=True
+            # capturing=True,
             # fabric_type="single_cell_combine",
             # fabric_kwargs={"sparse": True}
             # fabric_type="combine", fabric_kwargs={"sparse": True}
         )
-        if "combine" not in self.final_gather.captured_fabric_type:
-            self.final_gather.captured_fabric_type.append("combine")
+        # if "combine" not in self.final_gather.captured_fabric_type:
+        #     self.final_gather.captured_fabric_type.append("combine")
 
     def forward(self, x, _is_measure=False):
         res = []
         if not self.training and self.routers_initilized:
             ##the actual dynamic routing
+            x = self.annotator(x)
             for i in range(self.nBlocks):
                 ## scatter all of the image
                 x = self.blocks[i](x)

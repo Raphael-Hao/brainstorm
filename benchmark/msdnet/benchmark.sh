@@ -3,6 +3,7 @@
 export BRT_CAPTURE_STATS=True
 export BRT_CAPTURED_FABRIC_TYPE=dispatch,combine
 export BRT_CACHE_PATH="${HOME}/brainstorm_project/brainstorm/.cache"
+export DATA_SET_PATH="${HOME}/brainstorm_project/dataset/imagenet"
 
 # msdnet_path="${HOME}/brainstorm_project/brainstorm/benchmark/msdnet"
 msdnet_path=${PWD}
@@ -17,7 +18,7 @@ function run_benchmark() {
     echo ${thresholds}
     python3 main.py \
         --thresholds ${thresholds} \
-        --data-root ~/dataset/imagenet/ \
+        --data-root ${DATA_SET_PATH} \
         --data ImageNet \
         --save ${msdnet_path}/saveresult \
         --arch msdnet \

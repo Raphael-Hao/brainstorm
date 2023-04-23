@@ -30,7 +30,7 @@ from brt.runtime.benchmark import (
     MemoryStats,
     profile,
 )
-from brt.router import switch_router_mode, ScatterRouter, GatherRouter
+from brt.router import switch_capture, ScatterRouter, GatherRouter
 
 from msdnet import MSDNet
 from adaptive_inference import Tester
@@ -53,10 +53,10 @@ def threshold_evaluate(
 def threshold_dynamic_evaluate(
     model1: MSDNet, test_loader: DataLoader, val_loader: DataLoader, args
 ):
-    model1 = switch_router_mode(model1, False).eval()
+    model1 = switch_capture(model1, False).eval()
     tester = Tester(model1, args)
     # target_predict, val_target, n_batch = tester.calc(val_loader)
-    model1 = switch_router_mode(model1, True).eval()
+    model1 = switch_capture(model1, True, "max", "dispatch,combine").eval()
     if os.path.exists(os.path.join(args.save, "logits_single.pth")):
         val_pred, val_target, test_pred, test_target = torch.load(
             os.path.join(args.save, "logits_single.pth")
@@ -70,7 +70,7 @@ def threshold_dynamic_evaluate(
             naive_backbone = model1
             from torch.fx.passes.graph_drawer import FxGraphDrawer
 
-            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            naive_backbone = switch_capture(naive_backbone, False).eval()
             targets = []
             baseline_time = []
             DeadPathEliminatePass_time = []
@@ -149,7 +149,7 @@ def threshold_dynamic_evaluate(
 
             timer = CUDATimer(repeat=5)
             naive_backbone = model1
-            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            naive_backbone = switch_capture(naive_backbone, False).eval()
             targets = []
             baseline_time = []
             DeadPathEliminatePass_time = []
@@ -240,7 +240,7 @@ def threshold_dynamic_evaluate(
 
             timer = CUDATimer(repeat=5)
             naive_backbone = model1
-            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            naive_backbone = switch_capture(naive_backbone, False).eval()
             targets = []
             baseline_time = []
             DeadPathEliminatePass_time = []
@@ -334,9 +334,9 @@ def threshold_dynamic_evaluate(
 
             num_trials = 100
 
-            timer = CUDATimer(repeat=2)
+            timer = CUDATimer(repeat=2, export_fname="msdnet_all_opt")
             naive_backbone = model1
-            # naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            naive_backbone = switch_capture(naive_backbone, False).eval()
             raw_time = []
             dpe_time = []
             cp_time = []
@@ -366,13 +366,13 @@ def threshold_dynamic_evaluate(
                 raw_backbone = raw_pass.finalize()
 
                 # Initialize load history
-                raw_backbone = switch_router_mode(raw_backbone, True).eval()
+                raw_backbone = switch_capture(raw_backbone, True, mode="max", fabric_type="dispatch,combine").eval()
                 for i, (input, target) in enumerate(test_loader):
                     if i >= 100:
                         break
                     input_var = torch.autograd.Variable(input.cuda())
                     raw_backbone(input_var)
-                raw_backbone = switch_router_mode(raw_backbone, False).eval()
+                raw_backbone = switch_capture(raw_backbone, False).eval()
 
                 for i, (input, target) in enumerate(test_loader):
                     if i >= num_trials:
@@ -491,7 +491,7 @@ def threshold_dynamic_evaluate(
 
             timer = CUDATimer(repeat=5)
             naive_backbone = model1
-            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            naive_backbone = switch_capture(naive_backbone, False).eval()
             targets = []
             baseline_time = []
             VerticalFusePass_time = []
@@ -723,7 +723,7 @@ def threshold_dynamic_evaluate(
 
             timer = CUDATimer(repeat=5)
             naive_backbone = model1
-            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            naive_backbone = switch_capture(naive_backbone, False).eval()
             targets = []
             baseline_time = []
             VerticalFusePass_time = []
@@ -837,7 +837,7 @@ def threshold_dynamic_evaluate(
 
             timer = CUDATimer(repeat=5)
             naive_backbone = model1
-            naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            naive_backbone = switch_capture(naive_backbone, False).eval()
             targets = []
             baseline_time = []
             VerticalFusePass_time = []
@@ -1099,7 +1099,7 @@ def threshold_dynamic_evaluate(
 
             timer = CUDATimer(repeat=2)
             naive_backbone = model1
-            # naive_backbone = switch_router_mode(naive_backbone, False).eval()
+            # naive_backbone = switch_capture(naive_backbone, False).eval()
             raw_time = []
             hf_time = []
             cp_time = []
@@ -1121,7 +1121,7 @@ def threshold_dynamic_evaluate(
                     model_copy.scatters[j].__class__ = naive_backbone.scatters[
                         j
                     ].__class__
-                model_copy = switch_router_mode(model_copy, True).eval()
+                model_copy = switch_capture(model_copy, True).eval()
 
                 raw_pass = TracePass(model_copy)
                 raw_pass.run_on_graph()
@@ -1133,7 +1133,7 @@ def threshold_dynamic_evaluate(
                     timer.execute(lambda: raw_backbone(input_var), "raw_backbone")
                     raw_time.append(timer.avg)
 
-                raw_backbone = switch_router_mode(raw_backbone, False).eval()
+                raw_backbone = switch_capture(raw_backbone, False).eval()
 
                 dpe_pass = DeadPathEliminatePass(raw_backbone, runtime_load=1)
                 dpe_pass.run_on_graph()
@@ -1221,10 +1221,10 @@ def threshold_dynamic_evaluate(
             for i, (input, target) in enumerate(test_loader):
                 targets.append(target)
                 with torch.no_grad():
-                    naive_backbone = switch_router_mode(naive_backbone, True).eval()
+                    naive_backbone = switch_capture(naive_backbone, True).eval()
                     timer.execute(lambda: naive_backbone(input), "active_capture")
                     active_time.append(timer.avg)
-                    naive_backbone = switch_router_mode(naive_backbone, False).eval()
+                    naive_backbone = switch_capture(naive_backbone, False).eval()
                     timer.execute(lambda: naive_backbone(input), "inactive_capture")
                     in_active_time.append(timer.avg)
 
