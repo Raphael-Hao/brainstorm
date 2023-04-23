@@ -105,7 +105,7 @@ class FusedCombineFabric(CombineFabric):
             route_indices = in_flow_tag_stack.pop()
             in_flows_load = in_flow_load_stack.pop()
 
-            out_flow_data = c_router.combine_with_indices_and_loads(
+            (out_flow_data,) = c_router.combine_with_indices_and_loads(
                 in_flow_data,
                 route_indices,
                 in_flows_load,
