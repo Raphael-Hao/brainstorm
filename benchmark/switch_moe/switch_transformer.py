@@ -401,6 +401,7 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
         super().__init__()
         # Step 1: Get the correct router according to its class
         self.router = SwitchTransformersTop1Router(config)
+        self.annotator = Annotator(dims=[0])
         self.scatter = ScatterRouter(
             protocol_type="switch_top1",
             fabric_type="fused_dispatch",
