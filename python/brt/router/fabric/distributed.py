@@ -141,7 +141,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
                 in_flow_data,
                 route_indices,
                 out_loads,
-                score,
+                score if self.transform else None,
                 residual_flow,
                 max_path_padding=self.max_path_padding,
                 ever_padded=self.ever_padded,
