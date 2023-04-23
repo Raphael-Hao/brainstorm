@@ -5,7 +5,7 @@ import os
 
 os.environ[
     "BRT_CACHE_PATH"
-] = "/home/v-weihaocui/brainstorm_project/brainstorm_raphael/.cache"
+] = "/home/zhehan/brainstorm_project/brainstorm/.cache"
 import torch
 from brt.jit import make_jit_kernel
 from brt.jit.codegen import ModuleKernel  # pylint: disable=unused-import
@@ -38,10 +38,10 @@ all_bsz = [
     512,  # 3,
 ]
 
-in_features = 768
-out_features = 3072
-# in_features = 3072
-# out_features = 768
+#in_features = 768
+#out_features = 3072
+in_features = 3072
+out_features = 768
 
 for bs in all_bsz:
     input_infos = {"input_0": (bs, in_features)}
