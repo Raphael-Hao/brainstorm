@@ -9,5 +9,5 @@ cd $SCRIPT_DIR/../../benchmark/dynamic_routing
 bash run_all_route_benchmark.sh
 
 cd $SCRIPT_DIR
-python visualize/figure22.py
+python visualize/figure21.py
 

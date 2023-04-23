@@ -155,7 +155,7 @@ def test_argument_parser():
         default="raw",
         help="choose model architecture",
     )
-    parser.add_argument("--test-sampler-size", type=int, default=10)
+    parser.add_argument("--test-sampler-size", type=int, default=500)
     parser.add_argument("--debug", action="store_true", help="use debug mode or not")
     bench_arg_manager = BenchmarkArgumentManager(parser)
     bench_arg_manager.add_item("liveness")

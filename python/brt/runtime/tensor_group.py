@@ -47,9 +47,15 @@ class TensorGroup:
         self.pin_tensor = torch.empty(
             self.size_in_byte, dtype=torch.uint8, device="cpu", pin_memory=True
         )
-        self.pin_storage = self.pin_tensor.storage().untyped()
+        if torch.__version__ >= "1.13":
+            self.pin_storage = self.pin_tensor.storage().untyped()
+        else:
+            self.pin_storage = self.pin_tensor.storage()._untyped()
         self.target_tensor = torch.empty_like(self.pin_tensor, device=self.target)
-        self.target_storage = self.target_tensor.storage().untyped()
+        if torch.__version__ >= "1.13":
+            self.target_storage = self.target_tensor.storage().untyped()
+        else:
+            self.target_storage = self.target_tensor.storage()._untyped()
         self.used_in_byte = 0
         self.use_count = 0
 
