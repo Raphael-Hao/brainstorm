@@ -1,2 +1,4 @@
-# brainstorm
-Works like brain, as fast as storm
+# Brainstorm
+
+**Works like brain, as fast as storm**
+

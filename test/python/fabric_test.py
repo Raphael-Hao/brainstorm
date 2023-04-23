@@ -71,7 +71,6 @@ class FabricCPPTest(unittest.TestCase):
                 loads[i] = indices_per_path.numel()
                 indices[: indices_per_path.numel(), i : i + 1] = indices_per_path
                 if path_wise_padding:
-
                     assert capacity_padding is True
                     loads[i] = supported_capacities[i]
                 else:
@@ -183,4 +182,5 @@ class FabricCPPTest(unittest.TestCase):
         output_cells = router.dispatch_with_indices_and_loads(
             input_cells, indices, loads
         )
+        print(output_cells)
         # test dispatch with seat indices and combine with tag indices

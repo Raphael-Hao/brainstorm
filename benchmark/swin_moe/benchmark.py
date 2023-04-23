@@ -7,11 +7,11 @@
 import argparse
 import json
 import os
+import pathlib
 import random
 import time
 import warnings
 from functools import partial
-import pathlib
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
 from tutel_ea import system_init
@@ -23,27 +23,29 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-from brt.runtime.benchmark import deterministic_random_generator, profile_v2
-
+from brt.runtime import BRT_CACHE_PATH
+from brt.runtime.benchmark import (
+    ResultWriter,
+    deterministic_random_generator,
+    profile_v2,
+)
 from brt.runtime.placement import (
-    dump_trace,
     adaptive_load,
     adaptive_micro_bench_load,
+    dump_trace,
     load_searched_placement,
 )
-from brt.runtime import BRT_CACHE_PATH
-
 from config import get_config
 from data import build_loader
 from logger import create_logger
 from models import build_model
 from timm.utils import AverageMeter, accuracy
 from utils import (
+    adaptive_load_checkpoint,
     create_ds_config,
+    gather_all_ckpts_into_one,
     hook_scale_grad,
     reduce_tensor,
-    gather_all_ckpts_into_one,
-    adaptive_load_checkpoint,
 )
 
 warnings.filterwarnings(
@@ -198,7 +200,7 @@ def main(args, config, ds_init):
             adaptive_load(
                 model_without_ddp,
                 checkpoint_file,
-                enable_locality=args.locality,
+                False,
                 global_expert_num=16,
             )
         torch.cuda.synchronize()
@@ -221,7 +223,7 @@ def main(args, config, ds_init):
             dump_trace(model_without_ddp)
 
         elif args.mode == "throughput":
-            throughput(data_loader_val, model, logger)
+            throughput(args, data_loader_val, model, logger)
         elif args.mode == "profile":
             gpu_data, _batch_size = get_benchmark_data(data_loader_val, logger, 20)
             profile_v2(model, gpu_data, MOE_LAYER_VENDOR)
@@ -302,14 +304,14 @@ def get_benchmark_data(data_loader, logger, num_batches=100):
 
 
 @torch.inference_mode()
-def throughput(data_loader, model, logger):
-    bench_nums = 10
+def throughput(args, data_loader, model, logger):
+    bench_nums = 2
     gpu_data, batch_size = get_benchmark_data(data_loader, logger, bench_nums)
     bench_nums = len(gpu_data)
     torch.cuda.synchronize()
     logger.info("===> Start throughput benchmark")
     dist.barrier()
-    for idx in range(20):
+    for idx in range(2):
         model(gpu_data[idx % bench_nums])
     torch.cuda.synchronize()
     dist.barrier()
@@ -321,14 +323,28 @@ def throughput(data_loader, model, logger):
     end = time.time()
 
     if dist.get_rank() == 0:
-        result_path = BRT_CACHE_PATH / "results" / "swin_moe" / "e2e.csv"
-        result_path.parent.mkdir(parents=True, exist_ok=True)
-        result_f = result_path.open("a")
-        # result_f.write()
+        result_fname = "swin_moe/e2e.csv"
+        result_writer = ResultWriter(result_fname)
+        throughput_result = len(gpu_data) * batch_size / (end - start)
+        MOE_LAYER_VENDOR = os.environ.get("MOE_LAYER_VENDOR", "tutel")
+        if MOE_LAYER_VENDOR == "tutel":
+            item_name = "Tutel"
+        elif MOE_LAYER_VENDOR == "pt":
+            item_name = "DeepSpeed"
+        elif MOE_LAYER_VENDOR == "brt_dist":
+            item_name = "BRT"
+            if args.placement:
+                item_name += "+P"
+        else:
+            raise ValueError(f"Unknown MOE_LAYER_VENDOR: {MOE_LAYER_VENDOR}")
+        world_size = dist.get_world_size()
+        GPU_EXPERT = f"{world_size}Gx{int(16/world_size)}E"
+        result_writer.write(
+            f"{GPU_EXPERT},{args.capacity},{item_name},{throughput_result:.3f}"
+        )
     logger.info(
         f"Batch size: {batch_size}, Throughput: {len(gpu_data) * batch_size / (end - start)}"
     )
-
 
 
 @torch.inference_mode()

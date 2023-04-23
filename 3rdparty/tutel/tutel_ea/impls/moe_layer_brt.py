@@ -1,20 +1,20 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import  Any, Optional, cast
-
 import copy
+import logging
 import os
 import re
-import logging
+from typing import Any, Optional, cast
 
+import brt
 import torch
-from torch import Tensor
 import torch.distributed as dist
-from torch.nn import ModuleList
 import torch.nn.functional as F
+from brt.router import GatherRouter, SwinMoEScatterRouter
+from torch import Tensor
 from torch.distributions.normal import Normal
-from brt.router import SwinMoEScatterRouter, GatherRouter
+from torch.nn import ModuleList
 
 from ..jit_kernels.gating import fast_cumsum_sub_one
 from . import communicate as C
@@ -188,12 +188,23 @@ class TopKGate(torch.nn.Module):
             logits = logits + torch.randn_like(logits) / self.num_global_experts
 
         gates = F.softmax(logits, dim=1)
-        dispatched_input, _loss = self.scatter(in_data, gates, logits_wo_noise, logits)
-        dispatched_input = dispatched_input.reshape(1, self.num_global_experts, -1, M)
+        dispatched_input, score = self.scatter(in_data, gates, logits_wo_noise, logits)
+        dispatched_input, tag_stack, loads_stack, extra_attr_dict = brt.to_torch_tensor(
+            dispatched_input, retrieve_attr=True
+        )
+        # dispatched_input = dispatched_input.reshape(1, self.num_global_experts, -1, M)
+
         expert_output = expert_fn(dispatched_input)
         expert_output = expert_output.to(in_data.dtype)
         expert_output = expert_output.view(-1, M)
-        result_output = self.gather(expert_output)
+
+        expert_output = brt.to_grid_tensor(
+            expert_output, tag_stack, loads_stack, extra_attr_dict
+        )
+
+        result_output = self.gather(expert_output, score)
+        result_output = brt.to_torch_tensor(result_output)
+
         return result_output, 0
 
 
@@ -489,7 +500,7 @@ class MOELayer(torch.nn.Module):
                             x = self.dropout_fc2(x)
                             x = x.view(original_shape)
                         else:
-                            x = x.permute(1, 0, 2, 3)
+                            # x = x.permute(1, 0, 2, 3)
                             original_shape, x = x.shape, x.reshape(
                                 self.local_experts, -1, self.model_dim
                             )
@@ -513,13 +524,13 @@ class MOELayer(torch.nn.Module):
                                 if self.has_fc2_bias:
                                     x = x + fc2_bias
                             x = self.dropout_fc2(x)
-                            x = x.reshape(
-                                self.local_experts,
-                                original_shape[1],
-                                original_shape[2],
-                                self.model_dim,
-                            )
-                            x = x.permute(1, 0, 2, 3)
+                            # x = x.reshape(
+                            #     self.local_experts,
+                            #     original_shape[1],
+                            #     original_shape[2],
+                            #     self.model_dim,
+                            # )
+                            # x = x.permute(1, 0, 2, 3)
                         return x
 
                     def to(self, *args, **kwargs):

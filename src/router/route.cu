@@ -53,9 +53,9 @@ __global__ void __launch_bounds__(1024)
       new_tags[global_seat_index] = old_tags[i];
     }
   }
-  if (threadIdx.x == 0 && max_path_padding) {
-    loads[blockIdx.y] = max_path_load;
-  }
+  // if (threadIdx.x == 0 && max_path_padding) {
+  //   loads[blockIdx.y] = max_path_load;
+  // }
 }
 
 template <typename dtype, bool weighted, bool max_path_padding, bool tag_generating>
@@ -108,9 +108,9 @@ __global__ void __launch_bounds__(1024)
       }
     }
   }
-  if (threadIdx.x == 0 && max_path_padding) {
-    loads[blockIdx.y] = max_path_load;
-  }
+  // if (threadIdx.x == 0 && max_path_padding) {
+  //   loads[blockIdx.y] = max_path_load;
+  // }
 }
 
 template <typename dtype, bool max_path_padding, bool tag_generating>
@@ -152,9 +152,9 @@ __global__ void __launch_bounds__(1024)
       new_tags[global_seat_index] = old_tags[i];
     }
   }
-  if (threadIdx.x == 0 && max_path_padding) {
-    loads[blockIdx.y] = max_path_load;
-  }
+  // if (threadIdx.x == 0 && max_path_padding) {
+  //   loads[blockIdx.y] = max_path_load;
+  // }
 }
 
 template <typename dtype, bool max_path_padding, bool tag_generating>
@@ -200,9 +200,9 @@ __global__ void __launch_bounds__(1024)
       }
     }
   }
-  if (threadIdx.x == 0 && max_path_padding) {
-    loads[blockIdx.y] = max_path_load;
-  }
+  // if (threadIdx.x == 0 && max_path_padding) {
+  //   loads[blockIdx.y] = max_path_load;
+  // }
 }
 
 template <typename dtype, bool weighted, bool max_path_padding>

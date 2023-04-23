@@ -5,24 +5,23 @@ import unittest
 
 import torch
 import torch.nn as nn
-from brt.runtime.grid_tensor import (
-    annotate,
-    GridTensor,
-    init_grid_tensor,
-    deinit_grid_tensor,
-)
+from brt import Annotator
+from brt.runtime.grid_tensor import GridTensor, deinit_grid_tensor, init_grid_tensor
 
 
 class GridTensorTest(unittest.TestCase):
     def test_annotate(self):
         torch_t = torch.randn(2, 3, 4)
-        grid_t = annotate(torch_t, dims=[0, 1])
+        annotator = Annotator(dims=[0, 1])
+        grid_t = annotator(torch_t, dims=[0, 1])
         self.assertEqual(grid_t.shape, torch.Size([6, 4]))
         torch_t = torch.randn(2, 3, 4)
-        grid_t = annotate(torch_t, dims=[2, 1])
+        annotator = Annotator(dims=[2, 1])
+        grid_t = annotator(torch_t, dims=[2, 1])
         self.assertEqual(grid_t.shape, torch.Size([12, 2]))
         torch_t = torch.randn(2, 3, 4)
-        grid_t = annotate(torch_t, dims=[2], cell_shape=[2, 3, 2])
+        annotator = Annotator(dims=[2], cell_shape=[2, 3, 2])
+        grid_t = annotator(torch_t, dims=[2], cell_shape=[2, 3, 2])
         self.assertEqual(grid_t.shape, torch.Size([2, 2, 3, 2]))
 
         print(grid_t.load)
@@ -55,14 +54,16 @@ class GridTensorTest(unittest.TestCase):
 
         model = Model()
         GridTensor.SHALLOW_TRANSPORT = False
-        input_x = annotate(torch.Tensor([1]), dims=[0])
+        annotator = Annotator(dims=[0])
+        input_x = annotator(torch.Tensor([1]), dims=[0])
         output_x = model(input_x)
         self.assertEqual(input_x.tag_stack, output_x.tag_stack)
         self.assertEqual(input_x.load_stack, output_x.load_stack)
         self.assertNotEqual(id(input_x.tag_stack), id(output_x.tag_stack))
         self.assertNotEqual(id(input_x.load_stack), id(output_x.load_stack))
         GridTensor.SHALLOW_TRANSPORT = True
-        input_x = annotate(torch.Tensor([1]), dims=[0])
+        annotator = Annotator(dims=[0])
+        input_x = annotator(torch.Tensor([1]), dims=[0])
         output_x = model(input_x)
         self.assertEqual(input_x.tag_stack, output_x.tag_stack)
         self.assertEqual(input_x.load_stack, output_x.load_stack)

@@ -4,7 +4,8 @@
 # \file: /distributed.pyi
 # \brief:
 # Author: raphael hao
-from typing import Tuple, overload, Literal, List
+from typing import List, Literal, Tuple, overload
+
 import torch
 
 def make_nccl_unique_id(world_rank: int) -> torch.Tensor: ...
@@ -59,9 +60,12 @@ def batched_size_known_group_asymmetry_all_to_all(
 def group_sparse_all_to_all(
     in_data: torch.Tensor,
     send_sizes: torch.Tensor,
+    max_path_padding=False,
+    max_path_load=0,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
 def size_known_group_sparse_all_to_all(
     in_data: torch.Tensor,
     send_sizes: torch.Tensor,
     recv_sizes: torch.Tensor,
+    max_path_padding=False,
 ) -> torch.Tensor: ...

@@ -1,15 +1,11 @@
 ARG BASE_IMAGE
-ARG INSTALLER_IMAGE
-ARG VALIDATOR_IMAGE
 FROM $BASE_IMAGE AS base
-FROM $INSTALLER_IMAGE as installer
-FROM $VALIDATOR_IMAGE as validator
-
 FROM base
+LABEL org.opencontainers.image.source https://github.com/Raphael-Hao/Brainstorm
 
-ARG SSH_KEY_FILE=./id_ed25519
+# ARG SSH_KEY_FILE=./id_ed25519
 ARG BRT_BRANCH=main
-ENV BRT_SSH_KEY_FILE=${SSH_KEY_FILE}
+# ENV BRT_SSH_KEY_FILE=${SSH_KEY_FILE}
 ENV BRT_BRANCH=${BRT_BRANCH}
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -20,6 +16,8 @@ RUN apt-get -y update && apt-get install -y \
     cmake libedit-dev libxml2-dev llvm tmux wget curl git vim zsh
 
 RUN mkdir /var/run/sshd
+RUN mkdir /root/.ssh
+
 RUN echo 'root:osdi-brainstorm' | chpasswd
 RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' \
     /etc/ssh/sshd_config
@@ -29,10 +27,6 @@ RUN sed 's@session\s*required\s*pam_loginuid.so@session optional \
     pam_loginuid.so@g' -i /etc/pam.d/sshd
 
 
-# setup ssh key
-RUN mkdir -p /root/.ssh
-COPY "$BRT_SSH_KEY_FILE" /root/.ssh/
-RUN chmod 600 /root/.ssh/${BRT_SSH_KEY_FILE}
 RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
 ENV PATH=/opt/miniconda3/bin:/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LD_LIBRARY_PATH}
@@ -40,19 +34,12 @@ ENV LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LIBRARY_PATH}
 ENV CPLUS_INCLUDE_PATH=/usr/local/cuda/include:${CPLUS_INCLUDE_PATH}
 ENV BRT_CACHE_PATH=/brainstorm_project/brainstorm/.cache
 ENV TORCH_CUDA_ARCH_LIST="7.0;7.2;7.5;8.0;8.6+PTX"
-ENV SINGULARITY_PYTHON_PATH=/opt/miniconda3/bin/python
 
 
 COPY setup_docker.sh /tmp/setup_docker.sh
 
 RUN bash /tmp/setup_docker.sh --branch $BRT_BRANCH
 
-COPY --from=installer /installer /opt/microsoft/_singularity/installations/
-RUN /opt/microsoft/_singularity/installations/singularity/installer.sh
-
-COPY --from=validator /validations /opt/microsoft/_singularity/validations/
-ENV SINGULARITY_IMAGE_ACCELERATOR="NVIDIA"
-RUN /opt/microsoft/_singularity/validations/validator.sh
 
 EXPOSE 22
 CMD ["/usr/sbin/sshd","-D"]

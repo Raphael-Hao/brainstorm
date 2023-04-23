@@ -7,10 +7,10 @@ import os
 import re
 from typing import Any, Optional, cast
 
+import brt
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-import brt
 from brt.router import GatherRouter, SwinMoEScatterRouter
 from brt.runtime.distributed import global_info
 from torch import Tensor
@@ -169,10 +169,13 @@ class TopKGate(torch.nn.Module):
                 "normalize_gate": self.normalize_gate,
                 "batch_prioritized_routing": self.batch_prioritized_routing,
             },
-            fabric_kwargs={"capacity_padding": True},
+            fabric_kwargs={"max_path_padding": True},
         )
 
-        self.gather = GatherRouter(fabric_type="distributed_fused_combine")
+        self.gather = GatherRouter(
+            fabric_type="distributed_fused_combine",
+            fabric_kwargs={"max_path_padding": True},
+        )
 
     def compute_sorted_location(self, x, importance_scores):
         sorted_x = x[importance_scores.argsort(dim=0)]
@@ -192,12 +195,14 @@ class TopKGate(torch.nn.Module):
 
         gates = F.softmax(logits, dim=1)
         in_data = self.annotator(in_data)
-        dispatched_input, _loss = self.scatter(in_data, gates, logits_wo_noise, logits)
-        dispatched_input = brt.to_torch_tensor(dispatched_input)
-        route_indices = dispatched_input.route_indices
-        in_loads = dispatched_input.in_loads
-        out_loads = dispatched_input.out_loads
-        score = dispatched_input.score
+        dispatched_input, score = self.scatter(in_data, gates, logits_wo_noise, logits)
+        dispatched_input, tag_stack, loads_stack, extra_attr_dict = brt.to_torch_tensor(
+            dispatched_input, retrieve_attr=True
+        )
+        # route_indices = dispatched_input.route_indices
+        # in_loads = dispatched_input.in_loads
+        # out_loads = dispatched_input.out_loads
+        # score = dispatched_input.score
 
         dispatched_input = dispatched_input.reshape(
             global_info.world_size, self.num_local_experts, -1, M
@@ -206,12 +211,16 @@ class TopKGate(torch.nn.Module):
         expert_output = expert_output.to(in_data.dtype).contiguous()
         expert_output = expert_output.view(-1, M)
 
-        expert_output.route_indices = route_indices
-        expert_output.in_loads = in_loads
-        expert_output.out_loads = out_loads
-        expert_output.score = score
+        expert_output = brt.to_grid_tensor(
+            expert_output, tag_stack, loads_stack, extra_attr_dict
+        )
+        # expert_output.route_indices = route_indices
+        # expert_output.in_loads = in_loads
+        # expert_output.out_loads = out_loads
+        # expert_output.score = score
         # print(f"loads: {in_loads}")
-        result_output = self.gather(expert_output)
+        result_output = self.gather(expert_output, score=score)
+        result_output = brt.to_torch_tensor(result_output)
         return result_output, 0
 
 
@@ -507,7 +516,7 @@ class MOELayer(torch.nn.Module):
                             x = self.dropout_fc2(x)
                             x = x.view(original_shape)
                         else:
-                            x = x.permute(1, 0, 2, 3)
+                            # x = x.permute(1, 0, 2, 3)
                             original_shape, x = x.shape, x.reshape(
                                 self.local_experts, -1, self.model_dim
                             )
@@ -531,13 +540,13 @@ class MOELayer(torch.nn.Module):
                                 if self.has_fc2_bias:
                                     x = x + fc2_bias
                             x = self.dropout_fc2(x)
-                            x = x.reshape(
-                                self.local_experts,
-                                original_shape[1],
-                                original_shape[2],
-                                self.model_dim,
-                            )
-                            x = x.permute(1, 0, 2, 3)
+                            # x = x.reshape(
+                            #     self.local_experts,
+                            #     original_shape[1],
+                            #     original_shape[2],
+                            #     self.model_dim,
+                            # )
+                            # x = x.permute(1, 0, 2, 3)
                         return x
 
                     def to(self, *args, **kwargs):

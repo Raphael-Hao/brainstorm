@@ -1,13 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import torch
-from brt.runtime import log
 from brt.router.base import RouterBase, register_router
 from brt.router.fabric import make_fabric
 from brt.router.protocol import make_protocol
+from brt.runtime import log
 
 __all__ = [
     "ScatterRouter",
@@ -157,5 +157,9 @@ class SwinMoEScatterRouter(RouterBase):
         hot_mask, runtime_capacities, new_score, loss = self.protocol(
             score, logits_wo_noise, logits
         )
-        out_flows, _ = self.fabric(in_flows, hot_mask, runtime_capacities, new_score)
-        return out_flows, loss
+        if self.fabric.max_path_load is None:
+            self.fabric.max_path_load = runtime_capacities[0].item()
+        out_flows, new_score = self.fabric(
+            in_flows, hot_mask, runtime_capacities, new_score
+        )
+        return out_flows, new_score

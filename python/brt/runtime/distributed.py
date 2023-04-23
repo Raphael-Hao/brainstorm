@@ -1,6 +1,6 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Tuple, overload, Literal, List
+from typing import List, Literal, Tuple, overload
 
 import brt._C.distributed as C_dist
 import torch
@@ -174,17 +174,29 @@ def batched_size_known_group_asymmetry_a2a(
         return in_datas
 
 
-def group_sparse_a2a(in_data: torch.Tensor, in_loads: torch.Tensor):
+def group_sparse_a2a(
+    in_data: torch.Tensor,
+    in_loads: torch.Tensor,
+    max_path_padding=False,
+    max_path_load=0,
+):
     if is_nccl_activated():
-        return C_dist.group_sparse_all_to_all(in_data, in_loads)
+        return C_dist.group_sparse_all_to_all(
+            in_data, in_loads, max_path_padding, max_path_load
+        )
     else:
         return in_data, in_loads, in_loads
 
 
 def size_known_group_sparse_a2a(
-    in_data: torch.Tensor, in_loads: torch.Tensor, out_loads: torch.Tensor
+    in_data: torch.Tensor,
+    in_loads: torch.Tensor,
+    out_loads: torch.Tensor,
+    max_path_padding=False,
 ):
     if is_nccl_activated():
-        return C_dist.size_known_group_sparse_all_to_all(in_data, in_loads, out_loads)
+        return C_dist.size_known_group_sparse_all_to_all(
+            in_data, in_loads, out_loads, max_path_padding
+        )
     else:
         return in_data

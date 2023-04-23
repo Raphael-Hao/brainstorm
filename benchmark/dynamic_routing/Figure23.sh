@@ -19,3 +19,6 @@ for arch in "${ARCHS[@]}"; do
     python benchmark.py --arch "$arch" --benchmark=dce_memory_plan --memory-mode=predict
     python benchmark.py --arch "$arch" --benchmark=dce_memory_plan --memory-mode=on_demand
 done
+
+# plot
+#####

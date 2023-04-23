@@ -1,11 +1,12 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+import brt
 import torch
 import torch.nn as nn
+from brt.jit import make_jit_kernel
 from config import SwitchTransformersConfig
 from transformers.activations import ACT2FN
-from brt.jit import make_jit_kernel
 
 
 class FusedSwitchExpert(nn.Module):
@@ -58,10 +59,18 @@ class FusedSwitchExpert(nn.Module):
             self.fused_wo_standalone_inputs
         )
 
-    def forward(self, dispatched_states):
-        capacities = dispatched_states.loads
-        route_indices = dispatched_states.route_indices
-        score = dispatched_states.score
+    def forward(self, dispatched_states: brt.GridTensor):
+        (
+            dispatched_states,
+            indices_stag,
+            loads_stack,
+            extra_attr_dict,
+        ) = brt.to_torch_tensor(dispatched_states, retrieve_attr=True)
+
+        # capacities = dispatched_states.loads
+        # route_indices = dispatched_states.route_indices
+        # score = dispatched_states.score
+
         # print(f"capacities: {capacities}")
         wi_out = torch.empty(
             (dispatched_states.shape[0], self.d_ff), device=dispatched_states.device
@@ -69,7 +78,7 @@ class FusedSwitchExpert(nn.Module):
         self.fused_wi(
             shared_inputs=[dispatched_states, wi_out],
             standalone_inputs=self.fused_wi_standalone_inputs,
-            capacities=capacities,
+            capacities=loads_stack[-1],
         )
         act_out = self.act(wi_out)
         dropout_out = self.dropout(act_out)
@@ -79,11 +88,14 @@ class FusedSwitchExpert(nn.Module):
         self.fused_wo(
             shared_inputs=[dropout_out, wo_out],
             standalone_inputs=self.fused_wo_standalone_inputs,
-            capacities=capacities,
+            capacities=loads_stack[-1],
         )
-        wo_out.route_indices = route_indices
-        wo_out.score = score
-        wo_out.loads = dispatched_states.loads
+
+        wo_out = brt.to_grid_tensor(wo_out, indices_stag, loads_stack, extra_attr_dict)
+        # wo_out.route_indices = route_indices
+        # wo_out.score = score
+        # wo_out.loads = dispatched_states.loads
+
         return wo_out
 
 
@@ -116,18 +128,27 @@ class BatchmamutlSwitchExpert(nn.Module):
         self.register_parameter("fused_wo_weight", nn.Parameter(fused_wo_weight))
 
     def forward(self, dispatched_states):
+        (
+            dispatched_states,
+            indices_stag,
+            loads_stack,
+            extra_attr_dict,
+        ) = brt.to_torch_tensor(dispatched_states, retrieve_attr=True)
 
-        loads = dispatched_states.loads
-        # print(loads)
-        route_indices = dispatched_states.route_indices
-        score = dispatched_states.score
+        # loads = dispatched_states.loads
+        # route_indices = dispatched_states.route_indices
+        # score = dispatched_states.score
+
         dispatched_states = dispatched_states.view(self.num_experts, -1, self.d_model)
         wi_out = torch.bmm(dispatched_states, self.fused_wi_weight)
         act_out = self.act(wi_out)
         dropout_out = self.dropout(act_out)
         wo_out = torch.bmm(dropout_out, self.fused_wo_weight)
         wo_out = wo_out.view(-1, self.d_model)
-        wo_out.route_indices = route_indices
-        wo_out.score = score
-        wo_out.loads = loads
+
+        wo_out = brt.to_grid_tensor(wo_out, indices_stag, loads_stack, extra_attr_dict)
+
+        # wo_out.route_indices = route_indices
+        # wo_out.score = score
+        # wo_out.loads = loads
         return wo_out

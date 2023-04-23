@@ -4,8 +4,8 @@
 # \file: /build.py
 # \brief:
 # Author: raphael hao
-import pathlib
 import argparse
+import pathlib
 import subprocess
 
 
@@ -51,7 +51,7 @@ def get_build_args():
     script_dir = pathlib.Path(__file__).parent.absolute()
     context_dir = script_dir if args.context is None else pathlib.Path(args.context)
     args.context_path = context_dir.as_posix()
-    args.dockerfile = (context_dir / f"Dockerfile.{args.type}").as_posix()
+    args.dockerfile = (script_dir / f"../docker/Dockerfile.{args.type}").as_posix()
     args.image_spec = f"brt:{args.branch}" if args.tag is None else f"brt:{args.tag}"
 
     return args

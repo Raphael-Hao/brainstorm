@@ -3,9 +3,9 @@
 # Licensed under the MIT license.
 
 vendors=(
-    brt
     torch
     batchmatmul
+    brt
 )
 
 experts=(

@@ -20,8 +20,6 @@ docker/id_*
 .cache/log/*
 !.cache/log/kernel_tune/
 !.cache/log/benchmark/
-!.cache/dataset
-!.cache/ckpt
 
 .vscode
 
