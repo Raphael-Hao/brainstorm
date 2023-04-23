@@ -101,7 +101,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
     def __init__(
         self,
         flow_num,
-        reduction,
+        reduction="add",
         transform=False,
         task_locality: bool = False,
         **kwargs,

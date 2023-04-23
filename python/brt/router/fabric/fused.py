@@ -77,7 +77,7 @@ class FusedDispatchFabric(DispatchFabric):
 
 @register_fabric("fused_combine")
 class FusedCombineFabric(CombineFabric):
-    def __init__(self, flow_num, reduction, transform, **kwargs) -> None:
+    def __init__(self, flow_num, reduction="add", transform=False, **kwargs) -> None:
         kwargs["index_format"] = "seat_index"
         super().__init__(
             flow_num=flow_num, reduction=reduction, transform=transform, **kwargs

@@ -5,13 +5,13 @@
 
 CAPACITIES=(
     1.25
-    2
-    3
-    4
+    # 2
+    # 3
+    # 4
 )
 VENDORS=(
-    pt
-    tutel
+    # pt
+    # tutel
     brt_dist
 )
 GPUS=(
