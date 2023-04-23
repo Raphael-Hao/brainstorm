@@ -218,7 +218,7 @@ def throughput(args, model, tokenizer, test_data_num, warmup=10):
         end_event.synchronize()
 
     result_writer.write(
-        f"{args.item},{args.expert},{(start_event.elapsed_time(end_event) / test_data_num):.3f}\n"
+        f"{args.item},{args.expert},{(start_event.elapsed_time(end_event) / test_data_num):.3f}"
     )
 
 
