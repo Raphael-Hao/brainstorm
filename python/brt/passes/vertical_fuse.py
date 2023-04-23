@@ -1,11 +1,12 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import List, Union, Dict, Any, Callable
+from typing import List, Union, Dict, Any, Set
 
 from copy import deepcopy
 from hashlib import new
 import itertools as itt
+import operator
 
 import torch
 import torch.nn as nn
@@ -13,7 +14,14 @@ from torch import fx
 from torch.fx.immutable_collections import immutable_list, immutable_dict
 from torch.fx.node import map_arg
 
+from brt import Annotator
 from brt.runtime import log
+from brt.runtime.grid_tensor import (
+    init_grid_tensor,
+    init_grid_tensor_from,
+    deinit_grid_tensor,
+    to_torch_tensor,
+)
 from brt.jit import make_jit_module
 from brt.jit.modules.factory import JitModuleFactory
 from brt.router import ScatterRouter
@@ -213,7 +221,7 @@ class VerticalFusePass(PassBase):
                 for fpn in fuse_parteners_of[node]:
                     node_remap[fpn] = fused_node
         self.graph_mod.graph = new_graph
-        # clean
+        # Clean
         self.graph_mod.recompile()
 
     def _generate_fused_inputs(self, fuse_parteners: List[Node]):
@@ -286,6 +294,76 @@ class VerticalFusePass(PassBase):
         # for fpn in fuse_parteners_of[node]:
         #     node_remap[fpn] = fused_node
 
+    def add_annotation_dfs(self, start: Node, source: Node, skiped: Set[Node]):
+        # TODO: handle index-changing nodes that are not following a scatter, e.g. getitem, index_select
+        if start in skiped:
+            return
+        skiped.add(start)
+
+        getitem_users: Set[Node] = set()
+        indexing_users: Set[Node] = set()
+        other_users: Set[Node] = set()
+        for user in start.users:
+            if self.is_function_node(user) and user.target is operator.getitem:
+                getitem_users.add(user)
+                indexing_users.add(user)
+            elif self.is_router_node(user):
+                indexing_users.add(user)
+            else:
+                other_users.add(user)
+
+        # DFS the succeeding nodes and add `to_torch_tensor` and `init_grid_tensor_from` nodes
+        if (
+            start is source
+        ):  # only if they are index-changing nodes (e.g. `getitem`, router, `brt.Annotator`)
+            for indexing_node in indexing_users:
+                self.add_annotation_dfs(indexing_node, indexing_node, skiped)
+            if other_users:
+                with self.origin_graph.inserting_after(start):
+                    depacking_node = self.origin_graph.create_node(
+                        op="call_function",
+                        target=to_torch_tensor,
+                        args=(start, False),
+                    )
+                if start.is_fixed_inout:
+                    depacking_node.set_inout_shape(start.outshape, start.outshape)
+                start.replace_all_uses_with(
+                    depacking_node, lambda user: user in other_users
+                )
+                self.add_annotation_dfs(depacking_node, start, skiped)
+        else:  # only if `start` is a depacking node's successor and `source` is its unpacked ancestor
+            for other_node in other_users:
+                self.add_annotation_dfs(other_node, source, skiped)
+            if indexing_users:
+                with self.origin_graph.inserting_after(start):
+                    packing_node = self.origin_graph.create_node(
+                        op="call_function",
+                        target=init_grid_tensor_from,
+                        args=(start, source),
+                    )
+                if start.is_fixed_inout:
+                    packing_node.set_inout_shape(start.outshape, start.outshape)
+                start.replace_all_uses_with(
+                    packing_node, lambda user: user in indexing_users
+                )
+                skiped.add(packing_node)
+                for getitem_node in getitem_users:
+                    raise NotImplementedError
+                    self.add_annotation_dfs(getitem_node, getitem_node, skiped)
+
+    def add_annotation(self):
+        skiped: Set[Node] = set()
+        for node in self.origin_graph.nodes:
+            if node in skiped:
+                continue
+            if self.is_scatter_node(node) or (
+                self.is_module_node(node)
+                and isinstance(self.sub_modules[node.target], Annotator)
+            ):
+                self.add_annotation_dfs(node, node, skiped)
+            else:
+                skiped.add(node)
+
     def run_on_graph(self):
         visited = set()
         for node in self.origin_graph.nodes:
@@ -313,3 +391,6 @@ class VerticalFusePass(PassBase):
 
         self.origin_graph._owners = 0
         self.graph_mod.graph = self.origin_graph
+
+        self.finalize()
+        self.add_annotation()

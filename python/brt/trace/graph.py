@@ -11,8 +11,8 @@ from torch import Tensor, Size
 from torch.fx.node import Target, Argument, map_arg
 from torch.fx.graph import magic_methods
 
-from brt.router import is_router, RouterBase, ScatterRouter
-from brt.runtime import log
+# from brt.router import is_router, RouterBase, ScatterRouter
+from brt.runtime import log, Registry
 
 from brt.trace.node import Node
 from brt.trace.leaf_node import is_leaf_node
@@ -218,6 +218,7 @@ class GraphTracer(fx.Tracer):
     def trace_shape(
         self, graph: Graph, sample_inputs: Dict[str, Tensor], fixed_inputs: bool
     ) -> Graph:
+        from brt.router import ScatterRouter, is_router
         if sample_inputs is None:
             sample_inputs = {}
 
@@ -227,20 +228,24 @@ class GraphTracer(fx.Tracer):
         fixed_router_info = {}
         all_hooks = []
         # Get outshape of routers
-        # TODO: using RouterBase.ptu_grain_history
+        # TODO: using Fabric.cell_grain_history
         for node in graph.nodes:
             assert isinstance(node, Node), type(node)
             if node.op == "call_module" and isinstance(
                 root.get_submodule(node.target), ScatterRouter
             ):
                 router: ScatterRouter = root.get_submodule(node.target)
+                logger.debug(f"{router.fabric_type=}")
+                logger.debug(f"{router.fabric.supported_capacities=}")
+                logger.debug(f"{router.fabric.capacity_padding=}")
+                logger.debug(f"{router.fabric.path_wise_padding=}")
                 if (
-                    router.capture_mode == "max"
-                    and "dispatch" in router.fabric_type
-                    and router.load_history is not None
-                    and all(rl == "1d" for rl in router.fabric.route_logics)
+                    "dispatch" in router.fabric_type
+                    and router.fabric.supported_capacities is not None
+                    and router.fabric.capacity_padding
+                    and router.fabric.path_wise_padding
                 ):
-                    router.capturing = False
+                    # router.fabric.capturing = False
                     router_to_node[router] = node
                     fixed_router_info[node] = [None, None]  # [inshape, outshape]
 
@@ -254,13 +259,14 @@ class GraphTracer(fx.Tracer):
 
                     all_hooks.append(router.register_forward_hook(get_shape_hook))
                 continue
+        logger.debug(f"Found fixed routers: {router_to_node.values()}")
         root(**sample_inputs)
         for hook in all_hooks:
             hook.remove()
         for node, (inshape, outshape) in fixed_router_info.items():
             assert isinstance(node, Node), type(node)
-            scatter = root.get_submodule(node.target)
-            for i, bs in enumerate(scatter.load_history):
+            scatter: ScatterRouter = root.get_submodule(node.target)
+            for i, bs in enumerate(scatter.fabric.supported_capacities):
                 if scatter.fabric.flow_num == 1:
                     outshape[i] = torch.Size([int(bs), *outshape[i][1:]])
                 else:
@@ -280,6 +286,7 @@ class GraphTracer(fx.Tracer):
             if node.op == "placeholder":
                 if not fixed_inputs:
                     node.proto_depth = 0
+                    continue
                 if node.target in sample_inputs:
                     shape = getattr(sample_inputs[node.target], "shape", None)
                     if shape is not None:
@@ -350,6 +357,7 @@ class GraphTracer(fx.Tracer):
 
     def is_leaf_module(self, m: torch.nn.Module, module_qualified_name: str) -> bool:
         ##FIXME this is error when we use deepcopy is_router always returns false
+        from brt.router import is_router
         if is_router(m) or is_leaf_node(m):
             return True
         return super().is_leaf_module(m, module_qualified_name)

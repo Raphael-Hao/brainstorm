@@ -222,22 +222,24 @@ __global__ void generate_indices_and_loads(int* __restrict__ hot_mask /* [cell_n
   blockwise_generate_indices<is_tag_index>(hot_mask, indices, cell_num, prefix);
   if (threadIdx.x == 0) {
     auto& real_load = prefix;
+    // FIXME : path_wise_padding is padding to the supported capacity of each path unconditionally.
+    //         In the future, we should not pad it if the load is zero.
+    if (path_wise_padding) {
+      loads[blockIdx.x] = supported_capacities[blockIdx.x];
+      return;
+    }
     if (real_load == 0) {
       loads[blockIdx.x] = 0;
       return;
     }
     if (capacity_padding) {
-      if (path_wise_padding) {
-        loads[blockIdx.x] = supported_capacities[blockIdx.x];
-      } else {
-        for (int i = 0; i < supported_capacity_num; i++) {
-          if (real_load <= supported_capacities[i]) {
-            loads[blockIdx.x] = supported_capacities[i];
-            return;
-          }
+      for (int i = 0; i < supported_capacity_num; i++) {
+        if (real_load <= supported_capacities[i]) {
+          loads[blockIdx.x] = supported_capacities[i];
+          return;
         }
-        loads[blockIdx.x] = supported_capacities[supported_capacity_num - 1];
       }
+      loads[blockIdx.x] = supported_capacities[supported_capacity_num - 1];
     } else {
       if (supported_capacity_num == 0) {
         loads[blockIdx.x] = prefix;

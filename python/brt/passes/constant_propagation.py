@@ -39,18 +39,18 @@ class ConstantPropagationPass(PassBase):
                 scatter: ScatterRouter = self.sub_modules[scatter_node.target]
                 # Notation: flow_0, flow_1 -> scatter -> [outflow_0_path_0, outflow_0_path_1], [outflow_1_path_0, outflow_1_path_1]
                 flow_num = scatter.fabric.flow_num
-                load_history = scatter.load_history
+                load_history = scatter.fabric.load_history
                 path_num = len(load_history)
-                ptu_decision_history = scatter.ptu_decision_history
+                cell_decision_history = scatter.fabric.cell_decision_history
                 # Generate permanent path indecies
                 is_empty_path = [False] * path_num
                 is_forwarding_path = [False] * path_num
-                for i, path_history in enumerate(ptu_decision_history):
+                for i, path_history in enumerate(cell_decision_history):
                     if path_history.size == 0:
                         is_empty_path[i] = True
                     else:
                         # path_history is like a range(*)
-                        if (np.diff(path_history, 1) == 1).all():
+                        if (np.diff(path_history, 2) == 0).all():
                             is_forwarding_path[i] = True
 
                 # Check if all path is permanent
@@ -107,7 +107,7 @@ class ConstantPropagationPass(PassBase):
                 flow_num = gather.fabric.flow_num
                 if flow_num != 1:
                     logger.debug(f"Currently not support constant propagation for gathers with flow_num != 1, get {flow_num}")
-                load_history = gather.load_history
+                load_history = gather.fabric.load_history
                 path_num = len(load_history)
                 if np.count_nonzero(load_history) == 0:
                     # TODO: Delete gather
