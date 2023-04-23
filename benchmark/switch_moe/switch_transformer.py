@@ -407,7 +407,6 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
         self.scatter = ScatterRouter(
             protocol_type="switch_top1",
             protocol_kwargs={
-                "index_format": "dst_index",
                 "expert_capacity": config.expert_capacity,
             },
             fabric_type="fused_dispatch",
