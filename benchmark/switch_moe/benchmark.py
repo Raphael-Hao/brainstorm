@@ -61,7 +61,7 @@ def main():
         model_name, max_position_embeddings=args.max_seq_length
     )
     capacity_index = [[3, 4, 5, 6, 7, 8, 9, 15], [0, 1, 2, 3, 4, 15]]
-    if args.expert is 8 and args.vendor == "brt":
+    if args.expert == 8 and args.vendor == "brt":
         args.vendor = "batchmatmul"
     if args.expert in [16]:
         index = capacity_index[0]

@@ -1,9 +1,9 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-
-from brt.runtime import log
+import torch
 from brt.router.protocol.base import ProtocolBase, register_protocol
+from brt.runtime import log
 
 __all__ = ["SwitchTop1Protocol"]
 
@@ -26,7 +26,7 @@ class SwitchTop1Protocol(ProtocolBase):
         super().__init__()
 
     def make_route_decision(self, score):
-        hot_mask = score.reshape(-1, score.shape[-1])
+        hot_mask = score.reshape(-1, score.shape[-1]).to(torch.int32, non_blocking=True)
         return hot_mask
 
     def update(self, supported_capacities):
