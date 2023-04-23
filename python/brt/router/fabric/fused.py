@@ -53,7 +53,7 @@ class FusedDispatchFabric(DispatchFabric):
             flow_load_stack = flow_load_stack[:-1]
             flow_extra_attr_dict = extra_attr_dict
 
-            routed_data = c_router.dispatch_with_indices_and_loads(
+            (routed_data,) = c_router.dispatch_with_indices_and_loads(
                 flow_data,
                 route_indices,
                 loads,
