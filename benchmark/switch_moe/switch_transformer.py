@@ -335,9 +335,6 @@ class FusedSwitchTransformersSparseMLP(nn.Module):
         self.annotator = Annotator(dims=[0])
         self.scatter = ScatterRouter(
             protocol_type="switch_top1",
-            protocol_kwargs={
-                "expert_capacity": config.expert_capacity,
-            },
             fabric_type="fused_dispatch",
             fabric_kwargs={
                 "supported_capacities": config.capacities,
@@ -406,9 +403,6 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
         self.router = SwitchTransformersTop1Router(config)
         self.scatter = ScatterRouter(
             protocol_type="switch_top1",
-            protocol_kwargs={
-                "expert_capacity": config.expert_capacity,
-            },
             fabric_type="fused_dispatch",
             fabric_kwargs={"max_path_padding": True},
         )
