@@ -24,6 +24,7 @@ import brt
 import numpy as np  # pylint: disable=unused-import
 import torch
 import torch.nn as nn
+from brt import Annotator
 from brt.router import GatherRouter, ScatterRouter
 from config import SwitchTransformersConfig
 from switch_expert import BatchmamutlSwitchExpert, FusedSwitchExpert
@@ -331,6 +332,7 @@ class FusedSwitchTransformersSparseMLP(nn.Module):
         super().__init__()
         # Step 1: Get the correct router according to its class
         self.router = SwitchTransformersTop1Router(config)
+        self.annotator = Annotator(dims=[0])
         self.scatter = ScatterRouter(
             protocol_type="switch_top1",
             protocol_kwargs={
@@ -372,6 +374,7 @@ class FusedSwitchTransformersSparseMLP(nn.Module):
         # next_states = hidden_states.clone()
         origin_shape = hidden_states.shape
         hidden_states_to_be_routed = hidden_states.view(-1, hidden_states.size(-1))
+        hidden_states_to_be_routed = self.annotator(hidden_states_to_be_routed)
         routed_hidden_states = self.scatter(
             hidden_states_to_be_routed, router_mask.view(-1, router_mask.size(-1))
         )
@@ -407,12 +410,10 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
                 "index_format": "dst_index",
                 "expert_capacity": config.expert_capacity,
             },
-            fabric_type="homo_fused_dispatch",
-            fabric_kwargs={"capacity_padding": True},
+            fabric_type="fused_dispatch",
+            fabric_kwargs={"max_path_padding": True},
         )
-        self.gather = GatherRouter(
-            fabric_type="residual_homo_fused_combine", fabric_kwargs={"auto_pad": True}
-        )
+        self.gather = GatherRouter(fabric_type="fused_combine")
         self.fused_expert = BatchmamutlSwitchExpert(config)
 
         # Step 2: Get the experts
@@ -442,12 +443,14 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
         # next_states = hidden_states.clone()
         origin_shape = hidden_states.shape
         hidden_states_to_be_routed = hidden_states.view(-1, hidden_states.size(-1))
+        hidden_states_to_be_routed = self.annotator(hidden_states_to_be_routed)
         routed_hidden_states = self.scatter(
             hidden_states_to_be_routed, router_mask.view(-1, router_mask.size(-1))
         )
         expert_out = self.fused_expert(routed_hidden_states)
         # print(expert_out.shape)
-        next_states = self.gather(hidden_states, expert_out)
+        next_states = self.gather(expert_out, hidden_states)
+        next_states = brt.to_torch_tensor(next_states)
         next_states = next_states.view(origin_shape)
         hidden_states = router_probs * next_states
         return hidden_states, (router_logits, expert_index)

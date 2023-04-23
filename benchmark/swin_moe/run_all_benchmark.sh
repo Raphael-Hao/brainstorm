@@ -32,11 +32,12 @@ for vendor in "${VENDORS[@]}"; do
             # bash run_benchmark.sh --vendor "$vendor" --capacity "$capacity" --gpus "$gpus" --mode correctness
         done
     done
+    if [[ "${vendor}" == "brt_dist" ]]; then
+        for capacity in "${CAPACITIES[@]}"; do
+            for gpus in "${GPUS[@]}"; do
+                echo "Running benchmark for vendor: $vendor, capacity: $capacity, gpus: $gpus"
+                bash run_benchmark.sh --vendor "$vendor" --capacity "$capacity" --gpus "$gpus" --mode throughput --placement
+            done
+        done
+    fi
 done
-
-# for capacity in "${CAPACITIES[@]}"; do
-#     for gpus in "${GPUS[@]}"; do
-#         echo "Running benchmark for brt_dist with placement, capacity: $capacity, gpus: $gpus"
-#         bash run_benchmark.sh --vendor "$vendor" --capacity "$capacity" --gpus "$gpus" --mode throughput --placement
-#     done
-# done

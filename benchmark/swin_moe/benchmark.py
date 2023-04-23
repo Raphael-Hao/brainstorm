@@ -305,13 +305,13 @@ def get_benchmark_data(data_loader, logger, num_batches=100):
 
 @torch.inference_mode()
 def throughput(args, data_loader, model, logger):
-    bench_nums = 10
+    bench_nums = 2
     gpu_data, batch_size = get_benchmark_data(data_loader, logger, bench_nums)
     bench_nums = len(gpu_data)
     torch.cuda.synchronize()
     logger.info("===> Start throughput benchmark")
     dist.barrier()
-    for idx in range(20):
+    for idx in range(2):
         model(gpu_data[idx % bench_nums])
     torch.cuda.synchronize()
     dist.barrier()
