@@ -161,7 +161,7 @@ class DispatchFabric(FabricBase):
                     )
                 all_out_flows.append(out_flows)
             else:
-                routed_data = routed_results
+                (routed_data,) = routed_results
                 split_flow_datas = c_router.split_fused_cells_to_paths(
                     routed_data,
                     loads,

@@ -2,8 +2,6 @@
 
 This is the artifact for the paper "Optimizing Dynamic Neural Networks with Brainstorm", We are going to reproduce the main results of the paper in this artifact.
 
-Due to the large size of the dataset and inaccessibility of the server for multi-GPU experiments, We provide a screencast to demonstrate the whole artifact. The screencast can be found [here](https://youtu.be/1ZQ9Z2Z2Z2Z).
-For single-GPU experiments, we provide a docker image to reproduce the results.
 
 # Hardware and Software Requirements
 

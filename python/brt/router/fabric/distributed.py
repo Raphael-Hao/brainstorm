@@ -48,7 +48,6 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
                 flow_load_stack,
                 extra_attr_dict,
             ) = to_torch_tensor(in_flow, retrieve_attr=True)
-
             routed_data = c_router.dispatch_with_indices_and_loads(
                 flow_data,
                 route_indices,
@@ -62,7 +61,7 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
             )
 
             out_flow_data, out_loads, in_loads = brt_dist.group_sparse_a2a(
-                routed_data[0], loads
+                routed_data[0], loads, self.max_path_load, self.max_path_load
             )
             if self.task_locality:
                 world_size = dist.get_world_size()
@@ -87,7 +86,11 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
             out_flow = init_grid_tensor(
                 out_flow_data, flow_tag_stack, flow_load_stack, extra_attr_dict
             )
-            out_flow.pack(route_indices, out_loads, in_loads=in_loads)
+            out_flow.pack(
+                route_indices,
+                out_loads,
+                in_loads=in_loads,
+            )
             all_out_flows.append(out_flow)
 
         return all_out_flows, score
@@ -120,10 +123,8 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
     ) -> List[GridTensor]:
         out_flows = []
         for idx, in_flow in enumerate(in_flows):
-            in_flow, route_indices, in_loads, pre_in_loads_dict = in_flow.unpack(
-                "in_loads"
-            )
-            out_loads = pre_in_loads_dict["in_loads"]
+            in_flow, route_indices, in_loads, pre_attr_dict = in_flow.unpack("in_loads")
+            out_loads = pre_attr_dict["in_loads"]
             (
                 in_flow_data,
                 in_flow_tag_stack,
@@ -134,7 +135,7 @@ class DistributedFusedCombineFabric(FusedCombineFabric):
             residual_flow = residual_flows[idx] if residual_flows is not None else None
 
             in_flow_data = brt_dist.size_known_group_sparse_a2a(
-                in_flow_data, in_loads, out_loads
+                in_flow_data, in_loads, out_loads, self.max_path_padding
             )
             out_flow_data = c_router.combine_with_indices_and_loads(
                 in_flow_data,

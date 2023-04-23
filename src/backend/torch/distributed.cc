@@ -336,10 +336,9 @@ static std::vector<::torch::Tensor> asymmetry_all_to_all(const ::torch::Tensor& 
   }
 }
 
-static std::vector<::torch::Tensor> group_asymmetry_all_to_all(
-    const ::torch::Tensor& in_data,
-    const ::torch::Tensor& send_sizes,
-    bool locality_aware = false) {
+static std::vector<::torch::Tensor> group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
+                                                               const ::torch::Tensor& send_sizes,
+                                                               bool locality_aware = false) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   auto& world_rank = manager.GetWorldRank();
@@ -475,9 +474,10 @@ static std::vector<::torch::Tensor> group_asymmetry_all_to_all(
   }
 }
 
-static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(const ::torch::Tensor& in_data,
-                                                               const ::torch::Tensor& send_sizes,
-                                                               bool locality_aware = false) {
+static std::vector<::torch::Tensor> old_group_asymmetry_all_to_all(
+    const ::torch::Tensor& in_data,
+    const ::torch::Tensor& send_sizes,
+    bool locality_aware = false) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
@@ -753,7 +753,9 @@ static std::vector<::torch::Tensor> batched_size_known_group_asymmetry_all_to_al
 }
 
 static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tensor& in_data,
-                                                            const ::torch::Tensor& send_sizes) {
+                                                            const ::torch::Tensor& send_sizes,
+                                                            const bool& max_path_padding = false,
+                                                            const int& max_path_load = 0) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   manager.ExternalRecordEvent(0, at::cuda::getCurrentCUDAStream());
@@ -799,7 +801,12 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
   const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
   // printf("grain_size_in_byte: %d\n", grain_size_in_byte);
 
-  const int recv_num = recv_sizes_cpu.sum().item<int>();
+  int recv_num;
+  if (max_path_padding) {
+    recv_num = max_path_load * total_slice_num;
+  } else {
+    recv_num = recv_sizes_cpu.sum().item<int>();
+  }
   // printf("recv_num: %d\n", recv_num);
 
   auto out_data_shape = in_data.sizes().vec();
@@ -816,8 +823,9 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
   manager.RecordStorage(in_data);
   manager.RecordStorage(out_data);
   distributed::GroupSparseAllToAllForward(in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec,
-                                          recv_sizes_vec, grain_size_in_byte, group_size,
-                                          world_size, manager.GetComm(), manager.GetStream());
+                                          recv_sizes_vec, grain_size_in_byte, max_path_padding,
+                                          max_path_load, group_size, world_size, manager.GetComm(),
+                                          manager.GetStream());
   manager.RecordEvent(0);
   manager.EndContext();
 
@@ -828,7 +836,8 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
 
 static ::torch::Tensor size_known_group_sparse_all_to_all(const ::torch::Tensor& in_data,
                                                           const ::torch::Tensor& send_sizes,
-                                                          const ::torch::Tensor& recv_sizes) {
+                                                          const ::torch::Tensor& recv_sizes,
+                                                          const bool& max_path_padding = false) {
   auto& manager = NcclManager::GetManager();
   auto& world_size = manager.GetWorldSize();
   const int total_slice_num = send_sizes.numel();
@@ -849,7 +858,14 @@ static ::torch::Tensor size_known_group_sparse_all_to_all(const ::torch::Tensor&
   // Calculate the size of each grainularity in byte
   const int grain_size_in_byte = total_size_in_byte / in_data.size(0);
 
-  const int recv_num = recv_sizes_cpu.sum().item<int>();
+  int recv_num;
+  int max_path_load = 0;
+  if (max_path_padding) {
+    recv_num = in_data.size(0);
+    max_path_load = recv_num / total_slice_num;
+  } else {
+    recv_num = recv_sizes_cpu.sum().item<int>();
+  }
 
   auto out_data_shape = in_data.sizes().vec();
   out_data_shape[0] = recv_num;
@@ -865,8 +881,9 @@ static ::torch::Tensor size_known_group_sparse_all_to_all(const ::torch::Tensor&
   manager.RecordStorage(in_data);
   manager.RecordStorage(out_data);
   distributed::GroupSparseAllToAllBackward(in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec,
-                                           recv_sizes_vec, grain_size_in_byte, group_size,
-                                           world_size, manager.GetComm(), manager.GetStream());
+                                           recv_sizes_vec, grain_size_in_byte, max_path_padding,
+                                           max_path_load, group_size, world_size, manager.GetComm(),
+                                           manager.GetStream());
   manager.RecordEvent(0);
   manager.EndContext();
   manager.ExternalWaitEvent(0, at::cuda::getCurrentCUDAStream());
@@ -917,8 +934,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "batched asymmetry all to all for send sizes and recv size are already known",
         pybind11::arg("in_datas"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
   m.def("group_sparse_all_to_all", &brt::backend::torch::group_sparse_all_to_all,
-        "sparse all to all", pybind11::arg("in_data"), pybind11::arg("send_sizes"));
+        "sparse all to all", pybind11::arg("in_data"), pybind11::arg("send_sizes"),
+        pybind11::arg("max_path_padding") = false, pybind11::arg("max_path_load") = 0);
   m.def("size_known_group_sparse_all_to_all",
         &brt::backend::torch::size_known_group_sparse_all_to_all, "sparse all to all",
-        pybind11::arg("in_data"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"));
+        pybind11::arg("in_data"), pybind11::arg("send_sizes"), pybind11::arg("recv_sizes"),
+        pybind11::arg("max_path_padding") = false);
 }

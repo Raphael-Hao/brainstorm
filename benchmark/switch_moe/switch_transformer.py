@@ -20,13 +20,15 @@ import math
 import warnings
 from typing import Optional, Tuple, Union
 
+import brt
 import numpy as np  # pylint: disable=unused-import
-
 import torch
 import torch.nn as nn
+from brt.router import GatherRouter, ScatterRouter
+from config import SwitchTransformersConfig
+from switch_expert import BatchmamutlSwitchExpert, FusedSwitchExpert
 from torch.nn import CrossEntropyLoss
 from torch.utils.checkpoint import checkpoint
-
 from transformers.activations import ACT2FN
 from transformers.modeling_outputs import (
     MoEModelOutput,
@@ -49,10 +51,6 @@ from transformers.utils import (
     logging,
     replace_return_docstrings,
 )
-from brt.router import ScatterRouter, SwitchGatherRouter
-from switch_expert import FusedSwitchExpert, BatchmamutlSwitchExpert
-from config import SwitchTransformersConfig
-
 
 logger = logging.get_logger(__name__)
 
@@ -266,7 +264,6 @@ class SwitchTransformersLayerNorm(nn.Module):
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):
-
         # SwitchTransformers uses a layer_norm which only scales and doesn't shift, which is also known as Root Mean
         # Square Layer Normalization https://arxiv.org/abs/1910.07467 thus varience is calculated
         # w/o mean and there is no bias. Additionally we want to make sure that the accumulation for
@@ -337,15 +334,15 @@ class FusedSwitchTransformersSparseMLP(nn.Module):
         self.scatter = ScatterRouter(
             protocol_type="switch_top1",
             protocol_kwargs={
-                "index_format": "dst_index",
                 "expert_capacity": config.expert_capacity,
-                "supported_capacities": torch.tensor(
-                    [0] + config.capacities, dtype=torch.int32
-                ),
             },
-            fabric_type="homo_fused_dispatch",
+            fabric_type="fused_dispatch",
+            fabric_kwargs={
+                "supported_capacities": config.capacities,
+                "capacity_padding": True,
+            },
         )
-        self.gather = SwitchGatherRouter(fabric_type="residual_homo_fused_combine")
+        self.gather = GatherRouter(fabric_type="fused_combine")
         self.fused_expert = FusedSwitchExpert(config)
 
         # Step 2: Get the experts
@@ -380,7 +377,8 @@ class FusedSwitchTransformersSparseMLP(nn.Module):
         )
         # print(routed_hidden_states.shape)
         expert_out = self.fused_expert(routed_hidden_states)
-        next_states = self.gather(hidden_states, expert_out)
+        next_states = self.gather(expert_out, hidden_states)
+        next_states = brt.to_torch_tensor(next_states)
         next_states = next_states.view(origin_shape)
 
         hidden_states = router_probs * next_states
@@ -412,7 +410,7 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
             fabric_type="homo_fused_dispatch",
             fabric_kwargs={"capacity_padding": True},
         )
-        self.gather = SwitchGatherRouter(
+        self.gather = GatherRouter(
             fabric_type="residual_homo_fused_combine", fabric_kwargs={"auto_pad": True}
         )
         self.fused_expert = BatchmamutlSwitchExpert(config)
@@ -503,7 +501,6 @@ class SwitchTransformersSparseMLP(nn.Module):
         next_states = hidden_states.clone()
 
         for idx, expert in enumerate(self.experts.values()):
-
             token_indices = router_mask[:, :, idx].bool()
             if self.trace:
                 current_history[idx] = hidden_states[token_indices].shape[0]
@@ -959,7 +956,6 @@ class SwitchTransformersBlock(nn.Module):
         output_router_logits=True,
         return_dict=True,
     ):
-
         if past_key_value is not None:
             if not self.is_decoder:
                 logger.warning(
@@ -1233,7 +1229,6 @@ class SwitchTransformersStack(SwitchTransformersPreTrainedModel):
         )
         self.block = nn.ModuleList()
         for i in range(config.num_layers):
-
             is_sparse = (i % sparse_step == 1) if sparse_step > 0 else False
 
             self.block.append(
@@ -2131,7 +2126,6 @@ class SwitchTransformersForConditionalGeneration(SwitchTransformersPreTrainedMod
         encoder_outputs=None,
         **kwargs,
     ):
-
         # cut decoder_input_ids if past is used
         if past is not None:
             input_ids = input_ids[:, -1:]

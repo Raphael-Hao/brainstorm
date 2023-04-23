@@ -169,10 +169,13 @@ class TopKGate(torch.nn.Module):
                 "normalize_gate": self.normalize_gate,
                 "batch_prioritized_routing": self.batch_prioritized_routing,
             },
-            fabric_kwargs={"capacity_padding": True, "max_path_padding": True},
+            fabric_kwargs={"max_path_padding": True},
         )
 
-        self.gather = GatherRouter(fabric_type="distributed_fused_combine")
+        self.gather = GatherRouter(
+            fabric_type="distributed_fused_combine",
+            fabric_kwargs={"max_path_padding": True},
+        )
 
     def compute_sorted_location(self, x, importance_scores):
         sorted_x = x[importance_scores.argsort(dim=0)]
