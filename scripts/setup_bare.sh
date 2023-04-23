@@ -59,14 +59,19 @@ git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-m
 git clone https://github.com/zsh-users/zsh-history-substring-search ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
 sed "s/plugins=(git)/plugins=(git extract zsh-autosuggestions zsh-history-substring-search zsh-syntax-highlighting)/g" "${HOME}/.zshrc" >"${HOME}/.tmp_zshrc" && mv "${HOME}/.tmp_zshrc" "${HOME}/.zshrc"
 
+
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
     bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p "$HOME"/miniconda3 &&
     rm -f Miniconda3-py38_4.10.3-Linux-x86_64.sh
 
 # shellcheck disable=SC2016
-echo 'export PATH="$HOME"/miniconda3/bin:$PATH' >>"$HOME/.zshrc"
+echo 'export PATH="/usr/local/cuda/bin:$HOME"/miniconda3/bin:$PATH' >>"$HOME/.zshrc"
+echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >>"$HOME/.zshrc"
+echo 'export LIBRARY_PATH="/usr/local/cuda/lib64:$LIBRARY_PATH' >>"$HOME/.zshrc"
 # shellcheck disable=SC2016
-echo 'export PATH="$HOME"/miniconda3/bin:$PATH' >>"$HOME/.bashrc"
+echo 'export PATH="/usr/local/cuda/bin:$HOME"/miniconda3/bin:$PATH' >>"$HOME/.bashrc"
+echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >>"$HOME/.zshrc"
+echo 'export LIBRARY_PATH="/usr/local/cuda/lib64:$LIBRARY_PATH' >>"$HOME/.zshrc"
 
 # shellcheck disable=SC1090,SC1091
 source "$HOME/.bashrc"
