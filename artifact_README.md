@@ -63,39 +63,80 @@ bash scripts/init_dev.sh
 
 # Reproducing the Results
 
-## Reproducing the Results in Figure 12
+Please enter the directory `scripts/artifact` and run the following commands to reproduce the results. Each scripts will run the corresponding experiment, visualize the results, and the figure will be saved in the `.cache/results/figures` directory. Therefore, firstly we need to enter the directory with the following command:
 
+```bash
+cd scripts/artifact
+```
 
-## Reproducing the Results in Figure 13
+## Reproducing the Results in Figure 11 (~20 min)
 
+```bash
+bash Figure11.sh
+```
 
-## Reproducing the Results in Figure 14
+## Reproducing the Results in Figure 12 (~20 min)
 
+```bash
+bash Figure12.sh
+```
 
-## Reproducing the Results in Figure 15
+## Reproducing the Results in Figure 13 (~20 min)
 
+```bash
+bash Figure13.sh
+```
 
-## Reproducing the Results in Figure 16
+## Reproducing the Results in Figure 14 (~20 min)
 
+```bash
+bash Figure14.sh
+```
 
-## Reproducing the Results in Figure 17
+## Reproducing the Results in Figure 15 (~60 min)
 
+```bash
+bash Figure15.sh
+```
 
-## Reproducing the Results in Figure 18
+## Reproducing the Results in Figure 16 (~60 min)
 
+```bash
+bash Figure16.sh
+```
 
-## Reproducing the Results in Figure 19
+## Reproducing the Results in Figure 17 (~40 min)
 
+```bash
+bash Figure17.sh
+```
 
-## Reproducing the Results in Figure 20
+## Reproducing the Results in Figure 18 (~60 min)
 
+```bash
+bash Figure18.sh
+```
 
-## Reproducing the Results in Figure 21
+## Reproducing the Results in Figure 19 (~30 min)
 
+```bash
+bash Figure19.sh
+```
 
-## Reproducing the Results in Figure 22
+## Reproducing the Results in Figure 20 (~60 min)
 
+```bash
+bash Figure20.sh
+```
 
-## Reproducing the Results in Figure 23
+## Reproducing the Results in Figure 21 (~30 min)
 
+```bash
+bash Figure21.sh
+```
 
+## Reproducing the Results in Figure 22 (~30 min)
+
+```bash
+bash Figure22.sh
+```
