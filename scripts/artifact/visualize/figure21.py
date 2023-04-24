@@ -51,7 +51,6 @@ hatches = ["/////", "\\\\\\\\\\"]
 labels = ["Torch", "BRT+SP"]
 for j in range(n):
     bar_data = dr_load_e2e[dr_load_e2e["f0"] == labels[j]]["f2"]
-    print(bar_data)
     ax.bar(
         exit_idx_x + j * width,
         bar_data,

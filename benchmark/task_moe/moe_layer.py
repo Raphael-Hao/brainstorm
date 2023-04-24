@@ -89,11 +89,9 @@ class BertGenerationMoE(nn.Module):
                         "seed": seed,
                     },
                     fabric_type="distributed_fused_dispatch",
-                    fabric_kwargs={"max_path_padding": True},
                 )
                 self.hash_gather = GatherRouter(
                     fabric_type="distributed_fused_combine",
-                    fabric_kwargs={"max_path_padding": True},
                 )
 
         self.local_experts = config.num_tasks // dist.get_world_size()
@@ -124,18 +122,17 @@ class BertGenerationMoE(nn.Module):
             # task_ids = x.score
         x = self.annotator(x)
         x = self.hash_scatter(x, task_ids)
-        x, indices_stack, load_stack, extra_attr_dict = brt.to_torch_tensor(
+        x, indices_stack, loads_stack, extra_attr_dict = brt.to_torch_tensor(
             x, retrieve_attr=True
         )
         # in_loads = x.in_loads
         # out_loads = x.out_loads
         # route_indices = x.route_indices
-        out_loads = load_stack[-1].cpu()
+        out_loads = loads_stack[-1].cpu()
         outputs = []
         base_load_idx = 0
         base_x_idx = 0
         world_size = dist.get_world_size()
-
         for i in range(self.local_experts):
             load = out_loads[base_load_idx : base_load_idx + world_size].sum().item()
             outputs.append(self.expert_forward(x[base_x_idx : base_x_idx + load], i))
@@ -143,7 +140,7 @@ class BertGenerationMoE(nn.Module):
             base_x_idx += load
 
         x = torch.cat(outputs, dim=0)
-        x = brt.to_grid_tensor(x, indices_stack, load_stack, extra_attr_dict)
+        x = brt.to_grid_tensor(x, indices_stack, loads_stack, extra_attr_dict)
         # x.in_loads = in_loads
         # x.out_loads = out_loads
         # x.route_indices = route_indices
@@ -160,13 +157,17 @@ class BertGenerationMoE(nn.Module):
         # in_loads = x.in_loads
         # out_loads = x.out_loads
         # route_indices = x.route_indices
-        world_size = dist.get_world_size()
-        x = x.reshape(world_size, -1, x.shape[-2], x.shape[-1])
-        x = x.permute(1, 0, 2, 3).contiguous().view(-1, x.shape[-2], x.shape[-1])
-        xs = x.chunk(self.local_experts, dim=0)
+        out_loads = loads_stack[-1].cpu()
         outputs = []
+        base_load_idx = 0
+        base_x_idx = 0
+        world_size = dist.get_world_size()
+
         for i in range(self.local_experts):
-            outputs.append(self.expert_forward(xs[i], i))
+            load = out_loads[base_load_idx : base_load_idx + world_size].sum().item()
+            outputs.append(self.expert_forward(x[base_x_idx : base_x_idx + load], i))
+            base_load_idx += world_size
+            base_x_idx += load
 
         x = torch.cat(outputs, dim=0)
         x = brt.to_grid_tensor(x, indices_stack, loads_stack, extra_attr_dict)

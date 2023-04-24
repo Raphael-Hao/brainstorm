@@ -45,20 +45,24 @@ def main():
         else:
             config.placement_aware = False
     model = BertGenerationDecoder(config=config).cuda(device)
-    # inputs = tokenizer(
-    #     "To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English",
-    #     return_token_type_ids=False,
-    #     return_tensors="pt",
-    # )
-    inputs = tokenizer(
+    inputs_64 = tokenizer(
+        "To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English",
+        return_token_type_ids=False,
+        return_tensors="pt",
+    )
+    inputs_32 = tokenizer(
         "To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing other tasks we performed experiments on English constituency parsing performed experiments on English",
         return_token_type_ids=False,
         return_tensors="pt",
     )
     # %%
-
+    if args.mode == "debug":
+        args.seq = 4
     # input_ids = inputs["input_ids"].repeat(4, 1).cuda()
-    input_ids = inputs["input_ids"].repeat(512, 1).cuda()
+    if args.token == 32:
+        input_ids = inputs_32["input_ids"].repeat(args.seq, 1).cuda()
+    elif args.token == 64:
+        input_ids = inputs_64["input_ids"].repeat(args.seq, 1).cuda()
     print(f"local_rank: {local_rank}, input_ids.shape: {input_ids.shape}")
 
     # %%
@@ -108,12 +112,12 @@ def throughput(
     model_ddp.eval()
     all_task_ids = []
     torch.random.manual_seed(dist.get_rank())
-    num_per_task = input_ids.size(0) // config.num_tasks
-    task_ids = torch.arange(config.num_tasks, dtype=torch.int64).repeat(num_per_task)
-    for _ in range(bench_iteration):
-        all_task_ids.append(task_ids[torch.randperm(task_ids.size(0))])
+    # num_per_task = input_ids.size(0) // config.num_tasks
+    # task_ids = torch.arange(config.num_tasks, dtype=torch.int64).repeat(num_per_task)
     # for _ in range(bench_iteration):
-    #     all_task_ids.append(torch.randint(0, config.num_tasks, (input_ids.size(0),)))
+    #     all_task_ids.append(task_ids[torch.randperm(task_ids.size(0))])
+    for _ in range(bench_iteration):
+        all_task_ids.append(torch.randint(0, config.num_tasks, (input_ids.size(0),)))
     result_fname = "task_moe/throughput.csv"
     result_writer = ResultWriter(result_fname)
     with torch.inference_mode():
@@ -148,7 +152,7 @@ def throughput(
         seq_num = input_ids.size(0)
         token_num = input_ids.size(1)
         result_writer.write(
-            f"{item},{GPUS}GPUx{int(16/GPUS)},{seq_num}Seqsx{token_num}Tokens,{benched_throughput}"
+            f"{item},{GPUS}GPUx{int(16/GPUS)}E,{seq_num}Seqsx{token_num}Tokens,{benched_throughput}"
         )
         print(
             f"local_rank: {dist.get_rank()}, throughput: {benched_throughput} samples/s"

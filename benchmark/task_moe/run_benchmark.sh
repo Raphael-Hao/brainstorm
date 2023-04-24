@@ -14,6 +14,8 @@ ARGUMENT_LIST=(
     "gpus:"
     "opt:"
     "mode:"
+    "token:"
+    "seq:"
 )
 
 # read arguments
@@ -42,6 +44,16 @@ while [[ $# -gt 0 ]]; do
     --opt)
         OPT=$2
         LAUNCH_ARGS+=(--opt "$OPT")
+        shift 2
+        ;;
+    --token)
+        TOKEN=$2
+        LAUNCH_ARGS+=(--token "$TOKEN")
+        shift 2
+        ;;
+    --seq)
+        SEQ=$2
+        LAUNCH_ARGS+=(--seq "$SEQ")
         shift 2
         ;;
     *)
