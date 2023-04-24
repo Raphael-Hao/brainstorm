@@ -15,6 +15,7 @@ from brt.passes import (
     VerticalFusePass,
     TracePass,
     NoBatchPass,
+    RouterFixPass,
     DeadPathEliminatePass,
     PermanentPathFoldPass,
     OnDemandMemoryPlanPass,
@@ -381,18 +382,21 @@ def threshold_dynamic_evaluate(
                     timer.execute(lambda: raw_backbone(input_var), "raw_backbone")
                     raw_time.append(timer.avg)
 
-                vf_pass = VerticalFusePass(raw_backbone, sample_inputs={"x": input_var}, fusing_head=True)
+                rf_pass = RouterFixPass(raw_backbone)
+                rf_pass.run_on_graph()
+                rf_backbone = rf_pass.finalize()
+
+                vf_pass = VerticalFusePass(rf_backbone, sample_inputs={"x": input_var}, fusing_head=True)
                 vf_pass.run_on_graph()
                 vf_backbone = vf_pass.finalize()
-                # print(f"str(vf_backbone.graph) = {str(vf_backbone.graph)}\n\n")
                 for i, (input, target) in enumerate(test_loader):
                     if i >= num_trials:
                         break
                     input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(lambda: vf_backbone(input_var), "verti_fuse")
+                    timer.execute(lambda: vf_backbone(input_var), "verti_fuse", export=True)
                     vf_time.append(timer.avg)
 
-                dpe_pass = DeadPathEliminatePass(raw_backbone, runtime_load=1)
+                dpe_pass = DeadPathEliminatePass(rf_backbone, runtime_load=1)
                 dpe_pass.run_on_graph()
                 dce_backbone = dpe_pass.finalize()
                 for i, (input, target) in enumerate(test_loader):
@@ -425,18 +429,17 @@ def threshold_dynamic_evaluate(
                     if i >= num_trials:
                         break
                     input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(lambda: opr_backbone(input_var), "operator_reorder")
+                    timer.execute(lambda: opr_backbone(input_var), "operator_reorder", export=True)
                     opr_time.append(timer.avg)
 
-                sp_pass = VerticalFusePass(opr_backbone, sample_inputs={"x": input_var}, fusing_head=True)
+                sp_pass = VerticalFusePass(opr_backbone, sample_inputs={"x": input_var})
                 sp_pass.run_on_graph()
                 sp_backbone = sp_pass.finalize()
-                # print(f"str(sp_backbone.graph) = {str(sp_backbone.graph)}\n\n")
                 for i, (input, target) in enumerate(test_loader):
                     if i >= num_trials:
                         break
                     input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(lambda: sp_backbone(input_var), "speculative_routing")
+                    timer.execute(lambda: sp_backbone(input_var), "speculative_routing", export=True)
                     sp_time.append(timer.avg)
 
                 horiz_fuse_pass = HorizFusePass(
@@ -444,12 +447,11 @@ def threshold_dynamic_evaluate(
                 )
                 horiz_fuse_pass.run_on_graph()
                 hf_backbone = horiz_fuse_pass.finalize()
-                # print(f"str(hf_backbone.graph) = {str(hf_backbone.graph)}\n\n")
                 for i, (input, target) in enumerate(test_loader):
                     if i >= num_trials:
                         break
                     input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(lambda: hf_backbone(input_var), "horiz_fuse_pass")
+                    timer.execute(lambda: hf_backbone(input_var), "horiz_fuse_pass", export=True)
                     hf_time.append(timer.avg)
 
                 t_baseline_time = torch.tensor(raw_time)

@@ -56,13 +56,13 @@ def print_load_history(module: nn.Module):
             logger.debug(f"{subn}, {subm.fabric.capturing}, {load_history}")
 
 
-def time_it(func, func_args, msg):
+def time_it(func, func_args, msg, export=False):
     # profile(lambda: func(func_args))
 
     USING_BRT_CUDA_TIMER = True
     # USING_BRT_CUDA_TIMER = False
     if USING_BRT_CUDA_TIMER:
-        timer.execute(lambda: func(func_args), msg)
+        timer.execute(lambda: func(func_args), msg, export=export)
         return timer.avg
     else:
         return (
@@ -88,7 +88,7 @@ def benchmark(num_subnets: int, num_feature: int) -> None:
     switch_capture(livesr, False)
     print_load_history(livesr)
 
-    raw_time = time_it(livesr, input_tensor, "raw livesr")
+    raw_time = time_it(livesr, input_tensor, "raw livesr", export=True)
     logger.info(
         f"Raw LiveSR,    {num_feature=}, {num_subnets=}: {raw_time:3.06} ms/run"
     )
@@ -103,7 +103,7 @@ def benchmark(num_subnets: int, num_feature: int) -> None:
     logger.info(f"vFusedLiveSR {num_feature} {num_subnets} builded")
     # logger.debug(f"livesr_vf = {livesr_vf.graph}")
 
-    vfuse_time = time_it(livesr_vf, input_tensor, "vfused livesr")
+    vfuse_time = time_it(livesr_vf, input_tensor, "vfused livesr", export=True)
     logger.info(
         f"vFused LiveSR, {num_feature=}, {num_subnets=}: {vfuse_time:3.06} ms/run"
     )
@@ -114,7 +114,7 @@ def benchmark(num_subnets: int, num_feature: int) -> None:
     logger.info(f"hFusedLiveSR {num_feature} {num_subnets} builded")
     # logger.debug(f"livesr_hf = {livesr_hf.graph}")
 
-    hfuse_time = time_it(livesr_hf, input_tensor, "hfused livesr")
+    hfuse_time = time_it(livesr_hf, input_tensor, "hfused livesr", export=True)
     logger.info(
         f"hFused LiveSR, {num_feature=}, {num_subnets=}: {hfuse_time:3.06} ms/run"
     )
