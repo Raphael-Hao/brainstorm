@@ -6,6 +6,7 @@ import time
 
 import torch
 import torch.nn as nn
+from brt import Annotator
 from brt.app.rand import MissHitScatter
 from brt.router import GatherRouter
 from brt.runtime import BRT_CACHE_PATH
@@ -64,7 +65,6 @@ class MissModel(nn.Module):
         super().__init__()
         self.unroll_index = int(router_time // 0.00087) * 4
         # self.unroll_index = 4
-        print(self.unroll_index)
         self.in_features = in_features
         self.path_num = path_num
         self.router_time = router_time
@@ -120,9 +120,13 @@ def main():
         .eval()
         .cuda()
     )
+    annotator = Annotator(dims=[0])
 
     x = torch.randn(1, args.cell_size).cuda()
-    timer = CUDATimer(repeat=10, loop=100)
+    x = annotator(x)
+    result_path = BRT_CACHE_PATH / "results" / "micro" / "speculative" / "route_e2e.csv"
+
+    timer = CUDATimer(repeat=10, loop=100, export_fname=result_path.as_posix())
 
     def default_forward():
         default_model(x)
@@ -133,35 +137,20 @@ def main():
     def miss_forward():
         miss_model(x)
 
-    result_path = (
-        BRT_CACHE_PATH / "results" / "micro" / "speculative" / "route" / f"default.csv"
-    )
-    result_path.parent.mkdir(parents=True, exist_ok=True)
     timer.execute(
         default_forward,
-        f"{args.path_num},{args.time*1e3},{args.cell_size}",
+        f"Default,{args.time*1e3}",
         export=True,
-        export_path=result_path,
     )
-    result_path = (
-        BRT_CACHE_PATH / "results" / "micro" / "speculative" / "route" / f"hit.csv"
-    )
-    result_path.parent.mkdir(parents=True, exist_ok=True)
     timer.execute(
         hit_forward,
-        f"{args.path_num},{args.time*1e3},{args.cell_size}",
+        f"Hit,{args.time*1e3}",
         export=True,
-        export_path=result_path,
     )
-    result_path = (
-        BRT_CACHE_PATH / "results" / "micro" / "speculative" / "route" / f"miss.csv"
-    )
-    result_path.parent.mkdir(parents=True, exist_ok=True)
     timer.execute(
         miss_forward,
-        f"{args.path_num},{args.time*1e3},{args.cell_size}",
+        f"Miss,{args.time*1e3}",
         export=True,
-        export_path=result_path,
     )
 
 

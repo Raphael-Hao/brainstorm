@@ -21,7 +21,6 @@ FIGURES_PATH.mkdir(parents=True, exist_ok=True)
 
 # %%
 
-
 from matplotlib import pyplot as plt
 
 plt.rcParams["ytick.direction"] = "in"
@@ -32,33 +31,45 @@ plt.rcParams["axes.labelweight"] = "bold"
 # %%
 import numpy as np
 
-specu_route = np.loadtxt(RESULTS_PATH / "specu_load" / "cell_size.csv", delimiter=",")
+convs = dict.fromkeys([0], bytes.decode)
+specu_route = np.genfromtxt(
+    RESULTS_PATH / "micro/speculative/load_e2e.csv",
+    dtype=[object, float, float, float, float],
+    delimiter=",",
+    converters=convs,
+)
 
 # %%
 fig, ax = plt.subplots()
 fig.set_size_inches(3, 2)
-x_ticks = specu_route[:, 1]
+plot_data = specu_route[specu_route["f0"] == "Default"]
+x_ticks = plot_data["f1"]
+y_data = plot_data["f2"]
 ax.plot(
     x_ticks,
-    specu_route[:, 2],
+    y_data,
     marker="*",
     mfc="white",
     color="dimgrey",
     linewidth=1.5,
     label="Default",
 )
+plot_data = specu_route[specu_route["f0"] == "Hit"]
+y_data = plot_data["f2"]
 ax.plot(
     x_ticks,
-    specu_route[:, 3],
+    y_data,
     marker=".",
     mfc="white",
     color="lightseagreen",
     linewidth=1.5,
     label="Hit",
 )
+plot_data = specu_route[specu_route["f0"] == "Miss"]
+y_data = plot_data["f2"]
 ax.plot(
     x_ticks,
-    specu_route[:, 4],
+    y_data,
     marker="X",
     mfc="white",
     color="tomato",
@@ -70,8 +81,8 @@ ax.set_xticklabels(np.arange(0, 40, 10), fontsize=12)
 ax.set_ylim(0, 6.5)
 ax.set_yticks(np.arange(0, 7, 2))
 ax.set_yticklabels(np.arange(0, 7, 2), fontsize=12)
-ax.set_xlabel("Weight Size (\\textit{MB})", fontsize=14, fontweight="bold")
-ax.set_ylabel("Time (\\textit{ms})", fontsize=14, fontweight="bold")
+ax.set_xlabel("Weight Size (MB)", fontsize=14, fontweight="bold")
+ax.set_ylabel("Time (ms)", fontsize=14, fontweight="bold")
 
 ax.legend(
     ncol=3,
@@ -86,40 +97,50 @@ ax.legend(
     columnspacing=0.8,
     prop={"weight": "bold", "size": 11},
 )
-plt.savefig(FIGURES_PATH / "specu_load_cell_size.pdf", dpi=300, bbox_inches="tight")
+plt.savefig(FIGURES_PATH / "figure14-b.pdf", dpi=300, bbox_inches="tight")
 
 # %%
 import numpy as np
 
-specu_route = np.loadtxt(
-    RESULTS_PATH / "specu_route" / "unroll_position.csv", delimiter=","
+convs = dict.fromkeys([0], bytes.decode)
+specu_route = np.genfromtxt(
+    RESULTS_PATH / "micro/speculative/route_e2e.csv",
+    dtype=[object, float, float, float, float],
+    delimiter=",",
+    converters=convs,
 )
 
 # %%
 fig, ax = plt.subplots()
 fig.set_size_inches(3, 2)
-x_ticks = specu_route[:, 1]
+plot_data = specu_route[specu_route["f0"] == "Default"]
+x_ticks = plot_data["f1"]
+y_data = plot_data["f2"]
 ax.plot(
     x_ticks,
-    specu_route[:, 2],
+    y_data,
     marker="*",
     mfc="white",
     color="dimgrey",
     linewidth=1.5,
     label="Default",
 )
+plot_data = specu_route[specu_route["f0"] == "Hit"]
+y_data = plot_data["f2"]
 ax.plot(
     x_ticks,
-    specu_route[:, 3],
+    y_data,
     marker=".",
     mfc="white",
     color="lightseagreen",
     linewidth=1.5,
     label="Hit",
 )
+plot_data = specu_route[specu_route["f0"] == "Miss"]
+y_data = plot_data["f2"]
 ax.plot(
     x_ticks,
-    specu_route[:, 4],
+    y_data,
     marker="X",
     mfc="white",
     color="tomato",
@@ -131,8 +152,8 @@ ax.set_xticklabels([0.1, 0.2, 0.3, 0.4], fontsize=12)
 ax.set_yticks([0.0, 0.4, 0.8])
 ax.set_yticklabels([0.0, 0.4, 0.8], fontsize=12)
 ax.set_ylim(0, 1.1)
-ax.set_xlabel("Router Latency (\\textit{ms})", fontsize=14, fontweight="bold")
-ax.set_ylabel("Time (\\textit{ms})", fontsize=14, fontweight="bold")
+ax.set_xlabel("Router Latency (ms)", fontsize=14, fontweight="bold")
+ax.set_ylabel("Time (ms)", fontsize=14, fontweight="bold")
 
 ax.legend(
     ncol=3,
@@ -147,5 +168,5 @@ ax.legend(
     columnspacing=0.8,
     prop={"weight": "bold", "size": 11},
 )
-plt.savefig(FIGURES_PATH / "specu_route_unroll.pdf", dpi=300, bbox_inches="tight")
+plt.savefig(FIGURES_PATH / "figure14-a.pdf", dpi=300, bbox_inches="tight")
 # %%
