@@ -7,7 +7,7 @@
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 cd $SCRIPT_DIR/../../benchmark/task_moe || exit
-bash run_all_benchmark.sh
+bash run_all_benchmarks.sh
 
 cd $SCRIPT_DIR
 # visualize the results

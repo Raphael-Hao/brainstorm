@@ -19,9 +19,10 @@ FIGURES_PATH.mkdir(parents=True, exist_ok=True)
 # %%
 import numpy as np
 
-swin_moe_8g2e_caps = np.loadtxt(RESULTS_PATH / "swin_moe/micro_caps.csv", delimiter=",")
+swin_moe_8g2e_caps = np.loadtxt(
+    RESULTS_PATH / "swin_moe/micro_throughput.csv", delimiter=","
+)
 
-print(swin_moe_8g2e_caps.shape)
 
 # %%
 from matplotlib import pyplot as plt
@@ -43,16 +44,19 @@ hatches = ["/////", "\\\\\\\\\\"]
 markers = ["*", ".", "X", "P"]
 x_ticks = np.arange(1, 11)
 # x_ticklabels = ["32", "64", "96", "128", "160", "192", "224", "256"]
+labels = [1.25, 2, 3, 4]
 
 for i in range(4):
+    plot_data = swin_moe_8g2e_caps[swin_moe_8g2e_caps[:, 0] == labels[i]][:, 2]
+    print(plot_data)
     ax.plot(
         x_ticks,
-        swin_moe_8g2e_caps[i, 1:],
+        plot_data,
         marker=markers[i],
         mfc="white",
         color=colors[i],
         linewidth=1.5,
-        label=swin_moe_8g2e_caps[i, 0],
+        label=labels[i],
     )
 
 # ax_1 = ax.twinx()

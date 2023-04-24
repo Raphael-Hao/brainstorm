@@ -45,19 +45,16 @@ while [[ $# -gt 0 ]]; do
         GPU_NUM=$(($(echo "$GPUS" | tr -cd , | wc -c) + 1))
         shift 2
         ;;
-
     --locality)
         LOCALITY=1
         LAUNCH_ARGS+=(--locality)
         shift 1
         ;;
-
     --placement)
         PLACEMENT=$2
         LAUNCH_ARGS+=(--placement "$PLACEMENT")
         shift 2
         ;;
-
     --port)
         PORT=$2
         shift 2
@@ -85,7 +82,6 @@ while [[ $# -gt 0 ]]; do
         LAUNCH_ARGS+=(--moe-id "$MOE_ID")
         shift 2
         ;;
-
     *)
         break
         ;;

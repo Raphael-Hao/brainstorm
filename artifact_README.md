@@ -69,74 +69,29 @@ Please enter the directory `scripts/artifact` and run the following commands to 
 cd scripts/artifact
 ```
 
-## Reproducing the Results in Figure 11 (~20 min)
-
-```bash
-bash Figure11.sh
-```
-
-## Reproducing the Results in Figure 12 (~20 min)
+## Reproducing the Results on Single-GPU Server
 
 ```bash
 bash Figure12.sh
-```
-
-## Reproducing the Results in Figure 13 (~20 min)
-
-```bash
-bash Figure13.sh
-```
-
-## Reproducing the Results in Figure 14 (~20 min)
-
-```bash
 bash Figure14.sh
-```
-
-## Reproducing the Results in Figure 15 (~60 min)
-
-```bash
 bash Figure15.sh
-```
-
-## Reproducing the Results in Figure 16 (~60 min)
-
-```bash
 bash Figure16.sh
+bash Figure20.sh
+bash Figure21.sh
+bash Figure22.sh
 ```
 
-## Reproducing the Results in Figure 17 (~40 min)
+## Reproducing the Results in Multiple-GPU Server
+
 
 ```bash
+bash Figure11.sh
+bash Figure13.sh
 bash Figure17.sh
-```
-
-## Reproducing the Results in Figure 18 (~60 min)
-
-```bash
 bash Figure18.sh
-```
-
-## Reproducing the Results in Figure 19 (~30 min)
-
-```bash
 bash Figure19.sh
 ```
 
-## Reproducing the Results in Figure 20 (~60 min)
+# Visualized Results
 
-```bash
-bash Figure20.sh
-```
-
-## Reproducing the Results in Figure 21 (~30 min)
-
-```bash
-bash Figure21.sh
-```
-
-## Reproducing the Results in Figure 22 (~30 min)
-
-```bash
-bash Figure22.sh
-```
+Results of the experiments are visualized in the `.cache/results/figures`
