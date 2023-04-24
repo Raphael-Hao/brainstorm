@@ -7,7 +7,7 @@ import brt.runtime.distributed as brt_dist
 import torch
 import torch.distributed as dist
 from brt.runtime import BRT_CACHE_PATH
-from brt.runtime.benchmark import CUDATimer, ResultWriter
+from brt.runtime.benchmark import CUDATimer
 
 
 def main():
@@ -47,12 +47,10 @@ def main():
     cell_size = args.cell_size
     local_expert = args.local_expert
 
-    cuda_timer = CUDATimer(repeat=4, loop=100)
-
     result_path = (
-        BRT_CACHE_PATH / "results" / "micro" / "distributed" / "sparse_a2a.csv"
+        BRT_CACHE_PATH / "results" / "micro" / "distributed" / "sparse_e2e.csv"
     )
-    result_path.parent.mkdir(parents=True, exist_ok=True)
+    cuda_timer = CUDATimer(repeat=4, loop=100, export_fname=result_path.as_posix())
 
     if args.benchmark == "brt":
         torch.random.manual_seed(local_rank)
@@ -74,7 +72,7 @@ def main():
 
         cuda_timer.execute(
             lambda: brt_sparse_a2a(tensor, loads),
-            msg=f"brt_sparse_a2a,{world_size},{local_expert},{cell_size},{args.load}",
+            msg=f"BRT,{world_size},{local_expert},{cell_size}",
             export=True,
         )
     else:
@@ -97,7 +95,7 @@ def main():
 
         cuda_timer.execute(
             lambda: torch_a2a(tensor),
-            msg=f"torch_a2a,{world_size},{local_expert},{cell_size},{args.load}",
+            msg=f"Torch,{world_size},{local_expert},{cell_size}",
             export=True,
         )
 

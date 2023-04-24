@@ -46,13 +46,10 @@ def main():
 
     cell_size = args.cell_size
     local_expert = args.local_expert
-
-    cuda_timer = CUDATimer(repeat=10, loop=100, root=local_rank)
-
     result_path = (
-        BRT_CACHE_PATH / "results" / "micro" / "distributed" / "placement_a2a.csv"
+        BRT_CACHE_PATH / "results" / "micro" / "distributed" / "placement_e2e.csv"
     )
-    result_path.parent.mkdir(parents=True, exist_ok=True)
+    cuda_timer = CUDATimer(repeat=10, loop=100, export_fname=result_path.as_posix())
 
     if args.benchmark == "imbalance":
         loads = torch.zeros(
@@ -60,12 +57,13 @@ def main():
         ).fill_(1)
         dst_rank = (local_rank + 1) % world_size
         loads[dst_rank * local_expert : (dst_rank + 1) * local_expert] = args.load
+        item = "BRT"
     else:
         loads = torch.zeros(
             (world_size * local_expert,), dtype=torch.int32, device=device
         ).fill_(1)
         loads[local_rank * local_expert : (local_rank + 1) * local_expert] = args.load
-
+        item = "BRT+P"
     tensor = torch.randn(loads.sum().item(), cell_size, device=device)
     torch.cuda.synchronize()
     dist.barrier()
@@ -77,9 +75,8 @@ def main():
 
     cuda_timer.execute(
         lambda: brt_sparse_a2a(tensor, loads),
-        msg=f"{args.benchmark},{world_size},{local_expert},{cell_size},{args.load}",
+        msg=f"{item},{world_size},{local_expert},{cell_size}",
         export=True,
-        export_path=result_path,
     )
 
 
