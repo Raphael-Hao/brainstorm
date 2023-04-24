@@ -1,10 +1,12 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
+import brt
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
-from brt.router import ScatterRouter, GatherRouter
+from brt import Annotator
+from brt.router import GatherRouter, ScatterRouter, TaskScatterRouter
 from brt.router.protocol.hashed import HashProtocol
 from configuration_bert_generation import BertGenerationConfig
 from transformers.activations import ACT2FN
@@ -57,15 +59,15 @@ class BertGenerationMoE(nn.Module):
         if self.pt_native:
             self.protocol = HashProtocol(num_tasks=config.num_tasks, seed=seed)
         else:
+            self.annotator = Annotator(dims=[0])
             if config.placement_aware:
-                if task_locality:
-                    self.task_sactter = ScatterRouter(
+                if self.task_locality:
+                    self.task_sactter = TaskScatterRouter(
                         protocol_type="task",
                         protocol_kwargs={
                             "num_tasks": config.num_tasks,
-                            "index_format": "dst_index",
                         },
-                        fabric_type="distributed_placement_dispatch",
+                        fabric_type="distributed_fused_dispatch",
                         fabric_kwargs={"task_locality": True},
                     )
                 self.hash_scatter = ScatterRouter(
@@ -73,27 +75,25 @@ class BertGenerationMoE(nn.Module):
                     protocol_kwargs={
                         "num_tasks": config.num_tasks,
                         "placement_aware": config.placement_aware,
-                        "index_format": "dst_index",
                     },
-                    fabric_type="distributed_placement_dispatch",
+                    fabric_type="distributed_fused_dispatch",
                 )
                 self.hash_gather = GatherRouter(
-                    fabric_type="distributed_placement_combine",
-                    fabric_kwargs={"transform": False},
+                    fabric_type="distributed_fused_combine",
                 )
             else:
                 self.hash_scatter = ScatterRouter(
                     protocol_type="hash",
                     protocol_kwargs={
                         "num_tasks": config.num_tasks,
-                        "index_format": "dst_index",
                         "seed": seed,
                     },
                     fabric_type="distributed_fused_dispatch",
+                    fabric_kwargs={"max_path_padding": True},
                 )
                 self.hash_gather = GatherRouter(
                     fabric_type="distributed_fused_combine",
-                    fabric_kwargs={"transform": False},
+                    fabric_kwargs={"max_path_padding": True},
                 )
 
         self.local_experts = config.num_tasks // dist.get_world_size()
@@ -118,14 +118,19 @@ class BertGenerationMoE(nn.Module):
         )
 
     def placement_forward(self, x: torch.Tensor, task_ids: torch.Tensor):
-
+        x = self.annotator(x)
         if self.task_locality:
-            x = self.task_sactter(x, task_ids)
-            task_ids = x.score
+            x, task_ids = self.task_sactter(x, task_ids)
+            # task_ids = x.score
+        x = self.annotator(x)
         x = self.hash_scatter(x, task_ids)
-        in_loads = x.in_loads
-        out_loads = x.out_loads
-        route_indices = x.route_indices
+        x, indices_stack, load_stack, extra_attr_dict = brt.to_torch_tensor(
+            x, retrieve_attr=True
+        )
+        # in_loads = x.in_loads
+        # out_loads = x.out_loads
+        # route_indices = x.route_indices
+        out_loads = load_stack[-1].cpu()
         outputs = []
         base_load_idx = 0
         base_x_idx = 0
@@ -138,18 +143,23 @@ class BertGenerationMoE(nn.Module):
             base_x_idx += load
 
         x = torch.cat(outputs, dim=0)
-        x.in_loads = in_loads
-        x.out_loads = out_loads
-        x.route_indices = route_indices
-        x.score = task_ids
+        x = brt.to_grid_tensor(x, indices_stack, load_stack, extra_attr_dict)
+        # x.in_loads = in_loads
+        # x.out_loads = out_loads
+        # x.route_indices = route_indices
         x = self.hash_gather(x)
-        return x
+        x = brt.to_torch_tensor(x)
+        return x, task_ids
 
     def common_forward(self, x, task_ids):
+        x = self.annotator(x)
         x = self.hash_scatter(x, task_ids)
-        in_loads = x.in_loads
-        out_loads = x.out_loads
-        route_indices = x.route_indices
+        x, indices_stack, loads_stack, extra_attr_dict = brt.to_torch_tensor(
+            x, retrieve_attr=True
+        )
+        # in_loads = x.in_loads
+        # out_loads = x.out_loads
+        # route_indices = x.route_indices
         world_size = dist.get_world_size()
         x = x.reshape(world_size, -1, x.shape[-2], x.shape[-1])
         x = x.permute(1, 0, 2, 3).contiguous().view(-1, x.shape[-2], x.shape[-1])
@@ -159,10 +169,7 @@ class BertGenerationMoE(nn.Module):
             outputs.append(self.expert_forward(xs[i], i))
 
         x = torch.cat(outputs, dim=0)
-        x.in_loads = in_loads
-        x.out_loads = out_loads
-        x.route_indices = route_indices
-        x.score = task_ids
+        x = brt.to_grid_tensor(x, indices_stack, loads_stack, extra_attr_dict)
         x = self.hash_gather(x)
         return x
 
@@ -194,9 +201,11 @@ class BertGenerationMoE(nn.Module):
 
         for i in range(dest.size(1)):
             mask = hot_masks[i]
+            # print(f"mask: {mask.shape}")
             new_mask = torch.zeros(
                 seq_num, capacity, dtype=torch.int64, device=x.device
             ).scatter_(1, locations[i], 1)
+            # print(f"new_mask: {new_mask.shape}")
             tmp_mask = einsum("se,sc->sec", mask, new_mask)
             dispatch_mask = (
                 tmp_mask if dispatch_mask is None else dispatch_mask + tmp_mask
@@ -237,9 +246,7 @@ class BertGenerationMoE(nn.Module):
             x = self.pt_forward(x, task_ids)
         else:
             if self.placement_aware:
-                x = self.placement_forward(x, task_ids)
-                task_ids = x.score
+                x, task_ids = self.placement_forward(x, task_ids)
             else:
                 x = self.common_forward(x, task_ids)
         return x, task_ids
-

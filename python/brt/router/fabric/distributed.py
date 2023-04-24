@@ -59,9 +59,8 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
                 self.max_path_load,
                 self.route_logics[flow_idx] == "1d",
             )
-
             out_flow_data, out_loads, in_loads = brt_dist.group_sparse_a2a(
-                routed_data[0], loads, self.max_path_load, self.max_path_load
+                routed_data[0], loads, self.max_path_padding, self.max_path_load
             )
             if self.task_locality:
                 world_size = dist.get_world_size()
@@ -82,6 +81,8 @@ class DistributedFusedDispatchFabric(FusedDispatchFabric):
                     )
                     base_idx += task_total_load
                 score = task_ids
+                all_out_flows.append(out_flow_data)
+                continue
 
             out_flow = init_grid_tensor(
                 out_flow_data, flow_tag_stack, flow_load_stack, extra_attr_dict

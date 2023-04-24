@@ -1,11 +1,11 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
+import brt._C.router as c_router
 import torch
 import torch.distributed as dist
-from brt.runtime import log
-import brt._C.router as c_router
 from brt.router.protocol.base import ProtocolBase, register_protocol
+from brt.runtime import log
 
 __all__ = ["HashProtocol"]
 
@@ -19,7 +19,6 @@ class HashProtocol(ProtocolBase):
         num_tasks: int,
         placement_aware: bool = False,
         seed: int = 0,
-        supported_capacities: torch.Tensor = None,
         **kwargs,
     ):
         """Top-K protocol
@@ -30,8 +29,7 @@ class HashProtocol(ProtocolBase):
             index_format (str, optional): index tensors according to destination or source. Defaults to "src_index".
             index_gen_opt (bool, optional): whether use optimized GPU kernel. Defaults to True.
         """
-        super().__init__()
-        self.supported_capacities = supported_capacities
+        super().__init__(**kwargs)
         self.num_tasks = num_tasks
         self.placement_aware = placement_aware
         if self.placement_aware:
@@ -51,29 +49,10 @@ class HashProtocol(ProtocolBase):
         hash_dest = self.hash_indices[task_ids]
         hot_mask = torch.zeros(
             (task_ids.size(0), self.num_tasks),
-            dtype=torch.int64,
+            dtype=torch.int32,
             device=task_ids.device,
         ).scatter_(1, hash_dest, 1)
         return hot_mask
-
-    def make_route_decision_legacy(self, task_ids: torch.Tensor):
-        hash_dest = self.hash_indices[task_ids]
-        hot_mask = torch.zeros(
-            (task_ids.size(0), self.num_tasks),
-            dtype=torch.int64,
-            device=task_ids.device,
-        ).scatter_(1, hash_dest, 1)
-        route_indices, loads = c_router.generate_indices_and_loads(
-            hot_mask, self.supported_capacities, self.index_gen_opt, load_on_cpu=False,
-        )
-        if self.placement_aware:
-            loads.capacity = 0
-        else:
-            capacity = loads.max()
-            dist.all_reduce(capacity, op=dist.ReduceOp.MAX)
-            loads.capacity = capacity.sum().item()
-            loads.dest = hash_dest
-        return route_indices, loads, loads
 
     def check_hash_indices(self):
         assert self.hash_indices.size(0) == self.num_tasks
@@ -83,7 +62,10 @@ class HashProtocol(ProtocolBase):
 @register_protocol("task")
 class TaskProtocol(ProtocolBase):
     def __init__(
-        self, num_tasks: int, supported_capacities: torch.Tensor = None, **kwargs,
+        self,
+        num_tasks: int,
+        supported_capacities: torch.Tensor = None,
+        **kwargs,
     ):
         """Top-K protocol
 
@@ -103,11 +85,7 @@ class TaskProtocol(ProtocolBase):
         task_dest = self.task_indices[task_ids]
         hot_mask = torch.zeros(
             (task_ids.size(0), self.num_tasks),
-            dtype=torch.int64,
+            dtype=torch.int32,
             device=task_ids.device,
         ).scatter_(1, task_dest, 1)
-        route_indices, loads = generate_dst_indices(
-            hot_mask, self.supported_capacities, self.index_gen_opt, load_on_cpu=False
-        )
-        route_indices.capacity = 0
-        return route_indices, loads, loads
+        return hot_mask

@@ -1,13 +1,13 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-import torch.distributed as dist
 import torch
+import torch.distributed as dist
 import torch.nn as nn
-from transformers import BertGenerationTokenizer
-from modeling_bert_generation import BertGenerationDecoder, BertGenerationConfig
-from brt.runtime.benchmark import BenchmarkArgumentManager
+from brt.runtime.benchmark import BenchmarkArgumentManager, ResultWriter
 from brt.runtime.placement import dump_decision
+from modeling_bert_generation import BertGenerationConfig, BertGenerationDecoder
+from transformers import BertGenerationTokenizer
 
 
 def main():
@@ -19,6 +19,8 @@ def main():
     parser.add_argument(
         "--opt", type=str, default="None", choices=["None", "placement", "pytorch"]
     )
+    parser.add_argument("--seq", type=int, choices=[256, 512])
+    parser.add_argument("--token", type=int, choices=[32, 64])
     args = parser.parse_args()
     dist.init_process_group(backend="nccl")
     local_rank = dist.get_rank()
@@ -53,12 +55,13 @@ def main():
         return_token_type_ids=False,
         return_tensors="pt",
     )
-    #%%
+    # %%
 
+    # input_ids = inputs["input_ids"].repeat(4, 1).cuda()
     input_ids = inputs["input_ids"].repeat(512, 1).cuda()
     print(f"local_rank: {local_rank}, input_ids.shape: {input_ids.shape}")
 
-    #%%
+    # %%
     model_ddp = nn.parallel.DistributedDataParallel(
         model, device_ids=[local_rank], broadcast_buffers=False, bucket_cap_mb=4
     )
@@ -105,12 +108,14 @@ def throughput(
     model_ddp.eval()
     all_task_ids = []
     torch.random.manual_seed(dist.get_rank())
-    # num_per_task = input_ids.size(0) // config.num_tasks
-    # task_ids = torch.arange(config.num_tasks, dtype=torch.int64).repeat(num_per_task)
-    # for _ in range(bench_iteration):
-    #     all_task_ids.append(task_ids[torch.randperm(task_ids.size(0))])
+    num_per_task = input_ids.size(0) // config.num_tasks
+    task_ids = torch.arange(config.num_tasks, dtype=torch.int64).repeat(num_per_task)
     for _ in range(bench_iteration):
-        all_task_ids.append(torch.randint(0, config.num_tasks, (input_ids.size(0),)))
+        all_task_ids.append(task_ids[torch.randperm(task_ids.size(0))])
+    # for _ in range(bench_iteration):
+    #     all_task_ids.append(torch.randint(0, config.num_tasks, (input_ids.size(0),)))
+    result_fname = "task_moe/throughput.csv"
+    result_writer = ResultWriter(result_fname)
     with torch.inference_mode():
         for i in range(20):
             outputs = model_ddp(input_ids, task_ids=all_task_ids[i])
@@ -126,8 +131,27 @@ def throughput(
             outputs = model_ddp(input_ids, task_ids=all_task_ids[i])
         end_event.record(torch.cuda.current_stream())
         end_event.synchronize()
+        benched_throughput = (
+            bench_iteration
+            * input_ids.size(0)
+            / start_event.elapsed_time(end_event)
+            * 1000
+        )
+        if config.pt_native:
+            item = "Torch"
+        else:
+            if config.placement_aware:
+                item = "BRT+P"
+            else:
+                item = "BRT"
+        GPUS = dist.get_world_size()
+        seq_num = input_ids.size(0)
+        token_num = input_ids.size(1)
+        result_writer.write(
+            f"{item},{GPUS}GPUx{int(16/GPUS)},{seq_num}Seqsx{token_num}Tokens,{benched_throughput}"
+        )
         print(
-            f"local_rank: {dist.get_rank()}, throughput: {bench_iteration * input_ids.size(0) / start_event.elapsed_time(end_event) * 1000} samples/s"
+            f"local_rank: {dist.get_rank()}, throughput: {benched_throughput} samples/s"
         )
 
 

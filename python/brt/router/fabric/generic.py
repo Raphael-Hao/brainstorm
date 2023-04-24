@@ -67,7 +67,7 @@ class DispatchFabric(FabricBase):
             self.register_buffer("supported_capacities", None)
             self.path_wise_padding = False
         self.max_path_padding = kwargs.pop("max_path_padding", False)
-        self.max_path_load = kwargs.pop("max_path_load", None)
+        self.max_path_load = kwargs.pop("max_path_load", 0)
 
     def forward(
         self,
