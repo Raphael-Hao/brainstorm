@@ -81,7 +81,7 @@ class Conv2dElementWiseModule(AtomModule):
                             conv2d_output = node.name
                             self._succeed.append(node)
                 else:
-                    return False
+                    raise RuntimeError
             elif node.op == "call_method":
                 raise RuntimeError
             elif node.op == "output":
