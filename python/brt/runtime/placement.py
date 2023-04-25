@@ -1,17 +1,16 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
-from typing import Iterator
 import itertools
 import pathlib
 from collections import OrderedDict
-from typing import Dict, List, Tuple
+from typing import Dict, Iterator, List, Tuple
 
 import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 from brt.router import is_router
-from brt.runtime import log, BRT_CACHE_PATH
+from brt.runtime import BRT_CACHE_PATH, log
 
 logger = log.get_logger(__file__)
 
@@ -86,7 +85,9 @@ def dump_decision(mod: nn.Module):
     scatter_results = []
     for _m_name, m in mod.named_modules():
         if is_router(m) and "scatter" in m._router_type:
-            scatter_results.append(np.array(m.fabric.cell_decision_history, dtype=object))
+            scatter_results.append(
+                np.array(m.fabric.cell_decision_history, dtype=object)
+            )
     np.save("scatter_results.npy", scatter_results, allow_pickle=True)
 
 
@@ -147,7 +148,7 @@ def possible_placement_generator(expert_num: int, world_size: int):
 def load_searched_placement(
     config, which_one: str, moe_layer_start: int = None, moe_layer_end: int = None
 ) -> Dict[Tuple[int, int], List[List[int]]]:
-    result_path = BRT_CACHE_PATH / "results" / "swin_moe"
+    result_path = BRT_CACHE_PATH / "ckpt" / "swinv2_moe_small"
     world_size = dist.get_world_size()
     experts_range = {2: 18, 3: 2}
     experts_keys = generate_experts_keys(experts_range)
@@ -155,8 +156,7 @@ def load_searched_placement(
     assert which_one in ["best", "worst"]
     if moe_layer_start is None and moe_layer_end is None:
         searched_placement_file = (
-            result_path
-            / f"placement/{which_one}_{world_size}_placement.csv"
+            result_path / f"placement/{which_one}_{world_size}_placement.csv"
         )
         moe_layer_start = 0
         moe_layer_end = len(experts_keys) - 1
@@ -176,6 +176,7 @@ def load_searched_placement(
         placement = [list(p) for p in placement]
         searched_placement[experts_keys[i]] = placement
     return searched_placement
+
 
 def adaptive_micro_bench_load(
     model: nn.Module,

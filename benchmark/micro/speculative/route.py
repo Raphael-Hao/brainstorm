@@ -24,7 +24,7 @@ class DefaultModel(nn.Module):
         self.branches = nn.ModuleList(
             [
                 nn.Sequential(
-                    *[nn.Linear(self.in_features, self.in_features) for _ in range(20)]
+                    *[nn.Linear(self.in_features, self.in_features) for _ in range(10)]
                 )
                 for _path_id in range(self.path_num)
             ]

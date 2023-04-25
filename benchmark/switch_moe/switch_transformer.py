@@ -407,7 +407,9 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
             fabric_type="fused_dispatch",
             fabric_kwargs={"max_path_padding": True},
         )
-        self.gather = GatherRouter(fabric_type="fused_combine")
+        self.gather = GatherRouter(
+            fabric_type="fused_combine", fabric_kwargs={"max_path_padding": True}
+        )
         self.fused_expert = BatchmamutlSwitchExpert(config)
 
         # Step 2: Get the experts
