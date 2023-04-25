@@ -5,8 +5,8 @@
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 # run_all_benchmark.sh
 cd $SCRIPT_DIR/../../benchmark/micro/speculative || exit
-bash run_route_benchmarks.sh
-bash run_load_benchmarks.sh
+#bash run_route_benchmarks.sh
+#bash run_load_benchmarks.sh
 cd $SCRIPT_DIR
 # visualize the results
-python visualize/figure15.py
+python visualize/figure14.py
