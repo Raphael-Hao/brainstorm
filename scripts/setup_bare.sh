@@ -9,6 +9,12 @@ if [[ "$1" == "--branch" ]]; then
     shift 2
 fi
 
+if [[ "$1" == "--zsh" ]]; then
+    INSTALL_ZSH="true"
+    shift
+else
+    INSTALL_ZSH="false"
+fi
 
 is_root() {
     return "$(id -u)"
@@ -42,23 +48,25 @@ else
     fi
 fi
 
-
 cd "$HOME" || exit
 
 $sudo_cmd apt-get -y update && $sudo_cmd apt-get install -y \
     ssh openssh-server gcc libtinfo-dev zlib1g-dev build-essential \
     cmake libedit-dev libxml2-dev llvm tmux wget curl git vim zsh
 
-wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
-sed '/exec zsh -l/d' ./install.sh >./install_wo_exec.sh
-sh install_wo_exec.sh
-rm install.sh install_wo_exec.sh
+# install zsh if set --zsh
+if [[ "$INSTALL_ZSH" == "true" ]]; then
 
-git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-git clone https://github.com/zsh-users/zsh-history-substring-search ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
-sed "s/plugins=(git)/plugins=(git extract zsh-autosuggestions zsh-history-substring-search zsh-syntax-highlighting)/g" "${HOME}/.zshrc" >"${HOME}/.tmp_zshrc" && mv "${HOME}/.tmp_zshrc" "${HOME}/.zshrc"
+    wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
+    sed '/exec zsh -l/d' ./install.sh >./install_wo_exec.sh
+    sh install_wo_exec.sh
+    rm install.sh install_wo_exec.sh
 
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+    git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+    git clone https://github.com/zsh-users/zsh-history-substring-search ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
+    sed "s/plugins=(git)/plugins=(git extract zsh-autosuggestions zsh-history-substring-search zsh-syntax-highlighting)/g" "${HOME}/.zshrc" >"${HOME}/.tmp_zshrc" && mv "${HOME}/.tmp_zshrc" "${HOME}/.zshrc"
+fi
 
 wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh &&
     bash Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p "$HOME"/miniconda3 &&
