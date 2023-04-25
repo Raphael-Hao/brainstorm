@@ -445,7 +445,9 @@ class BatchmatmulSwitchTransformersSparseMLP(nn.Module):
         print("--------------------->after scatter")
         expert_out = self.fused_expert(routed_hidden_states)
         # print(expert_out.shape)
+        print("--------------------->after fused expert")
         next_states = self.gather(expert_out, hidden_states)
+        print("--------------------->after gather")
         next_states = brt.to_torch_tensor(next_states)
         next_states = next_states.view(origin_shape)
         hidden_states = router_probs * next_states
