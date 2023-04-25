@@ -7,8 +7,8 @@ export BRT_CACHE_PATH=$SCRIPT_DIR/../../../.cache
 
 GPU_SETTINGS=(
     "0,1"
-    # "0,1,2,3"
-    # "0,1,2,3,4,5,6,7"
+    "0,1,2,3"
+    "0,1,2,3,4,5,6,7"
 )
 EXPERTS=(
     # 1
@@ -21,12 +21,12 @@ EXPERTS=(
 )
 CELL_SIZES=(
     32
-    # 64
-    # 128
-    # 256
-    # 512
-    # 1024
-    # 2048
+    64
+    128
+    256
+    512
+    1024
+    2048
 )
 BENCH_ITEMS=(
     "brt"
@@ -56,3 +56,4 @@ for benchmark in "${BENCH_ITEMS[@]}"; do
         done
     done
 done
+mv $BRT_CACHE_PATH/results/micro/distributed/sparse_e2e.csv $BRT_CACHE_PATH/results/micro/distributed/sparse_cellsize.csv

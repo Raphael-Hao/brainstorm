@@ -50,3 +50,5 @@ for benchmark in "${BENCH_ITEMS[@]}"; do
         done
     done
 done
+
+mv $BRT_CACHE_PATH/results/micro/distributed/placement_e2e.csv $BRT_CACHE_PATH/results/micro/distributed/placement_cellsize.csv

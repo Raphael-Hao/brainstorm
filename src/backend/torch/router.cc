@@ -136,7 +136,7 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
     const bool& tag_generating = false,
     const ::c10::optional<::torch::Tensor>& tags = {},
     const bool& max_path_padding = false,
-    const ::c10::optional<int>& max_path_load = {},
+    const int& max_path_load = 0,
     const bool& is_1d_routing = true,
     const bool& is_tag_index = false) {
   CHECK_ON_CUDA(in_data);
@@ -190,8 +190,8 @@ std::vector<::torch::Tensor> dispatch_with_indices_and_loads(
   int total_load = 0;
   int max_path_load_value = 0;
   if (max_path_padding) {
-    if (max_path_load.has_value()) {
-      max_path_load_value = max_path_load.value();
+    if (max_path_load > 0) {
+      max_path_load_value = max_path_load;
       total_load = max_path_load_value * path_num;
     } else {
       max_path_load_value = loads.max().item<int>();
@@ -494,7 +494,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         pybind11::arg("in_data"), pybind11::arg("route_indices"), pybind11::arg("loads"),
         pybind11::arg("gates") = pybind11::none(), pybind11::arg("tag_generating") = false,
         pybind11::arg("tags") = pybind11::none(), pybind11::arg("max_path_padding") = false,
-        pybind11::arg("max_path_load") = pybind11::none(), pybind11::arg("is_1d_routing") = true,
+        pybind11::arg("max_path_load") = 0, pybind11::arg("is_1d_routing") = true,
         pybind11::arg("is_tag_index") = false);
   m.def("split_fused_cells_to_paths", &brt::backend::torch::split_fused_cells_to_paths,
         pybind11::arg("in_data"), pybind11::arg("loads"), pybind11::arg("max_path_padding") = false,

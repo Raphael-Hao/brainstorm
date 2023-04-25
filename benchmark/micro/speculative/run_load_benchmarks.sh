@@ -4,6 +4,9 @@
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 export BRT_CACHE_PATH=$SCRIPT_DIR/../../../.cache
+
+rm -rf $BRT_CACHE_PATH/results/micro/speculative/load_e2e.csv
+
 BRANCHES=(
     # 2
     # 3

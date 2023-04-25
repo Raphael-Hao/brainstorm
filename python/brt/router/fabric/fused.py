@@ -53,11 +53,11 @@ class FusedDispatchFabric(DispatchFabric):
             flow_load_stack = flow_load_stack[:-1]
             flow_extra_attr_dict = extra_attr_dict
 
-            routed_data = c_router.dispatch_with_indices_and_loads(
+            (routed_data,) = c_router.dispatch_with_indices_and_loads(
                 flow_data,
                 route_indices,
                 loads,
-                score,
+                score if self.transforms[flow_idx] else None,
                 self.is_tag_index,
                 flow_tag,
                 self.max_path_padding,
@@ -77,7 +77,7 @@ class FusedDispatchFabric(DispatchFabric):
 
 @register_fabric("fused_combine")
 class FusedCombineFabric(CombineFabric):
-    def __init__(self, flow_num, reduction, transform, **kwargs) -> None:
+    def __init__(self, flow_num, reduction="add", transform=False, **kwargs) -> None:
         kwargs["index_format"] = "seat_index"
         super().__init__(
             flow_num=flow_num, reduction=reduction, transform=transform, **kwargs
@@ -105,11 +105,11 @@ class FusedCombineFabric(CombineFabric):
             route_indices = in_flow_tag_stack.pop()
             in_flows_load = in_flow_load_stack.pop()
 
-            out_flow_data = c_router.combine_with_indices_and_loads(
+            (out_flow_data,) = c_router.combine_with_indices_and_loads(
                 in_flow_data,
                 route_indices,
                 in_flows_load,
-                score,
+                score if self.transform else None,
                 residual_flow,
                 max_path_padding=self.max_path_padding,
                 ever_padded=self.ever_padded,

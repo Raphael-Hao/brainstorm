@@ -10,9 +10,10 @@ from typing import Optional, Tuple, Union
 
 import torch
 import torch.utils.checkpoint
+from configuration_bert_generation import BertGenerationConfig
+from moe_layer import BertGenerationMoE
 from torch import nn
 from torch.nn import CrossEntropyLoss
-
 from transformers.activations import ACT2FN
 from transformers.modeling_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
@@ -30,14 +31,13 @@ from transformers.utils import (
     logging,
     replace_return_docstrings,
 )
-from configuration_bert_generation import BertGenerationConfig
-from moe_layer import BertGenerationMoE
 
 logger = logging.get_logger(__name__)
 
 _CHECKPOINT_FOR_DOC = "google/bert_for_seq_generation_L-24_bbc_encoder"
 _CONFIG_FOR_DOC = "BertGenerationConfig"
 _TOKENIZER_FOR_DOC = "BertGenerationTokenizer"
+
 
 # Copied from transformers.models.bert.modeling_bert.BertSelfOutput with Bert->BertGeneration
 class BertGenerationSelfOutput(nn.Module):
@@ -405,7 +405,6 @@ class BertGenerationLayer(nn.Module):
         if self.is_decoder:
             outputs = outputs + (present_key_value,)
 
-
         outputs = outputs + (task_ids,)
         return outputs
 
@@ -458,7 +457,6 @@ class BertEncoder(nn.Module):
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
             if self.gradient_checkpointing and self.training:
-
                 if use_cache:
                     logger.warning(
                         "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."

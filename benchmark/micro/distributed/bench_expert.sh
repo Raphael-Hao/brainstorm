@@ -16,8 +16,8 @@ EXPERTS=(
     4
     8
     16
-    32
-    64
+    # 32
+    # 64
 )
 CELL_SIZE=512
 LOAD=1024
@@ -46,3 +46,4 @@ for benchmark in "${BENCH_ITEMS[@]}"; do
     done
 done
 
+mv $BRT_CACHE_PATH/results/micro/distributed/sparse_e2e.csv $BRT_CACHE_PATH/results/micro/distributed/sparse_expert.csv

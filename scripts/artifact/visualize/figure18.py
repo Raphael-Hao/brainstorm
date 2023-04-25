@@ -92,7 +92,7 @@ axes[0].legend(
     columnspacing=0.8,
     prop={"weight": "bold", "size": 12},
 ).set_zorder(100)
-axes[1].set_ylabel("Throughput (\\textit{Img/s})", fontsize=14)
+axes[1].set_ylabel("Throughput (Img/s)", fontsize=14)
 plt.savefig(FIGURES_PATH / "figure18.pdf", bbox_inches="tight", dpi=300)
 
 # %%

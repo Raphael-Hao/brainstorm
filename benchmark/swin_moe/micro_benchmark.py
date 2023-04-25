@@ -4,17 +4,16 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu
 # --------------------------------------------------------
-from typing import Dict, List, Tuple
 import argparse
 import itertools
 import json
 import os
+import pathlib
 import random
 import time
 import warnings
 from functools import partial
-import pathlib
-
+from typing import Dict, List, Tuple
 
 # Recommend to initialize NUMA status at the most program begining (before any other imports)
 from tutel_ea import system_init
@@ -28,29 +27,27 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.nn as nn
-from brt.runtime.benchmark import deterministic_random_generator
+from brt.runtime.benchmark import ResultWriter, deterministic_random_generator
 from brt.runtime.pkg_info import BRT_CACHE_PATH
 
 # pylint: disable=unused-import
 from brt.runtime.placement import (
     adaptive_load,
     adaptive_micro_bench_load,
-    dump_trace,
     deterministic_rand_placement_generator,
+    dump_trace,
     generate_experts_keys,
-    possible_placement_generator,
     permute_placement,
+    possible_placement_generator,
 )
-
-# pylint: enable=unused-import
-
-
 from config import get_config
 from data import build_loader
 from logger import create_logger
 from models import build_model
 from models.micro_swin_v2_moe import MicroSwinV2TransformerMoE
 from utils import create_ds_config, hook_scale_grad
+
+# pylint: enable=unused-import
 
 
 warnings.filterwarnings(
@@ -219,7 +216,12 @@ def main(args, config, ds_init):
         )
     elif args.mode == "bench-searched":
         benchmark_serached_placement(
-            config, model_without_ddp, 0, 8, checkpoint_file, logger
+            config,
+            model_without_ddp,
+            args.moe_id,
+            args.moe_id,
+            checkpoint_file,
+            logger,
         )
     elif args.mode == "bench-permuted":
         benchmark_permuted_serached_placement(
@@ -300,6 +302,11 @@ def benchmark_serached_placement(
     )
     worst_througput = benchmark_micro_ddp_model(
         config, micro_moe_block_ddp, in_data, "worst", logger
+    )
+    result_fname = f"swin_moe/micro_throughput.csv"
+    result_writer = ResultWriter(result_fname)
+    result_writer.write(
+        f"{config.MODEL.SWIN_V2_MOE.CAPACITY_FACTOR},{moe_layer_start+1},{best_througput/worst_througput}"
     )
     logger.info(
         f"moe blocks: {moe_layer_start} - {moe_layer_end}, speedup: {best_througput/worst_througput}"
@@ -469,7 +476,7 @@ def search_end_layer_placement(
                 )
             no_update_iter_nums = 0
         no_update_iter_nums += 1
-        gap = best_throughput/worst_throughput
+        gap = best_throughput / worst_throughput
         logger.info(
             f"{idx} ===>Current Throughput: {throughput}, Best Throughput: {best_throughput}, Worst Throughput: {worst_throughput}, Gap: {gap:.2f}"  # pylint: disable=line-too-long
         )
@@ -503,13 +510,15 @@ def load_searched_placement(
     searched_placement_list = np.loadtxt(
         searched_placement_file, dtype=np.int32, delimiter=","
     )
+    searched_placement_list = searched_placement_list.reshape(-1, 16)
     assert len(searched_placement_list) == moe_layer_end - moe_layer_start + 1
     searched_placement = {}
     for i in range(moe_layer_start, moe_layer_end + 1):
-        placement = np.split(searched_placement_list[i], world_size)
+        placement = np.split(searched_placement_list[i - moe_layer_start], world_size)
         placement = [list(p) for p in placement]
         searched_placement[experts_keys[i]] = placement
     return searched_placement
+
 
 def load_micro_bench_data(config, data_dir: str, bs: int, logger):
     logger.info(f"Loading micro-bench data from {data_dir}")

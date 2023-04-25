@@ -802,8 +802,14 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
   // printf("grain_size_in_byte: %d\n", grain_size_in_byte);
 
   int recv_num;
+  int max_path_load_value = 0;
   if (max_path_padding) {
-    recv_num = max_path_load * total_slice_num;
+    if (max_path_load == 0) {
+      max_path_load_value = recv_sizes_cpu.max().item<int>();
+    } else {
+      max_path_load_value = max_path_load;
+    }
+    recv_num = max_path_load_value * total_slice_num;
   } else {
     recv_num = recv_sizes_cpu.sum().item<int>();
   }
@@ -824,7 +830,7 @@ static std::vector<::torch::Tensor> group_sparse_all_to_all(const ::torch::Tenso
   manager.RecordStorage(out_data);
   distributed::GroupSparseAllToAllForward(in_data.data_ptr(), out_data.data_ptr(), send_sizes_vec,
                                           recv_sizes_vec, grain_size_in_byte, max_path_padding,
-                                          max_path_load, group_size, world_size, manager.GetComm(),
+                                          max_path_load_value, group_size, world_size, manager.GetComm(),
                                           manager.GetStream());
   manager.RecordEvent(0);
   manager.EndContext();

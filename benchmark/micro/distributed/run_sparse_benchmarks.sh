@@ -2,13 +2,9 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-# run_all_benchmark.sh
-
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+export BRT_CACHE_PATH=$SCRIPT_DIR/../../../.cache
+rm -rf $BRT_CACHE_PATH/results/micro/distributed/sparse*.csv
 
-cd $SCRIPT_DIR/../../benchmark/swin_moe || exit
-bash run_all_benchmarks.sh
-
-cd $SCRIPT_DIR
-# visualize the results
-python visualize/figure18.py
+bash bench_expert.sh
+bash bench_cellsize.sh

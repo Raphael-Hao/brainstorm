@@ -63,39 +63,35 @@ bash scripts/init_dev.sh
 
 # Reproducing the Results
 
-## Reproducing the Results in Figure 12
+Please enter the directory `scripts/artifact` and run the following commands to reproduce the results. Each scripts will run the corresponding experiment, visualize the results, and the figure will be saved in the `.cache/results/figures` directory. Therefore, firstly we need to enter the directory with the following command:
+
+```bash
+cd scripts/artifact
+```
+
+## Reproducing the Results on Single-GPU Server
+
+```bash
+bash Figure12.sh
+bash Figure14.sh
+bash Figure15.sh
+bash Figure16.sh
+bash Figure20.sh
+bash Figure21.sh
+bash Figure22.sh
+```
+
+## Reproducing the Results in Multiple-GPU Server
 
 
-## Reproducing the Results in Figure 13
+```bash
+bash Figure11.sh
+bash Figure13.sh
+bash Figure17.sh
+bash Figure18.sh
+bash Figure19.sh
+```
 
+# Visualized Results
 
-## Reproducing the Results in Figure 14
-
-
-## Reproducing the Results in Figure 15
-
-
-## Reproducing the Results in Figure 16
-
-
-## Reproducing the Results in Figure 17
-
-
-## Reproducing the Results in Figure 18
-
-
-## Reproducing the Results in Figure 19
-
-
-## Reproducing the Results in Figure 20
-
-
-## Reproducing the Results in Figure 21
-
-
-## Reproducing the Results in Figure 22
-
-
-## Reproducing the Results in Figure 23
-
-
+Results of the experiments are visualized in the `.cache/results/figures`

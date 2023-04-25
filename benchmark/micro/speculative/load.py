@@ -2,12 +2,14 @@
 # Licensed under the MIT license.
 
 import argparse
-from brt.app.rand import MissHitScatter
-from brt.router import GatherRouter
+
 import torch
 import torch.nn as nn
-from brt.runtime.benchmark import CUDATimer
+from brt import Annotator
+from brt.app.rand import MissHitScatter
+from brt.router import GatherRouter
 from brt.runtime import BRT_CACHE_PATH
+from brt.runtime.benchmark import CUDATimer
 
 
 class DefaultModel(nn.Module):
@@ -116,8 +118,14 @@ def main():
     hit_model = MissModel(args.path_num, args.cell_size, is_hit=True).eval().cpu()
     miss_model = MissModel(args.path_num, args.cell_size, is_hit=False).eval().cpu()
 
+    result_path = BRT_CACHE_PATH / "results" / "micro" / "speculative" / "load_e2e.csv"
+
     x = torch.randn(1, args.cell_size).cuda()
-    timer = CUDATimer(warm_up=10, repeat=10, loop=1)
+    annotator = Annotator(dims=[0])
+    x = annotator(x)
+    timer = CUDATimer(
+        warm_up=10, repeat=10, loop=1, export_fname=result_path.as_posix()
+    )
 
     pytorch_total_params = sum(
         p.numel() for p in default_model.branches[0].parameters()
@@ -125,39 +133,24 @@ def main():
     pytorch_total_params_in_MB = pytorch_total_params * 4 / 1024 / 1024
     print(f"Total params: {pytorch_total_params_in_MB} MB")
 
-    result_path = (
-        BRT_CACHE_PATH / "results" / "micro" / "speculative" / "load" / f"default.csv"
-    )
-    result_path.parent.mkdir(parents=True, exist_ok=True)
     timer.memory_execute(
         default_model,
         x,
-        f"{args.path_num},{args.cell_size}",
+        f"Default,{pytorch_total_params_in_MB}",
         export=True,
-        export_path=result_path,
     )
-    result_path = (
-        BRT_CACHE_PATH / "results" / "micro" / "speculative" / "load" / f"hit.csv"
-    )
-    result_path.parent.mkdir(parents=True, exist_ok=True)
     hit_model.branches[0].cuda()
     timer.execute(
         lambda: hit_model(x),
-        f"{args.path_num},{args.cell_size}",
+        f"Hit,{pytorch_total_params_in_MB}",
         export=True,
-        export_path=result_path,
     )
-    result_path = (
-        BRT_CACHE_PATH / "results" / "micro" / "speculative" / "load" / f"miss.csv"
-    )
-    result_path.parent.mkdir(parents=True, exist_ok=True)
     # miss_model.branches[0].cuda()
     timer.memory_execute(
         miss_model,
         x,
-        f"{args.path_num},{args.cell_size}",
+        f"Miss,{pytorch_total_params_in_MB}",
         export=True,
-        export_path=result_path,
     )
 
 

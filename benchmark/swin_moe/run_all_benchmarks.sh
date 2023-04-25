@@ -16,8 +16,8 @@ VENDORS=(
 )
 GPUS=(
     "0,1"
-    # "0,1,2,3"
-    # "0,1,2,3,4,5,6,7"
+    "0,1,2,3"
+    "0,1,2,3,4,5,6,7"
 )
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 BRT_DIR=$(cd "${script_dir}/../../" && pwd)

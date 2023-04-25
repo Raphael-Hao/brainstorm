@@ -7,17 +7,17 @@ import time
 import datasets
 import numpy as np
 import torch
-from nvitop import Device
-from switch_transformer import (
-    SwitchTransformersModel,
-    FusedSwitchTransformersSparseMLP,
-    BatchmatmulSwitchTransformersSparseMLP,
-    SwitchTransformersSparseMLP,
-)  # v4.25.1
-from transformers import AutoConfig, AutoTokenizer
-from config import SwitchTransformersConfig
-from brt.runtime.benchmark import profile_v2
 from brt.runtime import BRT_CACHE_PATH
+from brt.runtime.benchmark import ResultWriter, profile_v2
+from config import SwitchTransformersConfig
+from nvitop import Device
+from switch_transformer import (  # v4.25.1
+    BatchmatmulSwitchTransformersSparseMLP,
+    FusedSwitchTransformersSparseMLP,
+    SwitchTransformersModel,
+    SwitchTransformersSparseMLP,
+)
+from transformers import AutoConfig, AutoTokenizer
 
 
 def get_gpu_info():
@@ -60,10 +60,26 @@ def main():
     config: SwitchTransformersConfig = AutoConfig.from_pretrained(
         model_name, max_position_embeddings=args.max_seq_length
     )
-    config.capacities = [
-        # 2,  # 1,
-        # 4,  # 1,
-        # 8,  # 1,
+    capacity_index = [[3, 4, 5, 6, 7, 8, 9, 15], [0, 1, 2, 3, 4, 15]]
+    if args.vendor == "brt":
+        args.item = "BRT"
+    elif args.vendor == "batchmatmul":
+        args.item = "Tutel"
+    elif args.vendor == "torch":
+        args.item = "Torch"
+    else:
+        raise ValueError(f"Unknown vendor: {args.vendor}")
+
+    if args.expert == 8 and args.vendor == "brt":
+        args.vendor = "batchmatmul"
+    if args.expert in [16]:
+        index = capacity_index[0]
+    else:
+        index = capacity_index[1]
+    capacities = [
+        2,  # 1,
+        4,  # 1,
+        8,  # 1,
         16,  # 1,
         32,  # 1,
         64,  # 1,
@@ -71,18 +87,18 @@ def main():
         128,  # 1,
         160,  # 1,
         192,  # 1,
-        # 224,  # 1,
-        # 272,  # 1,
-        # 320,  # 1, no need may
-        # 368,  # 1,
-        # 416,  # 1,
+        224,  # 1,
+        272,  # 1,
+        320,  # 1, no need may
+        368,  # 1,
+        416,  # 1,
         512,
     ]
-    config.ranks = [
+    ranks = [
         [
-            # 1,  # 2
-            # 2,  # 4
-            # 1,  # 8
+            1,  # 2
+            2,  # 4
+            1,  # 8
             1,  # 16
             1,  # 32
             2,  # 64
@@ -90,17 +106,17 @@ def main():
             1,  # 128
             3,  # 160
             1,  # 192
-            # 2,  # 224
-            # 1,  # 272
-            # 1,  # 320
-            # 1,  # 368
-            # 2,  # 416
+            2,  # 224
+            1,  # 272
+            1,  # 320
+            1,  # 368
+            2,  # 416
             1,  # 512
         ],
         [
-            # 1,  # 2
-            # 1,  # 4
-            # 1,  # 8
+            1,  # 2
+            1,  # 4
+            1,  # 8
             1,  # 16
             1,  # 32
             1,  # 64
@@ -108,14 +124,16 @@ def main():
             1,  # 128
             1,  # 160
             1,  # 192
-            # 1,  # 224
-            # 1,  # 272
-            # 5,  # 320
-            # 1,  # 368
-            # 1,  # 416
+            1,  # 224
+            1,  # 272
+            5,  # 320
+            1,  # 368
+            1,  # 416
             3,  # 512
         ],
     ]
+    config.capacities = [capacities[i] for i in index]
+    config.ranks = [[ranks[0][i] for i in index], [ranks[1][i] for i in index]]
     config.vendor = args.vendor
     config.trace = args.mode == "trace"
 
@@ -181,10 +199,8 @@ def load_data(args, tokenizer, data_num=100):
 def throughput(args, model, tokenizer, test_data_num, warmup=10):
     loaded_data = load_data(args, tokenizer)
     data_num = len(loaded_data)
-    result_path = BRT_CACHE_PATH / "results" / "switch_transformer"
-    result_path.mkdir(parents=True, exist_ok=True)
-    result_file = result_path / "e2e.csv"
-    result = result_file.open("a")
+    result_fname = (BRT_CACHE_PATH / "results" / "switch_moe" / "e2e").as_posix()
+    result_writer = ResultWriter(result_fname)
     random_idx = np.random.choice(range(data_num), test_data_num)
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
@@ -200,8 +216,9 @@ def throughput(args, model, tokenizer, test_data_num, warmup=10):
             model(**loaded_data[idx])
         end_event.record()
         end_event.synchronize()
-    result.write(
-        f"{args.vendor},{args.bsz},{args.max_seq_length},{args.expert},{(start_event.elapsed_time(end_event) / test_data_num):.2f}\n"
+
+    result_writer.write(
+        f"{args.item},{args.expert},{(start_event.elapsed_time(end_event) / test_data_num):.3f}"
     )
 
 
@@ -234,6 +251,7 @@ def trace(args, model, tokenizer):
             # average_load = np.max(m.shape_history, axis=1).astype(int)
             all_history.append(average_load)
     np.savetxt(result_file, np.array(all_history), delimiter=",", fmt="%d")
+
 
 def profile(args, model, tokenizer, vendor):
     loaded_data = load_data(args, tokenizer, 10)

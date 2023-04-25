@@ -1,7 +1,7 @@
 # Copyright (c) 2022 by Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Tuple, List, Union
+from typing import List, Tuple, Union
 
 import torch
 
@@ -30,7 +30,7 @@ def dispatch_with_indices_and_loads(
     tag_generating: bool = False,
     tags: torch.Tensor = None,
     max_path_padding: bool = False,
-    max_path_load: int = None,
+    max_path_load=0,
     is_1d_routing: bool = True,
     is_tag_index: bool = False,
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: ...

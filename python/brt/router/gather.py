@@ -22,8 +22,6 @@ class GatherRouter(RouterBase):
         self,
         fabric_type: str = "combine",
         fabric_kwargs: Dict[str, Any] = None,
-        capturing=False,
-        capture_mode: str = "cum",
     ):
         """gather router
 
