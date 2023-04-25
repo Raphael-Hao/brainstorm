@@ -81,7 +81,7 @@ class Conv2dElementWiseModule(AtomModule):
                             conv2d_output = node.name
                             self._succeed.append(node)
                 else:
-                    return False
+                    raise RuntimeError
             elif node.op == "call_method":
                 raise RuntimeError
             elif node.op == "output":
@@ -255,8 +255,8 @@ parameters: {parameters}
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
         sample_output = self.module(sample_input)
-        sample_input_size = sample_input.numel() / sample_input.shape[1]
-        sample_output_size = sample_output.numel() / sample_output.shape[1]
+        sample_input_size = sample_input.numel() // sample_input.shape[0]
+        sample_output_size = sample_output.numel() // sample_output.shape[0]
         shared_arg_grans = [
             sample_input_size * ModuleDTypeSizeInByte[sample_input.dtype],
             sample_output_size * ModuleDTypeSizeInByte[sample_output.dtype],
