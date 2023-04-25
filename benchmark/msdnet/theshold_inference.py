@@ -335,7 +335,7 @@ def threshold_dynamic_evaluate(
 
             num_trials = 100
 
-            timer = CUDATimer(repeat=2, export_fname="msdnet_all_opt")
+            timer = CUDATimer(repeat=2, export_fname="msdnet_all_opt", clean_export=True)
             naive_backbone = model1
             naive_backbone = switch_capture(naive_backbone, False).eval()
             raw_time = []

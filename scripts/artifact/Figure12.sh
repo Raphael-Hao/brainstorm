@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
-cd $BRT_CACHE_PATH/../benchmark/micro/homo_conv
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
-python figure_12.py
+cd $SCRIPT_DIR/../../benchmark/micro/homo_conv || exit
+bash figure_12.sh
+cd $SCRIPT_DIR
+
+python visualize/figure12.py

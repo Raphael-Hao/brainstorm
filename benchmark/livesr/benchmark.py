@@ -46,7 +46,7 @@ for hdlr in logger.handlers:
 # set_level_to_debug()
 
 
-timer = CUDATimer(loop=100, repeat=2, export_fname="benchmark_livesr")
+timer = CUDATimer(loop=100, repeat=2, export_fname="benchmark_livesr", clean_export=True)
 
 
 def print_load_history(module: nn.Module):

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
-cd $BRT_CACHE_PATH/../benchmark/livesr
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
+cd $SCRIPT_DIR/../../benchmark/livesr || exit
 . figure_16.sh
+cd $SCRIPT_DIR
+
+python visualize/figure16.py
