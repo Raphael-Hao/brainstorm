@@ -1,3 +1,10 @@
+import os
+import pathlib
+
+current_path = pathlib.Path(__file__).parent.absolute()
+pkg_path = current_path.parent.parent.parent
+os.environ["BRT_CACHE_PATH"] = str(pkg_path / ".cache")
+
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
