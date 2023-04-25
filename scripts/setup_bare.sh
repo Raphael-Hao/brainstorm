@@ -73,6 +73,10 @@ echo 'export PATH="/usr/local/cuda/bin:$HOME"/miniconda3/bin:$PATH' >>"$HOME/.ba
 echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >>"$HOME/.zshrc"
 echo 'export LIBRARY_PATH="/usr/local/cuda/lib64:$LIBRARY_PATH' >>"$HOME/.zshrc"
 
+export PATH="/usr/local/cuda/bin:$HOME"/miniconda3/bin:$PATH
+export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+export LIBRARY_PATH="/usr/local/cuda/lib64:$LIBRARY_PATH
+
 # shellcheck disable=SC1090,SC1091
 source "$HOME/.bashrc"
 
@@ -104,7 +108,6 @@ cd "$BRT_DIR" || exit
 
 cd 3rdparty/dynamic_routing && pip install -v -e .
 cd "$BRT_DIR" || exit
-
 
 cd benchmark/swin_moe && pip install -r requirements.txt
 cd "$BRT_DIR" || exit

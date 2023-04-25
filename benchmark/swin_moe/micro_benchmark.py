@@ -422,7 +422,7 @@ def search_end_layer_placement(
     worst_throughput = 1e10
     worst_placement = None
     idx = 0
-    micro_results_path = BRT_CACHE_PATH / "results" / "swin_moe" / "micro_results"
+    micro_results_path = BRT_CACHE_PATH / "ckpt" / "swinv2_moe_small" / "micro_results"
     micro_results_path.mkdir(parents=True, exist_ok=True)
     no_update_iter_nums = 0
     for i in range(1000):
@@ -495,7 +495,7 @@ def search_end_layer_placement(
 def load_searched_placement(
     config, which_one: str, moe_layer_start: int, moe_layer_end: int, logger
 ) -> Dict[Tuple[int, int], List[List[int]]]:
-    result_path = BRT_CACHE_PATH / "results" / "swin_moe"
+    result_path = BRT_CACHE_PATH / "ckpt" / "swinv2_moe_small"
     world_size = dist.get_world_size()
     experts_range = {2: 18, 3: 2}
     experts_keys = generate_experts_keys(experts_range)

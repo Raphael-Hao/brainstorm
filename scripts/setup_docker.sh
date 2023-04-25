@@ -66,5 +66,9 @@ cd "$BRT_DIR" || exit
 cd 3rdparty/tutel && pip install -v -e .
 cd "$BRT_DIR" || exit 1
 
+cd 3rdparty/dynamic_routing && pip install -v -e .
+cd "$BRT_DIR" || exit 1
+
+
 cd benchmark/swin_moe && pip install -r requirements.txt
 cd "$BRT_DIR" || exit 1
