@@ -78,8 +78,8 @@ echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >>"$HOME/.
 echo 'export LIBRARY_PATH="/usr/local/cuda/lib64:$LIBRARY_PATH' >>"$HOME/.zshrc"
 # shellcheck disable=SC2016
 echo 'export PATH="/usr/local/cuda/bin:$HOME"/miniconda3/bin:$PATH' >>"$HOME/.bashrc"
-echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >>"$HOME/.zshrc"
-echo 'export LIBRARY_PATH="/usr/local/cuda/lib64:$LIBRARY_PATH' >>"$HOME/.zshrc"
+echo 'export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >>"$HOME/.bashrc"
+echo 'export LIBRARY_PATH="/usr/local/cuda/lib64:$LIBRARY_PATH' >>"$HOME/.bashrc"
 
 export PATH="/usr/local/cuda/bin:$HOME"/miniconda3/bin:$PATH
 export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH
@@ -93,6 +93,8 @@ pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 --e
 
 BRT_DIR="$HOME/brainstorm_project/brainstorm"
 mkdir -p "$HOME/brainstorm_project" && cd "$HOME/brainstorm_project" || exit
+
+export TORCH_CUDA_ARCH_LIST="7.0;7.2;7.5;8.0;8.6+PTX"
 
 git clone https://Raphael-Hao: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@github.com/Raphael-Hao/brainstorm.git \
     -b "${BRT_BRANCH:-main}" \
