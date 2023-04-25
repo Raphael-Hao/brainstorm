@@ -13,8 +13,6 @@ from brt.passes import RouterFixPass, VerticalFusePass, HorizFusePass
 from brt.router import switch_capture, RouterBase
 
 from archs.livesr import LiveSR
-from archs.vfused_livesr import vFusedLiveSR
-from archs.hfused_livesr import hFusedLiveSR
 from dataset import get_dataloader
 
 DEFAULT_DATASET = Path(__file__).parent / "dataset/cam1/LQ"
