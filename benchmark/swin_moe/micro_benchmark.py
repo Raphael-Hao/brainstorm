@@ -425,7 +425,7 @@ def search_end_layer_placement(
     micro_results_path = BRT_CACHE_PATH / "ckpt" / "swinv2_moe_small" / "micro_results"
     micro_results_path.mkdir(parents=True, exist_ok=True)
     no_update_iter_nums = 0
-    for i in range(1000):
+    for i in range(300):
         placement = next(placement_generator)
         idx += 1
         modified_placements = {}
