@@ -429,7 +429,7 @@ def threshold_dynamic_evaluate(
                     if i >= num_trials:
                         break
                     input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(lambda: opr_backbone(input_var), "operator_reorder", export=True)
+                    timer.execute(lambda: opr_backbone(input_var), "operator_reorder")
                     opr_time.append(timer.avg)
 
                 sp_pass = VerticalFusePass(opr_backbone, sample_inputs={"x": input_var})

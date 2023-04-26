@@ -50,10 +50,10 @@ exit_portions = [
 
 msdnet_e2e_latency = []
 for i, ep in enumerate(exit_portions):
-    start = 800 * i
+    start = 300 * i
     vf_mean = msdnet_e2e_latency_raw[start:start+100]["f1"].mean()
-    sp_mean = msdnet_e2e_latency_raw[start+600:start+700]["f1"].mean()
-    hf_mean = msdnet_e2e_latency_raw[start+700:start+800]["f1"].mean()
+    sp_mean = msdnet_e2e_latency_raw[start+100:start+200]["f1"].mean()
+    hf_mean = msdnet_e2e_latency_raw[start+200:start+300]["f1"].mean()
     msdnet_e2e_latency.append((str(ep), vf_mean, sp_mean, hf_mean))
 msdnet_e2e_latency = np.array(msdnet_e2e_latency, dtype="O,f,f,f")[::-1]
 print(msdnet_e2e_latency)
