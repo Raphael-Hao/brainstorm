@@ -335,7 +335,7 @@ def threshold_dynamic_evaluate(
 
             num_trials = 100
 
-            timer = CUDATimer(repeat=2, export_fname="msdnet_all_opt", clean_export=True)
+            timer = CUDATimer(repeat=2, export_fname="msdnet_all_opt")
             naive_backbone = model1
             naive_backbone = switch_capture(naive_backbone, False).eval()
             raw_time = []
@@ -470,10 +470,10 @@ def threshold_dynamic_evaluate(
                 print_stat(t_sp_time, "Time of Speculative Routing")
                 print_stat(t_hf_time, "Time of Horizontal Fusion")
 
-                speed_up_of_dpe = t_baseline_time / t_dpe_time
-                speed_up_of_cp = t_baseline_time / t_cp_time
+                # speed_up_of_dpe = t_baseline_time / t_dpe_time
+                # speed_up_of_cp = t_baseline_time / t_cp_time
                 speed_up_of_vf = t_baseline_time / t_vf_time
-                speed_up_of_opr = t_baseline_time / t_opr_time
+                # speed_up_of_opr = t_baseline_time / t_opr_time
                 speed_up_of_sp = t_baseline_time / t_sp_time
                 speed_up_of_hf = t_baseline_time / t_hf_time
 
