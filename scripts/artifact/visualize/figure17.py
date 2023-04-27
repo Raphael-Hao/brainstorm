@@ -97,9 +97,9 @@ for i in range(3):
     axs[i].set_title(tiles[i], fontsize=14)
 
 axs[2].legend(
-    # bbox_to_anchor=(0.08, 1),
+    bbox_to_anchor=(0.06, 1.06),
     ncol=3,
-    loc="lower right",
+    # loc="lower right",
     # fontsize=10,
     # markerscale=3,
     labelspacing=0.1,
