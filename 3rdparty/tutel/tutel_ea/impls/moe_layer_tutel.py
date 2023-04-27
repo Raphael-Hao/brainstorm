@@ -272,8 +272,6 @@ class TopKGate(torch.nn.Module):
             expert_output = expert_fn(_dispatched_input)
             expert_output = expert_output.to(in_data.dtype)
             expert_output = C.AllToAll.apply(group, expert_output)
-            print("after a2a", expert_output)
-            print("after a2a", expert_output.sum())
         else:
             split_dim = 2
 
@@ -658,8 +656,6 @@ class MOELayer(torch.nn.Module):
                                 original_shape[2],
                                 self.model_dim,
                             )
-                            print("before permute", x)
-                            print("before permute", x.sum())
                             x = x.permute(1, 0, 2, 3)
                         return x
 
