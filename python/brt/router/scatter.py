@@ -157,7 +157,7 @@ class SwinMoEScatterRouter(RouterBase):
         hot_mask, runtime_capacities, new_score, loss = self.protocol(
             score, logits_wo_noise, logits
         )
-        if self.fabric.max_path_load is None:
+        if self.fabric.max_path_load == 0:
             self.fabric.max_path_load = runtime_capacities[0].item()
         out_flows, new_score = self.fabric(
             in_flows, hot_mask, runtime_capacities, new_score

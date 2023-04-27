@@ -1,23 +1,22 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from typing import Any, Optional, cast
-
 import copy
+import logging
 import os
 import re
-import logging
+from typing import Any, Optional, cast
 
 import torch
-from torch import Tensor
 import torch.distributed as dist
-from torch.nn import ModuleList
 import torch.nn.functional as F
+from torch import Tensor
 from torch.distributions.normal import Normal
+from torch.nn import ModuleList
 
-from .fast_dispatch import fast_dispatcher
 from ..jit_kernels.gating import fast_cumsum_sub_one
 from . import communicate as C
+from .fast_dispatch import fast_dispatcher
 
 
 class PrimFwdAllgather(torch.autograd.Function):

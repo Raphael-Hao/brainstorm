@@ -174,7 +174,7 @@ class TopKGate(torch.nn.Module):
 
         self.gather = GatherRouter(
             fabric_type="distributed_fused_combine",
-            fabric_kwargs={"max_path_padding": True},
+            fabric_kwargs={"max_path_padding": True, "transform": True},
         )
 
     def compute_sorted_location(self, x, importance_scores):

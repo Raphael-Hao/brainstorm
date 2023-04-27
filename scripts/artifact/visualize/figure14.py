@@ -149,9 +149,9 @@ ax.plot(
 )
 ax.set_xticks(np.arange(0.1, 0.5, 0.1))
 ax.set_xticklabels([0.1, 0.2, 0.3, 0.4], fontsize=12)
-ax.set_yticks([0.0, 0.4, 0.8])
-ax.set_yticklabels([0.0, 0.4, 0.8], fontsize=12)
-ax.set_ylim(0, 1.1)
+# ax.set_yticks([0.0, 0.4, 0.8])
+# ax.set_yticklabels([0.0, 0.4, 0.8], fontsize=12)
+# ax.set_ylim(0, 1.5)
 ax.set_xlabel("Router Latency (ms)", fontsize=14, fontweight="bold")
 ax.set_ylabel("Time (ms)", fontsize=14, fontweight="bold")
 

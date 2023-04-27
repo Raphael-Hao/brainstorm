@@ -255,8 +255,8 @@ parameters: {parameters}
         if method not in type(self)._shared_arg_indices:
             raise NotImplementedError(f"{method} is not supported")
         sample_output = self.module(sample_input)
-        sample_input_size = sample_input.numel() / sample_input.shape[1]
-        sample_output_size = sample_output.numel() / sample_output.shape[1]
+        sample_input_size = sample_input.numel() // sample_input.shape[1]
+        sample_output_size = sample_output.numel() // sample_output.shape[1]
         shared_arg_grans = [
             sample_input_size * ModuleDTypeSizeInByte[sample_input.dtype],
             sample_output_size * ModuleDTypeSizeInByte[sample_output.dtype],

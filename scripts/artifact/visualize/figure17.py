@@ -49,7 +49,6 @@ tiles = ["256Seqsx32Tokens", "256Seqsx64Tokens", "512Seqsx32Tokens"]
 for i in range(3):
     all_bar_data = task_moe_e2e[task_moe_e2e["f2"] == tiles[i]]
     bar_data = all_bar_data[all_bar_data["f0"] == "Torch"]["f3"]
-    print(bar_data)
     axs[i].bar(
         exit_idx_x,
         bar_data,
@@ -62,7 +61,6 @@ for i in range(3):
         zorder=10,
     )
     bar_data = all_bar_data[all_bar_data["f0"] == "BRT"]["f3"]
-    print(bar_data)
     axs[i].bar(
         exit_idx_x + width,
         bar_data,
@@ -75,7 +73,6 @@ for i in range(3):
         zorder=10,
     )
     bar_data = all_bar_data[all_bar_data["f0"] == "BRT+P"]["f3"]
-    print(bar_data)
     axs[i].bar(
         exit_idx_x + 2 * width,
         bar_data,
@@ -87,6 +84,7 @@ for i in range(3):
         label="BRT+P",
         zorder=10,
     )
+    axs[i].set_ylim(0, 2550)
     if i == 0:
         axs[i].set_ylabel("Throughput (Seq/s)", fontsize=14)
         axs[i].set_yticks([0, 1000, 2000])
@@ -99,9 +97,9 @@ for i in range(3):
     axs[i].set_title(tiles[i], fontsize=14)
 
 axs[2].legend(
-    # bbox_to_anchor=(0.08, 1),
+    bbox_to_anchor=(0.06, 1.06),
     ncol=3,
-    loc="lower right",
+    # loc="lower right",
     # fontsize=10,
     # markerscale=3,
     labelspacing=0.1,

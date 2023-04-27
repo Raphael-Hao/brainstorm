@@ -7,7 +7,7 @@ export DATA_SET_PATH="${BRT_CACHE_PATH}/dataset/imagenet"
 
 # msdnet_path="${HOME}/brainstorm_project/brainstorm/benchmark/msdnet"
 msdnet_path=${PWD}
-pth_path="${msdnet_path}/MSDNet.pth"
+pth_path="${BRT_CACHE_PATH}/ckpt/msdnet/MSDNet.pth"
 
 function run_benchmark() {
     echo "############################################################"

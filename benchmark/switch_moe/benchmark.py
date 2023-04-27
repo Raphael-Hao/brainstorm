@@ -150,7 +150,7 @@ def main():
     if args.mode == "debug":
         debug(args, model, tokenizer)
     elif args.mode == "throughput":
-        throughput(args, model, tokenizer, 1000)
+        throughput(args, model, tokenizer, 100)
     elif args.mode == "profile":
         profile(args, model, tokenizer, args.vendor)
     elif args.mode == "trace":

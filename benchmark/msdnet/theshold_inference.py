@@ -399,40 +399,40 @@ def threshold_dynamic_evaluate(
                 dpe_pass = DeadPathEliminatePass(rf_backbone, runtime_load=1)
                 dpe_pass.run_on_graph()
                 dce_backbone = dpe_pass.finalize()
-                for i, (input, target) in enumerate(test_loader):
-                    if i >= num_trials:
-                        break
-                    input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(
-                        lambda: dce_backbone(input_var), "dead_path_eliminated"
-                    )
-                    dpe_time.append(timer.avg)
+                # for i, (input, target) in enumerate(test_loader):
+                #     if i >= num_trials:
+                #         break
+                #     input_var = torch.autograd.Variable(input.cuda())
+                #     timer.execute(
+                #         lambda: dce_backbone(input_var), "dead_path_eliminated"
+                #     )
+                #     dpe_time.append(timer.avg)
 
                 constant_propagation_pass = ConstantPropagationPass(
                     dce_backbone, upper_perm_load=1
                 )
                 constant_propagation_pass.run_on_graph()
                 cp_backbone = constant_propagation_pass.finalize()
-                for i, (input, target) in enumerate(test_loader):
-                    if i >= num_trials:
-                        break
-                    input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(
-                        lambda: cp_backbone(input_var), "constant_propagation"
-                    )
-                    cp_time.append(timer.avg)
+                # for i, (input, target) in enumerate(test_loader):
+                #     if i >= num_trials:
+                #         break
+                #     input_var = torch.autograd.Variable(input.cuda())
+                #     timer.execute(
+                #         lambda: cp_backbone(input_var), "constant_propagation"
+                #     )
+                #     cp_time.append(timer.avg)
 
                 reorder_operator_pass = OperatorReorderPass(cp_backbone, runtime_load=1)
                 reorder_operator_pass.run_on_graph()
                 opr_backbone = reorder_operator_pass.finalize()
-                for i, (input, target) in enumerate(test_loader):
-                    if i >= num_trials:
-                        break
-                    input_var = torch.autograd.Variable(input.cuda())
-                    timer.execute(lambda: opr_backbone(input_var), "operator_reorder", export=True)
-                    opr_time.append(timer.avg)
+                # for i, (input, target) in enumerate(test_loader):
+                #     if i >= num_trials:
+                #         break
+                #     input_var = torch.autograd.Variable(input.cuda())
+                #     timer.execute(lambda: opr_backbone(input_var), "operator_reorder")
+                #     opr_time.append(timer.avg)
 
-                sp_pass = VerticalFusePass(opr_backbone, sample_inputs={"x": input_var})
+                sp_pass = VerticalFusePass(opr_backbone, sample_inputs={"x": input_var}, fusing_head=True)
                 sp_pass.run_on_graph()
                 sp_backbone = sp_pass.finalize()
                 for i, (input, target) in enumerate(test_loader):
@@ -470,10 +470,10 @@ def threshold_dynamic_evaluate(
                 print_stat(t_sp_time, "Time of Speculative Routing")
                 print_stat(t_hf_time, "Time of Horizontal Fusion")
 
-                speed_up_of_dpe = t_baseline_time / t_dpe_time
-                speed_up_of_cp = t_baseline_time / t_cp_time
+                # speed_up_of_dpe = t_baseline_time / t_dpe_time
+                # speed_up_of_cp = t_baseline_time / t_cp_time
                 speed_up_of_vf = t_baseline_time / t_vf_time
-                speed_up_of_opr = t_baseline_time / t_opr_time
+                # speed_up_of_opr = t_baseline_time / t_opr_time
                 speed_up_of_sp = t_baseline_time / t_sp_time
                 speed_up_of_hf = t_baseline_time / t_hf_time
 

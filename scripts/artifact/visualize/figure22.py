@@ -84,12 +84,10 @@ ax.text(
     fontsize=12,
     zorder=100,
 )
-ax.set_yticks(np.arange(0, 700, 200), fontsize=12)
-ax.set_yticklabels(np.arange(0, 700, 200), fontsize=12)
+ax.set_yticks(np.arange(0, 700, 200),labels=np.arange(0, 700, 200), fontsize=12)
 ax.set_ylim(0, 700)
 # # ax.set_title(dr_load_e2e["f0"], fontsize=14)
-ax.set_xticks([1, 3, 5, 7])
-ax.set_xticklabels(["A", "B", "C", "Raw"], fontsize=12)
+ax.set_xticks([1, 3, 5, 7], labels=["A", "B", "C", "Raw"], fontsize=12)
 ax.set_xlabel("Model Architectures", fontsize=14)
 ax.legend(
     # bbox_to_anchor=(1.02, 1.3),
@@ -160,10 +158,8 @@ for j in range(n):
 # ax.set_yticks(np.arange(0, 700, 200), fontsize=12)
 # ax.set_yticklabels(np.arange(0, 700, 200), fontsize=12)
 # # ax.set_title(dr_load_e2e["f0"], fontsize=14)
-ax.set_xticks([1, 3, 5, 7])
-ax.set_xticklabels(["A", "B", "C", "Raw"], fontsize=12)
-ax.set_yticks(np.arange(0, 130, 30))
-ax.set_yticklabels(np.arange(0, 130, 30), fontsize=12)
+ax.set_xticks([1, 3, 5, 7], labels=["A", "B", "C", "Raw"], fontsize=12)
+ax.set_yticks(np.arange(0, 130, 30),labels=np.arange(0, 130, 30), fontsize=12)
 ax.set_xlabel("Model Architectures", fontsize=14)
 ax.legend(
     # bbox_to_anchor=(1.02, 1.3),

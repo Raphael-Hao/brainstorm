@@ -7,17 +7,16 @@ import torch
 from torch import nn
 from torch.utils.benchmark import Timer
 
+from brt.runtime import BRT_CACHE_PATH
 from brt.runtime.benchmark import profile, CUDATimer
 from brt.runtime.log import get_logger, set_level_to_debug
 from brt.passes import RouterFixPass, VerticalFusePass, HorizFusePass
 from brt.router import switch_capture, RouterBase
 
 from archs.livesr import LiveSR
-from archs.vfused_livesr import vFusedLiveSR
-from archs.hfused_livesr import hFusedLiveSR
 from dataset import get_dataloader
 
-DEFAULT_DATASET = Path(__file__).parent / "dataset/cam1/LQ"
+DEFAULT_DATASET = BRT_CACHE_PATH / "dataset/livesr/cam1/LQ"
 ALL_SUBNET_BS = [
     [6, 7, 12, 27, 8, 8, 8, 12, 12, 4],
     [21, 8, 16, 11, 20, 8, 7, 15],
@@ -46,7 +45,7 @@ for hdlr in logger.handlers:
 # set_level_to_debug()
 
 
-timer = CUDATimer(loop=100, repeat=2, export_fname="benchmark_livesr")
+timer = CUDATimer(loop=100, repeat=2, export_fname="benchmark_livesr", clean_export=True)
 
 
 def print_load_history(module: nn.Module):
