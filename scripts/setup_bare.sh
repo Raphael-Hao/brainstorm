@@ -96,7 +96,7 @@ mkdir -p "$HOME/brainstorm_project" && cd "$HOME/brainstorm_project" || exit
 
 export TORCH_CUDA_ARCH_LIST="7.0;7.2;7.5;8.0;8.6+PTX"
 
-git clone https://Raphael-Hao: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@github.com/Raphael-Hao/brainstorm.git \
+git clone https://github.com/Raphael-Hao/brainstorm.git \
     -b "${BRT_BRANCH:-main}" \
     --recursive
 

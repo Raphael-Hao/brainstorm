@@ -43,7 +43,7 @@ pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 -f 
 BRT_DIR=/root/brainstorm_project/brainstorm
 mkdir -p /root/brainstorm_project && cd /root/brainstorm_project
 
-git clone https://Raphael-Hao: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@github.com/Raphael-Hao/brainstorm.git \
+git clone https://github.com/Raphael-Hao/brainstorm.git \
     -b "${BRT_BRANCH:-main}" \
     --recursive
 
