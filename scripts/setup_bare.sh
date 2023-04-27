@@ -9,12 +9,6 @@ if [[ "$1" == "--branch" ]]; then
     shift 2
 fi
 
-if [[ "$1" == "--zsh" ]]; then
-    INSTALL_ZSH="true"
-    shift
-else
-    INSTALL_ZSH="false"
-fi
 
 is_root() {
     return "$(id -u)"
@@ -68,6 +62,10 @@ wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh 
 export PATH=/usr/local/cuda/bin:$HOME/miniconda3/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 export LIBRARY_PATH=/usr/local/cuda/lib64:$LIBRARY_PATH
+
+export PATH="/usr/local/cuda/bin:$HOME"/miniconda3/bin:$PATH
+export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+export LIBRARY_PATH="/usr/local/cuda/lib64:$LIBRARY_PATH
 
 # shellcheck disable=SC1090,SC1091
 source "$HOME/.bashrc"
