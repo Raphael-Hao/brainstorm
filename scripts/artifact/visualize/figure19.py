@@ -93,13 +93,13 @@ ax.legend(
     columnspacing=0.8,
     prop={"weight": "bold", "size": 12},
 )
-ax.set_ylim(1, 1.6)
+ax.set_ylim(1, 1.3)
 ax.set_ylabel("Speedup", fontsize=14, fontweight="bold")
 ax.set_xlabel("Layer ID", fontsize=14, fontweight="bold")
 ax.set_xticks(x_ticks)
 ax.set_xticklabels(range(1, 11), fontsize=12)
-ax.set_yticks([1.0, 1.2, 1.4, 1.6])
-ax.set_yticklabels([1.0, 1.2, 1.4, 1.6], fontsize=12)
+ax.set_yticks([1.0, 1.1, 1.2, 1.3])
+ax.set_yticklabels([1.0, 1.1, 1.2, 1.3], fontsize=12)
 plt.savefig(FIGURES_PATH / "figure19.pdf", bbox_inches="tight")
 
 # %%
