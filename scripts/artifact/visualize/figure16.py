@@ -45,7 +45,8 @@ for i, (ns, nc) in enumerate(pair_num_subnets_num_channels):
     if ns == 10:
         livesr_channel.append((ns, nc, *(livesr_results_raw[j][1] for j in range(3*i, 3*i + 3))))
 
-livesr_subnet = np.array(livesr_subnet, dtype="i,i,f,f,f")
+livesr_subnet = np.flip(np.array(livesr_subnet, dtype="i,i,f,f,f"),0)
+
 livesr_channel = np.array(livesr_channel, dtype="i,i,f,f,f")
 livesr_e2e = [livesr_subnet, livesr_channel]
 print(livesr_e2e)
@@ -80,6 +81,7 @@ for i in range(2):
     axes[i].set_xticks([1.6, 4.6, 7.6, 10.6])
     axes[i].set_xticklabels(livesr_e2e[i][:][f"f{i}"], fontsize=12)
     axes[i].set_xlabel(x_labels[i], fontsize=14)
+    axes[i].set_ylim(0,200)
 axes[0].legend(
     bbox_to_anchor=(1.5, 0.98),
     ncol=3,
@@ -101,4 +103,4 @@ axes[0].set_ylabel("Time (\\textit{ms})", fontsize=14)
 # axes[0].set_yticks([0, 40, 80, 120], [0, 40, 80, 120], fontsize=12)
 # axes[1].set_yticks([0, 40, 80, 120], [], fontsize=12)
 axes[1].set_yticklabels([], fontsize=12)
-plt.savefig(FIGURE_PATH / "figure_16.pdf", bbox_inches="tight", dpi=300)
+plt.savefig(FIGURE_PATH / "figure16.pdf", bbox_inches="tight", dpi=300)

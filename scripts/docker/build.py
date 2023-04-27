@@ -1,53 +1,58 @@
-#!/usr/bin/env python3
-# -*- coding:utf-8 -*-
-# Motto: Were It to Benefit My Country, I Would Lay Down My Life!
-# \file: /build.py
-# \brief:
-# Author: raphael hao
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+
 import argparse
 import pathlib
 import subprocess
-
-import yaml
+import sys
 
 
 def get_build_args():
     parser = argparse.ArgumentParser(description="Build docker image")
     parser.add_argument(
-        "--type",
+        "--base",
         type=str,
-        choices=["base", "latest"],
+        choices=["nvidia", "brt"],
         default="update",
-        help="Type of docker image to build. Can be 'base' or 'latest'",
+        help="Type of base image to build on top of, can be nvidia or brt",
     )
+    parser.add_argument("--branch", type=str, default="main", help="BRT branch to use")
+    parser.add_argument("--no-cache", action="store_true", help="Do not use cache")
+    parser.add_argument(
+        "--update-brt-only",
+        action="store_true",
+        help="Update BRT only",
+    )
+    parser.add_argument("--upload", action="store_true", help="Upload to github")
+    parser.add_argument(
+        "--username",
+        type=str,
+        required="--upload" in sys.argv,
+        default=None,
+        help="Github username",
+    )
+    parser.add_argument(
+        "--token",
+        type=str,
+        required="--upload" in sys.argv,
+        default=None,
+        help="Github token",
+    )
+
     args = parser.parse_args()
 
     script_dir = pathlib.Path(__file__).parent.absolute()
-    config_file = script_dir / str("gh_config.yaml")
-    config = yaml.safe_load(config_file.open())
 
-    args.username = config["username"]
-    args.token = config["token"]
-    if args.type == "base":
-        args.base_image = config["base_base"]
-        args.tag = "base"
-    elif args.type == "latest":
-        args.base_image = config["latest_base"]
-        args.tag = "latest"
-    args.branch = config["branch"]
-    args.upload = config["upload"]
-    args.update_brt = config["update_brt"]
-    args.no_cache = config["no_cache"]
-    args.context: str = config["context"]
-    context_dir = (
-        script_dir if args.context is None else script_dir / pathlib.Path(args.context)
-    )
-    args.context_path = context_dir.as_posix()
-    dockerfile_suffix = "base" if args.type == "base" else "update"
+    if args.base == "nvidia":
+        args.base_image = "nvidia/cuda:11.3.1-cudnn8-devel-ubuntu20.04"
+    elif args.base == "brt":
+        args.base_image = "ghcr.io/raphael-hao/brt:main"
+    args.context_path = script_dir.as_posix()
+    dockerfile_suffix = "base" if args.base == "nvidia" else "update"
     args.dockerfile = (
-        script_dir / f"../docker/Dockerfile.{dockerfile_suffix}"
+        script_dir / f"../../docker/Dockerfile.{dockerfile_suffix}"
     ).as_posix()
-    args.image_spec = f"brt:{args.branch}" if args.tag is None else f"brt:{args.tag}"
+    args.image_spec = f"brt:{args.branch}"
 
     return args
 
@@ -64,7 +69,11 @@ def login_github_registry(username, token):
         username,
         "--password-stdin",
     ]
-    subprocess.call(az_acr_login_cmd)
+    print("Logging into github registry...")
+    az_acr_login_cmd_str = " ".join(az_acr_login_cmd)
+    print(az_acr_login_cmd_str)
+    login_output = subprocess.getoutput(az_acr_login_cmd_str)
+    print(login_output)
 
 
 def docker_upload(image_spec, username):
@@ -89,8 +98,8 @@ def build_docker():
 
     cmd.extend(["--build-arg", f"BASE_IMAGE={args.base_image}"])
     cmd.extend(["--build-arg", f"BRT_BRANCH={args.branch}"])
-    if args.type == "latest":
-        cmd.extend(["--build-arg", f"UPDATE_BRT_ONLY={args.update_brt}"])
+    if args.base == "brt":
+        cmd.extend(["--build-arg", f"UPDATE_BRT_ONLY={args.update_brt_only}"])
         cmd.append("--no-cache")
     if args.no_cache and "--no-cache" not in cmd:
         cmd.extend(["--no-cache"])
