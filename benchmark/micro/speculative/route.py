@@ -126,7 +126,9 @@ def main():
     x = annotator(x)
     result_path = BRT_CACHE_PATH / "results" / "micro" / "speculative" / "route_e2e.csv"
 
-    timer = CUDATimer(repeat=10, loop=100, export_fname=result_path.as_posix())
+    timer = CUDATimer(
+        warm_up=10, repeat=10, loop=100, export_fname=result_path.as_posix()
+    )
 
     def default_forward():
         default_model(x)
