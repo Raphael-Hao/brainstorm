@@ -31,12 +31,6 @@ We provide an one-click script to setup the environment on bare metal server. Th
 bash scripts/setup_bare.sh
 ```
 
-### Preparing the Dataset, Checkpoints, and Kernel Database with the following command:
-
-```bash
-bash scripts/init.sh
-```
-
 ## Installation with Docker Container
 
 ### Building the Docker Image
@@ -63,35 +57,30 @@ bash scripts/init_dev.sh
 
 # Reproducing the Results
 
+> **Note**: Due to the inability to access the machine inside the company and long evaluation time, we provide the screencasts for the results of single gpu and multiple gpus, respectively. The table below shows our experimental results after screen recording and visualization.
+
+|    Server    | Screencast | Visualized Results |  md5  |
+| :--------: | :--------: | :----------------: | :---: |
+| Single-GPU |    [single_gpu.mp4](https://drive.google.com/file/d/1ajXGo2wDrLfVioqH8iTuTVFmXS4OReRs/view?usp=share_link)    |           [Figures.tar.gz](https://drive.google.com/file/d/12-4z2sKjxfhl8FzVPbSlvw48J9JKiHWQ/view?usp=sharing)          |    `xxxxx`   |
+| Multi-GPUs |[multi_gpu.mp4](https://drive.google.com/file/d/1ajXGo2wDrLfVioqH8iTuTVFmXS4OReRs/view?usp=share_link) | [Figures.tar.gz](https://drive.google.com/file/d/12-4z2sKjxfhl8FzVPbSlvw48J9JKiHWQ/view?usp=sharing) |`a1800694cb6a3c1f508cb57905dff498`|
+
+> In the screeencast, we will first display the branch information of the code repository, then start the experiment using a one-click script. The script will delete the "results" path first. After running all experiments, it will enter the newly created "results" folder to compress the `figures` folder, calculate and output its corresponding md5 value. Reviewers can use this value to verify consistency between the compressed `figures` in the screen recording and that of provided one in above table.
+
+
 Please enter the directory `scripts/artifact` and run the following commands to reproduce the results. Each scripts will run the corresponding experiment, visualize the results, and the figure will be saved in the `.cache/results/figures` directory. Therefore, firstly we need to enter the directory with the following command:
 
 ```bash
 cd scripts/artifact
 ```
 
-## Reproducing the Results on Single-GPU Server
+## Reproducing the Results on Single-GPU Server (~ 5 hours)
 
 ```bash
-bash Figure12.sh
-bash Figure14.sh
-bash Figure15.sh
-bash Figure16.sh
-bash Figure20.sh
-bash Figure21.sh
-bash Figure22.sh
+bash sing_gpu.sh
 ```
 
-## Reproducing the Results in Multiple-GPU Server
-
+## Reproducing the Results in Multiple-GPU Server (~2 hours)
 
 ```bash
-bash Figure11.sh
-bash Figure13.sh
-bash Figure17.sh
-bash Figure18.sh
-bash Figure19.sh
+bash multi_gpu.sh
 ```
-
-# Visualized Results
-
-Results of the experiments are visualized in the `.cache/results/figures`
