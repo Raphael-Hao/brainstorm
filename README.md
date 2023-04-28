@@ -57,11 +57,12 @@ bash scripts/init_dev.sh
 
 # Reproducing the Results
 
-> **Note**: Due to the inability to access the machine inside the company and long evaluation time, we provide the screencasts for the results of single gpu and multiple gpus, respectively. The table below shows our experimental results after screen recording and visualization.
+<!-- > **Note**: Due to the inability to access the machine inside the company and long evaluation time, we provide the screencasts for the results of single gpu and multiple gpus, respectively. The table below shows our experimental results after screen recording and visualization. -->
+> **Note**: Due to the inability to access the machine with multiple GPUs inside the company and long evaluation time, we provide the screencasts for the results of multiple gpus, respectively. The table below shows our experimental results after screen recording.
 
+<!-- | Single-GPU |    [single_gpu.mp4](https://drive.google.com/file/d/1ajXGo2wDrLfVioqH8iTuTVFmXS4OReRs/view?usp=share_link)    |           [Figures.tar.gz](https://drive.google.com/file/d/12-4z2sKjxfhl8FzVPbSlvw48J9JKiHWQ/view?usp=sharing)          |    `xxxxx`   | -->
 |    Server    | Screencast | Visualized Results |  md5  |
 | :--------: | :--------: | :----------------: | :---: |
-| Single-GPU |    [single_gpu.mp4](https://drive.google.com/file/d/1ajXGo2wDrLfVioqH8iTuTVFmXS4OReRs/view?usp=share_link)    |           [Figures.tar.gz](https://drive.google.com/file/d/12-4z2sKjxfhl8FzVPbSlvw48J9JKiHWQ/view?usp=sharing)          |    `xxxxx`   |
 | Multi-GPUs |[multi_gpu.mp4](https://drive.google.com/file/d/1ajXGo2wDrLfVioqH8iTuTVFmXS4OReRs/view?usp=share_link) | [Figures.tar.gz](https://drive.google.com/file/d/12-4z2sKjxfhl8FzVPbSlvw48J9JKiHWQ/view?usp=sharing) |`a1800694cb6a3c1f508cb57905dff498`|
 
 > In the screeencast, we will first display the branch information of the code repository, then start the experiment using a one-click script. The script will delete the "results" path first. After running all experiments, it will enter the newly created "results" folder to compress the `figures` folder, calculate and output its corresponding md5 value. Reviewers can use this value to verify consistency between the compressed `figures` in the screen recording and that of provided one in above table.
