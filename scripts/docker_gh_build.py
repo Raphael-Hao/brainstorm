@@ -20,14 +20,14 @@ def get_build_args():
         default="update",
         help="Type of docker image to build. Can be 'base' or 'latest'",
     )
+    parser.add_argument("--username", type=str, default=None, help="Github username")
+    parser.add_argument("--token", type=str, default=None, help="Github token")
     args = parser.parse_args()
 
     script_dir = pathlib.Path(__file__).parent.absolute()
     config_file = script_dir / str("gh_config.yaml")
     config = yaml.safe_load(config_file.open())
 
-    args.username = config["username"]
-    args.token = config["token"]
     if args.type == "base":
         args.base_image = config["base_base"]
         args.tag = "base"
