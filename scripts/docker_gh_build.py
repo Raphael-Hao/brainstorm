@@ -64,7 +64,11 @@ def login_github_registry(username, token):
         username,
         "--password-stdin",
     ]
-    subprocess.call(az_acr_login_cmd)
+    print("Logging into github registry...")
+    az_acr_login_cmd_str = " ".join(az_acr_login_cmd)
+    print(az_acr_login_cmd_str)
+    login_output = subprocess.getoutput(az_acr_login_cmd_str)
+    print(login_output)
 
 
 def docker_upload(image_spec, username):

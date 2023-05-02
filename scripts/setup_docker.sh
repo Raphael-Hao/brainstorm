@@ -35,7 +35,6 @@ cd /root
 # shellcheck disable=SC2016
 echo 'export PATH=/opt/miniconda3/bin:$PATH' >>/etc/profile
 
-pip config set global.index-url https://mirror.sjtu.edu.cn/pypi/web/simple
 pip install --upgrade pip
 pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 -f https://mirror.sjtu.edu.cn/pytorch-wheels/torch_stable.html
 
