@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding:utf-8 -*-
-# Motto: Were It to Benefit My Country, I Would Lay Down My Life!
-# \file: /build.py
-# \brief:
-# Author: raphael hao
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+
 import argparse
 import pathlib
 import subprocess
+import sys
 
 import yaml
 
@@ -20,8 +18,22 @@ def get_build_args():
         default="update",
         help="Type of docker image to build. Can be 'base' or 'latest'",
     )
-    parser.add_argument("--username", type=str, default=None, help="Github username")
-    parser.add_argument("--token", type=str, default=None, help="Github token")
+    parser.add_argument("--upload", action="store_true", help="Upload to github")
+    parser.add_argument(
+        "--username",
+        type=str,
+        required="--upload" in sys.argv,
+        default=None,
+        help="Github username",
+    )
+    parser.add_argument(
+        "--token",
+        type=str,
+        required="--upload" in sys.argv,
+        default=None,
+        help="Github token",
+    )
+
     args = parser.parse_args()
 
     script_dir = pathlib.Path(__file__).parent.absolute()

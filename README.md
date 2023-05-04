@@ -64,7 +64,13 @@ python scripts/docker_gh_build.py --type latest
 The docker image can be run by the following command:
 
 ```bash
-bash scripts/docker_run.sh
+docker run -name brt_ae -ti brt:latest /bin/bash
+```
+
+We also provide an online image on github registry. The image can be run by the following command:
+
+```bash
+docker run --name brt_ae -ti ghcr.io/raphael-hao/brt:latest /bin/bash
 ```
 
 # Preparing the Dataset, Checkpoints, and Kernel Database:

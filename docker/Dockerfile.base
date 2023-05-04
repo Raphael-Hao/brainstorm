@@ -40,6 +40,7 @@ COPY setup_docker.sh /tmp/setup_docker.sh
 
 RUN bash /tmp/setup_docker.sh --branch $BRT_BRANCH
 
+COPY entrypoint.sh /tmp/entrypoint.sh
 
 EXPOSE 22
-CMD ["/usr/sbin/sshd","-D"]
+CMD ["/tmp/entrypoint.sh"]
