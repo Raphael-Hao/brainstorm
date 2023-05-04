@@ -4,4 +4,3 @@ branch: "osdi2023ae"
 update_brt: false
 no_cache: false
 context: ~
-upload: false

@@ -47,7 +47,6 @@ def get_build_args():
         args.base_image = config["latest_base"]
         args.tag = "latest"
     args.branch = config["branch"]
-    args.upload = config["upload"]
     args.update_brt = config["update_brt"]
     args.no_cache = config["no_cache"]
     args.context: str = config["context"]
