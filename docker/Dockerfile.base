@@ -43,4 +43,4 @@ RUN bash /tmp/setup_docker.sh --branch $BRT_BRANCH
 COPY entrypoint.sh /root/entrypoint.sh
 
 EXPOSE 22
-CMD ["/tmp/entrypoint.sh"]
+ENTRYPOINT ["/tmp/entrypoint.sh"]
