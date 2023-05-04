@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding:utf-8 -*-
-# Motto: Were It to Benefit My Country, I Would Lay Down My Life!
-# \file: /build.py
-# \brief:
-# Author: raphael hao
+# Copyright (c) 2022 by Microsoft Corporation.
+# Licensed under the MIT license.
+
 import argparse
 import pathlib
 import subprocess
+import sys
 
 import yaml
 
@@ -20,14 +18,28 @@ def get_build_args():
         default="update",
         help="Type of docker image to build. Can be 'base' or 'latest'",
     )
+    parser.add_argument("--upload", action="store_true", help="Upload to github")
+    parser.add_argument(
+        "--username",
+        type=str,
+        required="--upload" in sys.argv,
+        default=None,
+        help="Github username",
+    )
+    parser.add_argument(
+        "--token",
+        type=str,
+        required="--upload" in sys.argv,
+        default=None,
+        help="Github token",
+    )
+
     args = parser.parse_args()
 
     script_dir = pathlib.Path(__file__).parent.absolute()
     config_file = script_dir / str("gh_config.yaml")
     config = yaml.safe_load(config_file.open())
 
-    args.username = config["username"]
-    args.token = config["token"]
     if args.type == "base":
         args.base_image = config["base_base"]
         args.tag = "base"
@@ -35,7 +47,6 @@ def get_build_args():
         args.base_image = config["latest_base"]
         args.tag = "latest"
     args.branch = config["branch"]
-    args.upload = config["upload"]
     args.update_brt = config["update_brt"]
     args.no_cache = config["no_cache"]
     args.context: str = config["context"]
@@ -64,7 +75,11 @@ def login_github_registry(username, token):
         username,
         "--password-stdin",
     ]
-    subprocess.call(az_acr_login_cmd)
+    print("Logging into github registry...")
+    az_acr_login_cmd_str = " ".join(az_acr_login_cmd)
+    print(az_acr_login_cmd_str)
+    login_output = subprocess.getoutput(az_acr_login_cmd_str)
+    print(login_output)
 
 
 def docker_upload(image_spec, username):
