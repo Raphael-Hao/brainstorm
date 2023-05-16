@@ -46,7 +46,7 @@ def get_build_args():
     if args.base == "nvidia":
         args.base_image = "nvidia/cuda:11.3.1-cudnn8-devel-ubuntu20.04"
     elif args.base == "brt":
-        args.base_image = "ghcr.io/raphael-hao/brt:main"
+        args.base_image = f"ghcr.io/raphael-hao/brt:{args.branch}"
     args.context_path = script_dir.as_posix()
     dockerfile_suffix = "base" if args.base == "nvidia" else "update"
     args.dockerfile = (
