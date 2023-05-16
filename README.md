@@ -57,7 +57,7 @@ bash scripts/setup_bare.sh
 We also provide a docker image to setup the environment. The docker image can be built by the following command:
 
 ```bash
-python scripts/docker/build.py --type latest
+python scripts/docker/build.py --branch osdi2023ae
 ```
 
 ### Starting the Docker Container
@@ -65,13 +65,13 @@ python scripts/docker/build.py --type latest
 The docker image can be run by the following command:
 
 ```bash
-docker run -name brt_ae -ti brt:latest /bin/bash
+docker run --name brt_ae -ti brt:osdi2023ae /bin/bash
 ```
 
 We also provide an online image on github registry. The image can be run by the following command:
 
 ```bash
-docker run --name brt_ae -ti ghcr.io/raphael-hao/brt:latest /bin/bash
+docker run --name brt_ae -ti ghcr.io/raphael-hao/brt:osdi2023ae /bin/bash
 ```
 
 # Preparing the Dataset, Checkpoints, and Kernel Database:
