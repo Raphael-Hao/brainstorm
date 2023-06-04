@@ -40,7 +40,7 @@ COPY setup_docker.sh /tmp/setup_docker.sh
 
 RUN bash /tmp/setup_docker.sh --branch $BRT_BRANCH
 
-WORKDIR /root/brainstorm_project/brainstorm
+COPY entrypoint.sh /root/entrypoint.sh
 
 EXPOSE 22
-CMD ["/usr/sbin/sshd", "-D"]
+ENTRYPOINT ["/tmp/entrypoint.sh"]
