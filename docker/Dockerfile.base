@@ -13,7 +13,7 @@ RUN echo "${BRT_BRANCH}"
 
 RUN apt-get -y update && apt-get install -y \
     ssh openssh-server gcc libtinfo-dev zlib1g-dev build-essential \
-    cmake libedit-dev libxml2-dev llvm tmux wget curl git vim zsh
+    cmake libedit-dev libxml2-dev llvm tmux wget curl git
 
 RUN mkdir /var/run/sshd
 RUN mkdir /root/.ssh
@@ -32,7 +32,7 @@ ENV PATH=/opt/miniconda3/bin:/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LD_LIBRARY_PATH}
 ENV LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib:/usr/local/lib:${LIBRARY_PATH}
 ENV CPLUS_INCLUDE_PATH=/usr/local/cuda/include:${CPLUS_INCLUDE_PATH}
-ENV BRT_CACHE_PATH=/brainstorm_project/brainstorm/.cache
+ENV BRT_CACHE_PATH=/root/brainstorm_project/brainstorm/.cache
 ENV TORCH_CUDA_ARCH_LIST="7.0;7.2;7.5;8.0;8.6+PTX"
 
 

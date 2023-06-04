@@ -6,45 +6,10 @@
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
-is_root() {
-    return "$(id -u)"
-}
-
-has_sudo() {
-    local prompt
-    prompt=$(sudo -nv 2>&1)
-    if [ $? -eq 0 ]; then
-        echo "has_sudo__pass_set"
-    elif echo "$prompt" | grep -q '^sudo:'; then
-        echo "has_sudo__needs_pass"
-    else
-        echo "no_sudo"
-    fi
-}
-
-if is_root; then
-    sudo_cmd=""
-else
-    HAS_SUDO=$(has_sudo)
-    sudo_cmd="sudo"
-    if [ "$HAS_SUDO" == "has_sudo__needs_pass" ]; then
-        echo "You need to supply the password to use sudo."
-        sudo -v
-    elif [ "$HAS_SUDO" == "has_sudo__pass_set" ]; then
-        echo "You already have sudo privileges."
-    else
-        echo "You need to have sudo privileges to run this script for some packages."
-        exit 1
-    fi
-fi
-
 wget -O azcopy.tar.gz https://aka.ms/downloadazcopy-v10-linux -O azcopy.tar.gz
 mkdir -p azcopy && tar -xzvf azcopy.tar.gz -C "azcopy" --strip-components=1
-$sudo_cmd mv azcopy/azcopy /usr/bin/azcopy && rm -rf azcopy.tar.gz azcopy
+mv azcopy/azcopy "$HOME"/.local/bin/azcopy && rm -rf azcopy.tar.gz azcopy
 
-mkdir -p ../.vscode
-cp ./vscode/c_cpp_properties.json ../.vscode/c_cpp_properties.json
-cp ./vscode/settings_workspace.json ../.vscode/settings.json
-mkdir -p ~/.vscode-server/data/Machine/
-cp ./vscode/settings_global.json ~/.vscode-server/data/Machine/settings.json
-bash prepare_data.sh
+export PATH="$HOME"/.local/bin:"$PATH"
+
+bash "$script_dir"/prepare_data.sh
