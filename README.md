@@ -56,3 +56,22 @@ bash scripts/init_dev.sh
 # Playing with Brainstorm
 
 **TBD**
+
+# Reference
+
+Please cite Brainstorm in your publications if it helps your research:
+
+```
+@inproceedings {brainstorm,
+author = {Weihao Cui and Zhenhua Han and Lingji Ouyang and Yichuan Wang and Ningxin Zheng and Lingxiao Ma and Yuqing Yang and Fan Yang and Jilong Xue and Lili Qiu and Lidong Zhou and Quan Chen and Haisheng Tan and Minyi Guo},
+title = {Optimizing Dynamic Neural Networks with Brainstorm},
+booktitle = {17th USENIX Symposium on Operating Systems Design and Implementation (OSDI 23)},
+year = {2023},
+isbn = {978-1-939133-34-2},
+address = {Boston, MA},
+pages = {797--815},
+url = {https://www.usenix.org/conference/osdi23/presentation/cui},
+publisher = {USENIX Association},
+month = jul,
+}
+```
